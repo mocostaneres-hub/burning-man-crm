@@ -1,0 +1,2687 @@
+{
+  "users": [
+    [
+      "mudskipperscafe@gmail.com",
+      {
+        "_id": 1000006,
+        "isActive": true,
+        "isVerified": false,
+        "email": "mudskipperscafe@gmail.com",
+        "password": "$2a$12$eR5z9tIp5y5f7pcvNbMxd.VaYllTkvCtSVEMIfAQjdq1JVzzK5PEm",
+        "accountType": "admin",
+        "firstName": "Mo",
+        "lastName": "Costa-Neres",
+        "createdAt": "2025-09-20T23:28:55.551Z",
+        "updatedAt": "2025-09-23T06:31:41.083Z",
+        "lastLogin": "2025-09-23T06:31:41.083Z",
+        "phoneNumber": "+1 310-890-8708",
+        "city": "Venice, CA",
+        "yearsBurned": 0,
+        "previousCamps": "BRC Weekly, UT",
+        "bio": "",
+        "profilePhoto": "",
+        "socialMedia": {
+          "instagram": "mano_lax",
+          "facebook": "mocostaneres",
+          "linkedin": "https://www.linkedin.com/in/manolax/"
+        },
+        "skills": [
+          "Electrical",
+          "Leadership",
+          "Sound/AV"
+        ],
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2026-09-25T07:00:00.000Z",
+        "departureDate": "2026-10-07T07:00:00.000Z",
+        "interestedInEAP": true,
+        "interests": [
+          "Technology",
+          "Art",
+          "Music",
+          "Camping"
+        ],
+        "burningManExperience": "Been to Burning Man multiple times",
+        "location": "San Francisco, CA"
+      }
+    ],
+    [
+      "test@example.com",
+      {
+        "_id": 1000021,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test@example.com",
+        "password": "$2a$12$om4V5CJqZGQJ3SoK.Ri.w.RkjGkxnatDxuNb.LJxlcU7g9jdQ2y4C",
+        "accountType": "personal",
+        "firstName": "QA Test",
+        "lastName": "User",
+        "createdAt": "2025-09-21T05:23:21.244Z",
+        "updatedAt": "2025-09-21T20:52:44.122Z",
+        "lastLogin": "2025-09-21T20:52:44.121Z",
+        "bio": "Updated bio for QA testing",
+        "phoneNumber": "+15550123456",
+        "city": "San Francisco",
+        "yearsBurned": 5,
+        "skills": [
+          "Carpentry",
+          "Cooking",
+          "Leadership"
+        ]
+      }
+    ],
+    [
+      "alex.johnson@email.com",
+      {
+        "_id": 1000009,
+        "email": "alex.johnson@email.com",
+        "password": "$2a$12$8gyZs9U.kYwTpx.Y1Ni80.6eLBeo6XPB6faX8R2sJGad9t363fKXG",
+        "firstName": "Alex",
+        "lastName": "Johnson",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 3 years of experience. Love contributing to the community!",
+        "city": "San Francisco, CA",
+        "yearsBurned": 3,
+        "skills": [
+          "Carpentry",
+          "Cooking",
+          "Leadership"
+        ],
+        "socialMedia": {
+          "instagram": "alex_burner",
+          "facebook": "Alex Johnson",
+          "linkedin": "alex-johnson"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": true,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:51.935Z",
+        "updatedAt": "2025-09-21T23:18:51.935Z"
+      }
+    ],
+    [
+      "sarah.williams@email.com",
+      {
+        "_id": 1000010,
+        "email": "sarah.williams@email.com",
+        "password": "$2a$12$h2lxmtGDG9W31mnSR8sbVu/qqIDDmvquqrSTdxb8GZptBel8XInUC",
+        "firstName": "Sarah",
+        "lastName": "Williams",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 1 year of experience. Love contributing to the community!",
+        "city": "Portland, OR",
+        "yearsBurned": 1,
+        "skills": [
+          "Art",
+          "Electrical",
+          "Sound/AV"
+        ],
+        "socialMedia": {
+          "instagram": "sarah_burner",
+          "facebook": "Sarah Williams",
+          "linkedin": "sarah-williams"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-27T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": true,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:53.226Z",
+        "updatedAt": "2025-09-21T23:18:53.226Z"
+      }
+    ],
+    [
+      "mike.brown@email.com",
+      {
+        "_id": 1000011,
+        "email": "mike.brown@email.com",
+        "password": "$2a$12$PalP/s5I6GOYFknvGHLluOurSSyKSjOcTQZaz3qlZ4Q/Tz3L854Li",
+        "firstName": "Mike",
+        "lastName": "Brown",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 5 years of experience. Love contributing to the community!",
+        "city": "Austin, TX",
+        "yearsBurned": 5,
+        "skills": [
+          "Construction",
+          "Safety",
+          "Welding"
+        ],
+        "socialMedia": {
+          "instagram": "mike_burner",
+          "facebook": "Mike Brown",
+          "linkedin": "mike-brown"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-26T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:54.688Z",
+        "updatedAt": "2025-09-21T23:18:54.688Z"
+      }
+    ],
+    [
+      "emma.davis@email.com",
+      {
+        "_id": 1000012,
+        "email": "emma.davis@email.com",
+        "password": "$2a$12$vr9rPCNQsoHjEuTgAUu65egc7ibTGAyE1to5qolcehNmNfYo4lmsC",
+        "firstName": "Emma",
+        "lastName": "Davis",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 0 years of experience. Love contributing to the community!",
+        "city": "Seattle, WA",
+        "yearsBurned": 0,
+        "skills": [
+          "Art",
+          "Photography",
+          "Volunteering"
+        ],
+        "socialMedia": {
+          "instagram": "emma_burner",
+          "facebook": "Emma Davis",
+          "linkedin": "emma-davis"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-27T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:55.893Z",
+        "updatedAt": "2025-09-21T23:18:55.893Z"
+      }
+    ],
+    [
+      "david.miller@email.com",
+      {
+        "_id": 1000013,
+        "email": "david.miller@email.com",
+        "password": "$2a$12$FCiEc0atzSeVBMxTQdIcce0bMNQgTeUPNZMgsHl/E80dhfyoYeONi",
+        "firstName": "David",
+        "lastName": "Miller",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 2 years of experience. Love contributing to the community!",
+        "city": "Denver, CO",
+        "yearsBurned": 2,
+        "skills": [
+          "Electrical",
+          "Leadership",
+          "Sound/AV"
+        ],
+        "socialMedia": {
+          "instagram": "david_burner",
+          "facebook": "David Miller",
+          "linkedin": "david-miller"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-26T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:57.137Z",
+        "updatedAt": "2025-09-21T23:18:57.137Z"
+      }
+    ],
+    [
+      "lisa.wilson@email.com",
+      {
+        "_id": 1000014,
+        "email": "lisa.wilson@email.com",
+        "password": "$2a$12$5ubbMURbFGzn1cyOI5gx5OqsvSyKHVXCkhPk98qP9JCF0yaLMBJbm",
+        "firstName": "Lisa",
+        "lastName": "Wilson",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 4 years of experience. Love contributing to the community!",
+        "city": "Los Angeles, CA",
+        "yearsBurned": 4,
+        "skills": [
+          "Art",
+          "Cooking",
+          "Volunteering"
+        ],
+        "socialMedia": {
+          "instagram": "lisa_burner",
+          "facebook": "Lisa Wilson",
+          "linkedin": "lisa-wilson"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-27T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:58.355Z",
+        "updatedAt": "2025-09-21T23:18:58.355Z"
+      }
+    ],
+    [
+      "chris.moore@email.com",
+      {
+        "_id": 1000015,
+        "email": "chris.moore@email.com",
+        "password": "$2a$12$GIqzFKvNpnNVkYaZHvCg5.SJKEJF24wuuQiFitHpTle.llOrWCeQW",
+        "firstName": "Chris",
+        "lastName": "Moore",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 1 year of experience. Love contributing to the community!",
+        "city": "Chicago, IL",
+        "yearsBurned": 1,
+        "skills": [
+          "Construction",
+          "Leadership",
+          "Safety"
+        ],
+        "socialMedia": {
+          "instagram": "chris_burner",
+          "facebook": "Chris Moore",
+          "linkedin": "chris-moore"
+        },
+        "hasTicket": false,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-02T07:00:00.000Z",
+        "interestedInEAP": true,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:18:59.720Z",
+        "updatedAt": "2025-09-21T23:18:59.720Z"
+      }
+    ],
+    [
+      "amy.taylor@email.com",
+      {
+        "_id": 1000016,
+        "email": "amy.taylor@email.com",
+        "password": "$2a$12$KDpXx2FP7wirwb7K73CcY.vo50CBObj3g..bjYCIRhigQEnR83meG",
+        "firstName": "Amy",
+        "lastName": "Taylor",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 6 years of experience. Love contributing to the community!",
+        "city": "New York, NY",
+        "yearsBurned": 6,
+        "skills": [
+          "Art",
+          "Cooking",
+          "Photography"
+        ],
+        "socialMedia": {
+          "instagram": "amy_burner",
+          "facebook": "Amy Taylor",
+          "linkedin": "amy-taylor"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-27T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:00.942Z",
+        "updatedAt": "2025-09-21T23:19:00.942Z"
+      }
+    ],
+    [
+      "john.anderson@email.com",
+      {
+        "_id": 1000017,
+        "email": "john.anderson@email.com",
+        "password": "$2a$12$o5IFeM6YcO4I./ILHTXJZOycFa/p4ghxwGdlM4eRvrZ8VpLEdy82C",
+        "firstName": "John",
+        "lastName": "Anderson",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 2 years of experience. Love contributing to the community!",
+        "city": "Phoenix, AZ",
+        "yearsBurned": 2,
+        "skills": [
+          "Electrical",
+          "Safety",
+          "Welding"
+        ],
+        "socialMedia": {
+          "instagram": "john_burner",
+          "facebook": "John Anderson",
+          "linkedin": "john-anderson"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-27T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:02.068Z",
+        "updatedAt": "2025-09-21T23:19:02.068Z"
+      }
+    ],
+    [
+      "kate.thomas@email.com",
+      {
+        "_id": 1000018,
+        "email": "kate.thomas@email.com",
+        "password": "$2a$12$nBiOPj/KtweI5sJiBlHwMeAxRC28.JdYsyF48BtKEA.0aZa0julTm",
+        "firstName": "Kate",
+        "lastName": "Thomas",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 0 years of experience. Love contributing to the community!",
+        "city": "Miami, FL",
+        "yearsBurned": 0,
+        "skills": [
+          "Art",
+          "Photography",
+          "Volunteering"
+        ],
+        "socialMedia": {
+          "instagram": "kate_burner",
+          "facebook": "Kate Thomas",
+          "linkedin": "kate-thomas"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-26T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:03.159Z",
+        "updatedAt": "2025-09-21T23:19:03.159Z"
+      }
+    ],
+    [
+      "ryan.jackson@email.com",
+      {
+        "_id": 1000019,
+        "email": "ryan.jackson@email.com",
+        "password": "$2a$12$ogNieGeBPxkxpXwoWW6RfeaLLzSDEaOjVtDoHkADQ8MGSUSvPaqB6",
+        "firstName": "Ryan",
+        "lastName": "Jackson",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 3 years of experience. Love contributing to the community!",
+        "city": "Nashville, TN",
+        "yearsBurned": 3,
+        "skills": [
+          "Carpentry",
+          "Leadership",
+          "Sound/AV"
+        ],
+        "socialMedia": {
+          "instagram": "ryan_burner",
+          "facebook": "Ryan Jackson",
+          "linkedin": "ryan-jackson"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-02T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:04.268Z",
+        "updatedAt": "2025-09-21T23:19:04.268Z"
+      }
+    ],
+    [
+      "jessica.white@email.com",
+      {
+        "_id": 1000020,
+        "email": "jessica.white@email.com",
+        "password": "$2a$12$XCIBRCKhsRx3MMJCuBEmBeD1pGfVqnPhEKgb1vdWj7jsdL.JAYUyC",
+        "firstName": "Jessica",
+        "lastName": "White",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 1 year of experience. Love contributing to the community!",
+        "city": "Boston, MA",
+        "yearsBurned": 1,
+        "skills": [
+          "Art",
+          "Cooking",
+          "Volunteering"
+        ],
+        "socialMedia": {
+          "instagram": "jessica_burner",
+          "facebook": "Jessica White",
+          "linkedin": "jessica-white"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-02T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:05.370Z",
+        "updatedAt": "2025-09-21T23:19:05.370Z"
+      }
+    ],
+    [
+      "matt.harris@email.com",
+      {
+        "_id": 1000021,
+        "email": "matt.harris@email.com",
+        "password": "$2a$12$k.1UjDFouNLO5G7sd3LXo.XveRu/.SruF5Xox4/X5JiW6dH2ilQx2",
+        "firstName": "Matt",
+        "lastName": "Harris",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 4 years of experience. Love contributing to the community!",
+        "city": "Las Vegas, NV",
+        "yearsBurned": 4,
+        "skills": [
+          "Construction",
+          "Safety",
+          "Welding"
+        ],
+        "socialMedia": {
+          "instagram": "matt_burner",
+          "facebook": "Matt Harris",
+          "linkedin": "matt-harris"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": true,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:06.478Z",
+        "updatedAt": "2025-09-21T23:19:06.478Z"
+      }
+    ],
+    [
+      "rachel.martin@email.com",
+      {
+        "_id": 1000022,
+        "email": "rachel.martin@email.com",
+        "password": "$2a$12$tcunmAee3v8ZznEX7Wsbc.PfVWqIp9FJ91Y.C5HWWt.1dvHn2PhTO",
+        "firstName": "Rachel",
+        "lastName": "Martin",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 2 years of experience. Love contributing to the community!",
+        "city": "San Diego, CA",
+        "yearsBurned": 2,
+        "skills": [
+          "Art",
+          "Photography",
+          "Sound/AV"
+        ],
+        "socialMedia": {
+          "instagram": "rachel_burner",
+          "facebook": "Rachel Martin",
+          "linkedin": "rachel-martin"
+        },
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-26T07:00:00.000Z",
+        "departureDate": "2025-09-02T07:00:00.000Z",
+        "interestedInEAP": true,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:07.606Z",
+        "updatedAt": "2025-09-21T23:19:07.606Z"
+      }
+    ],
+    [
+      "tom.garcia@email.com",
+      {
+        "_id": 1000023,
+        "email": "tom.garcia@email.com",
+        "password": "$2a$12$3yRawIio3YxnDRnbT/R85OfuAB/.PblDuE7ZkN0wcsrjsAcY4m5uy",
+        "firstName": "Tom",
+        "lastName": "Garcia",
+        "profilePhoto": "",
+        "bio": "Passionate burner with 5 years of experience. Love contributing to the community!",
+        "city": "Dallas, TX",
+        "yearsBurned": 5,
+        "skills": [
+          "Carpentry",
+          "Electrical",
+          "Leadership"
+        ],
+        "socialMedia": {
+          "instagram": "tom_burner",
+          "facebook": "Tom Garcia",
+          "linkedin": "tom-garcia"
+        },
+        "hasTicket": false,
+        "hasVehiclePass": false,
+        "arrivalDate": "2025-08-25T07:00:00.000Z",
+        "departureDate": "2025-09-01T07:00:00.000Z",
+        "interestedInEAP": false,
+        "accountType": "personal",
+        "isActive": true,
+        "isVerified": true,
+        "createdAt": "2025-09-21T23:19:08.724Z",
+        "updatedAt": "2025-09-21T23:19:08.724Z"
+      }
+    ],
+    [
+      "mocostaneres@gmail.com",
+      {
+        "_id": 1000005,
+        "isActive": true,
+        "isVerified": false,
+        "email": "mocostaneres@gmail.com",
+        "password": "$2a$12$/yQw9U/dxo6Zyc2baD5NnOgxxCROrdGt4c.edxc5kyXbBAUedfvKK",
+        "accountType": "admin",
+        "campName": "Skips",
+        "createdAt": "2025-09-20T21:38:18.466Z",
+        "updatedAt": "2025-09-23T06:59:13.108Z",
+        "lastLogin": "2025-09-23T06:59:13.108Z",
+        "campBio": "Test camp bio",
+        "campPhotos": [],
+        "campSocialMedia": {},
+        "campLocation": "San Francisco",
+        "campTheme": "Technology",
+        "campSize": 50,
+        "campYearFounded": 2020,
+        "campWebsite": "https://example.com",
+        "campEmail": "test@example.com",
+        "firstName": "Mo",
+        "lastName": "Costa-Neres",
+        "phoneNumber": "+1234567890",
+        "city": "San Francisco",
+        "yearsBurned": 5,
+        "previousCamps": "Previous Camp",
+        "bio": "Updated bio",
+        "socialMedia": {
+          "instagram": "@mocosta",
+          "facebook": "facebook.com/mocosta",
+          "linkedin": "linkedin.com/in/mocosta"
+        },
+        "skills": [
+          "JavaScript",
+          "React",
+          "Node.js",
+          "Camp Management"
+        ],
+        "interests": [
+          "Technology",
+          "Art",
+          "Music"
+        ],
+        "burningManExperience": "Been to Burning Man 5 times",
+        "location": "San Francisco, CA",
+        "hasTicket": true,
+        "hasVehiclePass": false,
+        "arrivalDate": null,
+        "departureDate": null,
+        "interestedInEAP": false
+      }
+    ],
+    [
+      "mnereslax@gmail.com",
+      {
+        "_id": 1000024,
+        "isActive": true,
+        "isVerified": false,
+        "email": "mnereslax@gmail.com",
+        "password": "$2a$12$baI9rPYy0jAceDmVI/GTpu8.3KTJmErGXvvG42wTRQK7hN67dBnFW",
+        "accountType": "personal",
+        "firstName": "Irlaneide",
+        "lastName": "Brasil",
+        "createdAt": "2025-09-23T02:49:59.496Z",
+        "updatedAt": "2025-09-23T03:30:16.640Z",
+        "lastLogin": "2025-09-23T03:30:16.640Z"
+      }
+    ],
+    [
+      "mnomnobr@gmail.com",
+      {
+        "_id": 1000025,
+        "isActive": true,
+        "isVerified": false,
+        "email": "mnomnobr@gmail.com",
+        "password": "$2a$12$Azh5aFSzYd9w8tNAg3RdTuBtdnJ6aCkeO1OGvJtoGRgXeY07QDiF6",
+        "accountType": "personal",
+        "firstName": "momo",
+        "lastName": "neres",
+        "createdAt": "2025-09-23T03:01:13.513Z",
+        "updatedAt": "2025-09-23T05:34:33.803Z",
+        "phoneNumber": "+1 323-306-0321",
+        "city": "NYC",
+        "yearsBurned": 12,
+        "previousCamps": "Bahhas",
+        "bio": "",
+        "profilePhoto": "",
+        "socialMedia": {
+          "instagram": "instagram",
+          "facebook": "mocostaneres",
+          "linkedin": "manolax"
+        },
+        "skills": [
+          "Plumbing",
+          "Art/Creative",
+          "Leadership"
+        ],
+        "hasTicket": false,
+        "hasVehiclePass": true,
+        "arrivalDate": "2025-09-25T07:00:00.000Z",
+        "departureDate": "2025-10-02T07:00:00.000Z",
+        "interestedInEAP": false,
+        "interestedInStrike": false
+      }
+    ],
+    [
+      "admin@burningman.com",
+      {
+        "_id": 9999999,
+        "isActive": true,
+        "isVerified": true,
+        "email": "admin@burningman.com",
+        "password": "$2a$12$nUKXzyhp3yHc1DIMQa/gz.DaXPMvLDoDGiPRR4lasVzHQK1/lfjTK",
+        "accountType": "admin",
+        "firstName": "Admin",
+        "lastName": "User",
+        "createdAt": "2025-09-23T05:42:09.701Z",
+        "updatedAt": "2025-09-23T06:18:16.796Z",
+        "lastLogin": "2025-09-23T06:18:16.795Z",
+        "phoneNumber": "+1 555-000-0000",
+        "city": "San Francisco, CA",
+        "yearsBurned": 10,
+        "bio": "System Administrator for Burning Man CRM",
+        "profilePhoto": "",
+        "socialMedia": {
+          "instagram": "",
+          "facebook": "",
+          "linkedin": ""
+        },
+        "skills": [
+          "System Administration",
+          "Database Management",
+          "User Support"
+        ],
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "arrivalDate": null,
+        "departureDate": null,
+        "interestedInEAP": false,
+        "interestedInStrike": false,
+        "interests": [
+          "Technology",
+          "System Administration"
+        ],
+        "burningManExperience": "Long-time Burning Man participant and system administrator",
+        "location": "San Francisco, CA"
+      }
+    ]
+  ],
+  "camps": [
+    [
+      "2000001",
+      {
+        "_id": 2000001,
+        "campName": "Art & Music Collective",
+        "slug": "camp-1-art-music",
+        "description": "Art & Music camp bringing amazing experiences to the playa since 2011.",
+        "bio": "Welcome to Art & Music Collective! We're a dedicated group of burners passionate about art & music. Since 2011, we've been creating unforgettable experiences on the playa.",
+        "theme": "Art & Music",
+        "burningSince": 2011,
+        "hometown": "San Francisco, CA",
+        "contactEmail": "camp01@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/artmusiccollective"
+        },
+        "location": {
+          "street": "2:00 & A",
+          "crossStreet": "Between 3:00 & 3:30",
+          "time": "9:00 - 11:00",
+          "description": "Located at 2:00 & A, look for our art & music themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": false,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": false,
+          "games": false,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 25,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=1",
+          "https://picsum.photos/800/600?random=101",
+          "https://picsum.photos/800/600?random=201"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000001,
+        "createdAt": "2025-09-21T03:14:59.281Z",
+        "updatedAt": "2025-09-23T03:28:56.748Z",
+        "stats": {
+          "totalApplications": 4,
+          "totalMembers": 14
+        }
+      }
+    ],
+    [
+      "2000002",
+      {
+        "_id": 2000002,
+        "campName": "Food & Drinks Collective",
+        "slug": "camp-2-food-drinks",
+        "description": "Food & Drinks camp bringing amazing experiences to the playa since 2012.",
+        "bio": "Welcome to Food & Drinks Collective! We're a dedicated group of burners passionate about food & drinks. Since 2012, we've been creating unforgettable experiences on the playa.",
+        "theme": "Food & Drinks",
+        "burningSince": 2012,
+        "hometown": "Los Angeles, CA",
+        "contactEmail": "camp02@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/fooddrinkscollective"
+        },
+        "location": {
+          "street": "3:30 & B",
+          "crossStreet": "Between 4:00 & 4:30",
+          "time": "10:00 - 12:00",
+          "description": "Located at 3:30 & B, look for our food & drinks themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": true,
+          "acceptsRVs": true,
+          "shadeForTents": false,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": true,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": false,
+          "games": false,
+          "yoga": true,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 30,
+        "isPublic": true,
+        "acceptingNewMembers": false,
+        "showApplyNow": true,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=2",
+          "https://picsum.photos/800/600?random=102",
+          "https://picsum.photos/800/600?random=202"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000002,
+        "createdAt": "2025-09-21T03:15:00.581Z",
+        "updatedAt": "2025-09-21T03:15:00.581Z"
+      }
+    ],
+    [
+      "2000003",
+      {
+        "_id": 2000003,
+        "campName": "Workshop & Education Collective",
+        "slug": "camp-3-workshop-education",
+        "description": "Workshop & Education camp bringing amazing experiences to the playa since 2013.",
+        "bio": "Welcome to Workshop & Education Collective! We're a dedicated group of burners passionate about workshop & education. Since 2013, we've been creating unforgettable experiences on the playa.",
+        "theme": "Workshop & Education",
+        "burningSince": 2013,
+        "hometown": "Seattle, WA",
+        "contactEmail": "camp03@burningman.test",
+        "socialMedia": {
+          "instagram": "https://instagram.com/workshopeducationcollective"
+        },
+        "location": {
+          "street": "4:15 & C",
+          "crossStreet": "Between 5:00 & 5:30",
+          "time": "11:00 - 13:00",
+          "description": "Located at 4:15 & C, look for our workshop & education themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": false,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": true,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": false,
+          "games": false,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": true,
+          "costumeRental": true,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": false,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 35,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=3",
+          "https://picsum.photos/800/600?random=103",
+          "https://picsum.photos/800/600?random=203"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000003,
+        "createdAt": "2025-09-21T03:15:01.689Z",
+        "updatedAt": "2025-09-21T03:15:01.689Z"
+      }
+    ],
+    [
+      "2000004",
+      {
+        "_id": 2000004,
+        "campName": "Performance & Theater Collective",
+        "slug": "camp-4-performance-theater",
+        "description": "Performance & Theater camp bringing amazing experiences to the playa since 2014.",
+        "bio": "Welcome to Performance & Theater Collective! We're a dedicated group of burners passionate about performance & theater. Since 2014, we've been creating unforgettable experiences on the playa.",
+        "theme": "Performance & Theater",
+        "burningSince": 2014,
+        "hometown": "Portland, OR",
+        "contactEmail": "camp04@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/performancetheatercollective",
+          "instagram": "https://instagram.com/performancetheatercollective"
+        },
+        "location": {
+          "street": "5:45 & D",
+          "crossStreet": "Between 6:00 & 6:30",
+          "time": "12:00 - 14:00",
+          "description": "Located at 5:45 & D, look for our performance & theater themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": false,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": true,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": true,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": false,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 40,
+        "isPublic": true,
+        "acceptingNewMembers": false,
+        "showApplyNow": false,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=4",
+          "https://picsum.photos/800/600?random=104",
+          "https://picsum.photos/800/600?random=204"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000004,
+        "createdAt": "2025-09-21T03:15:02.649Z",
+        "updatedAt": "2025-09-21T03:15:02.649Z"
+      }
+    ],
+    [
+      "2000005",
+      {
+        "_id": 2000005,
+        "campName": "Wellness & Healing Collective",
+        "slug": "camp-5-wellness-healing",
+        "description": "Wellness & Healing camp bringing amazing experiences to the playa since 2015.",
+        "bio": "Welcome to Wellness & Healing Collective! We're a dedicated group of burners passionate about wellness & healing. Since 2015, we've been creating unforgettable experiences on the playa.",
+        "theme": "Wellness & Healing",
+        "burningSince": 2015,
+        "hometown": "Denver, CO",
+        "contactEmail": "camp05@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/wellnesshealingcollective"
+        },
+        "location": {
+          "street": "6:30 & E",
+          "crossStreet": "Between 7:00 & 7:30",
+          "time": "13:00 - 15:00",
+          "description": "Located at 6:30 & E, look for our wellness & healing themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": true,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": false,
+          "workshops": false,
+          "performances": false,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 45,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=5",
+          "https://picsum.photos/800/600?random=105",
+          "https://picsum.photos/800/600?random=205"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000004,
+        "createdAt": "2025-09-21T03:15:03.666Z",
+        "updatedAt": "2025-09-21T03:15:03.666Z"
+      }
+    ],
+    [
+      "2000006",
+      {
+        "_id": 2000006,
+        "campName": "Technology & Innovation Collective",
+        "slug": "camp-6-technology-innovation",
+        "description": "Technology & Innovation camp bringing amazing experiences to the playa since 2016.",
+        "bio": "Welcome to Technology & Innovation Collective! We're a dedicated group of burners passionate about technology & innovation. Since 2016, we've been creating unforgettable experiences on the playa.",
+        "theme": "Technology & Innovation",
+        "burningSince": 2016,
+        "hometown": "Austin, TX",
+        "contactEmail": "camp06@burningman.test",
+        "socialMedia": {},
+        "location": {
+          "street": "7:15 & F",
+          "crossStreet": "Between 8:00 & 8:30",
+          "time": "14:00 - 16:00",
+          "description": "Located at 7:15 & F, look for our technology & innovation themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": false,
+          "bar": false,
+          "snacks": false,
+          "music": false,
+          "art": true,
+          "workshops": true,
+          "performances": false,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": true,
+          "socialEvents": false,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 50,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": false,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=6",
+          "https://picsum.photos/800/600?random=106",
+          "https://picsum.photos/800/600?random=206"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000006,
+        "createdAt": "2025-09-21T03:15:04.613Z",
+        "updatedAt": "2025-09-21T03:15:04.613Z"
+      }
+    ],
+    [
+      "2000007",
+      {
+        "_id": 2000007,
+        "campName": "Community & Social Collective",
+        "slug": "camp-7-community-social",
+        "description": "Community & Social camp bringing amazing experiences to the playa since 2017.",
+        "bio": "Welcome to Community & Social Collective! We're a dedicated group of burners passionate about community & social. Since 2017, we've been creating unforgettable experiences on the playa.",
+        "theme": "Community & Social",
+        "burningSince": 2017,
+        "hometown": "Chicago, IL",
+        "contactEmail": "camp07@burningman.test",
+        "socialMedia": {
+          "instagram": "https://instagram.com/communitysocialcollective"
+        },
+        "location": {
+          "street": "8:00 & G",
+          "crossStreet": "Between 9:00 & 9:30",
+          "time": "15:00 - 17:00",
+          "description": "Located at 8:00 & G, look for our community & social themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": true,
+          "partialPower": true,
+          "rvPower": true,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": false,
+          "food": true,
+          "coffee": false,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": true,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": true,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 55,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": false,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=7",
+          "https://picsum.photos/800/600?random=107",
+          "https://picsum.photos/800/600?random=207"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000007,
+        "createdAt": "2025-09-21T03:15:05.610Z",
+        "updatedAt": "2025-09-21T03:15:05.610Z"
+      }
+    ],
+    [
+      "2000008",
+      {
+        "_id": 2000008,
+        "campName": "Adventure & Sports Collective",
+        "slug": "camp-8-adventure-sports",
+        "description": "Adventure & Sports camp bringing amazing experiences to the playa since 2018.",
+        "bio": "Welcome to Adventure & Sports Collective! We're a dedicated group of burners passionate about adventure & sports. Since 2018, we've been creating unforgettable experiences on the playa.",
+        "theme": "Adventure & Sports",
+        "burningSince": 2018,
+        "hometown": "New York, NY",
+        "contactEmail": "camp08@burningman.test",
+        "socialMedia": {},
+        "location": {
+          "street": "9:45 & H",
+          "crossStreet": "Between 2:00 & 2:30",
+          "time": "16:00 - 18:00",
+          "description": "Located at 9:45 & H, look for our adventure & sports themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": true,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": true,
+          "bar": false,
+          "snacks": true,
+          "music": false,
+          "art": true,
+          "workshops": false,
+          "performances": true,
+          "games": false,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": true,
+          "massage": true,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": true,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 60,
+        "isPublic": false,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=8",
+          "https://picsum.photos/800/600?random=108",
+          "https://picsum.photos/800/600?random=208"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000008,
+        "createdAt": "2025-09-21T03:15:06.647Z",
+        "updatedAt": "2025-09-21T03:15:06.647Z"
+      }
+    ],
+    [
+      "2000009",
+      {
+        "_id": 2000009,
+        "campName": "Sustainability & Environment Collective",
+        "slug": "camp-9-sustainability-environment",
+        "description": "Sustainability & Environment camp bringing amazing experiences to the playa since 2019.",
+        "bio": "Welcome to Sustainability & Environment Collective! We're a dedicated group of burners passionate about sustainability & environment. Since 2019, we've been creating unforgettable experiences on the playa.",
+        "theme": "Sustainability & Environment",
+        "burningSince": 2019,
+        "hometown": "Boston, MA",
+        "contactEmail": "camp09@burningman.test",
+        "website": "https://sustainabilityenvironmentcollective.com",
+        "socialMedia": {},
+        "location": {
+          "street": "10:30 & I",
+          "crossStreet": "Between 3:00 & 3:30",
+          "time": "17:00 - 19:00",
+          "description": "Located at 10:30 & I, look for our sustainability & environment themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": true,
+          "acceptsRVs": false,
+          "shadeForTents": false,
+          "showers": false,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": true,
+          "games": false,
+          "yoga": false,
+          "meditation": true,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": true,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 65,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": false,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=9",
+          "https://picsum.photos/800/600?random=109",
+          "https://picsum.photos/800/600?random=209"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000009,
+        "createdAt": "2025-09-21T03:15:07.934Z",
+        "updatedAt": "2025-09-21T03:15:07.934Z"
+      }
+    ],
+    [
+      "2000010",
+      {
+        "_id": 2000010,
+        "campName": "Cultural Exchange Collective",
+        "slug": "camp-10-cultural-exchange",
+        "description": "Cultural Exchange camp bringing amazing experiences to the playa since 2020.",
+        "bio": "Welcome to Cultural Exchange Collective! We're a dedicated group of burners passionate about cultural exchange. Since 2020, we've been creating unforgettable experiences on the playa.",
+        "theme": "Cultural Exchange",
+        "burningSince": 2020,
+        "hometown": "Miami, FL",
+        "contactEmail": "camp10@burningman.test",
+        "socialMedia": {},
+        "location": {
+          "street": "11:15 & J",
+          "crossStreet": "Between 4:00 & 4:30",
+          "time": "18:00 - 20:00",
+          "description": "Located at 11:15 & J, look for our cultural exchange themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": true,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": true,
+          "games": false,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": true,
+          "hairStyling": false,
+          "facePainting": true,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 70,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": false,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=10",
+          "https://picsum.photos/800/600?random=110",
+          "https://picsum.photos/800/600?random=210"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000010,
+        "createdAt": "2025-09-21T03:15:09.089Z",
+        "updatedAt": "2025-09-21T03:15:09.090Z"
+      }
+    ],
+    [
+      "2000011",
+      {
+        "_id": 2000011,
+        "campName": "Spiritual & Meditation Collective",
+        "slug": "camp-11-spiritual-meditation",
+        "description": "Spiritual & Meditation camp bringing amazing experiences to the playa since 2021.",
+        "bio": "Welcome to Spiritual & Meditation Collective! We're a dedicated group of burners passionate about spiritual & meditation. Since 2021, we've been creating unforgettable experiences on the playa.",
+        "theme": "Spiritual & Meditation",
+        "burningSince": 2021,
+        "hometown": "Phoenix, AZ",
+        "contactEmail": "camp11@burningman.test",
+        "socialMedia": {},
+        "location": {
+          "street": "12:00 & K",
+          "crossStreet": "Between 5:00 & 5:30",
+          "time": "19:00 - 21:00",
+          "description": "Located at 12:00 & K, look for our spiritual & meditation themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": false,
+          "food": false,
+          "coffee": false,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": false,
+          "workshops": true,
+          "performances": false,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": true,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": true,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": false,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 75,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=11",
+          "https://picsum.photos/800/600?random=111",
+          "https://picsum.photos/800/600?random=211"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000011,
+        "createdAt": "2025-09-21T03:15:10.267Z",
+        "updatedAt": "2025-09-21T03:15:10.267Z"
+      }
+    ],
+    [
+      "2000012",
+      {
+        "_id": 2000012,
+        "campName": "Party & Entertainment Collective",
+        "slug": "camp-12-party-entertainment",
+        "description": "Party & Entertainment camp bringing amazing experiences to the playa since 2022.",
+        "bio": "Welcome to Party & Entertainment Collective! We're a dedicated group of burners passionate about party & entertainment. Since 2022, we've been creating unforgettable experiences on the playa.",
+        "theme": "Party & Entertainment",
+        "burningSince": 2022,
+        "hometown": "Las Vegas, NV",
+        "contactEmail": "camp12@burningman.test",
+        "website": "https://partyentertainmentcollective.com",
+        "socialMedia": {
+          "instagram": "https://instagram.com/partyentertainmentcollective"
+        },
+        "location": {
+          "street": "1:30 & L",
+          "crossStreet": "Between 6:00 & 6:30",
+          "time": "20:00 - 22:00",
+          "description": "Located at 1:30 & L, look for our party & entertainment themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": true,
+          "partialPower": false,
+          "rvPower": true,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": true,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": true,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": true,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 80,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=12",
+          "https://picsum.photos/800/600?random=112",
+          "https://picsum.photos/800/600?random=212"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000012,
+        "createdAt": "2025-09-21T03:15:11.332Z",
+        "updatedAt": "2025-09-21T03:15:11.332Z"
+      }
+    ],
+    [
+      "2000013",
+      {
+        "_id": 2000013,
+        "campName": "Family & Kids Collective",
+        "slug": "camp-13-family-kids",
+        "description": "Family & Kids camp bringing amazing experiences to the playa since 2023.",
+        "bio": "Welcome to Family & Kids Collective! We're a dedicated group of burners passionate about family & kids. Since 2023, we've been creating unforgettable experiences on the playa.",
+        "theme": "Family & Kids",
+        "burningSince": 2023,
+        "hometown": "Salt Lake City, UT",
+        "contactEmail": "camp13@burningman.test",
+        "website": "https://familykidscollective.com",
+        "socialMedia": {
+          "facebook": "https://facebook.com/familykidscollective"
+        },
+        "location": {
+          "street": "2:45 & M",
+          "crossStreet": "Between 7:00 & 7:30",
+          "time": "21:00 - 10:00",
+          "description": "Located at 2:45 & M, look for our family & kids themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": true,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": true,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": false,
+          "music": true,
+          "art": false,
+          "workshops": true,
+          "performances": false,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 85,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": false,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=13",
+          "https://picsum.photos/800/600?random=113",
+          "https://picsum.photos/800/600?random=213"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000013,
+        "createdAt": "2025-09-21T03:15:12.336Z",
+        "updatedAt": "2025-09-21T03:15:12.336Z",
+        "stats": {
+          "totalApplications": 1
+        }
+      }
+    ],
+    [
+      "2000014",
+      {
+        "_id": 2000014,
+        "campName": "Bike & Transportation Collective",
+        "slug": "camp-14-bike-transportation",
+        "description": "Bike & Transportation camp bringing amazing experiences to the playa since 2024.",
+        "bio": "Welcome to Bike & Transportation Collective! We're a dedicated group of burners passionate about bike & transportation. Since 2024, we've been creating unforgettable experiences on the playa.",
+        "theme": "Bike & Transportation",
+        "burningSince": 2024,
+        "hometown": "Nashville, TN",
+        "contactEmail": "camp14@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/biketransportationcollective"
+        },
+        "location": {
+          "street": "3:15 & N",
+          "crossStreet": "Between 8:00 & 8:30",
+          "time": "8:00 - 11:00",
+          "description": "Located at 3:15 & N, look for our bike & transportation themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": true,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": false,
+          "snacks": true,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": false,
+          "games": true,
+          "yoga": true,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": true,
+          "socialEvents": false,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 90,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=14",
+          "https://picsum.photos/800/600?random=114",
+          "https://picsum.photos/800/600?random=214"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000014,
+        "createdAt": "2025-09-21T03:15:13.289Z",
+        "updatedAt": "2025-09-21T03:15:13.289Z",
+        "stats": {
+          "totalApplications": 2
+        }
+      }
+    ],
+    [
+      "2000015",
+      {
+        "_id": 2000015,
+        "campName": "Medical & Safety Collective",
+        "slug": "camp-15-medical-safety",
+        "description": "Medical & Safety camp bringing amazing experiences to the playa since 2025.",
+        "bio": "Welcome to Medical & Safety Collective! We're a dedicated group of burners passionate about medical & safety. Since 2025, we've been creating unforgettable experiences on the playa.",
+        "theme": "Medical & Safety",
+        "burningSince": 2025,
+        "hometown": "Atlanta, GA",
+        "contactEmail": "camp15@burningman.test",
+        "socialMedia": {},
+        "location": {
+          "street": "4:30 & O",
+          "crossStreet": "Between 9:00 & 9:30",
+          "time": "9:00 - 12:00",
+          "description": "Located at 4:30 & O, look for our medical & safety themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": true,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": false,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": true,
+          "bar": true,
+          "snacks": true,
+          "music": false,
+          "art": true,
+          "workshops": false,
+          "performances": true,
+          "games": false,
+          "yoga": false,
+          "meditation": true,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": false,
+          "socialEvents": false,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 95,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=15",
+          "https://picsum.photos/800/600?random=115",
+          "https://picsum.photos/800/600?random=215"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000015,
+        "createdAt": "2025-09-21T03:15:14.425Z",
+        "updatedAt": "2025-09-21T03:15:14.425Z",
+        "stats": {
+          "totalApplications": 1
+        }
+      }
+    ],
+    [
+      "2000016",
+      {
+        "_id": 2000016,
+        "campName": "Volunteer & Service Collective",
+        "slug": "camp-16-volunteer-service",
+        "description": "Volunteer & Service camp bringing amazing experiences to the playa since 2026.",
+        "bio": "Welcome to Volunteer & Service Collective! We're a dedicated group of burners passionate about volunteer & service. Since 2026, we've been creating unforgettable experiences on the playa.",
+        "theme": "Volunteer & Service",
+        "burningSince": 2026,
+        "hometown": "Minneapolis, MN",
+        "contactEmail": "camp16@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/volunteerservicecollective"
+        },
+        "location": {
+          "crossStreet": "Between 2:00 & 2:30",
+          "time": "10:00 - 13:00",
+          "description": "Located at undefined, look for our volunteer & service themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": true,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": true,
+          "wifi": false,
+          "ice": false,
+          "food": true,
+          "coffee": true,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": true,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": true,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": true,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 100,
+        "isPublic": true,
+        "acceptingNewMembers": false,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=16",
+          "https://picsum.photos/800/600?random=116",
+          "https://picsum.photos/800/600?random=216"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000016,
+        "createdAt": "2025-09-21T03:15:15.455Z",
+        "updatedAt": "2025-09-21T03:15:15.455Z"
+      }
+    ],
+    [
+      "2000017",
+      {
+        "_id": 2000017,
+        "campName": "Art Car & Mutant Vehicle Collective",
+        "slug": "camp-17-art-car-mutant-vehicle",
+        "description": "Art Car & Mutant Vehicle camp bringing amazing experiences to the playa since 2027.",
+        "bio": "Welcome to Art Car & Mutant Vehicle Collective! We're a dedicated group of burners passionate about art car & mutant vehicle. Since 2027, we've been creating unforgettable experiences on the playa.",
+        "theme": "Art Car & Mutant Vehicle",
+        "burningSince": 2027,
+        "hometown": "Detroit, MI",
+        "contactEmail": "camp17@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/artcarmutantvehiclecollective",
+          "instagram": "https://instagram.com/artcarmutantvehiclecollective"
+        },
+        "location": {
+          "crossStreet": "Between 3:00 & 3:30",
+          "time": "11:00 - 14:00",
+          "description": "Located at undefined, look for our art car & mutant vehicle themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": false,
+          "food": true,
+          "coffee": true,
+          "bar": false,
+          "snacks": true,
+          "music": true,
+          "art": true,
+          "workshops": true,
+          "performances": true,
+          "games": false,
+          "yoga": true,
+          "meditation": true,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": false,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 105,
+        "isPublic": true,
+        "acceptingNewMembers": false,
+        "showApplyNow": false,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=17",
+          "https://picsum.photos/800/600?random=117",
+          "https://picsum.photos/800/600?random=217"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000017,
+        "createdAt": "2025-09-21T03:15:16.680Z",
+        "updatedAt": "2025-09-21T03:15:16.680Z"
+      }
+    ],
+    [
+      "2000018",
+      {
+        "_id": 2000018,
+        "campName": "Temple & Sacred Space Collective",
+        "slug": "camp-18-temple-sacred-space",
+        "description": "Temple & Sacred Space camp bringing amazing experiences to the playa since 2028.",
+        "bio": "Welcome to Temple & Sacred Space Collective! We're a dedicated group of burners passionate about temple & sacred space. Since 2028, we've been creating unforgettable experiences on the playa.",
+        "theme": "Temple & Sacred Space",
+        "burningSince": 2028,
+        "hometown": "Philadelphia, PA",
+        "contactEmail": "camp18@burningman.test",
+        "socialMedia": {
+          "facebook": "https://facebook.com/templesacredspacecollective",
+          "instagram": "https://instagram.com/templesacredspacecollective"
+        },
+        "location": {
+          "crossStreet": "Between 4:00 & 4:30",
+          "time": "12:00 - 15:00",
+          "description": "Located at undefined, look for our temple & sacred space themed setup!"
+        },
+        "offerings": {
+          "water": false,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "showers": true,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": true,
+          "ice": false,
+          "food": true,
+          "coffee": false,
+          "bar": false,
+          "snacks": false,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": true,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 110,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=18",
+          "https://picsum.photos/800/600?random=118",
+          "https://picsum.photos/800/600?random=218"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000018,
+        "createdAt": "2025-09-21T03:15:17.835Z",
+        "updatedAt": "2025-09-21T03:15:17.835Z",
+        "stats": {
+          "totalApplications": 1
+        }
+      }
+    ],
+    [
+      "2000019",
+      {
+        "_id": 2000019,
+        "campName": "Fire & Pyrotechnics Collective",
+        "slug": "camp-19-fire-pyrotechnics",
+        "description": "Fire & Pyrotechnics camp bringing amazing experiences to the playa since 2029.",
+        "bio": "Welcome to Fire & Pyrotechnics Collective! We're a dedicated group of burners passionate about fire & pyrotechnics. Since 2029, we've been creating unforgettable experiences on the playa.",
+        "theme": "Fire & Pyrotechnics",
+        "burningSince": 2029,
+        "hometown": "Washington, DC",
+        "contactEmail": "camp19@burningman.test",
+        "socialMedia": {
+          "instagram": "https://instagram.com/firepyrotechnicscollective"
+        },
+        "location": {
+          "crossStreet": "Between 5:00 & 5:30",
+          "time": "13:00 - 16:00",
+          "description": "Located at undefined, look for our fire & pyrotechnics themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": true,
+          "acceptsRVs": false,
+          "shadeForTents": false,
+          "showers": true,
+          "communalKitchen": false,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": false,
+          "coffee": false,
+          "bar": false,
+          "snacks": true,
+          "music": true,
+          "art": true,
+          "workshops": false,
+          "performances": false,
+          "games": false,
+          "yoga": true,
+          "meditation": false,
+          "bikeRepair": true,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": false,
+          "welcomeNewbies": false
+        },
+        "approximateSize": 115,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": false,
+        "photos": [
+          "https://picsum.photos/800/600?random=19",
+          "https://picsum.photos/800/600?random=119",
+          "https://picsum.photos/800/600?random=219"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000019,
+        "createdAt": "2025-09-21T03:15:18.838Z",
+        "updatedAt": "2025-09-21T03:15:18.838Z",
+        "stats": {
+          "totalApplications": 2
+        }
+      }
+    ],
+    [
+      "2000020",
+      {
+        "_id": 2000020,
+        "campName": "Sound & DJ Collective",
+        "slug": "camp-20-sound-dj",
+        "description": "Sound & DJ camp bringing amazing experiences to the playa since 2030.",
+        "bio": "Welcome to Sound & DJ Collective! We're a dedicated group of burners passionate about sound & dj. Since 2030, we've been creating unforgettable experiences on the playa.",
+        "theme": "Sound & DJ",
+        "burningSince": 2030,
+        "hometown": "Orlando, FL",
+        "contactEmail": "camp20@burningman.test",
+        "website": "https://sounddjcollective.com",
+        "socialMedia": {
+          "instagram": "https://instagram.com/sounddjcollective"
+        },
+        "location": {
+          "crossStreet": "Between 6:00 & 6:30",
+          "time": "14:00 - 17:00",
+          "description": "Located at undefined, look for our sound & dj themed setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": false,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": false,
+          "showers": false,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": true,
+          "snacks": true,
+          "music": false,
+          "art": false,
+          "workshops": false,
+          "performances": false,
+          "games": false,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 120,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=20",
+          "https://picsum.photos/800/600?random=120",
+          "https://picsum.photos/800/600?random=220"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000020,
+        "createdAt": "2025-09-21T03:15:19.861Z",
+        "updatedAt": "2025-09-21T03:15:19.861Z",
+        "stats": {
+          "totalApplications": 1
+        }
+      }
+    ],
+    [
+      "2000021",
+      {
+        "_id": 2000021,
+        "isPublic": true,
+        "name": "Updated Test Camp",
+        "description": "This is a test camp for Burning Man 2025",
+        "contactEmail": "updated@test.com",
+        "owner": 1000022,
+        "slug": "updated-test-camp",
+        "createdAt": "2025-09-21T05:24:45.746Z",
+        "updatedAt": "2025-09-21T06:04:05.439Z",
+        "acceptingNewMembers": true,
+        "stats": {
+          "totalApplications": 1
+        },
+        "status": "active",
+        "campName": "QA Updated Camp",
+        "campBio": "Updated bio for QA testing"
+      }
+    ],
+    [
+      "2000022",
+      {
+        "_id": 2000022,
+        "campName": "Skips",
+        "slug": "skips",
+        "description": "Welcome to Skips camp!",
+        "bio": "Join us for an amazing Burning Man experience at Skips camp.",
+        "theme": "Community",
+        "burningSince": 2024,
+        "hometown": "Los Angeles, CA",
+        "contactEmail": "mocostaneres@gmail.com",
+        "location": {
+          "crossStreet": "Between 2:00 & 2:30",
+          "time": "10:00 - 22:00",
+          "description": "Look for our Skips camp setup!"
+        },
+        "offerings": {
+          "water": true,
+          "fullPower": false,
+          "partialPower": true,
+          "rvPower": false,
+          "acceptsRVs": false,
+          "shadeForTents": true,
+          "communalKitchen": true,
+          "storage": false,
+          "wifi": false,
+          "ice": true,
+          "food": true,
+          "coffee": true,
+          "bar": false,
+          "snacks": true,
+          "music": true,
+          "art": false,
+          "workshops": false,
+          "performances": false,
+          "games": true,
+          "yoga": false,
+          "meditation": false,
+          "bikeRepair": false,
+          "massage": false,
+          "hairStyling": false,
+          "facePainting": false,
+          "costumeRental": false,
+          "sharedSpace": true,
+          "campfire": false,
+          "socialEvents": true,
+          "welcomeNewbies": true
+        },
+        "approximateSize": 50,
+        "isPublic": true,
+        "acceptingNewMembers": true,
+        "showApplyNow": true,
+        "showMemberCount": true,
+        "photos": [
+          "https://picsum.photos/800/600?random=22",
+          "https://picsum.photos/800/600?random=122",
+          "https://picsum.photos/800/600?random=222"
+        ],
+        "primaryPhotoIndex": 0,
+        "status": "active",
+        "owner": 1000005,
+        "createdAt": "2025-09-21T06:30:00.000Z",
+        "updatedAt": "2025-09-21T21:56:17.811Z",
+        "stats": {
+          "totalApplications": 4,
+          "totalMembers": 14
+        }
+      }
+    ]
+  ],
+  "members": [
+    [
+      "68",
+      {
+        "_id": 68,
+        "user": 1000006,
+        "camp": 2000022,
+        "status": "rejected",
+        "appliedAt": "2025-09-20T23:28:55.551Z",
+        "reviewedAt": "2025-09-23T02:54:59.836Z",
+        "reviewedBy": 1000005,
+        "reviewNotes": "Removed from active roster",
+        "updatedAt": "2025-09-23T02:54:59.837Z"
+      }
+    ],
+    [
+      "68d08cdefea5a5dc098bd057",
+      {
+        "_id": "68d08cdefea5a5dc098bd057",
+        "user": 1000009,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:51.935Z",
+        "reviewedAt": "2025-09-21T23:18:51.935Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d08ce5fea5a5dc098bd058",
+      {
+        "_id": "68d08ce5fea5a5dc098bd058",
+        "user": 1000014,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:58.355Z",
+        "reviewedAt": "2025-09-21T23:18:58.355Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d090df9656afa7651bbed7",
+      {
+        "_id": "68d090df9656afa7651bbed7",
+        "user": 1000015,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:59.720Z",
+        "reviewedAt": "2025-09-21T23:18:59.720Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d1e3233c2974835a70afd0",
+      {
+        "_id": "68d1e3233c2974835a70afd0",
+        "user": 1000013,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:57.137Z",
+        "reviewedAt": "2025-09-21T23:18:57.137Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d1e32a3c2974835a70afd1",
+      {
+        "_id": "68d1e32a3c2974835a70afd1",
+        "user": 1000012,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:55.893Z",
+        "reviewedAt": "2025-09-21T23:18:55.893Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d1e79b09e48192914b467b",
+      {
+        "_id": "68d1e79b09e48192914b467b",
+        "user": 1000010,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:18:53.226Z",
+        "reviewedAt": "2025-09-21T23:18:53.226Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d1ebfdcfea78ca2a278dd3",
+      {
+        "_id": "68d1ebfdcfea78ca2a278dd3",
+        "user": 1000011,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-03T20:19:38.470Z",
+        "reviewedAt": "2025-09-23T00:38:21.601Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d1ec046b28b9ab5a0828c7",
+      {
+        "_id": "68d1ec046b28b9ab5a0828c7",
+        "user": 1000019,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-21T23:19:04.268Z",
+        "reviewedAt": "2025-09-21T23:19:04.268Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "test_1758595898678",
+      {
+        "_id": "test_1758595898678",
+        "user": 1000021,
+        "camp": 2000022,
+        "status": "active",
+        "appliedAt": "2025-09-23T02:51:38.678Z",
+        "reviewedAt": "2025-09-23T02:51:38.690Z",
+        "reviewedBy": 1000005
+      }
+    ],
+    [
+      "68d20bac6e3588b3361d3852",
+      {
+        "_id": "68d20bac6e3588b3361d3852",
+        "camp": 2000022,
+        "user": 1000024,
+        "role": "member",
+        "status": "rejected",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "reviewedAt": "2025-09-23T02:55:06.644Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T02:53:32.689Z",
+        "updatedAt": "2025-09-23T02:55:06.644Z",
+        "reviewNotes": "Removed from active roster"
+      }
+    ],
+    [
+      "68d20d4bbe1e294a3144e9da",
+      {
+        "_id": "68d20d4bbe1e294a3144e9da",
+        "camp": 2000022,
+        "user": 1000006,
+        "role": "member",
+        "status": "active",
+        "appliedAt": "2025-09-23T03:00:03.180Z",
+        "reviewedAt": "2025-09-23T03:00:27.126Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:00:27.127Z",
+        "updatedAt": "2025-09-23T03:00:27.127Z"
+      }
+    ],
+    [
+      "3000001",
+      {
+        "_id": 3000001,
+        "camp": 2000022,
+        "user": 1000024,
+        "role": "member",
+        "status": "active",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "reviewedAt": "2025-09-23T03:05:32.102Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:05:32.103Z",
+        "updatedAt": "2025-09-23T03:05:32.103Z"
+      }
+    ],
+    [
+      "3000002",
+      {
+        "_id": 3000002,
+        "camp": 2000022,
+        "user": 1000024,
+        "role": "member",
+        "status": "active",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "reviewedAt": "2025-09-23T03:08:05.847Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:08:05.847Z",
+        "updatedAt": "2025-09-23T03:08:05.847Z"
+      }
+    ],
+    [
+      "3000003",
+      {
+        "_id": 3000003,
+        "user": 1000024,
+        "camp": 2000022,
+        "status": "rejected",
+        "appliedAt": "2025-09-23T03:08:49.149Z",
+        "reviewedAt": "2025-09-23T03:25:54.432Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:08:49.154Z",
+        "updatedAt": "2025-09-23T03:25:54.433Z",
+        "reviewNotes": "Removed from active roster"
+      }
+    ],
+    [
+      "3000004",
+      {
+        "_id": 3000004,
+        "camp": 2000022,
+        "user": 1000024,
+        "role": "member",
+        "status": "rejected",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "reviewedAt": "2025-09-23T03:26:06.873Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:10:21.537Z",
+        "updatedAt": "2025-09-23T03:26:06.873Z",
+        "reviewNotes": "Removed from active roster"
+      }
+    ],
+    [
+      "3000005",
+      {
+        "_id": 3000005,
+        "camp": 2000022,
+        "user": 1000025,
+        "role": "member",
+        "status": "rejected",
+        "appliedAt": "2025-09-23T03:10:34.833Z",
+        "reviewedAt": "2025-09-23T03:26:02.965Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:10:41.034Z",
+        "updatedAt": "2025-09-23T03:26:02.965Z",
+        "reviewNotes": "Removed from active roster"
+      }
+    ],
+    [
+      "3000006",
+      {
+        "_id": 3000006,
+        "camp": 2000022,
+        "user": 1000025,
+        "role": "member",
+        "status": "active",
+        "appliedAt": "2025-09-23T03:10:34.833Z",
+        "reviewedAt": "2025-09-23T03:26:15.564Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:26:15.564Z",
+        "updatedAt": "2025-09-23T03:26:15.564Z"
+      }
+    ],
+    [
+      "3000007",
+      {
+        "_id": 3000007,
+        "camp": 2000022,
+        "user": 1000024,
+        "role": "member",
+        "status": "active",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "reviewedAt": "2025-09-23T03:28:56.744Z",
+        "reviewedBy": 1000005,
+        "createdAt": "2025-09-23T03:28:56.744Z",
+        "updatedAt": "2025-09-23T03:28:56.744Z"
+      }
+    ]
+  ],
+  "applications": [
+    [
+      "4000001",
+      {
+        "_id": 4000001,
+        "applicant": 1000024,
+        "camp": 2000022,
+        "applicationData": {
+          "motivation": "i love this cam",
+          "experience": "yes a few",
+          "skills": [
+            "Social Media",
+            "Leadership",
+            "Medical/First Aid"
+          ],
+          "availability": {
+            "arriveDate": "2025-09-23T07:00:00.000Z",
+            "departDate": "2025-09-30T07:00:00.000Z",
+            "workShifts": ""
+          }
+        },
+        "status": "approved",
+        "appliedAt": "2025-09-23T02:51:03.199Z",
+        "lastUpdated": "2025-09-23T03:28:56.741Z",
+        "createdAt": "2025-09-23T02:51:03.199Z",
+        "updatedAt": "2025-09-23T03:28:56.741Z",
+        "reviewedBy": 1000005,
+        "reviewedAt": "2025-09-23T03:28:56.741Z",
+        "reviewNotes": "Removed from active roster"
+      }
+    ],
+    [
+      "4000002",
+      {
+        "_id": 4000002,
+        "applicant": 1000006,
+        "camp": 2000022,
+        "applicationData": {
+          "motivation": "second app",
+          "experience": "some",
+          "skills": [
+            "Electrical",
+            "Leadership",
+            "Sound/AV"
+          ],
+          "availability": {
+            "arriveDate": "2026-09-25T07:00:00.000Z",
+            "departDate": "2026-10-07T07:00:00.000Z",
+            "workShifts": ""
+          }
+        },
+        "status": "approved",
+        "appliedAt": "2025-09-23T03:00:03.180Z",
+        "lastUpdated": "2025-09-23T05:29:19.760Z",
+        "createdAt": "2025-09-23T03:00:03.180Z",
+        "updatedAt": "2025-09-23T05:29:19.760Z",
+        "reviewedBy": 1000005,
+        "reviewedAt": "2025-09-23T03:00:27.122Z",
+        "reviewNotes": "",
+        "applicantDetails": {
+          "firstName": "Mo",
+          "lastName": "Costa-Neres",
+          "email": "mudskipperscafe@gmail.com",
+          "profilePhoto": "",
+          "bio": "",
+          "city": "Venice, CA",
+          "yearsBurned": 0,
+          "previousCamps": "BRC Weekly, UT",
+          "socialMedia": {
+            "instagram": "mano_lax",
+            "facebook": "mocostaneres",
+            "linkedin": "https://www.linkedin.com/in/manolax/"
+          },
+          "hasTicket": true,
+          "hasVehiclePass": false,
+          "arrivalDate": "2026-09-25T07:00:00.000Z",
+          "departureDate": "2026-10-07T07:00:00.000Z",
+          "interestedInEAP": true,
+          "skills": [
+            "Electrical",
+            "Leadership",
+            "Sound/AV"
+          ]
+        }
+      }
+    ],
+    [
+      "4000003",
+      {
+        "_id": 4000003,
+        "applicant": 1000025,
+        "camp": 2000022,
+        "applicationData": {
+          "motivation": "I want to test the approval flow",
+          "experience": "Some experience",
+          "skills": [
+            "Testing"
+          ],
+          "hasTicket": true,
+          "hasVehiclePass": false,
+          "arrivalDate": "2025-08-25T07:00:00.000Z",
+          "departureDate": "2025-09-01T07:00:00.000Z",
+          "interestedInEAP": true
+        },
+        "status": "approved",
+        "appliedAt": "2025-09-23T03:10:34.833Z",
+        "lastUpdated": "2025-09-23T05:34:33.813Z",
+        "createdAt": "2025-09-23T03:10:34.833Z",
+        "updatedAt": "2025-09-23T05:34:33.813Z",
+        "reviewedBy": 1000005,
+        "reviewedAt": "2025-09-23T03:26:15.563Z",
+        "reviewNotes": "Removed from active roster",
+        "applicantDetails": {
+          "firstName": "momo",
+          "lastName": "neres",
+          "email": "mnomnobr@gmail.com",
+          "profilePhoto": "",
+          "bio": "",
+          "city": "NYC",
+          "yearsBurned": 12,
+          "previousCamps": "Bahhas",
+          "socialMedia": {
+            "instagram": "instagram",
+            "facebook": "mocostaneres",
+            "linkedin": "manolax"
+          },
+          "hasTicket": false,
+          "hasVehiclePass": true,
+          "arrivalDate": "2025-09-25T07:00:00.000Z",
+          "departureDate": "2025-10-02T07:00:00.000Z",
+          "interestedInEAP": false,
+          "skills": [
+            "Plumbing",
+            "Art/Creative",
+            "Leadership"
+          ]
+        }
+      }
+    ]
+  ],
+  "rosters": [
+    [
+      "5000001",
+      {
+        "_id": 5000001,
+        "name": "1st roster ever",
+        "camp": 2000022,
+        "isActive": true,
+        "createdBy": 1000005,
+        "createdAt": "2025-09-23T00:50:00.000Z",
+        "updatedAt": "2025-09-23T03:28:56.746Z",
+        "members": [
+          {
+            "member": 3000006,
+            "addedAt": "2025-09-23T03:26:15.566Z",
+            "addedBy": 1000005
+          },
+          {
+            "member": 3000007,
+            "addedAt": "2025-09-23T03:28:56.746Z",
+            "addedBy": 1000005
+          }
+        ]
+      }
+    ]
+  ]
+}

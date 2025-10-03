@@ -1,0 +1,259 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const { body, validationResult } = require('express-validator');
+const db = require('../database/databaseAdapter');
+const { authenticateToken } = require('../middleware/auth');
+
+const router = express.Router();
+
+// Generate JWT token
+const generateToken = (userId) => {
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '7d'
+  });
+};
+
+// @route   POST /api/auth/register
+// @desc    Register a new user (personal or camp account)
+// @access  Public
+router.post('/register', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 }),
+  body('accountType').isIn(['personal', 'camp']),
+  body('firstName').optional().trim(),
+  body('lastName').optional().trim(),
+  body('campName').optional().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password, accountType, firstName, lastName, campName } = req.body;
+
+    // Check if user already exists
+    const existingUser = await db.findUser({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    // Validate required fields based on account type
+    if (accountType === 'personal' && (!firstName || !lastName)) {
+      return res.status(400).json({ message: 'First name and last name required for personal accounts' });
+    }
+
+    if (accountType === 'camp' && !campName) {
+      return res.status(400).json({ message: 'Camp name required for camp accounts' });
+    }
+
+    // Create user data
+    const userData = {
+      email,
+      password,
+      accountType
+    };
+
+    if (accountType === 'personal') {
+      userData.firstName = firstName;
+      userData.lastName = lastName;
+    } else {
+      userData.campName = campName;
+    }
+
+    // Create and save user
+    const user = await db.createUser(userData);
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Return user data (without password)
+    const userResponse = { ...user };
+    delete userResponse.password;
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: userResponse
+    });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Server error during registration' });
+  }
+});
+
+// @route   POST /api/auth/login
+// @desc    Login user
+// @access  Public
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').exists()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password } = req.body;
+
+    // Find user in database
+    const user = await db.findUser({ email });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if account is active
+    if (!user.isActive) {
+      return res.status(401).json({ message: 'Account deactivated' });
+    }
+
+    // Check password
+    const isPasswordValid = await db.comparePassword(user, password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Update last login
+    await db.updateUser(email, { lastLogin: new Date() });
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Return user data (without password)
+    const userResponse = { ...user };
+    delete userResponse.password;
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: userResponse
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error during login' });
+  }
+});
+
+// @route   GET /api/auth/me
+// @desc    Get current user
+// @access  Private
+router.get('/me', authenticateToken, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// @route   POST /api/auth/refresh
+// @desc    Refresh JWT token
+// @access  Private
+router.post('/refresh', (req, res) => {
+  res.json({ message: 'Token refresh not implemented in demo mode' });
+});
+
+// @route   POST /api/auth/logout
+// @desc    Logout user (client-side token removal)
+// @access  Private
+router.post('/logout', (req, res) => {
+  res.json({ message: 'Logout successful' });
+});
+
+// @route   POST /api/auth/forgot-password
+// @desc    Request password reset
+// @access  Public
+router.post('/forgot-password', [
+  body('email').isEmail().normalizeEmail()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if email exists or not
+      return res.json({ message: 'If email exists, reset instructions sent' });
+    }
+
+    // TODO: Implement email sending for password reset
+    // For now, just return success
+    res.json({ message: 'If email exists, reset instructions sent' });
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Reset password with token
+// @access  Public
+router.post('/reset-password', [
+  body('token').exists(),
+  body('password').isLength({ min: 6 })
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { token, password } = req.body;
+
+    // TODO: Implement password reset with token verification
+    // For now, return not implemented
+    res.status(501).json({ message: 'Password reset not yet implemented' });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/auth/change-password
+// @desc    Change user password
+// @access  Private
+router.put('/change-password', authenticateToken, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Get user from database
+    const user = await db.findUser({ _id: req.user._id });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const bcrypt = require('bcryptjs');
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password in database
+    await db.updateUser(user._id, { password: hashedPassword });
+
+    res.json({ message: 'Password changed successfully' });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
