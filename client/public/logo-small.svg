@@ -1,0 +1,48 @@
+<svg width="140" height="50" viewBox="0 0 140 50" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for flame -->
+    <linearGradient id="flameGradientSmall" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#FF8C00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF4500;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadow filter -->
+    <filter id="shadowSmall" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="1" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+  
+  <!-- Flame icon -->
+  <g transform="translate(25, 15)">
+    <!-- Outer flame layer -->
+    <path d="M-10,15 Q-8,5 -5,0 Q-3,-5 0,0 Q3,-5 5,0 Q8,5 10,15 Q8,18 4,22 Q0,26 -4,22 Q-8,18 -10,15 Z" 
+          fill="#FF4500" opacity="0.9" filter="url(#shadowSmall)"/>
+    
+    <!-- Middle flame layer -->
+    <path d="M-8,14 Q-6,7 -4,1 Q-2,-3 0,1 Q2,-3 4,1 Q6,7 8,14 Q6,16 3,19 Q0,22 -3,19 Q-6,16 -8,14 Z" 
+          fill="#FF8C00" opacity="0.95"/>
+    
+    <!-- Inner flame layer -->
+    <path d="M-6,13 Q-5,8 -3,2 Q-2,-1 0,2 Q2,-1 3,2 Q5,8 6,13 Q5,15 2,17 Q0,19 -2,17 Q-5,15 -6,13 Z" 
+          fill="#FFD700"/>
+    
+    <!-- Human silhouette in the center -->
+    <g fill="#1E3A8A" transform="translate(0, 6)" filter="url(#shadowSmall)">
+      <!-- Head -->
+      <circle cx="0" cy="-6" r="2.5"/>
+      <!-- Body -->
+      <rect x="-1.5" y="-4" width="3" height="6" rx="1"/>
+      <!-- Arms raised -->
+      <path d="M-1.5,-3 L-6,-6 L-5,-5 L-1.5,-1 Z" fill="#1E3A8A"/>
+      <path d="M1.5,-3 L6,-6 L5,-5 L1.5,-1 Z" fill="#1E3A8A"/>
+      <!-- Legs spread -->
+      <path d="M-1.5,2 L-5,8 L-4,7 L-1,2 Z" fill="#1E3A8A"/>
+      <path d="M1.5,2 L5,8 L4,7 L1,2 Z" fill="#1E3A8A"/>
+    </g>
+  </g>
+  
+  <!-- G8Road text -->
+  <text x="55" y="18" font-family="'Arial', sans-serif" font-size="18" font-weight="bold" fill="#1E3A8A" filter="url(#shadowSmall)">G8</text>
+  <text x="75" y="18" font-family="'Arial', sans-serif" font-size="18" font-weight="bold" fill="#FF4500" filter="url(#shadowSmall)">Road</text>
+</svg>
