@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@700&family=Work+Sans:wght@400;500;600&display=swap');
+
+@layer base {
+  body {
+    @apply font-work bg-custom-bg text-custom-text;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-lato;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
+}
+
+@layer components {
+  /* Button Components */
+  .btn-primary {
+    @apply bg-custom-primary hover:bg-custom-primary-hover text-white font-work font-medium px-4 py-2 rounded-lg transition-colors duration-200 shadow-soft;
+  }
+
+  .btn-secondary {
+    @apply bg-custom-secondary hover:bg-custom-secondary-hover text-white font-work font-medium px-4 py-2 rounded-lg transition-colors duration-200 shadow-soft;
+  }
+
+  .btn-accent {
+    @apply bg-custom-accent hover:bg-custom-accent-hover text-white font-work font-medium px-4 py-2 rounded-lg transition-colors duration-200 shadow-soft;
+  }
+
+  .btn-outline {
+    @apply border-2 border-custom-primary text-custom-primary hover:bg-custom-primary hover:text-white font-work font-medium px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .btn-ghost {
+    @apply text-custom-text hover:bg-gray-100 font-work font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+  }
+
+  /* Input Components */
+  .input-primary {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-custom-primary transition-colors duration-200 font-work text-sm;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500 focus:border-red-500;
+  }
+
+  /* Card Components */
+  .card {
+    @apply bg-white rounded-xl shadow-soft border border-gray-100;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-medium transition-shadow duration-200;
+  }
+
+  /* Table Components */
+  .table-container {
+    @apply overflow-x-auto shadow-soft rounded-xl border border-gray-100;
+  }
+
+  .table {
+    @apply min-w-full divide-y divide-gray-200;
+  }
+
+  .table-header {
+    @apply bg-gray-50;
+  }
+
+  .table-header-cell {
+    @apply px-6 py-3 text-left text-xs font-work font-medium text-gray-500 uppercase tracking-wider;
+  }
+
+  .table-body {
+    @apply bg-white divide-y divide-gray-200;
+  }
+
+  .table-cell {
+    @apply px-6 py-4 whitespace-nowrap text-sm font-work text-custom-text;
+  }
+
+  /* Modal Components */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  }
+
+  .modal-content {
+    @apply bg-white rounded-xl shadow-strong max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto;
+  }
+
+  /* Form Components */
+  .form-group {
+    @apply mb-6;
+  }
+
+  .form-label {
+    @apply block text-label font-work font-medium text-custom-text mb-2;
+  }
+
+  .form-error {
+    @apply text-red-600 text-sm font-work mt-1;
+  }
+
+  /* Navigation Components */
+  .nav-link {
+    @apply text-custom-text hover:text-custom-primary px-3 py-2 rounded-md text-sm font-work font-medium transition-colors duration-200;
+  }
+
+  .nav-link-active {
+    @apply text-custom-primary bg-green-50;
+  }
+
+  /* Badge Components */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-work font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-orange-100 text-orange-800;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-error {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  /* Loading Components */
+  .spinner {
+    @apply animate-spin rounded-full h-8 w-8 border-b-2 border-custom-primary;
+  }
+
+  /* Utility Classes */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
