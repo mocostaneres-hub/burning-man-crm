@@ -209,7 +209,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.post('/:id/assign', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { assignedTo } = req.body;
+    let { assignedTo } = req.body;
 
     // Check if user is camp owner
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
@@ -227,7 +227,34 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Convert assignedTo array to numbers for consistency with mock database
+    if (Array.isArray(assignedTo)) {
+      assignedTo = assignedTo.map(id => {
+        const numId = parseInt(id);
+        return isNaN(numId) ? id : numId;
+      });
+    }
+
+    console.log('🔄 [Task Assignment] Updating task:', {
+      taskId: id,
+      taskIdType: typeof id,
+      assignedTo: assignedTo,
+      assignedToType: typeof assignedTo[0]
+    });
+
     const updatedTask = await db.updateTask(id, { assignedTo });
+    
+    if (!updatedTask) {
+      console.error('❌ [Task Assignment] Task not found or update failed:', id);
+      return res.status(404).json({ message: 'Task not found or update failed' });
+    }
+    
+    console.log('✅ [Task Assignment] Task updated:', {
+      taskId: id,
+      taskTitle: updatedTask.title,
+      assignedTo: updatedTask.assignedTo,
+      assignedCount: updatedTask.assignedTo.length
+    });
     res.json(updatedTask);
   } catch (error) {
     console.error('Error assigning task:', error);

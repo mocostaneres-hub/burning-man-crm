@@ -118,6 +118,19 @@ const campSchema = new mongoose.Schema({
     ref: 'CampCategory'
   }],
   
+  // Selected perks (managed globally)
+  selectedPerks: [{
+    perkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GlobalPerk',
+      required: true
+    },
+    isOn: {
+      type: Boolean,
+      default: false
+    }
+  }],
+  
   // Camp Offerings
   offerings: {
     // Infrastructure

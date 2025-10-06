@@ -14,6 +14,8 @@ let nextEventId = 9000000;
 let nextShiftId = 10000000;
 let nextInviteId = 11000000;
 let nextCategoryId = 13000000;
+let nextPerkId = 14000000;
+let nextSkillId = 9000022; // Start after existing skills
 
 function generateNumericId(type) {
   switch (type) {
@@ -41,6 +43,10 @@ function generateNumericId(type) {
       return ++nextInviteId;
     case 'category':
       return ++nextCategoryId;
+    case 'perk':
+      return ++nextPerkId;
+    case 'skill':
+      return ++nextSkillId;
     default:
       return ++nextUserId;
   }
@@ -60,6 +66,7 @@ function initializeIdCounters(mockDb) {
   let maxShiftId = 10000000;
   let maxOfferingId = 12000000;
   let maxCategoryId = 13000000;
+  let maxPerkId = 14000000;
   
   for (let user of mockDb.collections.users.values()) {
     if (user._id > maxUserId) {
@@ -115,6 +122,12 @@ function initializeIdCounters(mockDb) {
       maxCategoryId = category._id;
     }
   }
+
+  for (let perk of mockDb.collections.globalPerks.values()) {
+    if (perk._id > maxPerkId) {
+      maxPerkId = perk._id;
+    }
+  }
   
   nextUserId = maxUserId;
   nextCampId = maxCampId;
@@ -125,6 +138,7 @@ function initializeIdCounters(mockDb) {
   nextCallSlotId = maxCallSlotId;
   nextTaskId = maxTaskId;
   nextCategoryId = maxCategoryId;
+  nextPerkId = maxPerkId;
 }
 const fs = require('fs').promises;
 const path = require('path');
@@ -144,7 +158,9 @@ class MockDatabase {
       events: new Map(),
       shifts: new Map(),
       invites: new Map(),
-      campCategories: new Map()
+      campCategories: new Map(),
+      globalPerks: new Map(),
+      skills: new Map()
     };
     this.loaded = false;
   }
@@ -182,6 +198,8 @@ class MockDatabase {
       this.collections.shifts = new Map(parsed.shifts || []);
       this.collections.invites = new Map(parsed.invites || []);
       this.collections.campCategories = new Map(parsed.campCategories || []);
+      this.collections.globalPerks = new Map(parsed.globalPerks || []);
+      this.collections.skills = new Map(parsed.skills || []);
       
       // Convert string IDs back to numbers (numeric IDs are stored as strings in JSON)
       for (let [key, user] of this.collections.users.entries()) {
@@ -268,6 +286,12 @@ class MockDatabase {
           category._id = parseInt(category._id);
         }
       }
+
+      for (let [key, perk] of this.collections.globalPerks.entries()) {
+        if (typeof perk._id === 'string') {
+          perk._id = parseInt(perk._id);
+        }
+      }
       
       console.log('Mock database data loaded from file');
       // Initialize ID counters based on existing data
@@ -311,7 +335,9 @@ class MockDatabase {
         events: Array.from(this.collections.events.entries()),
         shifts: Array.from(this.collections.shifts.entries()),
         invites: Array.from(this.collections.invites.entries()),
-        campCategories: Array.from(this.collections.campCategories.entries())
+        campCategories: Array.from(this.collections.campCategories.entries()),
+        globalPerks: Array.from(this.collections.globalPerks.entries()),
+        skills: Array.from(this.collections.skills.entries())
       };
       
       await fs.writeFile(this.dataFile, JSON.stringify(cleanData, null, 2));
@@ -870,6 +896,13 @@ class MockDatabase {
       if (query.status && application.status !== query.status) {
         matches = false;
       }
+      // Support nested query for applicationData.selectedCallSlotId
+      if (query['applicationData.selectedCallSlotId']) {
+        const selectedId = application.applicationData?.selectedCallSlotId;
+        if (!selectedId || selectedId.toString() !== query['applicationData.selectedCallSlotId'].toString()) {
+          matches = false;
+        }
+      }
       
       if (matches) {
         applications.push(application);
@@ -963,27 +996,73 @@ class MockDatabase {
     await this.ensureLoaded();
     for (let roster of this.collections.rosters.values()) {
       if (roster.camp.toString() === query.camp.toString() && roster.isActive && !roster.isArchived) {
-        // Populate user data for each member
+        // Populate user data and application data for each member
         const populatedRoster = { ...roster };
         if (populatedRoster.members && populatedRoster.members.length > 0) {
-          populatedRoster.members = populatedRoster.members.map(member => {
-            const populatedMember = { ...member };
-            if (member.member) {
-              const user = this.collections.users.get(member.member);
-              if (user) {
-                populatedMember.user = {
-                  _id: user._id,
-                  firstName: user.firstName,
-                  lastName: user.lastName,
-                  email: user.email,
-                  profilePhoto: user.profilePhoto,
-                  accountType: user.accountType,
-                  playaName: user.playaName
-                };
+          populatedRoster.members = await Promise.all(populatedRoster.members.map(async (memberEntry) => {
+            const populatedMember = { ...memberEntry };
+            if (memberEntry.member) {
+              // First get the Member record
+              const memberRecord = this.collections.members.get(memberEntry.member.toString());
+              if (memberRecord && memberRecord.user) {
+                // Then get the User record from the Member by iterating through users
+                // (users collection is keyed by email, not ID)
+                for (let user of this.collections.users.values()) {
+                  if (user._id === memberRecord.user || user._id === parseInt(memberRecord.user) || user._id.toString() === memberRecord.user.toString()) {
+                    populatedMember.user = {
+                      _id: user._id,
+                      firstName: user.firstName,
+                      lastName: user.lastName,
+                      email: user.email,
+                      profilePhoto: user.profilePhoto,
+                      accountType: user.accountType,
+                      playaName: user.playaName,
+                      city: user.city,
+                      yearsBurned: user.yearsBurned,
+                      hasTicket: user.hasTicket,
+                      hasVehiclePass: user.hasVehiclePass,
+                      interestedInEAP: user.interestedInEAP,
+                      interestedInStrike: user.interestedInStrike,
+                      arrivalDate: user.arrivalDate,
+                      departureDate: user.departureDate,
+                      skills: user.skills
+                    };
+                    break;
+                  }
+                }
+
+                // Get the application data for this member
+                const application = await this.findMemberApplication({
+                  applicant: memberRecord.user,
+                  camp: roster.camp
+                });
+
+                if (application) {
+                  // Add application data to member
+                  populatedMember.applicationData = application.applicationData;
+                  populatedMember.reviewNotes = application.reviewNotes;
+                  populatedMember.status = application.status;
+                  populatedMember.appliedAt = application.appliedAt;
+
+                  // Populate call slot details if selected
+                  if (application.applicationData?.selectedCallSlotId) {
+                    const callSlot = await this.findCallSlot({ _id: application.applicationData.selectedCallSlotId });
+                    if (callSlot) {
+                      populatedMember.applicationData = {
+                        ...populatedMember.applicationData,
+                        callSlot: {
+                          date: callSlot.date,
+                          startTime: callSlot.startTime,
+                          endTime: callSlot.endTime
+                        }
+                      };
+                    }
+                  }
+                }
               }
             }
             return populatedMember;
-          });
+          }));
         }
         return populatedRoster;
       }
@@ -1189,7 +1268,7 @@ class MockDatabase {
 
   async findTasks(query = {}) {
     await this.ensureLoaded();
-    let tasks = Array.from(this.collections.tasks.values());
+    let tasks = Array.from(this.collections.tasks.values()).filter(task => task && task.campId);
     
     if (query.campId) {
       tasks = tasks.filter(task => task.campId && task.campId.toString() === query.campId.toString());
@@ -1233,8 +1312,27 @@ class MockDatabase {
 
   async updateTask(id, updates) {
     await this.ensureLoaded();
-    const task = this.collections.tasks.get(parseInt(id));
+    console.log('🔍 [Mock DB] updateTask called:', {
+      id: id,
+      idType: typeof id,
+      parsedId: parseInt(id),
+      updates: updates
+    });
+    
+    // Debug: Show available task IDs
+    const availableTaskIds = Array.from(this.collections.tasks.keys());
+    console.log('🔍 [Mock DB] Available task IDs:', availableTaskIds);
+    
+    // Try both string and number keys since mock data uses string keys
+    let task = this.collections.tasks.get(parseInt(id));
     if (!task) {
+      task = this.collections.tasks.get(id.toString());
+    }
+    
+    console.log('🔍 [Mock DB] Task found:', !!task, task ? task.title : 'null');
+    
+    if (!task) {
+      console.log('❌ [Mock DB] Task not found with ID:', id, 'Available IDs:', availableTaskIds);
       return null;
     }
     
@@ -1244,7 +1342,9 @@ class MockDatabase {
       updatedAt: new Date().toISOString()
     };
     
-    this.collections.tasks.set(parseInt(id), updatedTask);
+    // Use the same key format as the original task (string keys from mock data)
+    const keyToUse = availableTaskIds.includes(id.toString()) ? id.toString() : parseInt(id);
+    this.collections.tasks.set(keyToUse, updatedTask);
     await this.saveData();
     return updatedTask;
   }
@@ -1265,7 +1365,7 @@ class MockDatabase {
       return this.collections.events.get(query._id);
     }
     for (let event of this.collections.events.values()) {
-      if (query.campId && event.campId.toString() === query.campId.toString()) {
+      if (event && event.campId && query.campId && event.campId.toString() === query.campId.toString()) {
         return event;
       }
     }
@@ -1276,7 +1376,7 @@ class MockDatabase {
     await this.ensureLoaded();
     const results = [];
     for (let event of this.collections.events.values()) {
-      if (query.campId && event.campId.toString() === query.campId.toString()) {
+      if (event && event.campId && query.campId && event.campId.toString() === query.campId.toString()) {
         results.push(event);
       }
     }
@@ -1572,6 +1672,186 @@ class MockDatabase {
     this.collections.campCategories.delete(parseInt(id));
     await this.saveData();
     return category;
+  }
+
+  // Global Perk methods
+  async findGlobalPerk(query = {}) {
+    await this.ensureLoaded();
+    for (let perk of this.collections.globalPerks.values()) {
+      if (query._id && perk._id === parseInt(query._id)) {
+        return perk;
+      }
+      if (query.name && perk.name === query.name) {
+        return perk;
+      }
+    }
+    return null;
+  }
+
+  async findGlobalPerks(query = {}) {
+    await this.ensureLoaded();
+    let perks = Array.from(this.collections.globalPerks.values());
+    if (query.name) {
+      perks = perks.filter(p => p.name.toLowerCase().includes(query.name.toLowerCase()));
+    }
+    return perks.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createGlobalPerk(perkData) {
+    await this.ensureLoaded();
+    const id = generateNumericId('perk');
+    const perk = {
+      _id: id,
+      name: perkData.name,
+      icon: perkData.icon,
+      color: perkData.color,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    this.collections.globalPerks.set(id, perk);
+    await this.saveData();
+    return perk;
+  }
+
+  async updateGlobalPerk(id, updateData) {
+    await this.ensureLoaded();
+    const perk = this.collections.globalPerks.get(parseInt(id));
+    if (!perk) return null;
+    const updatedPerk = {
+      ...perk,
+      ...updateData,
+      updatedAt: new Date().toISOString()
+    };
+    this.collections.globalPerks.set(parseInt(id), updatedPerk);
+    await this.saveData();
+    return updatedPerk;
+  }
+
+  async deleteGlobalPerk(id) {
+    await this.ensureLoaded();
+    
+    // Try both string and integer keys
+    let perk = this.collections.globalPerks.get(id.toString());
+    if (!perk) {
+      perk = this.collections.globalPerks.get(parseInt(id));
+    }
+    if (!perk) {
+      perk = this.collections.globalPerks.get(parseInt(id).toString());
+    }
+    
+    if (!perk) return null;
+    
+    // Delete using the actual key from the map
+    for (let [key, value] of this.collections.globalPerks.entries()) {
+      if (value._id === parseInt(id) || value._id.toString() === id.toString()) {
+        this.collections.globalPerks.delete(key);
+        break;
+      }
+    }
+    
+    await this.saveData();
+    return perk;
+  }
+
+  // ==================== Skills Methods ====================
+  
+  async findSkills(query = {}) {
+    await this.ensureLoaded();
+    let skills = Array.from(this.collections.skills.values());
+    
+    // Filter by isActive (default to only active skills)
+    if (query.isActive !== undefined) {
+      skills = skills.filter(skill => skill.isActive === query.isActive);
+    } else {
+      // By default, only return active skills
+      skills = skills.filter(skill => skill.isActive !== false);
+    }
+    
+    // Sort alphabetically by name
+    skills.sort((a, b) => a.name.localeCompare(b.name));
+    
+    return skills;
+  }
+  
+  async findSkillById(id) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    return this.collections.skills.get(numericId);
+  }
+  
+  async findSkillByName(name) {
+    await this.ensureLoaded();
+    const skills = Array.from(this.collections.skills.values());
+    return skills.find(skill => skill.name.toLowerCase() === name.toLowerCase());
+  }
+  
+  async createSkill(skillData) {
+    await this.ensureLoaded();
+    
+    // Check if skill with same name already exists
+    const existing = await this.findSkillByName(skillData.name);
+    if (existing) {
+      throw new Error('A skill with this name already exists');
+    }
+    
+    const skill = {
+      _id: generateNumericId('skill'),
+      name: skillData.name,
+      description: skillData.description || '',
+      isActive: skillData.isActive !== undefined ? skillData.isActive : true,
+      createdBy: skillData.createdBy,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.collections.skills.set(skill._id, skill);
+    await this.saveData();
+    
+    return skill;
+  }
+  
+  async updateSkill(id, updates) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    const skill = this.collections.skills.get(numericId);
+    
+    if (!skill) {
+      throw new Error('Skill not found');
+    }
+    
+    // If updating name, check for duplicates
+    if (updates.name && updates.name !== skill.name) {
+      const existing = await this.findSkillByName(updates.name);
+      if (existing && existing._id !== numericId) {
+        throw new Error('A skill with this name already exists');
+      }
+    }
+    
+    // Update skill
+    Object.assign(skill, {
+      ...updates,
+      updatedAt: new Date()
+    });
+    
+    this.collections.skills.set(numericId, skill);
+    await this.saveData();
+    
+    return skill;
+  }
+  
+  async deleteSkill(id) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    const skill = this.collections.skills.get(numericId);
+    
+    if (!skill) {
+      throw new Error('Skill not found');
+    }
+    
+    this.collections.skills.delete(numericId);
+    await this.saveData();
+    
+    return skill;
   }
 }
 

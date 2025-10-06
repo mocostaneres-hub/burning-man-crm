@@ -624,8 +624,112 @@ class DatabaseAdapter {
     }
   }
 
+  // GlobalPerk operations
+  async findGlobalPerk(query = {}) {
+    if (this.useMongoDB) {
+      const GlobalPerk = require('../models/GlobalPerk');
+      return await GlobalPerk.findOne(query);
+    } else {
+      return await this.mockDB.findGlobalPerk(query);
+    }
+  }
+
+  async findGlobalPerks(query = {}) {
+    if (this.useMongoDB) {
+      const GlobalPerk = require('../models/GlobalPerk');
+      return await GlobalPerk.find(query).sort({ name: 1 });
+    } else {
+      return await this.mockDB.findGlobalPerks(query);
+    }
+  }
+
+  async createGlobalPerk(perkData) {
+    if (this.useMongoDB) {
+      const GlobalPerk = require('../models/GlobalPerk');
+      const perk = new GlobalPerk(perkData);
+      return await perk.save();
+    } else {
+      return await this.mockDB.createGlobalPerk(perkData);
+    }
+  }
+
+  async updateGlobalPerk(id, updateData) {
+    if (this.useMongoDB) {
+      const GlobalPerk = require('../models/GlobalPerk');
+      return await GlobalPerk.findByIdAndUpdate(id, updateData, { new: true });
+    } else {
+      return await this.mockDB.updateGlobalPerk(id, updateData);
+    }
+  }
+
+  async deleteGlobalPerk(id) {
+    if (this.useMongoDB) {
+      const GlobalPerk = require('../models/GlobalPerk');
+      return await GlobalPerk.findByIdAndDelete(id);
+    } else {
+      return await this.mockDB.deleteGlobalPerk(id);
+    }
+  }
+
   setMongoDBMode(useMongoDB) {
     this.useMongoDB = useMongoDB;
+  }
+
+  // ==================== Skills Methods ====================
+  
+  async findSkills(query = {}) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      return await Skill.find(query).sort({ name: 1 });
+    } else {
+      return await this.mockDB.findSkills(query);
+    }
+  }
+
+  async findSkillById(id) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      return await Skill.findById(id);
+    } else {
+      return await this.mockDB.findSkillById(id);
+    }
+  }
+
+  async findSkillByName(name) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      return await Skill.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+    } else {
+      return await this.mockDB.findSkillByName(name);
+    }
+  }
+
+  async createSkill(skillData) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      const skill = new Skill(skillData);
+      return await skill.save();
+    } else {
+      return await this.mockDB.createSkill(skillData);
+    }
+  }
+
+  async updateSkill(id, updateData) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      return await Skill.findByIdAndUpdate(id, updateData, { new: true });
+    } else {
+      return await this.mockDB.updateSkill(id, updateData);
+    }
+  }
+
+  async deleteSkill(id) {
+    if (this.useMongoDB) {
+      const Skill = require('../models/Skill');
+      return await Skill.findByIdAndDelete(id);
+    } else {
+      return await this.mockDB.deleteSkill(id);
+    }
   }
 }
 

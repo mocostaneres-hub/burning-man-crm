@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -29,23 +29,23 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // @desc    Update user profile
 // @access  Private
 router.put('/profile', authenticateToken, [
-  body('firstName').optional().trim().isLength({ min: 1, max: 50 }),
-  body('lastName').optional().trim().isLength({ min: 1, max: 50 }),
-  body('phoneNumber').optional().trim().isLength({ min: 10, max: 20 }),
-  body('city').optional().trim().isLength({ max: 100 }),
-  body('yearsBurned').optional().isInt({ min: 0, max: 50 }),
-  body('previousCamps').optional().trim().isLength({ max: 1000 }),
-  body('bio').optional().trim().isLength({ max: 1000 }),
-  body('playaName').optional().trim().isLength({ max: 100 }),
-  body('socialMedia.instagram').optional().trim().isLength({ max: 200 }),
-  body('socialMedia.facebook').optional().trim().isLength({ max: 200 }),
-  body('socialMedia.linkedin').optional().trim().isLength({ max: 200 }),
+  body('firstName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
+  body('lastName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
+  body('phoneNumber').optional().trim().custom((value) => value === '' || (value.length >= 10 && value.length <= 20)),
+  body('city').optional().trim().custom((value) => value === '' || value.length <= 100),
+  body('yearsBurned').optional().custom((value) => value === '' || value === null || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50)),
+  body('previousCamps').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('bio').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('playaName').optional().trim().custom((value) => value === '' || value.length <= 100),
+  body('socialMedia.instagram').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('socialMedia.facebook').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('socialMedia.linkedin').optional().trim().custom((value) => value === '' || value.length <= 200),
   body('skills').optional().isArray(),
   body('interests').optional().isArray(),
-  body('burningManExperience').optional().trim().isLength({ max: 1000 }),
-  body('location').optional().trim().isLength({ max: 200 }),
-  body('hasTicket').optional().isBoolean(),
-  body('hasVehiclePass').optional().isBoolean(),
+  body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('location').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('hasTicket').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
+  body('hasVehiclePass').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
   body('arrivalDate').optional().custom((value) => {
     if (value === null || value === undefined || value === '') return true;
     return new Date(value).toString() !== 'Invalid Date';
@@ -56,8 +56,8 @@ router.put('/profile', authenticateToken, [
   }),
   body('interestedInEAP').optional().isBoolean(),
   body('interestedInStrike').optional().isBoolean(),
-  body('campName').optional().trim().isLength({ min: 1, max: 100 }),
-  body('campBio').optional().trim().isLength({ max: 2000 })
+  body('campName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 100)),
+  body('campBio').optional().trim().custom((value) => value === '' || value.length <= 2000)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -539,6 +539,329 @@ router.put('/change-password', authenticateToken, [
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
     console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ===== ADMIN USER MANAGEMENT ROUTES =====
+
+// @route   GET /api/users
+// @desc    Get all users (admin only)
+// @access  Private (Admin only)
+router.get('/admin', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      accountType,
+      status
+    } = req.query;
+
+    // Get all users from mock database
+    const allUsers = await db.findUsers();
+    
+    // Apply filters
+    let filteredUsers = allUsers;
+    
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredUsers = filteredUsers.filter(user => 
+        user.firstName?.toLowerCase().includes(searchLower) ||
+        user.lastName?.toLowerCase().includes(searchLower) ||
+        user.campName?.toLowerCase().includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        user.playaName?.toLowerCase().includes(searchLower) ||
+        user._id?.toString().includes(searchLower)
+      );
+    }
+    
+    if (accountType) {
+      filteredUsers = filteredUsers.filter(user => user.accountType === accountType);
+    }
+    
+    if (status) {
+      filteredUsers = filteredUsers.filter(user => user.isActive === (status === 'active'));
+    }
+    
+    // Sort by creation date
+    filteredUsers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const users = filteredUsers.slice(startIndex, endIndex);
+    
+    const total = filteredUsers.length;
+
+    // Remove passwords from response
+    const safeUsers = users.map(user => {
+      const { password, ...safeUser } = user;
+      return safeUser;
+    });
+
+    res.json({
+      data: safeUsers,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      total
+    });
+
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/users/:id
+// @desc    Get single user details (admin only)
+// @access  Private (Admin only)
+router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await db.findUser({ _id: parseInt(id) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Remove password from response
+    const { password, ...safeUser } = user;
+
+    res.json({ user: safeUser });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/users/:id
+// @desc    Update user by admin
+// @access  Private (Admin only)
+router.put('/:id', authenticateToken, requireAdmin, [
+  body('firstName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
+  body('lastName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
+  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('phoneNumber').optional().trim().custom((value) => value === '' || (value.length >= 10 && value.length <= 20)),
+  body('city').optional().trim().custom((value) => value === '' || value.length <= 100),
+  body('yearsBurned').optional().custom((value) => value === '' || value === null || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50)),
+  body('previousCamps').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('bio').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('playaName').optional().trim().custom((value) => value === '' || value.length <= 100),
+  body('socialMedia.instagram').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('socialMedia.facebook').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('socialMedia.linkedin').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('skills').optional().isArray(),
+  body('interests').optional().isArray(),
+  body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
+  body('location').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('hasTicket').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
+  body('hasVehiclePass').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
+  body('arrivalDate').optional().custom((value) => {
+    if (value === null || value === undefined || value === '') return true;
+    return new Date(value).toString() !== 'Invalid Date';
+  }),
+  body('departureDate').optional().custom((value) => {
+    if (value === null || value === undefined || value === '') return true;
+    return new Date(value).toString() !== 'Invalid Date';
+  }),
+  body('interestedInEAP').optional().isBoolean(),
+  body('interestedInStrike').optional().isBoolean(),
+  body('campName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 100)),
+  body('campBio').optional().trim().custom((value) => value === '' || value.length <= 2000),
+  body('accountType').optional().isIn(['personal', 'camp', 'admin']).withMessage('Invalid account type'),
+  body('isActive').optional().isBoolean()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Debug: Log the request body
+    console.log('🔍 [PUT /api/users/:id] Request body:', req.body);
+    console.log('🔍 [PUT /api/users/:id] Admin ID:', req.user._id);
+    console.log('🔍 [PUT /api/users/:id] Target user ID:', id);
+
+    // Find target user
+    const targetUser = await db.findUser({ _id: parseInt(id) });
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Create user history entry for tracking changes
+    const adminUser = await db.findUser({ _id: req.user._id });
+    const changes = {};
+    
+    // Track what fields are being changed
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== targetUser[key]) {
+        changes[key] = {
+          from: targetUser[key],
+          to: updateData[key]
+        };
+      }
+    });
+
+    // Add history entry if there are changes
+    if (Object.keys(changes).length > 0) {
+      const historyEntry = {
+        _id: Date.now(), // Simple ID generation for mock database
+        userId: parseInt(id),
+        editorId: req.user._id,
+        editorName: `${adminUser.firstName} ${adminUser.lastName}`,
+        changes: changes,
+        timestamp: new Date().toISOString(),
+        action: 'profile_updated'
+      };
+
+      // Add to user's history array
+      if (!targetUser.userHistory) {
+        targetUser.userHistory = [];
+      }
+      targetUser.userHistory.push(historyEntry);
+      updateData.userHistory = targetUser.userHistory;
+    }
+
+    // Update user using database adapter
+    const updatedUser = await db.updateUserById(parseInt(id), updateData);
+    
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found or update failed' });
+    }
+
+    // Update related applications and roster entries to reflect profile changes
+    try {
+      console.log('🔄 [PUT /api/users/:id] Starting applications and roster sync...');
+      
+      // Update applications where this user is the applicant
+      const applications = await db.findMemberApplications({ applicant: parseInt(id) });
+      console.log(`🔍 [PUT /api/users/:id] Found ${applications.length} applications to update`);
+      
+      for (const application of applications) {
+        if (application && application.applicant) {
+          try {
+            await db.updateMemberApplication(application._id, {
+              applicantDetails: {
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                email: updatedUser.email,
+                profilePhoto: updatedUser.profilePhoto,
+                bio: updatedUser.bio,
+                playaName: updatedUser.playaName,
+                city: updatedUser.city,
+                yearsBurned: updatedUser.yearsBurned,
+                previousCamps: updatedUser.previousCamps,
+                socialMedia: updatedUser.socialMedia,
+                hasTicket: updatedUser.hasTicket,
+                hasVehiclePass: updatedUser.hasVehiclePass,
+                arrivalDate: updatedUser.arrivalDate,
+                departureDate: updatedUser.departureDate,
+                interestedInEAP: updatedUser.interestedInEAP,
+                interestedInStrike: updatedUser.interestedInStrike,
+                skills: updatedUser.skills
+              }
+            });
+            console.log(`✅ [PUT /api/users/:id] Updated application ${application._id}`);
+          } catch (appError) {
+            console.error(`❌ [PUT /api/users/:id] Failed to update application ${application._id}:`, appError);
+          }
+        }
+      }
+
+      // Update roster entries where this user is a member
+      const rosters = await db.findAllRosters({});
+      console.log(`🔍 [PUT /api/users/:id] Found ${rosters.length} rosters to check`);
+      
+      for (const roster of rosters) {
+        if (roster.members && roster.members.length > 0) {
+          try {
+            let rosterUpdated = false;
+            const updatedMembers = roster.members.map(memberEntry => {
+              if (memberEntry && memberEntry.member && memberEntry.member.toString() === id.toString()) {
+                rosterUpdated = true;
+                return {
+                  ...memberEntry,
+                  memberDetails: {
+                    userDetails: {
+                      firstName: updatedUser.firstName,
+                      lastName: updatedUser.lastName,
+                      email: updatedUser.email,
+                      profilePhoto: updatedUser.profilePhoto,
+                      bio: updatedUser.bio,
+                      playaName: updatedUser.playaName,
+                      city: updatedUser.city,
+                      yearsBurned: updatedUser.yearsBurned,
+                      previousCamps: updatedUser.previousCamps,
+                      socialMedia: updatedUser.socialMedia,
+                      hasTicket: updatedUser.hasTicket,
+                      hasVehiclePass: updatedUser.hasVehiclePass,
+                      arrivalDate: updatedUser.arrivalDate,
+                      departureDate: updatedUser.departureDate,
+                      interestedInEAP: updatedUser.interestedInEAP,
+                      interestedInStrike: updatedUser.interestedInStrike,
+                      skills: updatedUser.skills
+                    }
+                  }
+                };
+              }
+              return memberEntry;
+            });
+
+            if (rosterUpdated) {
+              await db.updateRoster(roster._id, { members: updatedMembers });
+              console.log(`✅ [PUT /api/users/:id] Updated roster ${roster._id}`);
+            }
+          } catch (rosterError) {
+            console.error(`❌ [PUT /api/users/:id] Failed to update roster ${roster._id}:`, rosterError);
+          }
+        }
+      }
+      
+      console.log('✅ [PUT /api/users/:id] Applications and roster sync completed');
+    } catch (syncError) {
+      console.error('❌ [PUT /api/users/:id] Error during applications/roster sync:', syncError);
+      // Don't fail the profile update if sync fails - this is non-critical
+    }
+
+    // Remove password from response
+    const { password, ...safeUser } = updatedUser;
+
+    res.json({
+      message: 'User updated successfully',
+      user: safeUser
+    });
+
+  } catch (error) {
+    console.error('❌ [PUT /api/users/:id] Update user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/users/:id/history
+// @desc    Get user edit history (admin only)
+// @access  Private (Admin only)
+router.get('/:id/history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await db.findUser({ _id: parseInt(id) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Return user history or empty array
+    const history = user.userHistory || [];
+    
+    // Sort by timestamp descending (most recent first)
+    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json({ history });
+  } catch (error) {
+    console.error('Get user history error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

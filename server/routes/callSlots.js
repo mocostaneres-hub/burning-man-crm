@@ -179,4 +179,59 @@ router.get('/available/:campId', async (req, res) => {
   }
 });
 
+// @route   GET /api/call-slots/:id/details
+// @desc    Get call slot details with applicants
+// @access  Private (Camp owners only)
+router.get('/:id/details', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user is camp owner
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+      return res.status(403).json({ message: 'Camp account required' });
+    }
+
+    const callSlot = await db.findCallSlot({ _id: id });
+    if (!callSlot) {
+      return res.status(404).json({ message: 'Call slot not found' });
+    }
+
+    // Check if user owns this camp
+    const camp = await db.findCamp({ _id: callSlot.campId });
+    if (!camp || camp.contactEmail !== req.user.email) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Find all applications that selected this call slot
+    const applications = await db.findMemberApplications({ 
+      camp: callSlot.campId,
+      'applicationData.selectedCallSlotId': id 
+    });
+
+    // Get applicant details for each application
+    const applicantsWithDetails = await Promise.all(
+      applications.map(async (app) => {
+        const applicant = await db.findUser({ _id: app.applicant });
+        return {
+          _id: applicant._id,
+          firstName: applicant.firstName,
+          lastName: applicant.lastName,
+          email: applicant.email,
+          applicationId: app._id,
+          applicationStatus: app.status,
+          appliedAt: app.appliedAt
+        };
+      })
+    );
+
+    res.json({
+      callSlot,
+      applicants: applicantsWithDetails
+    });
+  } catch (error) {
+    console.error('Error fetching call slot details:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

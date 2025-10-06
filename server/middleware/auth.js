@@ -48,6 +48,13 @@ const requireAdmin = async (req, res, next) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
+    // Check if user has admin account type
+    if (req.user.accountType === 'admin') {
+      req.admin = { user: req.user._id, role: 'admin' };
+      return next();
+    }
+
+    // Fallback: check for separate Admin collection
     const admin = await db.findAdmin({ user: req.user._id, isActive: true });
     
     if (!admin) {

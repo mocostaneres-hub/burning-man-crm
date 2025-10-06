@@ -141,12 +141,23 @@ router.get('/public/:slug', async (req, res) => {
       ? camp.photos.map(photo => typeof photo === 'string' ? photo : photo.url).filter(Boolean)
       : (camp.heroPhoto?.url ? [camp.heroPhoto.url] : []);
     
+    // Populate selectedPerks with offering data
+    const populatedPerks = camp.selectedPerks && camp.selectedPerks.length > 0 ?
+      await Promise.all(camp.selectedPerks.map(async (perk) => {
+        const offering = await db.findGlobalPerk({ _id: perk.perkId });
+        return {
+          ...perk,
+          offering: offering || null
+        };
+      })) : [];
+    
     // Return public camp data with members
     const publicCamp = {
       ...camp,
       campName: camp.name, // Frontend expects campName
       photos: processedPhotos,
       primaryPhotoIndex: Math.min(camp.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
+      selectedPerks: populatedPerks,
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
@@ -443,7 +454,7 @@ router.put('/:id', authenticateToken, [
       return res.status(403).json({ message: 'Not authorized to update this camp' });
     }
 
-    // Update camp
+    // Update camp (allow selectedPerks passthrough)
     const updatedCamp = await db.updateCamp({ _id: camp._id }, req.body);
 
     // Get owner info

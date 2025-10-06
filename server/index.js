@@ -70,6 +70,9 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/shifts', require('./routes/shifts'));
 app.use('/api', require('./routes/invites'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/perks', require('./routes/perks'));
+app.use('/api/admin/perks', require('./routes/adminPerks'));
+app.use('/api/skills', require('./routes/skills'));
 
 // Socket.io for real-time features
 io.on('connection', (socket) => {

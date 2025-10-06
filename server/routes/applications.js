@@ -18,12 +18,11 @@ const isPersonalProfileComplete = (user) => {
     'city',
     'yearsBurned',
     'bio',
-    'hasTicket',
-    'hasVehiclePass',
     'interestedInEAP',
     'interestedInStrike'
   ];
 
+  // Check required fields
   for (const field of requiredFields) {
     if (typeof user[field] === 'boolean') {
       // Boolean fields are always valid (true or false)
@@ -37,6 +36,9 @@ const isPersonalProfileComplete = (user) => {
       return false;
     }
   }
+
+  // hasTicket and hasVehiclePass are optional (can be true, false, or null for "Not informed")
+  // They don't need to be validated as required fields
 
   return true;
 };
@@ -53,20 +55,24 @@ router.post('/apply', authenticateToken, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      console.error('❌ [Applications] Validation errors:', errors.array());
+      return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
     }
 
     // Check if user has personal account
     if (req.user.accountType !== 'personal') {
+      console.error('❌ [Applications] Wrong account type:', req.user.accountType);
       return res.status(403).json({ message: 'Only personal accounts can apply to camps' });
     }
 
     // Check if personal profile is complete
     if (!isPersonalProfileComplete(req.user)) {
+      console.error('❌ [Applications] Incomplete profile for user:', req.user.email);
+      console.error('User data:', JSON.stringify(req.user, null, 2));
       return res.status(400).json({ 
-        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Phone Number, City, Years Burning (or check "It\'s my first burn"), Bio, and all Burning Man Plans questions.',
+        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Phone Number, City, Years Burned, Bio, and Burning Man Plans (Interested in Early Arrival/Strike Team).',
         incompleteProfile: true,
-        redirectTo: '/member/profile'
+        redirectTo: '/user/profile'
       });
     }
 
@@ -104,6 +110,12 @@ router.post('/apply', authenticateToken, [
       return res.status(400).json({ message: 'Invalid camp ID provided' });
     }
 
+    // Determine initial status based on call slot selection
+    let initialStatus = 'pending-orientation'; // Default when no call slot available
+    if (applicationData.selectedCallSlotId) {
+      initialStatus = 'call-scheduled'; // When call time is selected
+    }
+
     // Create new application (with additional race condition protection)
     let application;
     try {
@@ -114,7 +126,7 @@ router.post('/apply', authenticateToken, [
           ...applicationData,
           skills: applicationData.skills || []
         },
-        status: 'pending'
+        status: initialStatus
       });
     } catch (dbError) {
       // Handle race condition where duplicate was created between checks
@@ -132,6 +144,27 @@ router.post('/apply', authenticateToken, [
         });
       }
       throw dbError;
+    }
+
+    // Handle call slot booking if a slot was selected
+    if (applicationData.selectedCallSlotId) {
+      try {
+        const callSlot = await db.findCallSlot({ _id: applicationData.selectedCallSlotId });
+        if (callSlot) {
+          // Increment currentParticipants and add to participants array
+          const updatedParticipants = callSlot.currentParticipants + 1;
+          const updatedIsAvailable = updatedParticipants < callSlot.maxParticipants;
+          
+          await db.updateCallSlot(applicationData.selectedCallSlotId, {
+            currentParticipants: updatedParticipants,
+            isAvailable: updatedIsAvailable,
+            participants: [...(callSlot.participants || []), req.user._id]
+          });
+        }
+      } catch (callSlotError) {
+        console.error('Error updating call slot:', callSlotError);
+        // Don't fail the application if call slot update fails
+      }
     }
 
     // Update camp stats
@@ -254,6 +287,20 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
     // Populate applicant details with comprehensive member information
     const applicationsWithApplicants = await Promise.all(applications.map(async (app) => {
       const applicant = await db.findUser({ _id: app.applicant });
+      
+      // Populate call slot details if selected
+      let callSlotDetails = null;
+      if (app.applicationData?.selectedCallSlotId) {
+        const callSlot = await db.findCallSlot({ _id: app.applicationData.selectedCallSlotId });
+        if (callSlot) {
+          callSlotDetails = {
+            date: callSlot.date,
+            startTime: callSlot.startTime,
+            endTime: callSlot.endTime
+          };
+        }
+      }
+      
       return {
         ...app,
         applicant: applicant ? {
@@ -276,7 +323,11 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
           interestedInEAP: applicant.interestedInEAP,
           interestedInStrike: applicant.interestedInStrike,
           skills: applicant.skills
-        } : null
+        } : null,
+        applicationData: {
+          ...app.applicationData,
+          callSlot: callSlotDetails
+        }
       };
     }));
 
@@ -301,7 +352,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 // @desc    Update application status (camp admins only)
 // @access  Private (Camp owners only)
 router.put('/:applicationId/status', authenticateToken, [
-  body('status').isIn(['pending', 'under-review', 'approved', 'rejected']).withMessage('Invalid status'),
+  body('status').isIn(['pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive']).withMessage('Invalid status'),
   body('reviewNotes').optional().trim().isLength({ max: 1000 })
 ], async (req, res) => {
   try {
@@ -334,6 +385,29 @@ router.put('/:applicationId/status', authenticateToken, [
     };
 
     const updatedApplication = await db.updateMemberApplication(applicationId, updateData);
+
+    // If rejected, release the call slot
+    if (status === 'rejected' && application.applicationData?.selectedCallSlotId) {
+      try {
+        const callSlot = await db.findCallSlot({ _id: application.applicationData.selectedCallSlotId });
+        if (callSlot && callSlot.currentParticipants > 0) {
+          // Decrement currentParticipants and remove from participants array
+          const updatedParticipants = callSlot.currentParticipants - 1;
+          const filteredParticipants = (callSlot.participants || []).filter(
+            p => p.toString() !== application.applicant.toString()
+          );
+          
+          await db.updateCallSlot(application.applicationData.selectedCallSlotId, {
+            currentParticipants: updatedParticipants,
+            isAvailable: true, // Always make available when releasing a slot
+            participants: filteredParticipants
+          });
+        }
+      } catch (callSlotError) {
+        console.error('Error releasing call slot:', callSlotError);
+        // Don't fail the status update if call slot release fails
+      }
+    }
 
     // If approved, create member record
     if (status === 'approved') {

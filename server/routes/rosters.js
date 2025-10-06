@@ -359,6 +359,10 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
             status: 'approved'
           });
           
+          // Get dues status from roster member entry first (most accurate), 
+          // then member record, then application, then default to Unpaid
+          const duesStatus = memberEntry.duesStatus || member.duesStatus || application?.duesStatus || 'Unpaid';
+          
           populatedMembers.push({
             ...memberEntry,
             memberDetails: {
@@ -380,7 +384,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 departureDate: user.departureDate,
                 interestedInEAP: user.interestedInEAP,
                 interestedInStrike: user.interestedInStrike,
-                duesStatus: application?.duesStatus || 'Unpaid'
+                duesStatus: duesStatus
               }
             }
           });
@@ -388,34 +392,122 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
       }
     }
 
-    // Generate CSV content
+    // Helper function to format dates like the frontend (DAYOFWEEK, MM/DD)
+    const formatDateForCSV = (dateString) => {
+      if (!dateString || dateString === '' || dateString === 'undefined' || dateString === 'null') {
+        return 'Not specified';
+      }
+      
+      try {
+        let date;
+        
+        if (dateString instanceof Date) {
+          date = dateString;
+        } else if (typeof dateString === 'string') {
+          // Handle different date formats
+          if (dateString.includes('T')) {
+            // Already has time component
+            date = new Date(dateString);
+          } else {
+            // Add timezone offset to handle date parsing correctly
+            date = new Date(dateString + 'T12:00:00');
+          }
+        } else {
+          return 'Not specified';
+        }
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          return 'Not specified';
+        }
+        
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: '2-digit',
+          day: '2-digit'
+        }).replace(/(\w+),\s*(\d+)\/(\d+)/, '$1, $2/$3');
+      } catch (error) {
+        return 'Not specified';
+      }
+    };
+
+    // Helper function to format travel plans (arrival and departure in one cell)
+    const formatTravelPlans = (arrivalDate, departureDate) => {
+      const arrival = formatDateForCSV(arrivalDate);
+      const departure = formatDateForCSV(departureDate);
+      
+      if (arrival === 'Not specified' && departure === 'Not specified') {
+        return 'Not specified';
+      } else if (arrival === 'Not specified') {
+        return `To: ${departure}`;
+      } else if (departure === 'Not specified') {
+        return `From: ${arrival}`;
+      } else {
+        return `${arrival} - ${departure}`;
+      }
+    };
+
+    // Helper function to format ticket/VP status
+    const formatTicketVPStatus = (value) => {
+      if (value === null || value === undefined) return 'Not informed';
+      return value ? 'Yes' : 'No';
+    };
+
+    // Helper function to format social media links
+    const formatSocialMedia = (socialMedia) => {
+      if (!socialMedia) return 'N/A';
+      const links = [];
+      if (socialMedia.instagram) links.push(`Instagram: ${socialMedia.instagram}`);
+      if (socialMedia.facebook) links.push(`Facebook: ${socialMedia.facebook}`);
+      if (socialMedia.linkedin) links.push(`LinkedIn: ${socialMedia.linkedin}`);
+      return links.length > 0 ? links.join('; ') : 'N/A';
+    };
+
+    // Generate CSV content with all available fields
     const csvHeaders = [
-      'Name',
+      'First Name',
+      'Last Name',
+      'Email',
+      'Playa Name',
       'City',
       'Years Burned',
       'Skills',
       'Has Ticket',
       'Has Vehicle Pass',
-      'Arrival Date',
-      'Departure Date',
+      'Travel Plans',
       'Early Arrival Interest',
+      'Late Departure Interest',
       'Bio',
+      'Social Media',
+      'Dues Status',
       'Added to Roster'
     ];
 
     const csvRows = populatedMembers.map(memberEntry => {
       const user = memberEntry.memberDetails.userDetails;
+      const overrides = memberEntry.overrides || {};
+      
+      // Use overrides if available, otherwise fall back to user data
+      const playaName = overrides.playaName !== undefined ? overrides.playaName : user.playaName;
+      const yearsBurned = overrides.yearsBurned !== undefined ? overrides.yearsBurned : user.yearsBurned;
+      const skills = overrides.skills !== undefined ? overrides.skills : user.skills;
+      
       return [
-        `"${user.firstName} ${user.lastName}"`,
+        `"${user.firstName || 'N/A'}"`,
+        `"${user.lastName || 'N/A'}"`,
+        `"${user.email || 'N/A'}"`,
+        `"${playaName || 'Not set'}"`,
         `"${user.city || 'N/A'}"`,
-        user.yearsBurned || 0,
-        `"${(user.skills || []).join(', ')}"`,
-        user.hasTicket ? 'Yes' : 'No',
-        user.hasVehiclePass ? 'Yes' : 'No',
-        user.arrivalDate ? new Date(user.arrivalDate).toLocaleDateString() : 'N/A',
-        user.departureDate ? new Date(user.departureDate).toLocaleDateString() : 'N/A',
+        (yearsBurned === 0 || yearsBurned === '0') ? 'Virgin' : (yearsBurned || 0),
+        `"${(skills || []).join(', ')}"`,
+        formatTicketVPStatus(user.hasTicket),
+        formatTicketVPStatus(user.hasVehiclePass),
+        `"${formatTravelPlans(user.arrivalDate, user.departureDate)}"`,
         user.interestedInEAP ? 'Yes' : 'No',
+        user.interestedInStrike ? 'Yes' : 'No',
         `"${(user.bio || '').replace(/"/g, '""')}"`,
+        `"${formatSocialMedia(user.socialMedia).replace(/"/g, '""')}"`,
+        user.duesStatus || 'Unpaid',
         new Date(memberEntry.addedAt).toLocaleDateString()
       ];
     });
@@ -493,6 +585,108 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Remove member from roster error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/rosters/:rosterId/members
+// @desc    Manually add a new member to roster
+// @access  Private (Camp admins/leads only)
+router.post('/:rosterId/members', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+    const memberData = req.body;
+
+    // Check if user is camp admin/lead
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    }
+
+    // Validate required fields
+    if (!memberData.firstName || !memberData.lastName || !memberData.email) {
+      return res.status(400).json({ message: 'First name, last name, and email are required' });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(memberData.email)) {
+      return res.status(400).json({ message: 'Invalid email address' });
+    }
+
+    // Get camp ID from user context
+    const camp = await db.findCamp({ contactEmail: req.user.email });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Verify roster belongs to this camp
+    const roster = await db.findRosterById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ message: 'Roster not found' });
+    }
+    if (roster.camp.toString() !== camp._id.toString()) {
+      return res.status(403).json({ message: 'Roster does not belong to your camp' });
+    }
+
+    // Check if user with this email already exists
+    let user = await db.findUser({ email: memberData.email });
+    
+    if (!user) {
+      // Create new user account
+      const newUser = {
+        firstName: memberData.firstName,
+        lastName: memberData.lastName,
+        email: memberData.email,
+        password: 'TempPass123!', // Temporary password - user should reset
+        accountType: 'personal',
+        playaName: memberData.playaName || '',
+        city: memberData.city || '',
+        yearsBurned: memberData.yearsBurned || 0,
+        hasTicket: memberData.hasTicket,
+        hasVehiclePass: memberData.hasVehiclePass,
+        arrivalDate: memberData.arrivalDate || null,
+        departureDate: memberData.departureDate || null,
+        skills: memberData.skills || [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      user = await db.createUser(newUser);
+    }
+
+    // Check if user is already in this roster
+    const isAlreadyMember = roster.members.some(m => 
+      m.user?.toString() === user._id.toString() || 
+      m.user?._id?.toString() === user._id.toString()
+    );
+    
+    if (isAlreadyMember) {
+      return res.status(400).json({ message: 'User is already a member of this roster' });
+    }
+
+    // Create member record
+    const newMember = {
+      user: user._id,
+      camp: camp._id,
+      roster: rosterId,
+      addedAt: new Date(),
+      addedBy: req.user._id,
+      status: 'approved',
+      duesPaid: memberData.duesPaid || false
+    };
+
+    const createdMember = await db.createMember(newMember);
+
+    // Add member to roster
+    await db.addMemberToRoster(rosterId, createdMember._id, req.user._id);
+
+    res.status(201).json({
+      message: 'Member added successfully',
+      member: createdMember,
+      user: user
+    });
+  } catch (error) {
+    console.error('Add member to roster error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -619,6 +813,66 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
   }
 });
 
+// @route   PUT /api/rosters/:rosterId/members/:memberId/overrides
+// @desc    Update roster-specific member overrides (playaName, yearsBurned, skills)
+// @access  Private (Camp admins/leads only)
+router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { playaName, yearsBurned, skills } = req.body;
+
+    // Check if user is camp admin/lead
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    }
+
+    const camp = await db.findCamp({ contactEmail: req.user.email });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    const roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
+    if (!roster) {
+      return res.status(404).json({ message: 'Roster not found' });
+    }
+
+    // Find the member in the roster
+    const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in roster' });
+    }
+
+    // Create or update the overrides object
+    if (!roster.members[memberIndex].overrides) {
+      roster.members[memberIndex].overrides = {};
+    }
+
+    // Update only the provided fields
+    if (playaName !== undefined) {
+      roster.members[memberIndex].overrides.playaName = playaName;
+    }
+    if (yearsBurned !== undefined) {
+      roster.members[memberIndex].overrides.yearsBurned = yearsBurned;
+    }
+    if (skills !== undefined) {
+      roster.members[memberIndex].overrides.skills = skills;
+    }
+
+    roster.updatedAt = new Date().toISOString();
+
+    // Save the updated roster
+    const updatedRoster = await db.updateRoster(roster._id, roster);
+
+    res.json({ 
+      message: 'Member overrides updated successfully',
+      member: roster.members[memberIndex]
+    });
+  } catch (error) {
+    console.error('Update member overrides error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/rosters/camp/:campId
 // @desc    Get roster for a specific camp (camp owners and members)
 // @access  Private (Camp owners and members only)
@@ -730,14 +984,9 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     console.log('🔍 [DUES UPDATE] Looking up camp...');
     
     try {
-      if (req.user.accountType === 'camp') {
-        console.log('📝 [DUES UPDATE] Camp account - looking up by contactEmail:', req.user.email);
+      if (req.user.accountType === 'camp' || req.user.accountType === 'admin') {
+        console.log('📝 [DUES UPDATE] Looking up camp by contactEmail:', req.user.email);
         const camp = await db.findCamp({ contactEmail: req.user.email });
-        console.log('📝 [DUES UPDATE] Camp lookup result:', camp ? { _id: camp._id, campName: camp.campName } : 'null');
-        campId = camp ? camp._id : null;
-      } else if (req.user.accountType === 'admin' && req.user.campName) {
-        console.log('📝 [DUES UPDATE] Admin account - looking up by campName:', req.user.campName);
-        const camp = await db.findCamp({ campName: req.user.campName });
         console.log('📝 [DUES UPDATE] Camp lookup result:', camp ? { _id: camp._id, campName: camp.campName } : 'null');
         campId = camp ? camp._id : null;
       }
