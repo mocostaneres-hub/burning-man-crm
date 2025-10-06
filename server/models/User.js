@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['personal', 'camp'],
+    enum: ['personal', 'camp', 'admin'],
     required: true
   },
   
