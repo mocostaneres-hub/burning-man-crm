@@ -196,7 +196,9 @@ router.get('/my-camp', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp profile not found' });
     }
     
-    res.json(camp);
+    // Convert Mongoose document to plain object if needed
+    const campResponse = camp.toObject ? camp.toObject() : camp;
+    res.json(campResponse);
   } catch (error) {
     console.error('Get my camp error:', error);
     res.status(500).json({ message: 'Server error' });
