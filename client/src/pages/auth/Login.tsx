@@ -12,9 +12,12 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 const schema = yup.object({
   email: yup.string().email('Invalid email').required('Email is required'),
   password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
-});
+}).required();
 
-type FormData = yup.InferType<typeof schema>;
+type FormData = {
+  email: string;
+  password: string;
+};
 
 const Login: React.FC = () => {
   const { login } = useAuth();
