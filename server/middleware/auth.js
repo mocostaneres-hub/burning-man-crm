@@ -20,8 +20,8 @@ const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('🔐 JWT decoded userId:', decoded.userId, 'type:', typeof decoded.userId);
     
-    // Ensure userId is a number for mock database compatibility
-    const userId = typeof decoded.userId === 'string' ? parseInt(decoded.userId) : decoded.userId;
+    // Use userId as-is (works for both numeric IDs and MongoDB ObjectId strings)
+    const userId = decoded.userId;
     const user = await db.findUser({ _id: userId });
     console.log('🔐 User found:', user ? `ID: ${user._id} (${typeof user._id})` : 'null');
     
