@@ -122,7 +122,8 @@ router.post('/login', [
     const token = generateToken(user._id);
 
     // Return user data (without password)
-    const userResponse = { ...user };
+    // Convert Mongoose document to plain object if needed
+    const userResponse = user.toObject ? user.toObject() : { ...user };
     delete userResponse.password;
 
     res.json({
