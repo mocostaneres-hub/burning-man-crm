@@ -184,7 +184,13 @@ router.get('/public/:slug', async (req, res) => {
 // @access  Private (Camp owners only)
 router.get('/my-camp', authenticateToken, async (req, res) => {
   try {
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Use campId if available, otherwise fall back to contactEmail
+    let camp;
+    if (req.user.campId) {
+      camp = await db.findCamp({ _id: req.user.campId });
+    } else {
+      camp = await db.findCamp({ contactEmail: req.user.email });
+    }
     
     if (!camp) {
       return res.status(404).json({ message: 'Camp profile not found' });

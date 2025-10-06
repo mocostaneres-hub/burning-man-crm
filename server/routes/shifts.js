@@ -44,7 +44,7 @@ router.get('/events', authenticateToken, async (req, res) => {
 router.post('/events', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -55,19 +55,17 @@ router.post('/events', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Event name and at least one shift are required' });
     }
 
-    // Get camp ID from user context
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      // For admin accounts, get the camp by contactEmail to ensure we get the right one
+    // Get camp ID from user context - prioritize campId field
+    let campId = req.user.campId;
+    
+    if (!campId) {
+      // Fallback: find camp by contactEmail
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
 
     if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+      return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
     }
 
     // Validate shifts

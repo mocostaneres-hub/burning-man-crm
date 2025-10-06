@@ -131,6 +131,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  campId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Camp',
+    default: null
+  },
   campBio: {
     type: String,
     maxlength: 2000

@@ -1,0 +1,126 @@
+✅ Connected to MongoDB
+
+📦 Mock data loaded
+
+👤 Migrating users...
+  ⏭️  User already exists: mudskipperscafe@gmail.com
+  ✅ Created user: test@example.com (test@example.com -> 68e43e4f9f7de469767de298)
+  ✅ Created user: alex.johnson@email.com (alex.johnson@email.com -> 68e43e529f7de469767de2ab)
+  ✅ Created user: sarah.williams@email.com (sarah.williams@email.com -> 68e43e559f7de469767de2ae)
+  ✅ Created user: mike.brown@email.com (mike.brown@email.com -> 68e43e579f7de469767de2b1)
+  ✅ Created user: emma.davis@email.com (emma.davis@email.com -> 68e43e5a9f7de469767de2b4)
+  ✅ Created user: david.miller@email.com (david.miller@email.com -> 68e43e5c9f7de469767de2b7)
+  ✅ Created user: lisa.wilson@email.com (lisa.wilson@email.com -> 68e43e5e9f7de469767de2ba)
+  ✅ Created user: chris.moore@email.com (chris.moore@email.com -> 68e43e619f7de469767de2bd)
+  ✅ Created user: amy.taylor@email.com (amy.taylor@email.com -> 68e43e639f7de469767de2c0)
+  ✅ Created user: john.anderson@email.com (john.anderson@email.com -> 68e43e669f7de469767de2c3)
+  ✅ Created user: kate.thomas@email.com (kate.thomas@email.com -> 68e43e689f7de469767de2c6)
+  ✅ Created user: ryan.jackson@email.com (ryan.jackson@email.com -> 68e43e6a9f7de469767de2c9)
+  ✅ Created user: jessica.white@email.com (jessica.white@email.com -> 68e43e6c9f7de469767de2cc)
+  ✅ Created user: matt.harris@email.com (matt.harris@email.com -> 68e43e6e9f7de469767de2cf)
+  ✅ Created user: rachel.martin@email.com (rachel.martin@email.com -> 68e43e709f7de469767de2d2)
+  ✅ Created user: tom.garcia@email.com (tom.garcia@email.com -> 68e43e739f7de469767de2d5)
+  ⚠️  Skipped user mocostaneres@gmail.com: User validation failed: burningManExperience: `Been to Burning Man 5 times` is not a valid enum value for path `burningManExperience`., campSize: `50` is not a valid enum value for path `campSize`., campSocialMedia.0.url: Path `url` is required., campSocialMedia.0.platform: Path `platform` is required.
+  ✅ Created user: mnereslax@gmail.com (mnereslax@gmail.com -> 68e43e759f7de469767de2db)
+  ✅ Created user: mnomnobr@gmail.com (mnomnobr@gmail.com -> 68e43e779f7de469767de2de)
+  ⚠️  Skipped user admin@burningman.com: User validation failed: burningManExperience: `Long-time Burning Man participant and system administrator` is not a valid enum value for path `burningManExperience`.
+  ✅ Created user: chits-nicker.0v@icloud.com (chits-nicker.0v@icloud.com -> 68e43e799f7de469767de2e3)
+  ✅ Created user: crags.style_0a@icloud.com (crags.style_0a@icloud.com -> 68e43e7c9f7de469767de2e6)
+
+  ✅ Migrated 20 users
+
+🏕️  Migrating camps...
+  ⚠️  Skipped camp Art & Music Collective: Owner not found
+  ⚠️  Skipped camp Food & Drinks Collective: Owner not found
+  ⚠️  Skipped camp Workshop & Education Collective: Owner not found
+  ⚠️  Skipped camp Performance & Theater Collective: Owner not found
+  ⚠️  Skipped camp Wellness & Healing Collective: Owner not found
+  ⚠️  Skipped camp Technology & Innovation Collective: Owner not found
+  ⚠️  Skipped camp Community & Social Collective: Owner not found
+  ⚠️  Skipped camp Adventure & Sports Collective: Owner not found
+  ⚠️  Skipped camp Sustainability & Environment Collective: Owner not found
+  ⚠️  Skipped camp Cultural Exchange Collective: Owner not found
+  ⚠️  Skipped camp Spiritual & Meditation Collective: Owner not found
+  ⚠️  Skipped camp Party & Entertainment Collective: Owner not found
+  ⚠️  Skipped camp Family & Kids Collective: Owner not found
+  ⚠️  Skipped camp Bike & Transportation Collective: Owner not found
+  ⚠️  Skipped camp Medical & Safety Collective: Owner not found
+  ⚠️  Skipped camp Volunteer & Service Collective: Owner not found
+  ⚠️  Skipped camp Art Car & Mutant Vehicle Collective: Owner not found
+  ⚠️  Skipped camp Temple & Sacred Space Collective: Owner not found
+  ⚠️  Skipped camp Fire & Pyrotechnics Collective: Owner not found
+  ⚠️  Skipped camp Sound & DJ Collective: Owner not found
+  ⚠️  Skipped camp QA Updated Camp: Owner not found
+  ⚠️  Skipped camp Mudskippers: Owner not found
+
+  ✅ Migrated 0 camps
+
+👥 Migrating members...
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+  ⚠️  Skipped member: User or Camp not found
+
+  ✅ Migrated 0 members
+
+📋 Migrating rosters...
+  ⚠️  Skipped roster '25 Mudskippers Roster: Camp not found
+
+  ✅ Migrated 0 rosters
+
+📝 Migrating applications...
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+  ⚠️  Skipped application: Applicant or Camp not found
+
+  ✅ Migrated 0 applications
+
+🔗 Linking admin user to Mudskippers camp...
+  ⚠️  Mudskippers camp not found
+
+🎉 Migration complete!
+
+📊 Summary:
+  Users: 20
+  Camps: 0
+  Members: 0
+  Rosters: 0
+  Applications: 0
