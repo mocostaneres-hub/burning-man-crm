@@ -48,9 +48,12 @@ const VolunteerShifts: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -415,6 +418,41 @@ const VolunteerShifts: React.FC = () => {
     setShowCreateModal(true);
   };
 
+  const handleDeleteEvent = (event: Event) => {
+    setEventToDelete(event);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!eventToDelete) return;
+
+    try {
+      setDeleteLoading(true);
+      console.log('🗑️ [Event Deletion] Deleting event:', eventToDelete._id);
+      
+      await api.delete(`/shifts/events/${eventToDelete._id}`);
+      
+      // Remove the event from the local state
+      setEvents(prevEvents => prevEvents.filter(e => e._id !== eventToDelete._id));
+      
+      // Close modal and reset state
+      setShowDeleteModal(false);
+      setEventToDelete(null);
+      
+      alert(`Event "${eventToDelete.eventName}" and all related data deleted successfully!`);
+    } catch (error: any) {
+      console.error('❌ [Event Deletion] Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setEventToDelete(null);
+  };
+
   // Using shared date formatting utilities
 
 
@@ -546,6 +584,7 @@ const VolunteerShifts: React.FC = () => {
                           variant="outline"
                           size="sm"
                           className="text-red-600 border-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteEvent(event)}
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Delete
@@ -1205,6 +1244,66 @@ const VolunteerShifts: React.FC = () => {
               className="flex-1"
             >
               Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={handleCancelDelete}
+        title="Delete Event"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <Trash2 className="h-5 w-5 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Are you sure you want to delete this event?
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>This action will permanently delete:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Event: <strong>{eventToDelete?.eventName}</strong></li>
+                    <li>All {eventToDelete?.shifts?.length || 0} shift(s) in this event</li>
+                    <li>All volunteer shift tasks assigned to members</li>
+                  </ul>
+                  <p className="mt-2 font-medium">This action cannot be undone.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="outline"
+              onClick={handleCancelDelete}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="error"
+              onClick={handleConfirmDelete}
+              disabled={deleteLoading}
+              className="flex items-center gap-2"
+            >
+              {deleteLoading ? (
+                <>
+                  <div className="spinner w-4 h-4" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Delete Event
+                </>
+              )}
             </Button>
           </div>
         </div>

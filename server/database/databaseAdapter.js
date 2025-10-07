@@ -576,6 +576,7 @@ class DatabaseAdapter {
     }
   }
 
+
   // Invite operations
   async findInvite(query) {
     if (this.useMongoDB) {

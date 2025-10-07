@@ -755,6 +755,122 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   DELETE /api/shifts/events/:eventId
+// @desc    Delete an event and all its related data (shifts, tasks)
+// @access  Private (Camp admins/leads only)
+router.delete('/events/:eventId', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔄 [EVENT DELETION] Starting complete event deletion');
+    console.log('📝 [EVENT DELETION] Event ID:', req.params.eventId);
+    
+    // Check if user is camp admin/lead
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+      console.log('❌ [EVENT DELETION] Permission denied - user not camp admin/lead');
+      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    }
+
+    const { eventId } = req.params;
+
+    // Check if event exists and user has access
+    console.log('🔍 [EVENT DELETION] Looking for event:', eventId);
+    const event = await db.findEvent({ _id: eventId });
+    if (!event) {
+      console.log('❌ [EVENT DELETION] Event not found:', eventId);
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName });
+
+    // Get camp ID and verify access
+    let campId;
+    if (req.user.accountType === 'camp') {
+      const camp = await db.findCamp({ contactEmail: req.user.email });
+      campId = camp ? camp._id : null;
+    } else if (req.user.accountType === 'admin' && req.user.campName) {
+      const camp = await db.findCamp({ contactEmail: req.user.email });
+      campId = camp ? camp._id : null;
+    }
+
+    console.log('🏕️ [EVENT DELETION] Camp ID resolved:', campId);
+    console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
+
+    if (!campId || event.campId.toString() !== campId.toString()) {
+      console.log('❌ [EVENT DELETION] Access denied - camp ID mismatch');
+      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
+    }
+
+    // Step 1: Delete all tasks related to this event
+    console.log('🔍 [EVENT DELETION] Searching for tasks to delete');
+    const tasks = await db.findTasks({ 
+      'metadata.eventId': eventId,
+      type: 'volunteer_shift'
+    });
+
+    console.log(`📊 [EVENT DELETION] Found ${tasks.length} tasks to delete`);
+
+    let deletedTasksCount = 0;
+    const failedTaskDeletions = [];
+    
+    for (const task of tasks) {
+      try {
+        console.log(`🗑️ [EVENT DELETION] Deleting task: ${task._id} (assigned to: ${task.assignedTo})`);
+        await db.deleteTask(task._id);
+        deletedTasksCount++;
+        console.log(`✅ [EVENT DELETION] Task deleted successfully: ${task._id}`);
+      } catch (deleteError) {
+        console.error(`❌ [EVENT DELETION] Failed to delete task ${task._id}:`, deleteError);
+        failedTaskDeletions.push({ taskId: task._id, error: deleteError.message });
+      }
+    }
+
+    // Step 2: Shifts will be deleted automatically when the event is deleted
+    // (shifts are embedded subdocuments in the event)
+    const shiftsCount = event.shifts?.length || 0;
+    console.log(`📊 [EVENT DELETION] Event contains ${shiftsCount} shifts (will be deleted with event)`);
+
+    // Step 3: Delete the event itself
+    console.log('🗑️ [EVENT DELETION] Deleting event:', eventId);
+    try {
+      await db.deleteEvent(eventId);
+      console.log('✅ [EVENT DELETION] Event deleted successfully:', eventId);
+    } catch (deleteError) {
+      console.error('❌ [EVENT DELETION] Failed to delete event:', deleteError);
+      return res.status(500).json({ 
+        message: 'Failed to delete event',
+        error: deleteError.message
+      });
+    }
+
+    console.log('🎉 [EVENT DELETION] Complete deletion summary:', { 
+      eventDeleted: true,
+      tasksDeleted: deletedTasksCount,
+      shiftsDeleted: shiftsCount,
+      failedTasks: failedTaskDeletions.length
+    });
+
+    const response = { 
+      message: 'Event and all related data deleted successfully',
+      eventId: eventId,
+      eventName: event.eventName,
+      tasksDeleted: deletedTasksCount,
+      shiftsDeleted: shiftsCount,
+      totalTasksFound: tasks.length
+    };
+
+    if (failedTaskDeletions.length > 0) {
+      response.warnings = 'Some related tasks failed to delete';
+      response.failedTaskDeletions = failedTaskDeletions;
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('❌ [EVENT DELETION] Critical error in event deletion:', error);
+    res.status(500).json({ 
+      message: 'Server error during event deletion',
+      error: error.message
+    });
+  }
+});
+
 // @route   DELETE /api/shifts/events/:eventId/tasks
 // @desc    Remove all tasks associated with an event
 // @access  Private (Camp admins/leads only)
