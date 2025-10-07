@@ -3,6 +3,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { authenticateToken } = require('../middleware/auth');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 const router = express.Router();
 
@@ -136,8 +137,9 @@ router.post('/camp-photo/:campId', authenticateToken, upload.single('photo'), as
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if user is camp lead
-    if (camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, camp._id);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to upload photos for this camp' });
     }
 

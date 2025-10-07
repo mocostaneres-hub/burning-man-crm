@@ -4,6 +4,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { sendApplicationNotification } = require('../services/notifications');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // Helper function to validate if personal profile is complete
 const isPersonalProfileComplete = (user) => {
@@ -275,15 +276,9 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Camp accounts with matching campId or contactEmail have full access
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campName && camp.name === req.user.campName)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
+    // Check camp ownership using helper (immutable campId)
+    const hasAccess = await canAccessCamp(req, campId);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -489,7 +484,8 @@ router.post('/:applicationId/message', authenticateToken, [
     // Check access
     const camp = await db.findCamp({ _id: application.camp });
     const isApplicant = application.applicant.toString() === req.user._id.toString();
-    const isCampOwner = camp && camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = camp && await canAccessCamp(req, camp._id);
 
     if (!isApplicant && !isCampOwner) {
       return res.status(403).json({ message: 'Access denied' });

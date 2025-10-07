@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const Member = require('../models/Member');
 const Camp = require('../models/Camp');
 const { authenticateToken, requireCampMember, requireProjectLead } = require('../middleware/auth');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 const router = express.Router();
 
@@ -127,7 +128,8 @@ router.put('/:id/approve', authenticateToken, [
     }
 
     // Check permissions
-    const isCampLead = member.camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampLead = await canAccessCamp(req, member.camp._id);
     const userMember = await Member.findOne({ 
       user: req.user._id, 
       camp: member.camp._id,
@@ -187,7 +189,9 @@ router.put('/:id/role', authenticateToken, [
     }
 
     // Check if user is camp lead
-    if (member.camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, member.camp._id);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Only camp leads can change roles' });
     }
 
@@ -238,7 +242,8 @@ router.put('/:id/status', authenticateToken, [
     }
 
     // Check permissions
-    const isCampLead = member.camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampLead = await canAccessCamp(req, member.camp._id);
     const userMember = await Member.findOne({ 
       user: req.user._id, 
       camp: member.camp._id,
@@ -295,7 +300,8 @@ router.post('/:id/contributions', authenticateToken, [
     }
 
     // Check permissions
-    const isCampLead = member.camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampLead = await canAccessCamp(req, member.camp._id);
     const userMember = await Member.findOne({ 
       user: req.user._id, 
       camp: member.camp._id,

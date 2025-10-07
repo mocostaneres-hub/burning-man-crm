@@ -3,6 +3,7 @@ const router = express.Router();
 const CallSlot = require('../models/CallSlot');
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // @route   GET /api/call-slots/available/:campId
 // @desc    Get available call slots for a camp (for logged-in applicants)
@@ -42,15 +43,9 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if user owns this camp - camp accounts with matching campId or contactEmail have full access
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campName && camp.name === req.user.campName)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
+    // Check camp ownership using helper (immutable campId)
+    const hasAccess = await canAccessCamp(req, campId);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
