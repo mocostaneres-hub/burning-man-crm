@@ -835,19 +835,37 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    const roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
+    console.log('🔄 [Dues Update] Looking for roster:', { rosterId, campId: camp._id });
+
+    // Find roster - try as ObjectId first, then as integer
+    let roster;
+    roster = await db.findRoster({ _id: rosterId, camp: camp._id });
+    
     if (!roster) {
+      // Fallback: try parsing as integer for legacy numeric IDs
+      console.log('⚠️ [Dues Update] Trying integer roster ID...');
+      roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
+    }
+    
+    if (!roster) {
+      console.error('❌ [Dues Update] Roster not found:', { rosterId, campId: camp._id });
       return res.status(404).json({ message: 'Roster not found' });
     }
+
+    console.log('✅ [Dues Update] Roster found:', { rosterId: roster._id });
 
     // Find the member in the roster
     const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
     if (memberIndex === -1) {
+      console.error('❌ [Dues Update] Member not found in roster:', memberId);
       return res.status(404).json({ message: 'Member not found in roster' });
     }
 
+    console.log('✅ [Dues Update] Member found at index:', memberIndex);
+
     // Update the dues status
     roster.members[memberIndex].duesStatus = duesStatus;
+    console.log('📝 [Dues Update] Updated duesStatus to:', duesStatus);
     roster.updatedAt = new Date().toISOString();
 
     // Save the updated roster

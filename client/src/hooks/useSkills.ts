@@ -20,13 +20,44 @@ export const useSkills = () => {
         const response = await api.get('/skills');
         // Extract just the skill names, sorted alphabetically
         const skillNames = response.map((skill: Skill) => skill.name).sort();
-        setSkills(skillNames);
+        
+        // If API returns empty array, use fallback skills
+        if (skillNames.length === 0) {
+          console.log('⚠️ [useSkills] API returned empty array, using fallback skills');
+          setSkills([
+            'Art/Creative',
+            'Building/Construction',
+            'Cooking',
+            'DJ/Music',
+            'Electrical',
+            'Event Planning',
+            'First Aid/Medical',
+            'Leadership',
+            'Plumbing',
+            'Teaching/Mentoring',
+            'Welding'
+          ]);
+        } else {
+          setSkills(skillNames);
+        }
         setError(null);
       } catch (err) {
         console.error('Error fetching skills:', err);
         setError('Failed to load skills');
-        // Fallback to empty array if fetch fails
-        setSkills([]);
+        // Fallback to common Burning Man skills if fetch fails
+        setSkills([
+          'Art/Creative',
+          'Building/Construction',
+          'Cooking',
+          'DJ/Music',
+          'Electrical',
+          'Event Planning',
+          'First Aid/Medical',
+          'Leadership',
+          'Plumbing',
+          'Teaching/Mentoring',
+          'Welding'
+        ]);
       } finally {
         setLoading(false);
       }

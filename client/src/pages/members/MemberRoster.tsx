@@ -492,10 +492,17 @@ const MemberRoster: React.FC = () => {
     const newStatus = !currentStatus;
     
     try {
+      if (!rosterId) {
+        alert('Roster ID not found');
+        setDuesConfirmModal({ isOpen: false, member: null, currentStatus: false });
+        return;
+      }
+
       setDuesLoading(member._id.toString());
       
-      // Call API to update dues status
-      await api.patch(`/rosters/member/${member._id}/dues`, { isPaid: newStatus });
+      // Call API to update dues status (using correct endpoint and format)
+      const duesStatus = newStatus ? 'Paid' : 'Unpaid';
+      await api.put(`/rosters/${rosterId}/members/${member._id}/dues`, { duesStatus });
       
       // Update local state immediately for better UX
       setMembers(prevMembers => 
