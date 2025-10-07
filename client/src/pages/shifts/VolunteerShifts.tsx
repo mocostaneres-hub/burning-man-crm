@@ -444,7 +444,11 @@ const VolunteerShifts: React.FC = () => {
       alert(`Event "${eventToDelete.eventName}" and all related data deleted successfully!`);
     } catch (error: any) {
       console.error('❌ [Event Deletion] Error deleting event:', error);
-      alert('Failed to delete event. Please try again.');
+      console.error('❌ [Event Deletion] Error response:', error.response?.data);
+      console.error('❌ [Event Deletion] Error status:', error.response?.status);
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`Failed to delete event: ${errorMessage}`);
     } finally {
       setDeleteLoading(false);
     }
