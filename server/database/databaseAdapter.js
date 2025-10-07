@@ -283,11 +283,18 @@ class DatabaseAdapter {
 
   async findActiveRoster(query) {
     if (this.useMongoDB) {
+      // Ensure models are loaded
       const Roster = require('../models/Roster');
+      const Member = require('../models/Member');
+      const User = require('../models/User');
+      
       return await Roster.findOne({ ...query, isActive: true, isArchived: false })
         .populate({
           path: 'members.member',
-          populate: { path: 'user' }
+          populate: { 
+            path: 'user',
+            select: '-password' // Exclude password from user data
+          }
         });
     } else {
       return await this.mockDB.findActiveRoster(query);
