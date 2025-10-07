@@ -313,8 +313,54 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
         return res.status(500).json({ message: 'Failed to retrieve roster members' });
       }
     } else if (memberIds && Array.isArray(memberIds)) {
-      targetMembers = memberIds;
-      console.log('👤 [TASK ASSIGNMENT] Using specific member IDs:', targetMembers.length);
+      console.log('👤 [TASK ASSIGNMENT] Validating specific member IDs:', memberIds.length);
+      
+      // Validate that all provided member IDs are actually approved members of the camp
+      try {
+        const activeRoster = await db.findActiveRoster({ camp: campId });
+        if (!activeRoster || !activeRoster.members) {
+          console.log('❌ [TASK ASSIGNMENT] No active roster found for validation');
+          return res.status(400).json({ message: 'No active roster found for this camp' });
+        }
+
+        const approvedMemberIds = [];
+        for (const memberEntry of activeRoster.members) {
+          if (memberEntry.member && (memberEntry.status === 'approved' || memberEntry.status === 'active')) {
+            const member = await db.findMember({ _id: memberEntry.member });
+            if (member && member.user && (member.status === 'approved' || member.status === 'active')) {
+              const userId = typeof member.user === 'object' ? member.user._id : member.user;
+              if (userId) {
+                approvedMemberIds.push(userId.toString());
+              }
+            }
+          }
+        }
+
+        console.log('✅ [TASK ASSIGNMENT] Approved member IDs:', approvedMemberIds);
+
+        // Filter the requested member IDs to only include approved ones
+        const validMemberIds = memberIds.filter(memberId => 
+          approvedMemberIds.includes(memberId.toString())
+        );
+
+        if (validMemberIds.length !== memberIds.length) {
+          const invalidIds = memberIds.filter(memberId => 
+            !approvedMemberIds.includes(memberId.toString())
+          );
+          console.log('⚠️ [TASK ASSIGNMENT] Some member IDs are not approved:', invalidIds);
+          return res.status(400).json({ 
+            message: 'Some provided member IDs are not approved camp members',
+            invalidMemberIds: invalidIds,
+            validMemberIds: validMemberIds
+          });
+        }
+
+        targetMembers = validMemberIds;
+        console.log('👤 [TASK ASSIGNMENT] Using validated member IDs:', targetMembers.length);
+      } catch (validationError) {
+        console.error('❌ [TASK ASSIGNMENT] Error validating member IDs:', validationError);
+        return res.status(500).json({ message: 'Failed to validate member IDs' });
+      }
     } else {
       console.log('❌ [TASK ASSIGNMENT] Invalid request - no assignment type specified');
       return res.status(400).json({ message: 'Either memberIds or sendToAllMembers is required' });
@@ -878,7 +924,54 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
         newTargetMembers = approvedMembers;
       }
     } else if (memberIds && Array.isArray(memberIds)) {
-      newTargetMembers = memberIds;
+      console.log('👤 [TASK SYNC] Validating specific member IDs:', memberIds.length);
+      
+      // Validate that all provided member IDs are actually approved members of the camp
+      try {
+        const activeRoster = await db.findActiveRoster({ camp: campId });
+        if (!activeRoster || !activeRoster.members) {
+          console.log('❌ [TASK SYNC] No active roster found for validation');
+          return res.status(400).json({ message: 'No active roster found for this camp' });
+        }
+
+        const approvedMemberIds = [];
+        for (const memberEntry of activeRoster.members) {
+          if (memberEntry.member && (memberEntry.status === 'approved' || memberEntry.status === 'active')) {
+            const member = await db.findMember({ _id: memberEntry.member });
+            if (member && member.user && (member.status === 'approved' || member.status === 'active')) {
+              const userId = typeof member.user === 'object' ? member.user._id : member.user;
+              if (userId) {
+                approvedMemberIds.push(userId.toString());
+              }
+            }
+          }
+        }
+
+        console.log('✅ [TASK SYNC] Approved member IDs:', approvedMemberIds);
+
+        // Filter the requested member IDs to only include approved ones
+        const validMemberIds = memberIds.filter(memberId => 
+          approvedMemberIds.includes(memberId.toString())
+        );
+
+        if (validMemberIds.length !== memberIds.length) {
+          const invalidIds = memberIds.filter(memberId => 
+            !approvedMemberIds.includes(memberId.toString())
+          );
+          console.log('⚠️ [TASK SYNC] Some member IDs are not approved:', invalidIds);
+          return res.status(400).json({ 
+            message: 'Some provided member IDs are not approved camp members',
+            invalidMemberIds: invalidIds,
+            validMemberIds: validMemberIds
+          });
+        }
+
+        newTargetMembers = validMemberIds;
+        console.log('👤 [TASK SYNC] Using validated member IDs:', newTargetMembers.length);
+      } catch (validationError) {
+        console.error('❌ [TASK SYNC] Error validating member IDs:', validationError);
+        return res.status(500).json({ message: 'Failed to validate member IDs' });
+      }
     }
 
     console.log('🎯 [TASK SYNC] New target members:', { count: newTargetMembers.length, members: newTargetMembers });
