@@ -1288,10 +1288,10 @@ const VolunteerShifts: React.FC = () => {
               Cancel
             </Button>
             <Button
-              variant="error"
+              variant="primary"
               onClick={handleConfirmDelete}
               disabled={deleteLoading}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 focus:ring-red-500"
             >
               {deleteLoading ? (
                 <>
