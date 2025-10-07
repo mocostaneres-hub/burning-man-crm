@@ -47,7 +47,33 @@ const rosterSchema = new mongoose.Schema({
       },
       skills: [{
         type: String
-      }]
+      }],
+      hasTicket: {
+        type: Boolean
+      },
+      hasVehiclePass: {
+        type: Boolean
+      },
+      interestedInEAP: {
+        type: Boolean
+      },
+      interestedInStrike: {
+        type: Boolean
+      },
+      arrivalDate: {
+        type: Date
+      },
+      departureDate: {
+        type: Date
+      },
+      city: {
+        type: String,
+        trim: true
+      },
+      state: {
+        type: String,
+        trim: true
+      }
     },
     status: {
       type: String,

@@ -108,11 +108,21 @@ const MemberRoster: React.FC = () => {
       const currentEdits = localEdits[memberId] || {};
       const allEdits = { ...currentEdits, ...editData };
 
-      // Extract only the fields we support for overrides
+      // Extract all editable fields for roster overrides
       const overridesData: any = {};
       if (allEdits.playaName !== undefined) overridesData.playaName = allEdits.playaName;
       if (allEdits.yearsBurned !== undefined) overridesData.yearsBurned = allEdits.yearsBurned;
       if (allEdits.skills !== undefined) overridesData.skills = allEdits.skills;
+      if (allEdits.hasTicket !== undefined) overridesData.hasTicket = allEdits.hasTicket;
+      if (allEdits.hasVehiclePass !== undefined) overridesData.hasVehiclePass = allEdits.hasVehiclePass;
+      if (allEdits.interestedInEAP !== undefined) overridesData.interestedInEAP = allEdits.interestedInEAP;
+      if (allEdits.interestedInStrike !== undefined) overridesData.interestedInStrike = allEdits.interestedInStrike;
+      if (allEdits.arrivalDate !== undefined) overridesData.arrivalDate = allEdits.arrivalDate;
+      if (allEdits.departureDate !== undefined) overridesData.departureDate = allEdits.departureDate;
+      if (allEdits.city !== undefined) overridesData.city = allEdits.city;
+      if (allEdits.state !== undefined) overridesData.state = allEdits.state;
+
+      console.log('💾 [MemberRoster] Saving overrides:', overridesData);
 
       // Call API to update roster overrides (NOT the member's profile)
       await api.put(`/rosters/${rosterId}/members/${memberId}/overrides`, overridesData);
@@ -150,8 +160,10 @@ const MemberRoster: React.FC = () => {
   // Helper components for inline editing
   const EditableArrivalDeparture = ({ user, memberId }: { user: any; memberId: string }) => {
     const currentEdits = localEdits[memberId] || {};
-    const arrivalDate = currentEdits?.arrivalDate || user?.arrivalDate || '';
-    const departureDate = currentEdits?.departureDate || user?.departureDate || '';
+    const member = members.find(m => m._id.toString() === memberId);
+    const overrides = member?.overrides || {};
+    const arrivalDate = currentEdits?.arrivalDate || overrides?.arrivalDate || user?.arrivalDate || '';
+    const departureDate = currentEdits?.departureDate || overrides?.departureDate || user?.departureDate || '';
 
     return (
       <div className="text-sm space-y-1">
@@ -179,8 +191,10 @@ const MemberRoster: React.FC = () => {
 
   const EditableEALD = ({ user, memberId }: { user: any; memberId: string }) => {
     const currentEdits = localEdits[memberId] || {};
-    const interestedInEAP = currentEdits?.interestedInEAP !== undefined ? currentEdits.interestedInEAP : user?.interestedInEAP;
-    const interestedInStrike = currentEdits?.interestedInStrike !== undefined ? currentEdits.interestedInStrike : user?.interestedInStrike;
+    const member = members.find(m => m._id.toString() === memberId);
+    const overrides = member?.overrides || {};
+    const interestedInEAP = currentEdits?.interestedInEAP !== undefined ? currentEdits.interestedInEAP : (overrides?.interestedInEAP !== undefined ? overrides.interestedInEAP : user?.interestedInEAP);
+    const interestedInStrike = currentEdits?.interestedInStrike !== undefined ? currentEdits.interestedInStrike : (overrides?.interestedInStrike !== undefined ? overrides.interestedInStrike : user?.interestedInStrike);
 
     return (
       <div className="text-sm space-y-1">
@@ -212,8 +226,10 @@ const MemberRoster: React.FC = () => {
 
   const EditableTicketVP = ({ user, memberId }: { user: any; memberId: string }) => {
     const currentEdits = localEdits[memberId] || {};
-    const hasTicket = currentEdits?.hasTicket !== undefined ? currentEdits.hasTicket : user?.hasTicket;
-    const hasVehiclePass = currentEdits?.hasVehiclePass !== undefined ? currentEdits.hasVehiclePass : user?.hasVehiclePass;
+    const member = members.find(m => m._id.toString() === memberId);
+    const overrides = member?.overrides || {};
+    const hasTicket = currentEdits?.hasTicket !== undefined ? currentEdits.hasTicket : (overrides?.hasTicket !== undefined ? overrides.hasTicket : user?.hasTicket);
+    const hasVehiclePass = currentEdits?.hasVehiclePass !== undefined ? currentEdits.hasVehiclePass : (overrides?.hasVehiclePass !== undefined ? overrides.hasVehiclePass : user?.hasVehiclePass);
 
     return (
       <div className="text-sm space-y-1">
@@ -245,8 +261,10 @@ const MemberRoster: React.FC = () => {
 
   const EditableLocation = ({ user, memberId }: { user: any; memberId: string }) => {
     const currentEdits = localEdits[memberId] || {};
-    const city = currentEdits?.city || user?.city || user?.location?.city || '';
-    const state = currentEdits?.state || user?.location?.state || '';
+    const member = members.find(m => m._id.toString() === memberId);
+    const overrides = member?.overrides || {};
+    const city = currentEdits?.city || overrides?.city || user?.city || user?.location?.city || '';
+    const state = currentEdits?.state || overrides?.state || user?.location?.state || '';
 
     return (
       <div className="flex flex-col space-y-1">
@@ -945,26 +963,32 @@ const MemberRoster: React.FC = () => {
                       {isEditing ? (
                         <EditableTicketVP user={user} memberId={member._id.toString()} />
                       ) : (
-                        <div className="text-sm">
-                          <div>Ticket: <span className={
-                            user?.hasTicket === true ? 'text-green-600 font-medium' : 
-                            user?.hasTicket === false ? 'text-red-300' : 
-                            'text-gray-500'
-                          }>{
-                            user?.hasTicket === true ? 'Yes' : 
-                            user?.hasTicket === false ? 'No' : 
-                            'Not informed'
-                          }</span></div>
-                          <div>VP: <span className={
-                            user?.hasVehiclePass === true ? 'text-green-600 font-medium' : 
-                            user?.hasVehiclePass === false ? 'text-red-300' : 
-                            'text-gray-500'
-                          }>{
-                            user?.hasVehiclePass === true ? 'Yes' : 
-                            user?.hasVehiclePass === false ? 'No' : 
-                            'Not informed'
-                          }</span></div>
-                        </div>
+                        (() => {
+                          const hasTicket = (member as any).overrides?.hasTicket !== undefined ? (member as any).overrides.hasTicket : user?.hasTicket;
+                          const hasVehiclePass = (member as any).overrides?.hasVehiclePass !== undefined ? (member as any).overrides.hasVehiclePass : user?.hasVehiclePass;
+                          return (
+                            <div className="text-sm">
+                              <div>Ticket: <span className={
+                                hasTicket === true ? 'text-green-600 font-medium' : 
+                                hasTicket === false ? 'text-red-300' : 
+                                'text-gray-500'
+                              }>{
+                                hasTicket === true ? 'Yes' : 
+                                hasTicket === false ? 'No' : 
+                                'Not informed'
+                              }</span></div>
+                              <div>VP: <span className={
+                                hasVehiclePass === true ? 'text-green-600 font-medium' : 
+                                hasVehiclePass === false ? 'text-red-300' : 
+                                'text-gray-500'
+                              }>{
+                                hasVehiclePass === true ? 'Yes' : 
+                                hasVehiclePass === false ? 'No' : 
+                                'Not informed'
+                              }</span></div>
+                            </div>
+                          );
+                        })()
                       )}
                     </td>
                     {/* EA/LD */}
@@ -972,10 +996,16 @@ const MemberRoster: React.FC = () => {
                       {isEditing ? (
                         <EditableEALD user={user} memberId={member._id.toString()} />
                       ) : (
-                        <div className="text-sm">
-                          <div>EA: <span className={user?.interestedInEAP ? 'text-green-600 font-medium' : 'text-red-300'}>{user?.interestedInEAP ? 'Yes' : 'No'}</span></div>
-                          <div>LD: <span className={user?.interestedInStrike ? 'text-green-600 font-medium' : 'text-red-300'}>{user?.interestedInStrike ? 'Yes' : 'No'}</span></div>
-                        </div>
+                        (() => {
+                          const interestedInEAP = (member as any).overrides?.interestedInEAP !== undefined ? (member as any).overrides.interestedInEAP : user?.interestedInEAP;
+                          const interestedInStrike = (member as any).overrides?.interestedInStrike !== undefined ? (member as any).overrides.interestedInStrike : user?.interestedInStrike;
+                          return (
+                            <div className="text-sm">
+                              <div>EA: <span className={interestedInEAP ? 'text-green-600 font-medium' : 'text-red-300'}>{interestedInEAP ? 'Yes' : 'No'}</span></div>
+                              <div>LD: <span className={interestedInStrike ? 'text-green-600 font-medium' : 'text-red-300'}>{interestedInStrike ? 'Yes' : 'No'}</span></div>
+                            </div>
+                          );
+                        })()
                       )}
                     </td>
                     {/* Arrival/Departure */}
@@ -984,8 +1014,8 @@ const MemberRoster: React.FC = () => {
                         <EditableArrivalDeparture user={user} memberId={member._id.toString()} />
                       ) : (
                         <div className="text-sm">
-                          <div className="text-green-600 font-medium">Arrive: {formatArrivalDepartureDate(user?.arrivalDate || '')}</div>
-                          <div className="text-yellow-600 font-medium">Depart: {formatArrivalDepartureDate(user?.departureDate || '')}</div>
+                          <div className="text-green-600 font-medium">Arrive: {formatArrivalDepartureDate((member as any).overrides?.arrivalDate || user?.arrivalDate || '')}</div>
+                          <div className="text-yellow-600 font-medium">Depart: {formatArrivalDepartureDate((member as any).overrides?.departureDate || user?.departureDate || '')}</div>
                         </div>
                       )}
                     </td>
@@ -994,7 +1024,11 @@ const MemberRoster: React.FC = () => {
                       {isEditing ? (
                         <EditableLocation user={user} memberId={member._id.toString()} />
                       ) : (
-                        location
+                        (() => {
+                          const city = (member as any).overrides?.city || user?.city || user?.location?.city;
+                          const state = (member as any).overrides?.state || user?.location?.state;
+                          return city && state ? `${city}, ${state}` : city || 'Not specified';
+                        })()
                       )}
                     </td>
                     {/* Burns */}

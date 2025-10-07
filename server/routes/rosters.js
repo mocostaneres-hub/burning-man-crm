@@ -870,9 +870,21 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
 router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
-    const { playaName, yearsBurned, skills } = req.body;
+    const { 
+      playaName, 
+      yearsBurned, 
+      skills,
+      hasTicket,
+      hasVehiclePass,
+      interestedInEAP,
+      interestedInStrike,
+      arrivalDate,
+      departureDate,
+      city,
+      state
+    } = req.body;
 
-    console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: { playaName, yearsBurned, skills } });
+    console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
 
     // Check if user is camp admin/lead
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
@@ -926,7 +938,7 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       roster.members[memberIndex].overrides = {};
     }
 
-    // Update only the provided fields
+    // Update all provided fields
     if (playaName !== undefined) {
       roster.members[memberIndex].overrides.playaName = playaName;
       console.log('📝 [Roster Override] Updated playaName:', playaName);
@@ -938,6 +950,38 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     if (skills !== undefined) {
       roster.members[memberIndex].overrides.skills = skills;
       console.log('📝 [Roster Override] Updated skills:', skills);
+    }
+    if (hasTicket !== undefined) {
+      roster.members[memberIndex].overrides.hasTicket = hasTicket;
+      console.log('📝 [Roster Override] Updated hasTicket:', hasTicket);
+    }
+    if (hasVehiclePass !== undefined) {
+      roster.members[memberIndex].overrides.hasVehiclePass = hasVehiclePass;
+      console.log('📝 [Roster Override] Updated hasVehiclePass:', hasVehiclePass);
+    }
+    if (interestedInEAP !== undefined) {
+      roster.members[memberIndex].overrides.interestedInEAP = interestedInEAP;
+      console.log('📝 [Roster Override] Updated interestedInEAP:', interestedInEAP);
+    }
+    if (interestedInStrike !== undefined) {
+      roster.members[memberIndex].overrides.interestedInStrike = interestedInStrike;
+      console.log('📝 [Roster Override] Updated interestedInStrike:', interestedInStrike);
+    }
+    if (arrivalDate !== undefined) {
+      roster.members[memberIndex].overrides.arrivalDate = arrivalDate;
+      console.log('📝 [Roster Override] Updated arrivalDate:', arrivalDate);
+    }
+    if (departureDate !== undefined) {
+      roster.members[memberIndex].overrides.departureDate = departureDate;
+      console.log('📝 [Roster Override] Updated departureDate:', departureDate);
+    }
+    if (city !== undefined) {
+      roster.members[memberIndex].overrides.city = city;
+      console.log('📝 [Roster Override] Updated city:', city);
+    }
+    if (state !== undefined) {
+      roster.members[memberIndex].overrides.state = state;
+      console.log('📝 [Roster Override] Updated state:', state);
     }
 
     roster.updatedAt = new Date().toISOString();
