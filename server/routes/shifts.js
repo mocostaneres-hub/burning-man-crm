@@ -198,16 +198,23 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
           
           const approvedMembers = [];
           for (const memberEntry of activeRoster.members) {
-            // Accept both 'active' and 'approved' status (active members are approved)
-            if ((memberEntry.status === 'approved' || memberEntry.status === 'active') && memberEntry.member) {
-              console.log('🔍 [TASK ASSIGNMENT] Processing approved member entry:', { 
+            // Check if member exists first
+            if (memberEntry.member) {
+              const member = await db.findMember({ _id: memberEntry.member });
+              
+              // Accept members with 'active' or 'approved' status (check nested member.status, not entry status)
+              const memberStatus = member?.status || memberEntry.status;
+              const isApproved = memberStatus === 'approved' || memberStatus === 'active';
+              
+              console.log('🔍 [TASK ASSIGNMENT] Processing member entry:', { 
                 entryId: memberEntry._id,
                 memberId: memberEntry.member,
-                status: memberEntry.status 
+                entryStatus: memberEntry.status,
+                memberStatus: member?.status,
+                isApproved
               });
               
-              const member = await db.findMember({ _id: memberEntry.member });
-              if (member && member.user) {
+              if (member && member.user && isApproved) {
                 // Ensure user ID is in the correct format (number or string)
                 const userId = typeof member.user === 'object' ? member.user._id : member.user;
                 console.log('🆔 [TASK ASSIGNMENT] Found member with user:', { 
