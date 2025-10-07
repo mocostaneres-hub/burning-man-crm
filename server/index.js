@@ -101,7 +101,7 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ message: 'Route not found - Railway deployment test ' + new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 5000;
