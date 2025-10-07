@@ -50,7 +50,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (requireCampAccount && user?.accountType !== 'camp' && !(user?.accountType === 'admin' && user?.campName)) {
+  if (requireCampAccount && user?.accountType !== 'camp' && !(user?.accountType === 'admin' && user?.campId)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
         <h1 className="text-h1 text-red-600">

@@ -162,8 +162,9 @@ const AdminDashboard: React.FC = () => {
   );
 
   const filteredCamps = (camps || []).filter(camp =>
-    (camp.campName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase()))
+    (camp.name || camp.campName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (camp.location?.city && camp.location.city.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (loading) {
@@ -438,21 +439,21 @@ const AdminDashboard: React.FC = () => {
                   {filteredCamps.map((camp) => (
                     <tr key={camp._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {camp.campName}
+                        {camp.name || camp.campName || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {camp.hometown || '-'}
+                        {camp.hometown || camp.location?.city || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {camp.memberCount}
+                        {camp.memberCount || camp.members?.length || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={camp.isActive ? 'success' : 'error'}>
-                          {camp.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={camp.isActive !== false ? 'success' : 'error'}>
+                          {camp.isActive !== false ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(camp.createdAt).toLocaleDateString()}
+                        {camp.createdAt ? new Date(camp.createdAt).toLocaleDateString() : 'Invalid Date'}
                       </td>
                     </tr>
                   ))}

@@ -5,6 +5,17 @@ const db = require('../database/databaseAdapter');
 
 const router = express.Router();
 
+// GET /api/admin/perks - get all global perks
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const perks = await db.findGlobalPerks();
+    res.json({ perks });
+  } catch (error) {
+    console.error('Admin get perks error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/admin/perks - create a new global perk
 router.post('/', authenticateToken, requireAdmin, [
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),

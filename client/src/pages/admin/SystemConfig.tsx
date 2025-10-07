@@ -66,10 +66,10 @@ const SystemConfig: React.FC = () => {
 
   const loadPerks = async () => {
     try {
-      const response = await api.get('/perks');
+      const response = await api.get('/admin/perks');
       console.log('SystemConfig loadPerks response:', response);
       // The API service already unwraps response.data, so response IS the data
-      const perksData = response.perks || [];
+      const perksData = response.perks || response.data || [];
       setPerks(perksData);
     } catch (error) {
       console.error('Failed to load perks:', error);
