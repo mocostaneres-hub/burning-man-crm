@@ -31,6 +31,7 @@ export interface User {
     state?: string;
     country?: string;
   };
+  campId?: string; // MongoDB ObjectId reference to Camp
   campName?: string;
   campBio?: string;
   campPhotos?: string[];
