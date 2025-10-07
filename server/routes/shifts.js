@@ -198,7 +198,8 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
           
           const approvedMembers = [];
           for (const memberEntry of activeRoster.members) {
-            if (memberEntry.status === 'approved' && memberEntry.member) {
+            // Accept both 'active' and 'approved' status (active members are approved)
+            if ((memberEntry.status === 'approved' || memberEntry.status === 'active') && memberEntry.member) {
               console.log('🔍 [TASK ASSIGNMENT] Processing approved member entry:', { 
                 entryId: memberEntry._id,
                 memberId: memberEntry.member,
