@@ -124,6 +124,28 @@ const ApplicationManagementTable: React.FC = () => {
     }
   };
 
+  const handleSaveStatusOnly = async () => {
+    if (!selectedApplication) return;
+    
+    try {
+      setProcessing(selectedApplication._id);
+      await api.put(`/applications/${selectedApplication._id}/status`, {
+        status: selectedStatus,
+        reviewNotes: reviewNotes
+      });
+      
+      await fetchApplications();
+      setShowApplicationModal(false);
+      setSelectedApplication(null);
+      setReviewNotes('');
+    } catch (err) {
+      console.error('Error updating application status:', err);
+      setError('Failed to update application status');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
@@ -830,7 +852,15 @@ const ApplicationManagementTable: React.FC = () => {
                   >
                     Cancel
                   </Button>
-                  {selectedApplication.status !== 'approved' && (
+                  <Button
+                    variant="outline"
+                    onClick={handleSaveStatusOnly}
+                    disabled={processing === selectedApplication._id}
+                    className="flex-1"
+                  >
+                    {processing === selectedApplication._id ? 'Saving...' : 'Save Status'}
+                  </Button>
+                  {selectedApplication.status !== 'approved' && selectedStatus === 'approved' && (
                     <Button
                       variant="primary"
                       onClick={() => handleStatusChange(selectedApplication._id, 'approved')}

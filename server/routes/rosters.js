@@ -869,10 +869,10 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     roster.markModified('members');
-    roster.updatedAt = new Date().toISOString();
+    roster.updatedAt = new Date();
 
-    // Save the updated roster
-    const updatedRoster = await db.updateRoster(roster._id, roster);
+    // Save the updated roster directly (must use .save() for markModified to work)
+    await roster.save();
     console.log('✅ [Dues Update] Saved successfully');
 
     res.json({ 
@@ -1008,13 +1008,13 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     roster.markModified('members');
-    roster.updatedAt = new Date().toISOString();
+    roster.updatedAt = new Date();
 
-    // Save the updated roster
+    // Save the updated roster directly (must use .save() for markModified to work)
     console.log('💾 [Roster Override] Saving roster...');
-    const updatedRoster = await db.updateRoster(roster._id, roster);
+    await roster.save();
     console.log('✅ [Roster Override] Roster saved successfully');
-    console.log('📊 [Roster Override] Saved overrides:', JSON.stringify(updatedRoster.members[memberIndex].overrides, null, 2));
+    console.log('📊 [Roster Override] Saved overrides:', JSON.stringify(roster.members[memberIndex].overrides, null, 2));
 
     res.json({ 
       message: 'Member overrides updated successfully',

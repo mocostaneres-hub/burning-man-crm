@@ -472,12 +472,18 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     const updatedUser = await db.updateUserById(id, updateData);
     console.log('✅ [PUT /api/admin/users/:id] User updated successfully');
     
-    // Add action log to user's history
-    if (!updatedUser.actionHistory) {
-      updatedUser.actionHistory = [];
+    // Add action log to user's history (non-critical, wrapped in try-catch)
+    try {
+      if (!updatedUser.actionHistory) {
+        updatedUser.actionHistory = [];
+      }
+      updatedUser.actionHistory.push(actionLog);
+      await db.updateUserById(id, { actionHistory: updatedUser.actionHistory });
+      console.log('✅ [PUT /api/admin/users/:id] Action history updated');
+    } catch (historyError) {
+      console.error('⚠️ [PUT /api/admin/users/:id] Failed to update action history (non-critical):', historyError);
+      // Don't fail the whole request if action history update fails
     }
-    updatedUser.actionHistory.push(actionLog);
-    await db.updateUserById(id, { actionHistory: updatedUser.actionHistory });
 
     res.json({ user: updatedUser });
   } catch (error) {

@@ -348,7 +348,8 @@ class DatabaseAdapter {
             members: { 
               member: memberId, 
               addedAt: new Date(), 
-              addedBy 
+              addedBy,
+              duesStatus: 'Unpaid'
             } 
           } 
         },
