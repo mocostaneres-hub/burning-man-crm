@@ -45,7 +45,7 @@ const Navbar: React.FC = () => {
     console.log('Navbar - Is authenticated:', isAuthenticated);
 
     // Camp/Admin accounts navigation (ordered as requested)
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campName)) {
+    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
       return [
         { label: 'My Camp', path: '/camp/profile', icon: <AccountCircle size={18} /> },
         { label: 'Roster', path: '/camp/rosters', icon: <People size={18} /> },

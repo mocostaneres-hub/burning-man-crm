@@ -69,14 +69,18 @@ const AdminDashboard: React.FC = () => {
   const loadStats = async () => {
     try {
       const response = await apiService.get('/admin/dashboard');
+      console.log('🔍 [AdminDashboard] Stats response:', response);
       // Ensure response.data exists and has the expected structure
-      if (response && response.data && response.data.stats && typeof response.data.stats === 'object') {
+      if (response && response.stats && typeof response.stats === 'object') {
+        console.log('✅ [AdminDashboard] Setting stats:', response.stats);
         setStats({
-          totalUsers: response.data.stats.totalUsers || 0,
-          totalCamps: response.data.stats.totalCamps || 0,
-          totalMembers: response.data.stats.totalMembers || 0,
-          activeCamps: response.data.stats.activeCamps || 0
+          totalUsers: response.stats.totalUsers || 0,
+          totalCamps: response.stats.totalCamps || 0,
+          totalMembers: response.stats.totalMembers || 0,
+          activeCamps: response.stats.activeCamps || 0
         });
+      } else {
+        console.log('❌ [AdminDashboard] Invalid stats response structure:', response);
       }
     } catch (err) {
       console.error('Error loading stats:', err);
@@ -86,9 +90,10 @@ const AdminDashboard: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const response = await apiService.get('/users/admin');
+      const response = await apiService.get('/admin/users');
+      console.log('🔍 [AdminDashboard] Users response:', response);
       // Backend returns { users: users[], totalPages, currentPage, total }
-      const userData = response.data?.users || response.data;
+      const userData = response.users || response.data?.users || response.data;
       setUsers(Array.isArray(userData) ? userData : []);
     } catch (err) {
       console.error('Error loading users:', err);
@@ -99,8 +104,9 @@ const AdminDashboard: React.FC = () => {
   const loadCamps = async () => {
     try {
       const response = await apiService.get('/admin/camps');
+      console.log('🔍 [AdminDashboard] Camps response:', response);
       // Backend returns { data: camps[], totalPages, currentPage, total }
-      const campData = response.data?.data || response.data;
+      const campData = response.data || response.camps;
       setCamps(Array.isArray(campData) ? campData : []);
     } catch (err) {
       console.error('Error loading camps:', err);
