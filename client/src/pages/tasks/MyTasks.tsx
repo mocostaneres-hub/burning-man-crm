@@ -132,8 +132,8 @@ const MyTasks: React.FC = () => {
       console.log('📝 [MyTasks] Extracted shift title:', shiftTitle);
       
       // Try to find events that contain this shift
-      // First, get all events for the camp
-      const eventsResponse = await apiService.get('/shifts/events');
+      // Get all events for camps the user is a member of
+      const eventsResponse = await apiService.get('/shifts/my-events');
       console.log('📅 [MyTasks] All events response:', eventsResponse);
       
       if (eventsResponse && eventsResponse.events) {
