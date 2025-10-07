@@ -530,6 +530,52 @@ class DatabaseAdapter {
     }
   }
 
+  // Event operations
+  async findEvents(query) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      return await Event.find(query).populate('createdBy', 'firstName lastName email').populate('campId', 'name');
+    } else {
+      return await this.mockDB.findEvents(query);
+    }
+  }
+
+  async findEvent(query) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      return await Event.findOne(query).populate('createdBy', 'firstName lastName email').populate('campId', 'name');
+    } else {
+      return await this.mockDB.findEvent(query);
+    }
+  }
+
+  async createEvent(eventData) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      return await Event.create(eventData);
+    } else {
+      return await this.mockDB.createEvent(eventData);
+    }
+  }
+
+  async updateEvent(id, updates) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      return await Event.findByIdAndUpdate(id, updates, { new: true });
+    } else {
+      return await this.mockDB.updateEvent(id, updates);
+    }
+  }
+
+  async deleteEvent(id) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      return await Event.findByIdAndDelete(id);
+    } else {
+      return await this.mockDB.deleteEvent(id);
+    }
+  }
+
   // Invite operations
   async findInvite(query) {
     if (this.useMongoDB) {
