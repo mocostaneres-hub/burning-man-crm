@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // Test route to verify this file is being loaded
 router.get('/debug-test', (req, res) => {
@@ -18,15 +19,8 @@ router.get('/events', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    // Get camp ID from user context - prioritize campId field
-    let campId = req.user.campId;
-    
-    if (!campId) {
-      // Fallback: find camp by contactEmail
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
-
+    // Get camp ID using helper (immutable campId, fallback to email)
+    const campId = await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
     }
@@ -119,15 +113,8 @@ router.post('/events', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Event name and at least one shift are required' });
     }
 
-    // Get camp ID from user context - prioritize campId field
-    let campId = req.user.campId;
-    
-    if (!campId) {
-      // Fallback: find camp by contactEmail
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
-
+    // Get camp ID using helper (immutable campId, fallback to email)
+    const campId = await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
     }
@@ -183,15 +170,8 @@ router.get('/events/:eventId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Verify user has access to this event's camp
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      const camp = await db.findCamp({ campName: req.user.campName });
-      campId = camp ? camp._id : null;
-    }
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
 
     if (event.campId !== campId) {
       return res.status(403).json({ message: 'Access denied' });
@@ -233,11 +213,8 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     console.log('✅ [TASK ASSIGNMENT] Event found:', { id: event._id, name: event.eventName, shiftsCount: event.shifts?.length });
 
     // Get camp ID and verify access
-    let campId = req.user.campId || null;
-    if (!campId) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
 
     console.log('🏕️ [TASK ASSIGNMENT] Camp ID resolved:', campId);
     const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
@@ -570,15 +547,8 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
     }
 
     // Get camp ID
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      const camp = await db.findCamp({ campName: req.user.campName });
-      campId = camp ? camp._id : null;
-    }
-
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -628,15 +598,8 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
     }
 
     // Get camp ID
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      const camp = await db.findCamp({ campName: req.user.campName });
-      campId = camp ? camp._id : null;
-    }
-
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -700,11 +663,8 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     }
 
     // Get camp ID from user context and verify access
-    let campId = req.user.campId || null;
-    if (!campId) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
 
     const eventCampIdStr = (existingEvent.campId && existingEvent.campId._id ? existingEvent.campId._id : existingEvent.campId).toString();
     const isCampAccount = req.user.accountType === 'camp';
@@ -1007,11 +967,8 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
     console.log('✅ [TASK SYNC] Event found:', { id: event._id, name: event.eventName });
 
     // Get camp ID and verify access
-    let campId = req.user.campId || null;
-    if (!campId) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
 
     console.log('🏕️ [TASK SYNC] Camp ID resolved:', campId);
     const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();

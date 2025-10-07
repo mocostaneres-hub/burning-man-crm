@@ -4,16 +4,14 @@ const router = express.Router();
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
 // @access  Private (Camp accounts and admins)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    let campId = req.user.campId || null;
-    if (!campId) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
     if (!campId) return res.status(404).json({ message: 'Camp not found' });
 
     const tasks = await db.findTasks({ campId });
@@ -42,8 +40,9 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if user owns this camp
-    if (camp.contactEmail !== req.user.email) {
+    // Check if user owns this camp using helper
+    const hasAccess = await canAccessCamp(req, campId);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -144,7 +143,9 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Check if user owns this camp
     const camp = await db.findCamp({ _id: campId });
-    if (!camp || camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, task.campId);
+    if (!camp || !hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -181,7 +182,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Check if user is camp owner or assigned to the task
     const camp = await db.findCamp({ _id: task.campId });
-    const isCampOwner = camp && camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = camp && await canAccessCamp(req, task.campId);
     const isAssigned = task.assignedTo.includes(req.user._id.toString());
     const isAdmin = req.user.accountType === 'admin';
 
@@ -221,7 +223,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     // Check if user owns this camp
     const camp = await db.findCamp({ _id: task.campId });
-    if (!camp || camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, task.campId);
+    if (!camp || !hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -253,7 +257,9 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
 
     // Check if user owns this camp
     const camp = await db.findCamp({ _id: task.campId });
-    if (!camp || camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, task.campId);
+    if (!camp || !hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

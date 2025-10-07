@@ -426,8 +426,12 @@ router.put('/my-camp', authenticateToken, [
       camp = await db.createCamp(newCampData);
       return res.json(camp);
     } else {
-      // Update existing camp
-      camp = await db.updateCamp({ contactEmail: req.user.email }, updateData);
+      // Update existing camp using campId
+      const campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
+      camp = await db.updateCamp({ _id: campId }, updateData);
       return res.json(camp);
     }
   } catch (error) {
@@ -456,7 +460,8 @@ router.put('/:id', authenticateToken, [
     }
 
     // Check permissions
-    const isOwner = camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isOwner = await canAccessCamp(req, camp._id);
     const isAdmin = await db.findMember({ 
       user: req.user._id, 
       camp: camp._id, 
@@ -503,7 +508,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user is camp owner
-    if (camp.contactEmail !== req.user.email) {
+    // Check camp ownership using helper
+    const hasAccess = await canAccessCamp(req, camp._id);
+    if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to delete this camp' });
     }
 
@@ -658,7 +665,8 @@ router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
     }
 
     // Verify user has access to this camp
-    const isCampOwner = camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = await canAccessCamp(req, camp._id);
     const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
     
     if (!isCampOwner && !isAdmin) {
@@ -704,7 +712,8 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
     }
 
     // Verify user has access to this camp
-    const isCampOwner = camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = await canAccessCamp(req, camp._id);
     const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
     
     if (!isCampOwner && !isAdmin) {
@@ -767,7 +776,8 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     }
 
     // Verify user has access to this camp
-    const isCampOwner = camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = await canAccessCamp(req, camp._id);
     const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
     
     if (!isCampOwner && !isAdmin) {

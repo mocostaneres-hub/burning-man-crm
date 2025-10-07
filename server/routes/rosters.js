@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 const router = express.Router();
 
@@ -94,9 +95,12 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     let camp;
     
-    // Check if user is camp owner
+    // Check if user is camp owner using helper
     if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campName)) {
-      camp = await db.findCamp({ contactEmail: req.user.email });
+      const campId = await getUserCampId(req);
+      if (campId) {
+        camp = await db.findCamp({ _id: campId });
+      }
     }
     
     // If not camp owner, check if user is a member of any camp
@@ -219,7 +223,12 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -278,7 +287,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -308,7 +322,12 @@ router.put('/:id/archive', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -342,7 +361,12 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -548,7 +572,12 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -620,7 +649,12 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     }
 
     // Get camp ID from user context
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -709,7 +743,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -786,7 +825,12 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -833,7 +877,12 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using helper (immutable campId)
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -895,7 +944,8 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
     }
 
     // Check if user is camp owner or member
-    const isCampOwner = camp.contactEmail === req.user.email;
+    // Check camp ownership using helper
+    const isCampOwner = await canAccessCamp(req, camp._id);
     const isCampMember = await db.findMember({ camp: numericCampId, user: req.user._id, status: 'active' });
     
     if (!isCampOwner && !isCampMember) {
