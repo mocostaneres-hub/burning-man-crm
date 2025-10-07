@@ -192,7 +192,13 @@ router.get('/camp/:campId/members', authenticateToken, async (req, res) => {
       return new Date(a.createdAt) - new Date(b.createdAt);
     });
 
-    res.json({ members: populatedMembers });
+    // Convert Mongoose documents to plain objects
+    const plainMembers = populatedMembers.map(m => {
+      const plainMember = m.toObject ? m.toObject() : m;
+      return plainMember;
+    });
+
+    res.json({ members: plainMembers });
 
   } catch (error) {
     console.error('Get camp members error:', error);
