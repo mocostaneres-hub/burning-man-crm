@@ -133,7 +133,7 @@ const MyTasks: React.FC = () => {
       
       // Try to find events that contain this shift
       // Get all events for camps the user is a member of
-      const eventsResponse = await apiService.get('/shifts/my-events');
+      const eventsResponse = await apiService.get('/tasks/my-events');
       console.log('📅 [MyTasks] All events response:', eventsResponse);
       
       if (eventsResponse && eventsResponse.events) {
