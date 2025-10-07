@@ -308,7 +308,7 @@ const MemberRoster: React.FC = () => {
             const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
         
         return {
-          _id: memberEntry.member, // The member ID
+          _id: memberEntry.member?._id || memberEntry.member, // The member ID (handle both object and string)
           member: memberEntry.member, // The full member object with nested user data
           user: memberEntry.member?.user,  // The populated user data from the backend
               duesPaid: duesPaid,
