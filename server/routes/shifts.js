@@ -756,17 +756,16 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
     console.log('✅ [TASK SYNC] Event found:', { id: event._id, name: event.eventName });
 
     // Get camp ID and verify access
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
+    let campId = req.user.campId || null;
+    if (!campId) {
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
 
     console.log('🏕️ [TASK SYNC] Camp ID resolved:', campId);
-    if (event.campId.toString() !== campId.toString()) {
+    const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
+    const isCampAccount = req.user.accountType === 'camp';
+    if (!isCampAccount && eventCampIdStr !== campId.toString()) {
       console.log('❌ [TASK SYNC] Access denied - camp ID mismatch');
       return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
     }
