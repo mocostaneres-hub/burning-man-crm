@@ -145,8 +145,8 @@ const VolunteerShifts: React.FC = () => {
   const loadEvents = async () => {
     try {
       const response = await api.get('/shifts/events');
-      if (response.data?.events) {
-        setEvents(response.data.events);
+      if (response?.events) {
+        setEvents(response.events);
       } else {
         setEvents([]);
       }
@@ -212,8 +212,8 @@ const VolunteerShifts: React.FC = () => {
         successMessage = 'Event created successfully!';
       }
       
-      if (response.data?.event) {
-        const resultEvent = response.data.event;
+      if (response?.event) {
+        const resultEvent = response.event;
         
         // Handle task assignment changes
         let taskResult = { success: true, message: '' };
@@ -239,9 +239,9 @@ const VolunteerShifts: React.FC = () => {
               3, // 3 retries
               1000 // 1 second delay
             );
-            console.log('✅ Task assignment update response:', updateResponse.data);
+            console.log('✅ Task assignment update response:', updateResponse);
             
-            const { deletedCount, createdCount, membersAdded, membersRemoved, finalMemberCount, noChangesNeeded } = updateResponse.data;
+            const { deletedCount, createdCount, membersAdded, membersRemoved, finalMemberCount, noChangesNeeded } = updateResponse || {};
             
             if (noChangesNeeded) {
               taskResult.message = `Task assignments unchanged - already correctly assigned to ${finalMemberCount} members.`;
@@ -263,8 +263,8 @@ const VolunteerShifts: React.FC = () => {
               }
             }
             
-            if (updateResponse.data.warnings) {
-              taskResult.message += ` Warning: ${updateResponse.data.warnings}`;
+            if (updateResponse?.warnings) {
+              taskResult.message += ` Warning: ${updateResponse.warnings}`;
             }
           } catch (taskError: any) {
             console.error('❌ Task assignment update failed:', taskError);
@@ -295,12 +295,12 @@ const VolunteerShifts: React.FC = () => {
                 3, // 3 retries
                 1000 // 1 second delay
               );
-              console.log('✅ Task creation response:', createResponse.data);
+              console.log('✅ Task creation response:', createResponse);
               
-              taskResult.message = `Created ${createResponse.data.tasksCreated || 0} tasks for ${createResponse.data.targetMembers || 0} members.`;
+              taskResult.message = `Created ${createResponse?.tasksCreated || 0} tasks for ${createResponse?.targetMembers || 0} members.`;
               
-              if (createResponse.data.warnings) {
-                taskResult.message += ` Warning: ${createResponse.data.warnings}`;
+              if (createResponse?.warnings) {
+                taskResult.message += ` Warning: ${createResponse.warnings}`;
               }
             } catch (taskError: any) {
               console.error('❌ Task assignment failed:', taskError);
