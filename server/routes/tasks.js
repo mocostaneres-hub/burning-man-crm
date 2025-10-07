@@ -66,29 +66,38 @@ router.get('/my-tasks', authenticateToken, async (req, res) => {
     }
 
     const tasks = await db.findTasks({ assignedTo: req.user._id });
-    
+
     // Populate camp information for each task (always fetch fresh data)
     const tasksWithCampInfo = await Promise.all(tasks.map(async (task) => {
       try {
+        // Normalize task in case it's a Mongoose document
+        const plainTask = typeof task.toObject === 'function' ? task.toObject() : task;
+
         // Always fetch fresh camp data to ensure updates are reflected
-        const camp = await db.findCamp({ _id: task.campId });
+        const camp = await db.findCamp({ _id: plainTask.campId });
+
+        // Camps model uses `name`, not `campName`
+        const campName = camp ? (camp.campName || camp.name) : undefined;
+
         return {
-          ...task,
+          ...plainTask,
           camp: camp ? {
             _id: camp._id,
-            campName: camp.campName,
+            campName: campName,
             slug: camp.slug
           } : null
         };
       } catch (error) {
         console.error('Error fetching camp info for task:', error);
+        const plainTask = typeof task.toObject === 'function' ? task.toObject() : task;
         return {
-          ...task,
+          ...plainTask,
           camp: null
         };
       }
     }));
-    
+
+    // Return plain JSON
     res.json(tasksWithCampInfo);
   } catch (error) {
     console.error('Error fetching my tasks:', error);

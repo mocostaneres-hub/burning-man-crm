@@ -52,6 +52,26 @@ const taskSchema = new mongoose.Schema({
   completedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  type: {
+    type: String,
+    enum: ['general', 'volunteer_shift', 'meeting', 'other'],
+    default: 'general'
+  },
+  metadata: {
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Event'
+    },
+    shiftId: {
+      type: mongoose.Schema.Types.ObjectId
+    },
+    eventName: {
+      type: String
+    },
+    shiftTitle: {
+      type: String
+    }
   }
 });
 

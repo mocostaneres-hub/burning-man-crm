@@ -82,7 +82,22 @@ const MyTasks: React.FC = () => {
           'Pragma': 'no-cache'
         }
       });
-      setTasks(response || []);
+      // Normalize payload in case API returns raw Mongoose docs
+      const normalized = (response || []).map((item: any) => {
+        // If payload looks like a Mongoose doc wrapper, unwrap
+        const task = item?._doc ? { ...item._doc, camp: item.camp } : item;
+
+        // Ensure camp shape and derive a readable name
+        const camp = task.camp || null;
+        const campName = camp?.campName || camp?.name || (camp?.slug ? camp.slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : undefined);
+
+        return {
+          ...task,
+          camp: camp ? { ...camp, campName } : null
+        } as Task & { camp?: any };
+      });
+
+      setTasks(normalized);
     } catch (error) {
       console.error('Error fetching my tasks:', error);
       setError('Failed to load your tasks');
@@ -107,13 +122,60 @@ const MyTasks: React.FC = () => {
     }
   };
 
+  const loadEventShiftsFromTaskDescription = async (task: Task) => {
+    try {
+      setLoadingShifts(true);
+      console.log('🔍 [MyTasks] Trying to find event from task description:', task.title);
+      
+      // Extract shift title from task title
+      const shiftTitle = task.title.replace(/^Volunteer Shift:\s*/i, '');
+      console.log('📝 [MyTasks] Extracted shift title:', shiftTitle);
+      
+      // Try to find events that contain this shift
+      // First, get all events for the camp
+      const eventsResponse = await apiService.get('/shifts/events');
+      console.log('📅 [MyTasks] All events response:', eventsResponse);
+      
+      if (eventsResponse && eventsResponse.events) {
+        // Find event that contains a shift with matching title
+        const matchingEvent = eventsResponse.events.find((event: any) => {
+          return event.shifts && event.shifts.some((shift: any) => 
+            shift.title === shiftTitle
+          );
+        });
+        
+        if (matchingEvent) {
+          console.log('✅ [MyTasks] Found matching event:', matchingEvent.eventName);
+          setEventData(matchingEvent);
+        } else {
+          console.log('⚠️ [MyTasks] No matching event found for shift:', shiftTitle);
+          setEventData(null);
+        }
+      } else {
+        console.log('⚠️ [MyTasks] No events found');
+        setEventData(null);
+      }
+    } catch (error) {
+      console.error('❌ [MyTasks] Error finding event from task description:', error);
+      setEventData(null);
+    } finally {
+      setLoadingShifts(false);
+    }
+  };
+
   const handleViewTask = async (task: Task) => {
     setSelectedTask(task);
     setViewDialogOpen(true);
     
-    // If this is a volunteer shift task, load the event data
-    if (task.type === 'volunteer_shift' && task.metadata?.eventId) {
+    // Check if this is a volunteer shift task (by type or title pattern)
+    const isVolunteerShiftTask = task.type === 'volunteer_shift' || 
+      task.title.toLowerCase().startsWith('volunteer shift:');
+    
+    if (isVolunteerShiftTask && task.metadata?.eventId) {
       await loadEventShifts(task.metadata.eventId);
+    } else if (isVolunteerShiftTask) {
+      // Try to extract event information from the task description
+      await loadEventShiftsFromTaskDescription(task);
     } else {
       setEventData(null);
     }
@@ -131,10 +193,14 @@ const MyTasks: React.FC = () => {
       
       const response = await apiService.post(`/shifts/shifts/${shiftId}/signup`);
       
-      if (response.status === 200) {
+      // The API service post method returns response.data, so we check for the message
+      if (response.message === 'Successfully signed up for shift') {
         // Refresh the event data to show updated sign-up counts
         if (selectedTask?.metadata?.eventId) {
           await loadEventShifts(selectedTask.metadata.eventId);
+        } else if (eventData) {
+          // If we found the event through task description matching, reload it
+          await loadEventShiftsFromTaskDescription(selectedTask!);
         }
         
         // Refresh tasks to update status if this was the first sign-up
@@ -177,6 +243,21 @@ const MyTasks: React.FC = () => {
 
   // Using shared date formatting utilities
 
+  const getCampDisplayName = (camp: any | undefined | null): string => {
+    if (!camp) return 'Unknown Camp';
+    if (camp.campName) return camp.campName;
+    if (camp.name) return camp.name;
+    if (camp.slug) {
+      const formatted = camp.slug
+        .toString()
+        .split('-')
+        .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join(' ');
+      return formatted || 'Unknown Camp';
+    }
+    return 'Unknown Camp';
+  };
+
   const isUserSignedUp = (shift: any) => {
     return shift.memberIds && shift.memberIds.includes(user?._id);
   };
@@ -205,7 +286,7 @@ const MyTasks: React.FC = () => {
       title: 'Camp',
       render: (_, task) => (
         <div className="font-work font-medium text-custom-text">
-          {task.camp?.campName || 'Unknown Camp'}
+          {getCampDisplayName(task.camp)}
         </div>
       ),
     },
@@ -381,7 +462,7 @@ const MyTasks: React.FC = () => {
             )}
 
             {/* Volunteer Shift Sign-Up Interface */}
-            {selectedTask.type === 'volunteer_shift' && (
+            {(selectedTask.type === 'volunteer_shift' || selectedTask.title.toLowerCase().startsWith('volunteer shift:')) && (
               <div>
                 <h3 className="text-lg font-lato font-bold text-custom-text mb-3 flex items-center gap-2">
                   <Calendar size={20} />
