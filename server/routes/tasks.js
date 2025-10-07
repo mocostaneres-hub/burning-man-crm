@@ -375,5 +375,16 @@ router.post('/fix-volunteer-shifts', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/tasks/test-railway
+// @desc    Test endpoint to verify Railway deployment
+// @access  Public
+router.get('/test-railway', (req, res) => {
+  res.json({ 
+    message: 'Railway deployment test successful', 
+    timestamp: new Date().toISOString(),
+    route: '/api/tasks/test-railway'
+  });
+});
+
 module.exports = router;
 
