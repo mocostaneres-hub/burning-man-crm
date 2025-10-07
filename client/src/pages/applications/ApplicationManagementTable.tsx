@@ -95,10 +95,10 @@ const ApplicationManagementTable: React.FC = () => {
   }, [applications, statusFilter]);
 
   useEffect(() => {
-    if (user?.campName) {
+    if (user?.accountType === 'camp' || user?.campId) {
       fetchApplications();
     }
-  }, [user?.campName]);
+  }, [user?.accountType, user?.campId]);
 
   useEffect(() => {
     filterApplications();

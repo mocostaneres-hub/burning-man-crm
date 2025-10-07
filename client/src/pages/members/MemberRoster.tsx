@@ -335,10 +335,10 @@ const MemberRoster: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    if (user?.campName) {
+    if (user?.accountType === 'camp' || user?.campId) {
       fetchCampData();
     }
-  }, [user?.campName]);
+  }, [user?.accountType, user?.campId]);
 
   useEffect(() => {
     if (campId) {
