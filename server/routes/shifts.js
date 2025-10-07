@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-const db = require('../database/mockDatabase');
+const db = require('../database/databaseAdapter');
 
 // @route   GET /api/shifts/events
 // @desc    Get all events for a camp
@@ -9,23 +9,21 @@ const db = require('../database/mockDatabase');
 router.get('/events', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    // Get camp ID from user context
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      // For admin accounts, get the camp by contactEmail to ensure we get the right one
+    // Get camp ID from user context - prioritize campId field
+    let campId = req.user.campId;
+    
+    if (!campId) {
+      // Fallback: find camp by contactEmail
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
 
     if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+      return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
     }
 
     // Get events for this camp  
