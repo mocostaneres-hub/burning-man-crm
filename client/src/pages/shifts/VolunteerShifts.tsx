@@ -158,19 +158,29 @@ const VolunteerShifts: React.FC = () => {
 
   const handleCreateEvent = async () => {
     try {
+      console.log('🔍 [Event Creation] User object:', user);
+      console.log('🔍 [Event Creation] User accountType:', user?.accountType);
+      console.log('🔍 [Event Creation] User campName:', user?.campName);
+      
       // Get camp ID from user context
       let campId;
       if (user?.accountType === 'camp') {
+        console.log('🔍 [Event Creation] Detected camp account, fetching camp data...');
         // For camp accounts, we need to get the camp ID
         const response = await api.get('/camps/my-camp');
+        console.log('🔍 [Event Creation] Camp response:', response.data);
         campId = response.data?._id;
       } else if (user?.accountType === 'admin' && user?.campName) {
+        console.log('🔍 [Event Creation] Detected admin account with camp context...');
         // For admin accounts with camp context
         const response = await api.get('/camps/my-camp');
+        console.log('🔍 [Event Creation] Camp response:', response.data);
         campId = response.data?._id;
       }
 
+      console.log('🔍 [Event Creation] Final campId:', campId);
       if (!campId) {
+        console.error('❌ [Event Creation] No campId found!');
         alert('Unable to determine camp context. Please ensure you are logged in as a camp admin.');
         return;
       }
