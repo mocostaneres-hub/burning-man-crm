@@ -309,7 +309,8 @@ const MemberRoster: React.FC = () => {
         
         return {
           _id: memberEntry.member, // The member ID
-          user: memberEntry.user,  // The populated user data from the backend
+          member: memberEntry.member, // The full member object with nested user data
+          user: memberEntry.member?.user,  // The populated user data from the backend
               duesPaid: duesPaid,
           duesStatus: memberEntry.duesStatus,
               addedAt: memberEntry.addedAt,
