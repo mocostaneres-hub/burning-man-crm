@@ -419,8 +419,10 @@ const VolunteerShifts: React.FC = () => {
   };
 
   const handleDeleteEvent = (event: Event) => {
+    console.log('🗑️ [Delete Button Clicked] Event:', event);
     setEventToDelete(event);
     setShowDeleteModal(true);
+    console.log('🗑️ [Delete Modal State] showDeleteModal should now be true');
   };
 
   const handleConfirmDelete = async () => {
