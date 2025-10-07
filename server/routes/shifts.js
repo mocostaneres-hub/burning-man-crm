@@ -149,7 +149,7 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     console.log('📝 [TASK ASSIGNMENT] Request body:', req.body);
     
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       console.log('❌ [TASK ASSIGNMENT] Permission denied - user not camp admin/lead');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
@@ -445,7 +445,7 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
 router.get('/reports/per-person', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -498,7 +498,7 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
 router.get('/reports/per-day', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -561,7 +561,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 router.put('/events/:eventId', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
