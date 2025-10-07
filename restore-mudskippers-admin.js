@@ -103,8 +103,14 @@ async function restoreMudskippersAdmin() {
       
       adminRecord = new Admin({
         user: owner._id,
-        role: 'super_admin',
-        permissions: ['all'],
+        role: 'super-admin',
+        permissions: {
+          userManagement: true,
+          campManagement: true,
+          systemSettings: true,
+          analytics: true,
+          support: true
+        },
         isActive: true,
         createdAt: new Date()
       });
