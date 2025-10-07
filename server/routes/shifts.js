@@ -174,9 +174,10 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     }
 
     console.log('🏕️ [TASK ASSIGNMENT] Camp ID resolved:', campId);
-    console.log('🔒 [TASK ASSIGNMENT] Event camp ID:', event.campId);
+    const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
+    console.log('🔒 [TASK ASSIGNMENT] Event camp ID:', eventCampIdStr);
 
-    if (event.campId.toString() !== campId.toString()) {
+    if (eventCampIdStr !== campId.toString()) {
       console.log('❌ [TASK ASSIGNMENT] Access denied - camp ID mismatch');
       return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
     }
