@@ -168,11 +168,18 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/active', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
-    const camp = await db.findCamp({ contactEmail: req.user.email });
+    // Get camp using campId if available, otherwise fall back to contactEmail
+    let camp;
+    if (req.user.campId) {
+      camp = await db.findCamp({ _id: req.user.campId });
+    } else {
+      camp = await db.findCamp({ contactEmail: req.user.email });
+    }
+    
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }

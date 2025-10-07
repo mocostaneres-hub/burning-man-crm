@@ -284,7 +284,11 @@ class DatabaseAdapter {
   async findActiveRoster(query) {
     if (this.useMongoDB) {
       const Roster = require('../models/Roster');
-      return await Roster.findOne({ ...query, isActive: true, isArchived: false });
+      return await Roster.findOne({ ...query, isActive: true, isArchived: false })
+        .populate({
+          path: 'members.member',
+          populate: { path: 'user' }
+        });
     } else {
       return await this.mockDB.findActiveRoster(query);
     }
