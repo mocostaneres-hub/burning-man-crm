@@ -124,4 +124,4 @@ server.listen(PORT, () => {
 });
 
 module.exports = { app, io };
-// Deployment trigger Mon Oct  6 23:44:46 PDT 2025
+// Deployment trigger - Fix Railway startup error
