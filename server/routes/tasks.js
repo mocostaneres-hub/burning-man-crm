@@ -396,19 +396,46 @@ router.get('/my-events', authenticateToken, async (req, res) => {
 
     // Find all camps where the user is an approved member
     const rosters = await db.findRosters({});
+    console.log('📊 [MY EVENTS] Found rosters:', rosters.length);
+    
     const userCampIds = [];
 
     for (const roster of rosters) {
+      console.log('🔍 [MY EVENTS] Checking roster:', { 
+        id: roster._id, 
+        active: roster.active, 
+        membersCount: roster.members?.length || 0,
+        camp: roster.camp 
+      });
+      
       if (!roster.members || !roster.active) continue;
 
       for (const memberEntry of roster.members) {
+        console.log('👤 [MY EVENTS] Checking member entry:', { 
+          status: memberEntry.status, 
+          memberId: memberEntry.member 
+        });
+        
         if (memberEntry.status !== 'approved' || !memberEntry.member) continue;
 
         const member = await db.findMember({ _id: memberEntry.member });
+        console.log('🔍 [MY EVENTS] Found member:', { 
+          id: member?._id, 
+          user: member?.user, 
+          status: member?.status 
+        });
+        
         if (member && member.user && member.status === 'active') {
           const memberId = typeof member.user === 'object' ? member.user._id : member.user;
+          console.log('🔍 [MY EVENTS] Comparing IDs:', { 
+            memberId: memberId.toString(), 
+            userId: req.user._id.toString(),
+            match: memberId.toString() === req.user._id.toString()
+          });
+          
           if (memberId.toString() === req.user._id.toString()) {
             userCampIds.push(roster.camp);
+            console.log('✅ [MY EVENTS] User found in camp:', roster.camp);
             break;
           }
         }
