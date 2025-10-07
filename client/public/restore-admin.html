@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restore Mudskippers Admin Features</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .info {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            color: #004085;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Restore Mudskippers Admin Features</h1>
+        
+        <div class="info">
+            <strong>What this does:</strong>
+            <ul>
+                <li>Upgrades account type to 'admin' if needed</li>
+                <li>Ensures campId is set correctly</li>
+                <li>Creates/activates Admin record for system admin features</li>
+            </ul>
+            <strong>Requirements:</strong>
+            <ul>
+                <li>You must be logged in as the Mudskippers camp owner</li>
+                <li>Your session must be valid</li>
+            </ul>
+        </div>
+
+        <button id="restoreBtn" onclick="restoreAdmin()">Restore Admin Features</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'https://burning-man-crm-production.up.railway.app/api';
+        const CAMP_ID = '68e43f61a8f6ec1271586306'; // Mudskippers camp ID
+
+        async function restoreAdmin() {
+            const btn = document.getElementById('restoreBtn');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            result.style.display = 'block';
+            result.className = 'loading';
+            result.innerHTML = '🔄 Processing... Please wait...';
+
+            try {
+                // Get auth token from localStorage (same as your React app)
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    throw new Error('Not logged in. Please log in to the CRM first, then return to this page.');
+                }
+
+                const response = await fetch(`${API_URL}/admin/restore-camp-admin/${CAMP_ID}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    result.className = 'success';
+                    result.innerHTML = `
+                        <h3>✅ Success!</h3>
+                        <p><strong>Message:</strong> ${data.message}</p>
+                        <p><strong>Changes made:</strong></p>
+                        <ul>
+                            ${data.changes.map(change => `<li>${change}</li>`).join('')}
+                        </ul>
+                        <p><strong>Camp:</strong> ${data.camp.name} (ID: ${data.camp.id})</p>
+                        <p><strong>User:</strong> ${data.user.email}</p>
+                        <p><strong>Account Type:</strong> ${data.user.accountType}</p>
+                        <p><strong>Admin Record:</strong> ${data.adminRecord.exists ? (data.adminRecord.active ? 'Active ✅' : 'Inactive ❌') : 'None'}</p>
+                        <hr>
+                        <p><strong>📋 What to do next:</strong></p>
+                        <ol>
+                            <li>Log out of the CRM</li>
+                            <li>Log back in</li>
+                            <li>You should now see the "Admin" link in the navigation bar</li>
+                            <li>System admin features should be fully restored</li>
+                        </ol>
+                    `;
+                } else {
+                    result.className = 'error';
+                    result.innerHTML = `
+                        <h3>❌ Error</h3>
+                        <p><strong>Message:</strong> ${data.message || 'Unknown error'}</p>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        ${data.error ? `<p><strong>Details:</strong> ${data.error}</p>` : ''}
+                        <hr>
+                        <p><strong>Troubleshooting:</strong></p>
+                        <ul>
+                            <li>Make sure you're logged in as the Mudskippers camp owner</li>
+                            <li>Try logging out and back in, then return to this page</li>
+                            <li>Check that your session hasn't expired</li>
+                        </ul>
+                    `;
+                }
+            } catch (error) {
+                result.className = 'error';
+                result.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p><strong>Message:</strong> ${error.message}</p>
+                    <hr>
+                    <p><strong>Troubleshooting:</strong></p>
+                    <ul>
+                        <li>Make sure you're logged in to the CRM</li>
+                        <li>Check your internet connection</li>
+                        <li>Try refreshing this page and trying again</li>
+                    </ul>
+                `;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+

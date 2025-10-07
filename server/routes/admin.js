@@ -588,4 +588,110 @@ router.post('/camps/:id/upload-photo', authenticateToken, requireAdmin, upload.s
   }
 });
 
+// @route   POST /api/admin/restore-camp-admin/:campId
+// @desc    Restore admin features for a camp account (emergency fix endpoint)
+// @access  Private (Can be called by the camp owner themselves)
+router.post('/restore-camp-admin/:campId', authenticateToken, async (req, res) => {
+  try {
+    const { campId } = req.params;
+    
+    console.log('🔄 [RESTORE ADMIN] Request from user:', req.user.email);
+    console.log('🔄 [RESTORE ADMIN] Target camp ID:', campId);
+
+    // Find the camp
+    const camp = await db.findCamp({ _id: campId });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    console.log('✅ [RESTORE ADMIN] Found camp:', camp.name);
+    console.log('📝 [RESTORE ADMIN] Camp owner ID:', camp.owner);
+
+    // Security: Only allow the camp owner to restore their own admin status
+    if (camp.owner.toString() !== req.user._id.toString()) {
+      console.log('❌ [RESTORE ADMIN] Permission denied - user is not camp owner');
+      return res.status(403).json({ message: 'Only the camp owner can restore admin status' });
+    }
+
+    // Find the owner user
+    const owner = await db.findUser({ _id: camp.owner });
+    if (!owner) {
+      return res.status(404).json({ message: 'Camp owner user not found' });
+    }
+
+    console.log('👤 [RESTORE ADMIN] Current account type:', owner.accountType);
+    console.log('👤 [RESTORE ADMIN] Current campId:', owner.campId);
+
+    const changes = [];
+
+    // Upgrade to admin account type if needed
+    if (owner.accountType !== 'admin') {
+      console.log('🔄 [RESTORE ADMIN] Upgrading account type to admin...');
+      owner.accountType = 'admin';
+      changes.push('Account type upgraded to admin');
+    }
+
+    // Ensure campId is set
+    if (!owner.campId || owner.campId.toString() !== camp._id.toString()) {
+      console.log('🔄 [RESTORE ADMIN] Setting campId...');
+      owner.campId = camp._id;
+      changes.push('campId set correctly');
+    }
+
+    // Save user changes
+    if (changes.length > 0) {
+      await db.updateUser(owner._id, owner);
+      console.log('✅ [RESTORE ADMIN] User updated successfully');
+    }
+
+    // Check/create Admin record
+    let adminRecord = await db.findAdmin({ user: owner._id });
+    
+    if (!adminRecord) {
+      console.log('🔄 [RESTORE ADMIN] Creating Admin record...');
+      adminRecord = await db.createAdmin({
+        user: owner._id,
+        role: 'super_admin',
+        permissions: ['all'],
+        isActive: true,
+        createdAt: new Date()
+      });
+      changes.push('Admin record created');
+      console.log('✅ [RESTORE ADMIN] Admin record created');
+    } else if (!adminRecord.isActive) {
+      console.log('🔄 [RESTORE ADMIN] Activating Admin record...');
+      adminRecord.isActive = true;
+      await db.updateAdmin(adminRecord._id, adminRecord);
+      changes.push('Admin record activated');
+      console.log('✅ [RESTORE ADMIN] Admin record activated');
+    }
+
+    console.log('✅ [RESTORE ADMIN] Restoration complete!');
+    
+    res.json({
+      success: true,
+      message: 'Admin features restored successfully',
+      changes: changes.length > 0 ? changes : ['No changes needed - already configured'],
+      camp: {
+        id: camp._id,
+        name: camp.name
+      },
+      user: {
+        id: owner._id,
+        email: owner.email,
+        accountType: owner.accountType,
+        campId: owner.campId
+      },
+      adminRecord: {
+        exists: !!adminRecord,
+        active: adminRecord?.isActive
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [RESTORE ADMIN] Error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
