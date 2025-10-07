@@ -425,8 +425,14 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
   body('accountType').optional().isIn(['personal', 'camp', 'admin']).withMessage('Invalid account type'),
 ], async (req, res) => {
   try {
+    console.log('🔍 [PUT /api/admin/users/:id] Update user request');
+    console.log('🔍 [PUT /api/admin/users/:id] User ID:', req.params.id);
+    console.log('🔍 [PUT /api/admin/users/:id] Admin:', { _id: req.user._id, accountType: req.user.accountType });
+    console.log('🔍 [PUT /api/admin/users/:id] Update data keys:', Object.keys(req.body));
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ [PUT /api/admin/users/:id] Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -435,11 +441,19 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
 
     // Log the admin action
     const adminUser = await db.findUser({ _id: req.user._id });
+    if (!adminUser) {
+      console.log('❌ [PUT /api/admin/users/:id] Admin user not found');
+      return res.status(404).json({ message: 'Admin user not found' });
+    }
+    
     const targetUser = await db.findUser({ _id: id });
     
     if (!targetUser) {
+      console.log('❌ [PUT /api/admin/users/:id] Target user not found');
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    console.log('🔍 [PUT /api/admin/users/:id] Target user found:', { _id: targetUser._id, email: targetUser.email });
 
     // Create action log entry (avoid circular references)
     const { actionHistory, ...safeUpdateData } = updateData;
@@ -454,7 +468,9 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     };
 
     // Update user
+    console.log('🔍 [PUT /api/admin/users/:id] Updating user...');
     const updatedUser = await db.updateUserById(id, updateData);
+    console.log('✅ [PUT /api/admin/users/:id] User updated successfully');
     
     // Add action log to user's history
     if (!updatedUser.actionHistory) {
@@ -465,8 +481,8 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
 
     res.json({ user: updatedUser });
   } catch (error) {
-    console.error('Update user error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [PUT /api/admin/users/:id] Update user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

@@ -51,8 +51,8 @@ router.post('/create-applications', authenticateToken, requireAdmin, async (req,
 
       // Check if application already exists
       const existingApp = await MemberApplication.findOne({
-        userId: user._id,
-        campId: camp._id
+        applicant: user._id,
+        camp: camp._id
       });
 
       if (existingApp) {
@@ -66,18 +66,20 @@ router.post('/create-applications', authenticateToken, requireAdmin, async (req,
 
       // Create new application
       const application = new MemberApplication({
-        userId: user._id,
-        campId: camp._id,
-        status: 'pending',
-        answers: {
-          whyJoin: `I'm excited to join Mudskippers and contribute to the camp community at Burning Man.`,
-          skillsToOffer: user.skills?.join(', ') || 'Team player, willing to help wherever needed',
-          expectations: 'Looking forward to participating in camp activities and making new connections.',
-          previousExperience: user.burningManExperience || 'New to Burning Man, eager to learn.',
-          additionalInfo: ''
+        applicant: user._id,
+        camp: camp._id,
+        status: 'ApplicationSubmitted',
+        applicationData: {
+          motivation: `I'm excited to join Mudskippers and contribute to the camp community at Burning Man.`,
+          experience: user.burningManExperience || 'New to Burning Man, eager to learn.',
+          skills: user.skills || [],
+          availability: {
+            arriveDate: user.arrivalDate || null,
+            departDate: user.departureDate || null,
+            workShifts: 'Available to help with camp duties and shifts as needed.'
+          }
         },
-        createdAt: new Date(),
-        updatedAt: new Date()
+        appliedAt: new Date()
       });
 
       await application.save();

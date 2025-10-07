@@ -8,7 +8,7 @@ const db = require('../database/databaseAdapter');
 
 /**
  * Get the camp ID for the authenticated user
- * For camp accounts: Uses req.user.campId (immutable identifier)
+ * For camp/admin accounts: Uses req.user.campId (immutable identifier)
  * Falls back to email lookup only if campId is not available in JWT
  * 
  * @param {Object} req - Express request object with req.user
@@ -22,7 +22,7 @@ async function getUserCampId(req) {
   }
 
   // Fallback: Look up by email (only for backwards compatibility)
-  if (req.user.accountType === 'camp' && req.user.email) {
+  if ((req.user.accountType === 'camp' || req.user.accountType === 'admin') && req.user.email) {
     console.log('⚠️ [Permission] campId not in JWT, falling back to email lookup');
     const camp = await db.findCamp({ contactEmail: req.user.email });
     if (camp) {
@@ -37,16 +37,16 @@ async function getUserCampId(req) {
 
 /**
  * Check if user has permission to access a specific camp
- * RULE: Camp accounts have FULL power over their own camp
+ * RULE: Camp accounts and admin accounts with campId have FULL power over their own camp
  * 
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed
  * @returns {Promise<boolean>} - true if user has access
  */
 async function canAccessCamp(req, targetCampId) {
-  // Only camp accounts can access camps
-  if (req.user.accountType !== 'camp') {
-    console.log('❌ [Permission] Not a camp account');
+  // Camp accounts and admin accounts (with campId) can access camps
+  if (req.user.accountType !== 'camp' && req.user.accountType !== 'admin') {
+    console.log('❌ [Permission] Not a camp or admin account, got:', req.user.accountType);
     return false;
   }
 
@@ -58,6 +58,7 @@ async function canAccessCamp(req, targetCampId) {
 
   const hasAccess = userCampId.toString() === targetCampId.toString();
   console.log(`${hasAccess ? '✅' : '❌'} [Permission] Camp access check:`, {
+    userAccountType: req.user.accountType,
     userCampId: userCampId.toString(),
     targetCampId: targetCampId.toString(),
     hasAccess
