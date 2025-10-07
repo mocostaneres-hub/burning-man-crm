@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Mudskippers Applications</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-2xl w-full">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Create Mudskippers Applications</h1>
+        <p class="text-gray-600 mb-6">
+            This will create applications for the following 6 members to join Mudskippers camp:
+        </p>
+        <ul class="list-disc list-inside text-gray-700 mb-6 space-y-1">
+            <li>David Miller</li>
+            <li>Lisa Wilson</li>
+            <li>Kate Thomas</li>
+            <li>Ryan Jackson</li>
+            <li>Jessica White</li>
+            <li>Chris Moore</li>
+        </ul>
+        <p class="text-red-600 font-semibold mb-6">
+            ⚠️ This action requires you to be logged in as a System Admin.
+        </p>
+        <button
+            id="createButton"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center justify-center w-full"
+        >
+            <svg id="spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="buttonText">Create Applications</span>
+        </button>
+        <div id="response" class="mt-6 p-4 text-sm rounded-lg hidden"></div>
+    </div>
+
+    <script>
+        document.getElementById('createButton').addEventListener('click', async () => {
+            const button = document.getElementById('createButton');
+            const buttonText = document.getElementById('buttonText');
+            const spinner = document.getElementById('spinner');
+            const responseDiv = document.getElementById('response');
+
+            button.disabled = true;
+            spinner.classList.remove('hidden');
+            buttonText.textContent = 'Creating...';
+            responseDiv.classList.add('hidden');
+            responseDiv.textContent = '';
+
+            try {
+                const baseUrl = window.location.origin.replace('vercel.app', 'railway.app').replace('burning-man-crm', 'burning-man-crm-production.up');
+                const apiUrl = `${baseUrl}/api/mudskippers/create-applications`;
+
+                const token = localStorage.getItem('token');
+
+                if (!token) {
+                    throw new Error('Authentication token not found. Please log in as an admin first.');
+                }
+
+                const res = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    responseDiv.classList.remove('bg-red-100', 'text-red-700');
+                    responseDiv.classList.add('bg-green-100', 'text-green-700');
+                    
+                    let message = `<strong>Success!</strong><br><br>`;
+                    if (data.results.created.length > 0) {
+                        message += `<strong>✅ Applications Created (${data.results.created.length}):</strong><br>`;
+                        message += data.results.created.map(name => `• ${name}`).join('<br>') + '<br><br>';
+                    }
+                    if (data.results.existing.length > 0) {
+                        message += `<strong>ℹ️ Applications Already Exist (${data.results.existing.length}):</strong><br>`;
+                        message += data.results.existing.map(item => `• ${item.name} (${item.status})`).join('<br>') + '<br><br>';
+                    }
+                    if (data.results.notFound.length > 0) {
+                        message += `<strong>⚠️ Users Not Found (${data.results.notFound.length}):</strong><br>`;
+                        message += data.results.notFound.map(name => `• ${name}`).join('<br>');
+                    }
+                    
+                    responseDiv.innerHTML = message;
+                } else {
+                    responseDiv.classList.remove('bg-green-100', 'text-green-700');
+                    responseDiv.classList.add('bg-red-100', 'text-red-700');
+                    responseDiv.textContent = `Error: ${data.message || 'Failed to create applications.'} ${data.error || ''}`;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                responseDiv.classList.remove('bg-green-100', 'text-green-700');
+                responseDiv.classList.add('bg-red-100', 'text-red-700');
+                responseDiv.textContent = `An unexpected error occurred: ${error.message}`;
+            } finally {
+                responseDiv.classList.remove('hidden');
+                button.disabled = false;
+                spinner.classList.add('hidden');
+                buttonText.textContent = 'Create Applications';
+            }
+        });
+    </script>
+</body>
+</html>
+
