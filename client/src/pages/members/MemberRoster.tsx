@@ -303,6 +303,8 @@ const MemberRoster: React.FC = () => {
       // Transform roster member entries into the format expected by the component
       const enhancedMembers = (roster.members || []).map((memberEntry: any) => {
         console.log('🔍 [MemberRoster] Processing member entry:', memberEntry);
+        console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
+        console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
         
             // Map duesStatus string to duesPaid boolean for frontend compatibility
             const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
