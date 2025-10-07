@@ -15,7 +15,7 @@ router.get('/faqs', async (req, res) => {
       {
         _id: '1',
         question: 'How do I create a camp profile?',
-        answer: 'To create a camp profile, go to your dashboard and click "Create Camp". Fill out all the required information including camp name, contact email, and G8Road location.',
+        answer: 'To create a camp profile, go to your dashboard and click "Create Camp". Fill out all the required information including camp name, contact email, and Playa location.',
         category: 'camp-management',
         order: 1,
         isActive: true,

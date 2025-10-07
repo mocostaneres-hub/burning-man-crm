@@ -311,6 +311,10 @@ const CampProfile: React.FC = () => {
       setSaving(true);
       setError('');
       
+      console.log('🔍 [CampProfile] Saving camp profile...');
+      console.log('🔍 [CampProfile] User:', user);
+      console.log('🔍 [CampProfile] Camp ID:', campId);
+      
       if (!campId) {
         throw new Error('Camp ID not available');
       }
@@ -324,14 +328,19 @@ const CampProfile: React.FC = () => {
         isPublic: campData.visibility === 'public'
       };
       
-      await api.put(`/camps/${campId}`, saveData);
+      console.log('🔍 [CampProfile] Save data:', saveData);
+      
+      const response = await api.put(`/camps/${campId}`, saveData);
+      console.log('✅ [CampProfile] Save response:', response);
       setSuccess('Camp profile updated successfully!');
       setIsEditing(false);
       // Reload the profile to get updated data
       fetchCampProfile();
-    } catch (err) {
-      console.error('Error saving camp profile:', err);
-      setError('Failed to save camp profile');
+    } catch (err: any) {
+      console.error('❌ [CampProfile] Error saving camp profile:', err);
+      console.error('❌ [CampProfile] Error response:', err.response?.data);
+      console.error('❌ [CampProfile] Error status:', err.response?.status);
+      setError(err.response?.data?.message || 'Failed to save camp profile');
     } finally {
       setSaving(false);
     }
@@ -526,7 +535,7 @@ const CampProfile: React.FC = () => {
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
                 <MapPin className="w-4 h-4 inline mr-2" />
-                G8Road Location
+                Playa Location
               </label>
               {isEditing ? (
                 <Input

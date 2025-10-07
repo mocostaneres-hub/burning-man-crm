@@ -449,32 +449,46 @@ router.put('/:id', authenticateToken, [
   body('contactEmail').optional().isEmail().normalizeEmail()
 ], async (req, res) => {
   try {
+    console.log('🔍 [PUT /api/camps/:id] Update camp request');
+    console.log('🔍 [PUT /api/camps/:id] Camp ID:', req.params.id);
+    console.log('🔍 [PUT /api/camps/:id] User:', { _id: req.user._id, accountType: req.user.accountType, campId: req.user.campId });
+    console.log('🔍 [PUT /api/camps/:id] Update data keys:', Object.keys(req.body));
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ [PUT /api/camps/:id] Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     const camp = await db.findCamp({ _id: req.params.id });
     if (!camp) {
+      console.log('❌ [PUT /api/camps/:id] Camp not found');
       return res.status(404).json({ message: 'Camp not found' });
     }
+    
+    console.log('🔍 [PUT /api/camps/:id] Camp found:', { _id: camp._id, name: camp.name, owner: camp.owner });
 
     // Check permissions
     // Check camp ownership using helper
     const isOwner = await canAccessCamp(req, camp._id);
+    console.log('🔍 [PUT /api/camps/:id] Is owner?', isOwner);
+    
     const isAdmin = await db.findMember({ 
       user: req.user._id, 
       camp: camp._id, 
       role: 'camp-lead',
       status: 'active'
     });
+    console.log('🔍 [PUT /api/camps/:id] Is camp-lead?', !!isAdmin);
 
     if (!isOwner && !isAdmin) {
+      console.log('❌ [PUT /api/camps/:id] Not authorized');
       return res.status(403).json({ message: 'Not authorized to update this camp' });
     }
 
     // Update camp (allow selectedPerks passthrough)
     const updatedCamp = await db.updateCamp({ _id: camp._id }, req.body);
+    console.log('✅ [PUT /api/camps/:id] Camp updated successfully');
 
     // Get owner info
     const owner = await db.findUser({ _id: camp.owner });
@@ -492,8 +506,8 @@ router.put('/:id', authenticateToken, [
     });
 
   } catch (error) {
-    console.error('Update camp error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [PUT /api/camps/:id] Update camp error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

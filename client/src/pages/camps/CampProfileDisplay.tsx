@@ -162,12 +162,12 @@ const CampProfileDisplay: React.FC<CampProfileDisplayProps> = ({ camp, onEdit })
           </div>
         </Card>
 
-        {/* G8Road Location */}
+        {/* Playa Location */}
         <Card>
           <div className="p-6">
             <h2 className="text-h2 font-lato-bold text-custom-text mb-4 flex items-center">
               <MapPin className="w-5 h-5 mr-2" />
-              G8Road Location
+              Playa Location
             </h2>
 
             {camp.location.street && (
