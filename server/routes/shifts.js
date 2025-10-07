@@ -287,10 +287,11 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
             title: `Volunteer Shift: ${shift.title}`,
             description: `Event: ${event.eventName}\nShift: ${shift.title}\nDate: ${shift.date.toDateString()}\nTime: ${shift.startTime.toTimeString()} - ${shift.endTime.toTimeString()}\nDescription: ${shift.description}`,
             assignedTo: [memberId], // FIX: assignedTo should be an array
+            createdBy: req.user._id,
             assignedBy: req.user._id,
             dueDate: shift.date,
             priority: 'medium',
-            status: 'pending',
+            status: 'open',
             type: 'volunteer_shift',
             campId: event.campId, // FIX: Add campId for proper task filtering
             metadata: {
@@ -874,10 +875,11 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
             title: `Volunteer Shift: ${shift.title}`,
             description: `Event: ${event.eventName}\nShift: ${shift.title}\nDate: ${shift.date.toDateString()}\nTime: ${shift.startTime.toTimeString()} - ${shift.endTime.toTimeString()}\nDescription: ${shift.description}`,
             assignedTo: [memberId],
+            createdBy: req.user._id,
             assignedBy: req.user._id,
             dueDate: shift.date,
             priority: 'medium',
-            status: 'pending',
+            status: 'open',
             type: 'volunteer_shift',
             campId: event.campId,
             metadata: {
@@ -1042,7 +1044,7 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       assignedTo: userId,
       'metadata.eventId': targetEvent._id,
       type: 'volunteer_shift',
-      status: 'pending'
+      status: 'open'
     });
 
     console.log(`📊 [SHIFT SIGNUP] Found ${userTasks.length} pending volunteer shift tasks for this event`);
