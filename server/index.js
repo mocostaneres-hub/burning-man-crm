@@ -69,8 +69,21 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/call-slots', require('./routes/callSlots'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/shifts-test', require('./routes/shifts-test'));
-app.use('/api/test-shifts', require('./routes/shifts-minimal'));
-app.use('/api/shifts', require('./routes/shifts'));
+try {
+  console.log('Loading shifts-minimal router...');
+  app.use('/api/test-shifts', require('./routes/shifts-minimal'));
+  console.log('✅ shifts-minimal router loaded');
+} catch (error) {
+  console.error('❌ Error loading shifts-minimal router:', error);
+}
+
+try {
+  console.log('Loading shifts router...');
+  app.use('/api/shifts', require('./routes/shifts'));
+  console.log('✅ shifts router loaded');
+} catch (error) {
+  console.error('❌ Error loading shifts router:', error);
+}
 app.use('/api', require('./routes/invites'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/perks', require('./routes/perks'));
