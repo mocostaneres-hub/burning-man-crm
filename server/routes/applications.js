@@ -278,7 +278,15 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    if (camp.contactEmail !== req.user.email) {
+    // Camp accounts with matching campId or contactEmail have full access
+    const isCampOwner = camp.contactEmail === req.user.email || 
+                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
+    const isAdminWithAccess = req.user.accountType === 'admin' && (
+      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
+      (req.user.campName && camp.name === req.user.campName)
+    );
+    
+    if (!isCampOwner && !isAdminWithAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -372,7 +380,18 @@ router.put('/:applicationId/status', authenticateToken, [
 
     // Check if user is camp owner
     const camp = await db.findCamp({ _id: application.camp });
-    if (!camp || camp.contactEmail !== req.user.email) {
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    
+    const isCampOwner = camp.contactEmail === req.user.email || 
+                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
+    const isAdminWithAccess = req.user.accountType === 'admin' && (
+      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
+      (req.user.campName && camp.name === req.user.campName)
+    );
+    
+    if (!isCampOwner && !isAdminWithAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

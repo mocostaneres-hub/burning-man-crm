@@ -10,7 +10,7 @@ const router = express.Router();
 router.post('/reload-data', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -37,7 +37,7 @@ router.post('/reload-data', authenticateToken, async (req, res) => {
 router.post('/fix-duplicates', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -215,7 +215,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -274,7 +274,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -304,7 +304,7 @@ router.put('/:id/archive', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -338,7 +338,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -544,7 +544,7 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
     const { memberId } = req.params;
     
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -604,7 +604,7 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     const memberData = req.body;
 
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -705,7 +705,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -782,7 +782,7 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     }
 
     // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp account required' });
     }
 
@@ -829,7 +829,7 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     const { playaName, yearsBurned, skills } = req.body;
 
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -970,7 +970,7 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     }
     
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
       console.log('❌ [DUES UPDATE] Permission denied - user not camp admin/lead');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
