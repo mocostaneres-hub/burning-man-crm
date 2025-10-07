@@ -205,6 +205,20 @@ export interface Member {
       showContributions: boolean;
     };
   };
+  // Roster-specific overrides (for roster view only, doesn't affect user account)
+  overrides?: {
+    playaName?: string;
+    yearsBurned?: number;
+    skills?: string[];
+    hasTicket?: boolean;
+    hasVehiclePass?: boolean;
+    interestedInEAP?: boolean;
+    interestedInStrike?: boolean;
+    arrivalDate?: string | Date;
+    departureDate?: string | Date;
+    city?: string;
+    state?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
