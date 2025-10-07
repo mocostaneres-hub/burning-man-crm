@@ -68,7 +68,7 @@ router.post('/create-applications', authenticateToken, requireAdmin, async (req,
       const application = new MemberApplication({
         applicant: user._id,
         camp: camp._id,
-        status: 'ApplicationSubmitted',
+        status: 'pending',
         applicationData: {
           motivation: `I'm excited to join Mudskippers and contribute to the camp community at Burning Man.`,
           experience: user.burningManExperience || 'New to Burning Man, eager to learn.',

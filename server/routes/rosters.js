@@ -853,6 +853,11 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     }
 
     console.log('✅ [Dues Update] Roster found:', { rosterId: roster._id });
+    console.log('🔍 [Dues Update] Roster type check:', { 
+      hasMarkModified: typeof roster.markModified === 'function',
+      hasSave: typeof roster.save === 'function',
+      isMongooseDoc: roster.constructor.name 
+    });
 
     // Find the member in the roster
     const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
@@ -866,14 +871,20 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     // Update the dues status
     roster.members[memberIndex].duesStatus = duesStatus;
     console.log('📝 [Dues Update] Updated duesStatus to:', duesStatus);
+    console.log('📝 [Dues Update] Member before save:', JSON.stringify(roster.members[memberIndex], null, 2));
     
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     roster.markModified('members');
     roster.updatedAt = new Date();
 
     // Save the updated roster directly (must use .save() for markModified to work)
-    await roster.save();
+    const savedRoster = await roster.save();
     console.log('✅ [Dues Update] Saved successfully');
+    
+    // Verify the save
+    const verifyRoster = await db.findRoster({ _id: roster._id });
+    const verifyMember = verifyRoster.members.find(m => m.member.toString() === memberId.toString());
+    console.log('🔍 [Dues Update] Verified after save - duesStatus:', verifyMember?.duesStatus);
 
     res.json({ 
       message: 'Dues status updated successfully',
