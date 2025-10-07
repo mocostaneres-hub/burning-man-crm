@@ -762,38 +762,72 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
   try {
     console.log('🔄 [EVENT DELETION] Starting complete event deletion');
     console.log('📝 [EVENT DELETION] Event ID:', req.params.eventId);
-    
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
-      console.log('❌ [EVENT DELETION] Permission denied - user not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
+    console.log('📝 [EVENT DELETION] User:', { accountType: req.user.accountType, email: req.user.email, campId: req.user.campId });
 
     const { eventId } = req.params;
 
-    // Check if event exists and user has access
+    // Check if event exists first
     console.log('🔍 [EVENT DELETION] Looking for event:', eventId);
     const event = await db.findEvent({ _id: eventId });
     if (!event) {
       console.log('❌ [EVENT DELETION] Event not found:', eventId);
       return res.status(404).json({ message: 'Event not found' });
     }
-    console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName });
+    console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
-    // Get camp ID and verify access
-    let campId;
+    // Get camp ID and verify user has permission
+    let campId = null;
+    let hasPermission = false;
+
     if (req.user.accountType === 'camp') {
+      // Camp account - get camp by email
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
+      hasPermission = true;
+    } else if (req.user.accountType === 'admin') {
+      // Admin account - get camp by email or campId
+      if (req.user.campId) {
+        campId = req.user.campId;
+        hasPermission = true;
+      } else {
+        const camp = await db.findCamp({ contactEmail: req.user.email });
+        campId = camp ? camp._id : null;
+        hasPermission = !!campId;
+      }
+    } else {
+      // Personal account - check if they're a camp lead/admin in the roster
+      console.log('🔍 [EVENT DELETION] Checking if personal account is camp lead...');
+      
+      // Find the member record for this user
+      const member = await db.findMember({ user: req.user._id, status: 'active' });
+      if (member) {
+        console.log('✅ [EVENT DELETION] Found member record:', { memberId: member._id, camp: member.camp });
+        
+        // Find the roster to check role
+        const roster = await db.findActiveRoster({ camp: event.campId });
+        if (roster && roster.members) {
+          const memberInRoster = roster.members.find(m => 
+            m.member && m.member.toString() === member._id.toString()
+          );
+          
+          if (memberInRoster) {
+            console.log('✅ [EVENT DELETION] Found in roster:', { role: memberInRoster.role, status: memberInRoster.status });
+            hasPermission = (memberInRoster.role === 'lead' || memberInRoster.role === 'admin') && memberInRoster.status === 'approved';
+            campId = event.campId;
+          }
+        }
+      }
     }
 
     console.log('🏕️ [EVENT DELETION] Camp ID resolved:', campId);
-    console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
+    console.log('🔒 [EVENT DELETION] Has permission:', hasPermission);
 
-    if (!campId || event.campId.toString() !== campId.toString()) {
+    if (!hasPermission || !campId) {
+      console.log('❌ [EVENT DELETION] Permission denied - user is not camp admin/lead');
+      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    }
+
+    if (event.campId.toString() !== campId.toString()) {
       console.log('❌ [EVENT DELETION] Access denied - camp ID mismatch');
       return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
     }
