@@ -36,11 +36,11 @@ router.get('/events', authenticateToken, async (req, res) => {
   }
 });
 
-// @route   GET /api/shifts/test-deployment
+// @route   GET /api/shifts/test
 // @desc    Test endpoint to verify deployment
 // @access  Public
-router.get('/test-deployment', (req, res) => {
-  res.json({ message: 'Deployment working', timestamp: new Date().toISOString() });
+router.get('/test', (req, res) => {
+  res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
 });
 
 // @route   GET /api/shifts/my-events
