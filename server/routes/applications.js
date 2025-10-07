@@ -269,11 +269,8 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
     
-    // Convert campId to number to match database format
-    const numericCampId = parseInt(campId);
-
-    // Check if camp exists and user is owner
-    const camp = await db.findCamp({ _id: numericCampId });
+    // Check if camp exists and user is owner (Mongo ObjectId string)
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -290,7 +287,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const applications = await db.findMemberApplications({ camp: numericCampId });
+    const applications = await db.findMemberApplications({ camp: campId });
     
     // Populate applicant details with comprehensive member information
     const applicationsWithApplicants = await Promise.all(applications.map(async (app) => {

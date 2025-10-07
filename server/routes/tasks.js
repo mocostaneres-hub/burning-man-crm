@@ -1,5 +1,24 @@
 const express = require('express');
 const router = express.Router();
+// @route   GET /api/tasks
+// @desc    Return tasks for current user's camp
+// @access  Private (Camp accounts and admins)
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    let campId = req.user.campId || null;
+    if (!campId) {
+      const camp = await db.findCamp({ contactEmail: req.user.email });
+      campId = camp ? camp._id : null;
+    }
+    if (!campId) return res.status(404).json({ message: 'Camp not found' });
+
+    const tasks = await db.findTasks({ campId });
+    return res.json(tasks);
+  } catch (error) {
+    console.error('Get tasks error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 const Task = require('../models/Task');
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');

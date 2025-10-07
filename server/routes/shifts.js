@@ -579,16 +579,15 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     }
 
     // Get camp ID from user context and verify access
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
+    let campId = req.user.campId || null;
+    if (!campId) {
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
 
-    if (!campId || existingEvent.campId.toString() !== campId.toString()) {
+    const eventCampIdStr = (existingEvent.campId && existingEvent.campId._id ? existingEvent.campId._id : existingEvent.campId).toString();
+    const isCampAccount = req.user.accountType === 'camp';
+    if (!isCampAccount && (!campId || eventCampIdStr !== campId.toString())) {
       return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
     }
 
