@@ -872,31 +872,54 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     const { rosterId, memberId } = req.params;
     const { playaName, yearsBurned, skills } = req.body;
 
+    console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: { playaName, yearsBurned, skills } });
+
     // Check if user is camp admin/lead
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+      console.log('❌ [Roster Override] Permission denied');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
     // Get camp using helper (immutable campId)
     const campId = await getUserCampId(req);
     if (!campId) {
+      console.log('❌ [Roster Override] Camp ID not found');
       return res.status(404).json({ message: 'Camp not found' });
     }
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
+      console.log('❌ [Roster Override] Camp not found in database');
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    const roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
+    console.log('✅ [Roster Override] Camp found:', { campId: camp._id, campName: camp.name });
+
+    // Find roster - try as ObjectId first, then as integer
+    let roster;
+    roster = await db.findRoster({ _id: rosterId, camp: camp._id });
+    
     if (!roster) {
+      // Fallback: try parsing as integer for legacy numeric IDs
+      console.log('⚠️ [Roster Override] Trying integer roster ID...');
+      roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
+    }
+    
+    if (!roster) {
+      console.error('❌ [Roster Override] Roster not found:', { rosterId, campId: camp._id });
       return res.status(404).json({ message: 'Roster not found' });
     }
 
+    console.log('✅ [Roster Override] Roster found:', { rosterId: roster._id, membersCount: roster.members?.length });
+
     // Find the member in the roster
+    console.log('🔍 [Roster Override] Searching for member in roster...');
     const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
     if (memberIndex === -1) {
+      console.error('❌ [Roster Override] Member not found in roster:', { memberId, rosterMembers: roster.members.map(m => m.member.toString()) });
       return res.status(404).json({ message: 'Member not found in roster' });
     }
+
+    console.log('✅ [Roster Override] Member found at index:', memberIndex);
 
     // Create or update the overrides object
     if (!roster.members[memberIndex].overrides) {
@@ -906,18 +929,23 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     // Update only the provided fields
     if (playaName !== undefined) {
       roster.members[memberIndex].overrides.playaName = playaName;
+      console.log('📝 [Roster Override] Updated playaName:', playaName);
     }
     if (yearsBurned !== undefined) {
       roster.members[memberIndex].overrides.yearsBurned = yearsBurned;
+      console.log('📝 [Roster Override] Updated yearsBurned:', yearsBurned);
     }
     if (skills !== undefined) {
       roster.members[memberIndex].overrides.skills = skills;
+      console.log('📝 [Roster Override] Updated skills:', skills);
     }
 
     roster.updatedAt = new Date().toISOString();
 
     // Save the updated roster
+    console.log('💾 [Roster Override] Saving roster...');
     const updatedRoster = await db.updateRoster(roster._id, roster);
+    console.log('✅ [Roster Override] Roster saved successfully');
 
     res.json({ 
       message: 'Member overrides updated successfully',
