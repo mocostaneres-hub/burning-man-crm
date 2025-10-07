@@ -3,6 +3,11 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 
+// Test route to verify this file is being loaded
+router.get('/debug-test', (req, res) => {
+  res.json({ message: 'Shifts router loaded successfully', timestamp: new Date().toISOString() });
+});
+
 // @route   GET /api/shifts/events
 // @desc    Get all events for a camp
 // @access  Private (Camp admins/leads only)
