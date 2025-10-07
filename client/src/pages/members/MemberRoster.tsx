@@ -12,14 +12,19 @@ import { InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
 import { useSkills } from '../../hooks/useSkills';
 
+// Extended type for roster members that includes nested member data
+interface RosterMember extends Member {
+  member?: Member; // Nested member structure from API
+}
+
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
   const { skills: systemSkills } = useSkills();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [campId, setCampId] = useState<string | null>(null);
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedMember, setSelectedMember] = useState<RosterMember | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
@@ -34,10 +39,10 @@ const MemberRoster: React.FC = () => {
   }>({ isOpen: false, member: null, currentStatus: false });
   const [duesLoading, setDuesLoading] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<RosterMember | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
+  const [memberToEdit, setMemberToEdit] = useState<RosterMember | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   // Roster rename state
   const [rosterName, setRosterName] = useState<string>('Member Roster');
@@ -852,7 +857,8 @@ const MemberRoster: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredMembers.map((member, index) => {
                 // Handle the nested structure: member.member.user
-                const user = member.member?.user || member.user;
+                const memberData = member.member || member;
+                const user = typeof memberData.user === 'object' ? memberData.user : null;
                 const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
@@ -1546,7 +1552,8 @@ const MemberRoster: React.FC = () => {
 
               <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded">
                 {(() => {
-                  const user = memberToDelete.member?.user || memberToDelete.user;
+                  const memberData = memberToDelete.member || memberToDelete;
+                  const user = typeof memberData.user === 'object' ? memberData.user : null;
                   const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
                   const userPhoto = user?.profilePhoto;
                   
@@ -1619,7 +1626,8 @@ const MemberRoster: React.FC = () => {
         {memberToEdit && (
           <div className="space-y-6">
             {(() => {
-              const user = memberToEdit.member?.user || memberToEdit.user;
+              const memberData = memberToEdit.member || memberToEdit;
+              const user = typeof memberData.user === 'object' ? memberData.user : null;
               const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
               const userEmail = user?.email || 'No email';
               const userPhoto = user?.profilePhoto;
