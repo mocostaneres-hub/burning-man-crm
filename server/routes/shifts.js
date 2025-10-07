@@ -1085,6 +1085,13 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/shifts/test-deployment
+// @desc    Test endpoint to verify deployment
+// @access  Public
+router.get('/test-deployment', (req, res) => {
+  res.json({ message: 'Deployment working', timestamp: new Date().toISOString() });
+});
+
 // @route   GET /api/shifts/my-events
 // @desc    Get all events for camps the user is a member of (for member view)
 // @access  Private (Approved camp members)
