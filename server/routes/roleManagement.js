@@ -111,17 +111,24 @@ router.get('/camp/:campId/members', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if user is member of this camp OR is an admin
+    // Check if user is member of this camp
     const userMember = await db.findMember({ 
       user: req.user._id, 
       camp: camp._id
     });
 
-    // Check if user is admin with access to this camp
+    // Additional access scenarios
     const isAdmin = req.user.accountType === 'admin';
-    
-    // Allow access if user is a member OR if user is admin and the camp matches their campName
-    const hasAccess = userMember || (isAdmin && req.user.campName === camp.campName);
+    const isCampAccount = req.user.accountType === 'camp';
+    const isCampOwner = isCampAccount && camp.owner && camp.owner.toString() === req.user._id.toString();
+    const isCampLinked = !!req.user.campId && camp._id.toString() === req.user.campId.toString();
+    const adminCampMatch = isAdmin && (
+      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
+      (req.user.campName && req.user.campName === camp.campName)
+    );
+
+    // Allow if: user is a member, camp account owner, camp-linked user, or admin with matching camp context
+    const hasAccess = !!userMember || isCampOwner || isCampLinked || adminCampMatch;
 
     if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to view this camp roster' });
