@@ -444,18 +444,35 @@ router.get('/my-events', authenticateToken, async (req, res) => {
 
     console.log('🏕️ [MY EVENTS] User is member of camps:', userCampIds);
 
+    // If no camps found through roster lookup, try to find camps from user's tasks
     if (userCampIds.length === 0) {
+      console.log('⚠️ [MY EVENTS] No camps found through roster, checking user tasks...');
+      
+      // Get user's tasks to find camp IDs
+      const userTasks = await db.findTasks({ assignedTo: req.user._id });
+      console.log('📋 [MY EVENTS] User tasks:', userTasks.length);
+      
+      const taskCampIds = [...new Set(userTasks.map(task => task.campId).filter(Boolean))];
+      console.log('🏕️ [MY EVENTS] Camps from tasks:', taskCampIds);
+      
+      userCampIds.push(...taskCampIds);
+    }
+
+    if (userCampIds.length === 0) {
+      console.log('❌ [MY EVENTS] No camps found for user');
       return res.json({ events: [] });
     }
 
     // Get all events for these camps
     const allEvents = [];
     for (const campId of userCampIds) {
+      console.log('🔍 [MY EVENTS] Looking for events in camp:', campId);
       const events = await db.findEvents({ campId });
+      console.log('📅 [MY EVENTS] Found events in camp:', events.length);
       allEvents.push(...events);
     }
 
-    console.log('✅ [MY EVENTS] Found events:', allEvents.length);
+    console.log('✅ [MY EVENTS] Total events found:', allEvents.length);
 
     res.json({ events: allEvents });
   } catch (error) {
