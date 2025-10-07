@@ -292,5 +292,88 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   POST /api/tasks/fix-volunteer-shifts
+// @desc    Fix existing volunteer shift tasks by adding type and metadata fields
+// @access  Private (Admin only)
+router.post('/fix-volunteer-shifts', authenticateToken, async (req, res) => {
+  try {
+    // Only allow admin users to run this fix
+    if (req.user.accountType !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    console.log('🔧 [TASK FIX] Starting volunteer shift task fix');
+
+    // Find volunteer shift tasks missing type/metadata
+    const tasks = await Task.find({
+      title: /^Volunteer Shift:/,
+      $or: [
+        { type: { $exists: false } },
+        { metadata: { $exists: false } }
+      ]
+    });
+
+    console.log(`📊 [TASK FIX] Found ${tasks.length} volunteer shift tasks missing type/metadata`);
+
+    if (tasks.length === 0) {
+      return res.json({ 
+        message: 'All volunteer shift tasks already have proper type and metadata',
+        updatedCount: 0,
+        failedCount: 0
+      });
+    }
+
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    for (const task of tasks) {
+      try {
+        console.log(`🔧 [TASK FIX] Updating task: ${task._id} - ${task.title}`);
+
+        // Extract event and shift info from description
+        const desc = task.description;
+        const eventMatch = desc.match(/Event: (.+)/);
+        const shiftMatch = desc.match(/Shift: (.+)/);
+
+        if (eventMatch && shiftMatch) {
+          const updateData = {
+            type: 'volunteer_shift',
+            metadata: {
+              eventName: eventMatch[1].trim(),
+              shiftTitle: shiftMatch[1].trim()
+            }
+          };
+
+          await Task.updateOne({ _id: task._id }, updateData);
+          console.log(`✅ [TASK FIX] Updated task ${task._id} with type and metadata`);
+          updatedCount++;
+        } else {
+          console.log(`⚠️ [TASK FIX] Could not extract event/shift info from description for task ${task._id}`);
+          failedCount++;
+        }
+      } catch (error) {
+        console.error(`❌ [TASK FIX] Error updating task ${task._id}:`, error.message);
+        failedCount++;
+      }
+    }
+
+    console.log(`🎉 [TASK FIX] Fix complete: ${updatedCount} updated, ${failedCount} failed`);
+
+    res.json({
+      message: 'Volunteer shift task fix completed',
+      updatedCount,
+      failedCount,
+      totalFound: tasks.length
+    });
+
+  } catch (error) {
+    console.error('❌ [TASK FIX] Critical error:', error);
+    res.status(500).json({ 
+      message: 'Server error during task fix',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 
