@@ -148,8 +148,8 @@ const MemberRoster: React.FC = () => {
   };
 
   // Helper components for inline editing
-  const EditableArrivalDeparture = ({ user }: { user: any }) => {
-    const currentEdits = editingMemberId ? localEdits[editingMemberId] : {};
+  const EditableArrivalDeparture = ({ user, memberId }: { user: any; memberId: string }) => {
+    const currentEdits = localEdits[memberId] || {};
     const arrivalDate = currentEdits?.arrivalDate || user?.arrivalDate || '';
     const departureDate = currentEdits?.departureDate || user?.departureDate || '';
 
@@ -160,7 +160,7 @@ const MemberRoster: React.FC = () => {
           <input
             type="date"
             value={arrivalDate ? new Date(arrivalDate).toISOString().split('T')[0] : ''}
-            onChange={(e) => handleEditFieldChange('arrivalDate', e.target.value)}
+            onChange={(e) => handleFieldChange(memberId, 'arrivalDate', e.target.value)}
             className="border border-gray-300 rounded px-2 py-1 text-xs w-28"
           />
         </div>
@@ -169,7 +169,7 @@ const MemberRoster: React.FC = () => {
           <input
             type="date"
             value={departureDate ? new Date(departureDate).toISOString().split('T')[0] : ''}
-            onChange={(e) => handleEditFieldChange('departureDate', e.target.value)}
+            onChange={(e) => handleFieldChange(memberId, 'departureDate', e.target.value)}
             className="border border-gray-300 rounded px-2 py-1 text-xs w-28"
           />
         </div>
@@ -177,8 +177,8 @@ const MemberRoster: React.FC = () => {
     );
   };
 
-  const EditableEALD = ({ user }: { user: any }) => {
-    const currentEdits = editingMemberId ? localEdits[editingMemberId] : {};
+  const EditableEALD = ({ user, memberId }: { user: any; memberId: string }) => {
+    const currentEdits = localEdits[memberId] || {};
     const interestedInEAP = currentEdits?.interestedInEAP !== undefined ? currentEdits.interestedInEAP : user?.interestedInEAP;
     const interestedInStrike = currentEdits?.interestedInStrike !== undefined ? currentEdits.interestedInStrike : user?.interestedInStrike;
 
@@ -188,7 +188,7 @@ const MemberRoster: React.FC = () => {
           <span className="w-6">EA:</span>
           <select
             value={interestedInEAP ? 'yes' : 'no'}
-            onChange={(e) => handleEditFieldChange('interestedInEAP', e.target.value === 'yes')}
+            onChange={(e) => handleFieldChange(memberId, 'interestedInEAP', e.target.value === 'yes')}
             className="border border-gray-300 rounded px-2 py-1 text-xs"
           >
             <option value="yes">Yes</option>
@@ -199,7 +199,7 @@ const MemberRoster: React.FC = () => {
           <span className="w-6">LD:</span>
           <select
             value={interestedInStrike ? 'yes' : 'no'}
-            onChange={(e) => handleEditFieldChange('interestedInStrike', e.target.value === 'yes')}
+            onChange={(e) => handleFieldChange(memberId, 'interestedInStrike', e.target.value === 'yes')}
             className="border border-gray-300 rounded px-2 py-1 text-xs"
           >
             <option value="yes">Yes</option>
@@ -210,8 +210,8 @@ const MemberRoster: React.FC = () => {
     );
   };
 
-  const EditableTicketVP = ({ user }: { user: any }) => {
-    const currentEdits = editingMemberId ? localEdits[editingMemberId] : {};
+  const EditableTicketVP = ({ user, memberId }: { user: any; memberId: string }) => {
+    const currentEdits = localEdits[memberId] || {};
     const hasTicket = currentEdits?.hasTicket !== undefined ? currentEdits.hasTicket : user?.hasTicket;
     const hasVehiclePass = currentEdits?.hasVehiclePass !== undefined ? currentEdits.hasVehiclePass : user?.hasVehiclePass;
 
@@ -221,7 +221,7 @@ const MemberRoster: React.FC = () => {
           <span className="w-12">Ticket:</span>
           <select
             value={hasTicket ? 'yes' : 'no'}
-            onChange={(e) => handleEditFieldChange('hasTicket', e.target.value === 'yes')}
+            onChange={(e) => handleFieldChange(memberId, 'hasTicket', e.target.value === 'yes')}
             className="border border-gray-300 rounded px-2 py-1 text-xs"
           >
             <option value="yes">Yes</option>
@@ -232,7 +232,7 @@ const MemberRoster: React.FC = () => {
           <span className="w-12">VP:</span>
           <select
             value={hasVehiclePass ? 'yes' : 'no'}
-            onChange={(e) => handleEditFieldChange('hasVehiclePass', e.target.value === 'yes')}
+            onChange={(e) => handleFieldChange(memberId, 'hasVehiclePass', e.target.value === 'yes')}
             className="border border-gray-300 rounded px-2 py-1 text-xs"
           >
             <option value="yes">Yes</option>
@@ -243,8 +243,8 @@ const MemberRoster: React.FC = () => {
     );
   };
 
-  const EditableLocation = ({ user }: { user: any }) => {
-    const currentEdits = editingMemberId ? localEdits[editingMemberId] : {};
+  const EditableLocation = ({ user, memberId }: { user: any; memberId: string }) => {
+    const currentEdits = localEdits[memberId] || {};
     const city = currentEdits?.city || user?.city || user?.location?.city || '';
     const state = currentEdits?.state || user?.location?.state || '';
 
@@ -254,14 +254,14 @@ const MemberRoster: React.FC = () => {
           type="text"
           placeholder="City"
           value={city}
-          onChange={(e) => handleEditFieldChange('city', e.target.value)}
+          onChange={(e) => handleFieldChange(memberId, 'city', e.target.value)}
           className="border border-gray-300 rounded px-2 py-1 text-xs"
         />
         <input
           type="text"
           placeholder="State"
           value={state}
-          onChange={(e) => handleEditFieldChange('state', e.target.value)}
+          onChange={(e) => handleFieldChange(memberId, 'state', e.target.value)}
           className="border border-gray-300 rounded px-2 py-1 text-xs"
         />
       </div>
@@ -940,7 +940,7 @@ const MemberRoster: React.FC = () => {
                     {/* Ticket/VP */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {isEditing ? (
-                        <EditableTicketVP user={user} />
+                        <EditableTicketVP user={user} memberId={member._id.toString()} />
                       ) : (
                         <div className="text-sm">
                           <div>Ticket: <span className={
@@ -967,7 +967,7 @@ const MemberRoster: React.FC = () => {
                     {/* EA/LD */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {isEditing ? (
-                        <EditableEALD user={user} />
+                        <EditableEALD user={user} memberId={member._id.toString()} />
                       ) : (
                         <div className="text-sm">
                           <div>EA: <span className={user?.interestedInEAP ? 'text-green-600 font-medium' : 'text-red-300'}>{user?.interestedInEAP ? 'Yes' : 'No'}</span></div>
@@ -978,7 +978,7 @@ const MemberRoster: React.FC = () => {
                     {/* Arrival/Departure */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {isEditing ? (
-                        <EditableArrivalDeparture user={user} />
+                        <EditableArrivalDeparture user={user} memberId={member._id.toString()} />
                       ) : (
                         <div className="text-sm">
                           <div className="text-green-600 font-medium">Arrive: {formatArrivalDepartureDate(user?.arrivalDate || '')}</div>
@@ -989,7 +989,7 @@ const MemberRoster: React.FC = () => {
                     {/* City */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {isEditing ? (
-                        <EditableLocation user={user} />
+                        <EditableLocation user={user} memberId={member._id.toString()} />
                       ) : (
                         location
                       )}
