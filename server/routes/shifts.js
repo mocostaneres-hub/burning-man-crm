@@ -775,61 +775,16 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     }
     console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
-    // Get camp ID and verify user has permission
-    let campId = null;
-    let hasPermission = false;
-
+    // PERMISSION CHECK: Camp accounts have FULL power
     if (req.user.accountType === 'camp') {
-      // Camp account - get camp by email
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-      hasPermission = true;
-    } else if (req.user.accountType === 'admin') {
-      // Admin account - get camp by email or campId
-      if (req.user.campId) {
-        campId = req.user.campId;
-        hasPermission = true;
-      } else {
-        const camp = await db.findCamp({ contactEmail: req.user.email });
-        campId = camp ? camp._id : null;
-        hasPermission = !!campId;
-      }
+      console.log('✅ [EVENT DELETION] Camp account detected - FULL permissions granted');
+      // Camp accounts can delete ANY event - no restrictions
+      // Continue to deletion
     } else {
-      // Personal account - check if they're a camp lead/admin in the roster
-      console.log('🔍 [EVENT DELETION] Checking if personal account is camp lead...');
-      
-      // Find the member record for this user
-      const member = await db.findMember({ user: req.user._id, status: 'active' });
-      if (member) {
-        console.log('✅ [EVENT DELETION] Found member record:', { memberId: member._id, camp: member.camp });
-        
-        // Find the roster to check role
-        const roster = await db.findActiveRoster({ camp: event.campId });
-        if (roster && roster.members) {
-          const memberInRoster = roster.members.find(m => 
-            m.member && m.member.toString() === member._id.toString()
-          );
-          
-          if (memberInRoster) {
-            console.log('✅ [EVENT DELETION] Found in roster:', { role: memberInRoster.role, status: memberInRoster.status });
-            hasPermission = (memberInRoster.role === 'lead' || memberInRoster.role === 'admin') && memberInRoster.status === 'approved';
-            campId = event.campId;
-          }
-        }
-      }
-    }
-
-    console.log('🏕️ [EVENT DELETION] Camp ID resolved:', campId);
-    console.log('🔒 [EVENT DELETION] Has permission:', hasPermission);
-
-    if (!hasPermission || !campId) {
-      console.log('❌ [EVENT DELETION] Permission denied - user is not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
-    if (event.campId.toString() !== campId.toString()) {
-      console.log('❌ [EVENT DELETION] Access denied - camp ID mismatch');
-      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
+      // For non-camp accounts, deny access (member permissions not implemented yet)
+      console.log('❌ [EVENT DELETION] Permission denied - only camp accounts can delete events');
+      console.log('📝 [EVENT DELETION] User accountType:', req.user.accountType);
+      return res.status(403).json({ message: 'Camp account required to delete events' });
     }
 
     // Step 1: Delete all tasks related to this event
