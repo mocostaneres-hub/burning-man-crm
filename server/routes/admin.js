@@ -640,7 +640,7 @@ router.post('/restore-camp-admin/:campId', authenticateToken, async (req, res) =
 
     // Save user changes
     if (changes.length > 0) {
-      await db.updateUser(owner._id, owner);
+      await db.updateUserById(owner._id, owner);
       console.log('✅ [RESTORE ADMIN] User updated successfully');
     }
 
