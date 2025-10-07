@@ -167,11 +167,8 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     console.log('✅ [TASK ASSIGNMENT] Event found:', { id: event._id, name: event.eventName, shiftsCount: event.shifts?.length });
 
     // Get camp ID and verify access
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
+    let campId = req.user.campId || null;
+    if (!campId) {
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
