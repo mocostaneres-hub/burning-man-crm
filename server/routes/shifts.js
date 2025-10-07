@@ -776,16 +776,41 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
     // PERMISSION CHECK: Camp accounts have FULL power
-    if (req.user.accountType === 'camp') {
-      console.log('✅ [EVENT DELETION] Camp account detected - FULL permissions granted');
-      // Camp accounts can delete ANY event - no restrictions
-      // Continue to deletion
-    } else {
-      // For non-camp accounts, deny access (member permissions not implemented yet)
+    if (req.user.accountType !== 'camp') {
       console.log('❌ [EVENT DELETION] Permission denied - only camp accounts can delete events');
       console.log('📝 [EVENT DELETION] User accountType:', req.user.accountType);
       return res.status(403).json({ message: 'Camp account required to delete events' });
     }
+
+    console.log('✅ [EVENT DELETION] Camp account detected');
+    
+    // Get camp ID from user (always use campId, not email or name)
+    let campId = req.user.campId;
+    
+    // Fallback: if campId not in JWT, look up camp by email
+    if (!campId) {
+      console.log('⚠️ [EVENT DELETION] campId not in user object, looking up by email...');
+      const camp = await db.findCamp({ contactEmail: req.user.email });
+      campId = camp ? camp._id : null;
+    }
+
+    console.log('🏕️ [EVENT DELETION] Camp ID:', campId);
+    console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
+
+    if (!campId) {
+      console.log('❌ [EVENT DELETION] Could not determine camp ID for user');
+      return res.status(403).json({ message: 'Camp association not found' });
+    }
+
+    // Verify event belongs to this camp
+    if (event.campId.toString() !== campId.toString()) {
+      console.log('❌ [EVENT DELETION] Access denied - event belongs to different camp');
+      console.log('📝 [EVENT DELETION] User camp:', campId.toString());
+      console.log('📝 [EVENT DELETION] Event camp:', event.campId.toString());
+      return res.status(403).json({ message: 'You can only delete events from your own camp' });
+    }
+
+    console.log('✅ [EVENT DELETION] Permission granted - camp owns this event');
 
     // Step 1: Delete all tasks related to this event
     console.log('🔍 [EVENT DELETION] Searching for tasks to delete');
