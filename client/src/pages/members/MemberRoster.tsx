@@ -851,8 +851,8 @@ const MemberRoster: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredMembers.map((member, index) => {
-                // Handle both User object and user ID cases
-                const user = typeof member.user === 'object' ? member.user : null;
+                // Handle the nested structure: member.member.user
+                const user = member.member?.user || member.user;
                 const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
@@ -1546,7 +1546,7 @@ const MemberRoster: React.FC = () => {
 
               <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded">
                 {(() => {
-                  const user = typeof memberToDelete.user === 'object' ? memberToDelete.user : null;
+                  const user = memberToDelete.member?.user || memberToDelete.user;
                   const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
                   const userPhoto = user?.profilePhoto;
                   
@@ -1619,7 +1619,7 @@ const MemberRoster: React.FC = () => {
         {memberToEdit && (
           <div className="space-y-6">
             {(() => {
-              const user = typeof memberToEdit.user === 'object' ? memberToEdit.user : null;
+              const user = memberToEdit.member?.user || memberToEdit.user;
               const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
               const userEmail = user?.email || 'No email';
               const userPhoto = user?.profilePhoto;
