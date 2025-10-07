@@ -3,6 +3,7 @@ const multer = require('multer');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireCampLead, optionalAuth } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // Configure multer for photo uploads (memory storage for mock)
 const upload = multer({
@@ -333,15 +334,20 @@ router.post('/', authenticateToken, [
 // @access  Private (Camp owners only)
 router.put('/my-camp/public', authenticateToken, async (req, res) => {
   try {
-    const camp = await db.findCamp({ contactEmail: req.user.email });
-    
+    // Get camp ID using immutable identifier
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp profile not found' });
+    }
+
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp profile not found' });
     }
     
-    // Toggle public status
+    // Toggle public status using campId
     const updatedCamp = await db.updateCamp(
-      { contactEmail: req.user.email }, 
+      { _id: campId }, 
       { isPublic: !camp.isPublic }
     );
     
