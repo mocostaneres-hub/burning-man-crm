@@ -53,7 +53,7 @@ const MemberRoster: React.FC = () => {
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
 
   // Check if current user can access roster features (STRICT: only admins and camp leads, NO standard members)
-  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campName);
+  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId);
   const isAdminOrLead = user?.accountType === 'admin' || user?.accountType === 'camp';
   const canAccessRoster = isCampContext && isAdminOrLead; // STRICT: Only admins/leads can access
   const canEdit = canAccessRoster;

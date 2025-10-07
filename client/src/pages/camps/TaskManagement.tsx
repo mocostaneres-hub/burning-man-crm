@@ -76,10 +76,10 @@ const TaskManagement: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    if (user?.campName) {
+    if (user?.campId) {
       fetchCampData();
     }
-  }, [user?.campName]);
+  }, [user?.campId]);
 
   useEffect(() => {
     if (campId) {

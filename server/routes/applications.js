@@ -380,7 +380,7 @@ router.put('/:applicationId/status', authenticateToken, [
                         (req.user.campId && camp._id.toString() === req.user.campId.toString());
     const isAdminWithAccess = req.user.accountType === 'admin' && (
       (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campName && camp.name === req.user.campName)
+      (req.user.campId && camp._id.toString() === req.user.campId)
     );
     
     if (!isCampOwner && !isAdminWithAccess) {

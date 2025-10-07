@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
     // Debug logging
     console.log('Dashboard - User data:', user);
     console.log('Dashboard - Account type:', user?.accountType);
-    console.log('Dashboard - Camp name:', user?.campName);
+    console.log('Dashboard - Camp ID:', user?.campId);
     
     const commonTiles = [
       {
@@ -109,7 +109,7 @@ const Dashboard: React.FC = () => {
       }
     ];
 
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campName)) {
+    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
       return [
         ...commonTiles,
         {
@@ -182,7 +182,7 @@ const Dashboard: React.FC = () => {
   const getQuickActions = () => {
     const commonActions = [];
 
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campName)) {
+    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
       return [
         {
           title: 'Create Task',

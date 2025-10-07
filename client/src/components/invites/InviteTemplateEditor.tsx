@@ -204,7 +204,7 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border text-sm">
                   {templates.inviteTemplateEmail
-                    .replace(/\{\{campName\}\}/g, user?.campName || '[Camp Name]')
+                    .replace(/\{\{campName\}\}/g, user?.campName || '[Camp Name]') // TODO: Get from camp data
                     .replace(/\{\{link\}\}/g, 'http://localhost:3000/apply?token=abc123')}
                 </div>
               </div>
@@ -217,7 +217,7 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border text-sm">
                   {templates.inviteTemplateSMS
-                    .replace(/\{\{campName\}\}/g, user?.campName || '[Camp Name]')
+                    .replace(/\{\{campName\}\}/g, user?.campName || '[Camp Name]') // TODO: Get from camp data
                     .replace(/\{\{link\}\}/g, 'http://localhost:3000/apply?token=abc123')}
                 </div>
               </div>

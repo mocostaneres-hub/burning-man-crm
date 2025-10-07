@@ -655,7 +655,7 @@ router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
     const numericCampId = parseInt(campId);
     
     // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -667,7 +667,7 @@ router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
     // Verify user has access to this camp
     // Check camp ownership using helper
     const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
+    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
     
     if (!isCampOwner && !isAdmin) {
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
@@ -702,7 +702,7 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
     const { name = `${new Date().getFullYear()} Roster`, description = 'Active camp roster' } = req.body;
     
     // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -714,7 +714,7 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
     // Verify user has access to this camp
     // Check camp ownership using helper
     const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
+    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
     
     if (!isCampOwner && !isAdmin) {
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
@@ -766,7 +766,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     const numericCampId = parseInt(campId);
     
     // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -778,7 +778,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     // Verify user has access to this camp
     // Check camp ownership using helper
     const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campName === camp.campName;
+    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
     
     if (!isCampOwner && !isAdmin) {
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });

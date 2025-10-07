@@ -15,7 +15,7 @@ router.get('/debug-test', (req, res) => {
 router.get('/events', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -102,7 +102,7 @@ router.get('/my-events', authenticateToken, async (req, res) => {
 router.post('/events', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -159,7 +159,7 @@ router.post('/events', authenticateToken, async (req, res) => {
 router.get('/events/:eventId', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -195,7 +195,7 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     console.log('📝 [TASK ASSIGNMENT] Request body:', req.body);
     
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       console.log('❌ [TASK ASSIGNMENT] Permission denied - user not camp admin/lead');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
@@ -542,7 +542,7 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
 router.get('/reports/per-person', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -588,7 +588,7 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
 router.get('/reports/per-day', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -644,7 +644,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 router.put('/events/:eventId', authenticateToken, async (req, res) => {
   try {
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && (req.user.campId || req.user.campName))) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
@@ -848,7 +848,7 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
     console.log('📝 [TASK DELETION] Event ID:', req.params.eventId);
     
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       console.log('❌ [TASK DELETION] Permission denied - user not camp admin/lead');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
@@ -869,7 +869,7 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
     if (req.user.accountType === 'camp') {
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campName) {
+    } else if (req.user.accountType === 'admin' && req.user.campId) {
       const camp = await db.findCamp({ contactEmail: req.user.email });
       campId = camp ? camp._id : null;
     }
@@ -943,7 +943,7 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
     console.log('📝 [TASK SYNC] Request body:', req.body);
     
     // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campName)) {
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       console.log('❌ [TASK SYNC] Permission denied - user not camp admin/lead');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }

@@ -63,7 +63,7 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
       console.error('Error loading templates:', err);
       setError('Failed to load invite templates');
       // Fallback camp name
-      setCampName(user?.campName || 'Your Camp');
+      setCampName(user?.campName || 'Your Camp'); // Keep campName for display, but we'll get it from camp data
     } finally {
       setTemplatesLoading(false);
     }

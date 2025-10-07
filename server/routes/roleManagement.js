@@ -124,7 +124,7 @@ router.get('/camp/:campId/members', authenticateToken, async (req, res) => {
     const isCampLinked = !!req.user.campId && camp._id.toString() === req.user.campId.toString();
     const adminCampMatch = isAdmin && (
       (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campName && req.user.campName === camp.campName)
+      (req.user.campId && req.user.campId === camp._id.toString())
     );
 
     // Allow if: user is a member, camp account owner, camp-linked user, or admin with matching camp context

@@ -28,7 +28,7 @@ async function getCampIdFromUser(user) {
  * @returns {boolean} - True if user is camp admin/lead
  */
 function isCampAdmin(user) {
-  return user.accountType === 'camp' || (user.accountType === 'admin' && (user.campId || user.campName));
+  return user.accountType === 'camp' || (user.accountType === 'admin' && user.campId);
 }
 
 /**
