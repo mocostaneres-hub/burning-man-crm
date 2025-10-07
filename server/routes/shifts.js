@@ -744,17 +744,10 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
 
     console.log('✅ [EVENT DELETION] Camp account detected');
     
-    // Get camp ID from user (always use campId, not email or name)
-    let campId = req.user.campId;
+    // Get camp ID using helper (immutable campId)
+    const campId = await getUserCampId(req);
     
-    // Fallback: if campId not in JWT, look up camp by email
-    if (!campId) {
-      console.log('⚠️ [EVENT DELETION] campId not in user object, looking up by email...');
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    }
-
-    console.log('🏕️ [EVENT DELETION] Camp ID:', campId);
+    console.log('🏕️ [EVENT DELETION] User camp ID:', campId);
     console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
 
     if (!campId) {
@@ -763,10 +756,11 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     }
 
     // Verify event belongs to this camp
-    if (event.campId.toString() !== campId.toString()) {
+    const eventCampId = event.campId._id ? event.campId._id.toString() : event.campId.toString();
+    if (eventCampId !== campId) {
       console.log('❌ [EVENT DELETION] Access denied - event belongs to different camp');
-      console.log('📝 [EVENT DELETION] User camp:', campId.toString());
-      console.log('📝 [EVENT DELETION] Event camp:', event.campId.toString());
+      console.log('📝 [EVENT DELETION] User camp:', campId);
+      console.log('📝 [EVENT DELETION] Event camp:', eventCampId);
       return res.status(403).json({ message: 'You can only delete events from your own camp' });
     }
 

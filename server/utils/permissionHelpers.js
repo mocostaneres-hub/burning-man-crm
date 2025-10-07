@@ -18,7 +18,7 @@ async function getUserCampId(req) {
   // Primary: Use campId from JWT (immutable)
   if (req.user.campId) {
     console.log('✅ [Permission] Using campId from JWT:', req.user.campId);
-    return req.user.campId;
+    return req.user.campId.toString();
   }
 
   // Fallback: Look up by email (only for backwards compatibility)
