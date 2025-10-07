@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+// IMPORTANT: Middlewares and DB must be required BEFORE route usage
+const { authenticateToken, requireCampAccount } = require('../middleware/auth');
+const db = require('../database/databaseAdapter');
+const Task = require('../models/Task');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
 // @access  Private (Camp accounts and admins)
@@ -19,9 +23,7 @@ router.get('/', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-const Task = require('../models/Task');
-const { authenticateToken, requireCampAccount } = require('../middleware/auth');
-const db = require('../database/databaseAdapter');
+// (moved requires to the top so authenticateToken is initialized before first use)
 
 // @route   GET /api/tasks/camp/:campId
 // @desc    Get all tasks for a camp
