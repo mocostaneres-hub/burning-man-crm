@@ -23,9 +23,16 @@ interface DashboardStats {
 
 interface Camp {
   _id: string;
-  campName: string;
+  name: string;
+  campName?: string; // Keep for backward compatibility
   hometown?: string;
-  memberCount: number;
+  location?: {
+    city?: string;
+    state?: string;
+    country?: string;
+  };
+  memberCount?: number;
+  members?: any[];
   isActive: boolean;
   createdAt: string;
 }
