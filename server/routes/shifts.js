@@ -36,6 +36,67 @@ router.get('/events', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/shifts/test-deployment
+// @desc    Test endpoint to verify deployment
+// @access  Public
+router.get('/test-deployment', (req, res) => {
+  res.json({ message: 'Deployment working', timestamp: new Date().toISOString() });
+});
+
+// @route   GET /api/shifts/my-events
+// @desc    Get all events for camps the user is a member of (for member view)
+// @access  Private (Approved camp members)
+router.get('/my-events', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔄 [MY EVENTS] Fetching events for member view');
+    console.log('📝 [MY EVENTS] User ID:', req.user._id);
+
+    // Find all camps where the user is an approved member
+    const rosters = await db.findRosters({});
+    const userCampIds = [];
+
+    for (const roster of rosters) {
+      if (!roster.members || !roster.active) continue;
+
+      for (const memberEntry of roster.members) {
+        if (memberEntry.status !== 'approved' || !memberEntry.member) continue;
+
+        const member = await db.findMember({ _id: memberEntry.member });
+        if (member && member.user && member.status === 'active') {
+          const memberId = typeof member.user === 'object' ? member.user._id : member.user;
+          if (memberId.toString() === req.user._id.toString()) {
+            userCampIds.push(roster.camp);
+            break;
+          }
+        }
+      }
+    }
+
+    console.log('🏕️ [MY EVENTS] User is member of camps:', userCampIds);
+
+    if (userCampIds.length === 0) {
+      return res.json({ events: [] });
+    }
+
+    // Get all events for these camps
+    const allEvents = [];
+    for (const campId of userCampIds) {
+      const events = await db.findEvents({ campId });
+      allEvents.push(...events);
+    }
+
+    console.log('✅ [MY EVENTS] Found events:', allEvents.length);
+
+    res.json({ events: allEvents });
+  } catch (error) {
+    console.error('❌ [MY EVENTS] Error fetching events:', error);
+    res.status(500).json({
+      message: 'Server error fetching events',
+      error: error.message
+    });
+  }
+});
+
 // @route   POST /api/shifts/events
 // @desc    Create a new event with shifts
 // @access  Private (Camp admins/leads only)
@@ -1080,67 +1141,6 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
     console.error('❌ [SHIFT SIGNUP] Critical error during sign-up:', error);
     res.status(500).json({ 
       message: 'Server error during shift sign-up',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/shifts/test-deployment
-// @desc    Test endpoint to verify deployment
-// @access  Public
-router.get('/test-deployment', (req, res) => {
-  res.json({ message: 'Deployment working', timestamp: new Date().toISOString() });
-});
-
-// @route   GET /api/shifts/my-events
-// @desc    Get all events for camps the user is a member of (for member view)
-// @access  Private (Approved camp members)
-router.get('/my-events', authenticateToken, async (req, res) => {
-  try {
-    console.log('🔄 [MY EVENTS] Fetching events for member view');
-    console.log('📝 [MY EVENTS] User ID:', req.user._id);
-
-    // Find all camps where the user is an approved member
-    const rosters = await db.findRosters({});
-    const userCampIds = [];
-
-    for (const roster of rosters) {
-      if (!roster.members || !roster.active) continue;
-
-      for (const memberEntry of roster.members) {
-        if (memberEntry.status !== 'approved' || !memberEntry.member) continue;
-
-        const member = await db.findMember({ _id: memberEntry.member });
-        if (member && member.user && member.status === 'active') {
-          const memberId = typeof member.user === 'object' ? member.user._id : member.user;
-          if (memberId.toString() === req.user._id.toString()) {
-            userCampIds.push(roster.camp);
-            break;
-          }
-        }
-      }
-    }
-
-    console.log('🏕️ [MY EVENTS] User is member of camps:', userCampIds);
-
-    if (userCampIds.length === 0) {
-      return res.json({ events: [] });
-    }
-
-    // Get all events for these camps
-    const allEvents = [];
-    for (const campId of userCampIds) {
-      const events = await db.findEvents({ campId });
-      allEvents.push(...events);
-    }
-
-    console.log('✅ [MY EVENTS] Found events:', allEvents.length);
-
-    res.json({ events: allEvents });
-  } catch (error) {
-    console.error('❌ [MY EVENTS] Error fetching events:', error);
-    res.status(500).json({
-      message: 'Server error fetching events',
       error: error.message
     });
   }

@@ -127,14 +127,34 @@ const MyTasks: React.FC = () => {
       setLoadingShifts(true);
       console.log('🔍 [MyTasks] Trying to find event from task description:', task.title);
       
-      // For now, since Railway deployment is having issues, 
-      // let's show a helpful message to the user
-      console.log('⚠️ [MyTasks] Railway deployment issue - showing fallback message');
-      setEventData(null);
+      // Extract shift title from task title
+      const shiftTitle = task.title.replace(/^Volunteer Shift:\s*/i, '');
+      console.log('📝 [MyTasks] Extracted shift title:', shiftTitle);
       
-      // TODO: Once Railway deploys the /my-events endpoint, this will work
-      // The backend endpoint is ready, just waiting for deployment
+      // Try to find events that contain this shift
+      // Get all events for camps the user is a member of
+      const eventsResponse = await apiService.get('/shifts/my-events');
+      console.log('📅 [MyTasks] All events response:', eventsResponse);
       
+      if (eventsResponse && eventsResponse.events) {
+        // Find event that contains a shift with matching title
+        const matchingEvent = eventsResponse.events.find((event: any) => {
+          return event.shifts && event.shifts.some((shift: any) => 
+            shift.title === shiftTitle
+          );
+        });
+        
+        if (matchingEvent) {
+          console.log('✅ [MyTasks] Found matching event:', matchingEvent.eventName);
+          setEventData(matchingEvent);
+        } else {
+          console.log('⚠️ [MyTasks] No matching event found for shift:', shiftTitle);
+          setEventData(null);
+        }
+      } else {
+        console.log('⚠️ [MyTasks] No events found');
+        setEventData(null);
+      }
     } catch (error) {
       console.error('❌ [MyTasks] Error finding event from task description:', error);
       setEventData(null);
@@ -562,10 +582,7 @@ const MyTasks: React.FC = () => {
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="mb-2">Unable to load shift information</p>
-                    <p className="text-sm text-gray-400">
-                      The backend endpoint is being deployed. Please try again in a few minutes.
-                    </p>
+                    <p>Unable to load shift information</p>
                   </div>
                 )}
               </div>
