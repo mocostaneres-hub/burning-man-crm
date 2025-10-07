@@ -315,7 +315,8 @@ const MemberRoster: React.FC = () => {
           duesStatus: memberEntry.duesStatus,
               addedAt: memberEntry.addedAt,
               addedBy: memberEntry.addedBy,
-          rosterStatus: memberEntry.status || 'active'
+          rosterStatus: memberEntry.status || 'active',
+          overrides: memberEntry.overrides || {} // Roster-specific overrides
         };
       });
       

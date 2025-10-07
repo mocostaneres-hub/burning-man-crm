@@ -35,6 +35,29 @@ const rosterSchema = new mongoose.Schema({
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
+    },
+    overrides: {
+      playaName: {
+        type: String,
+        trim: true
+      },
+      yearsBurned: {
+        type: Number,
+        min: 0
+      },
+      skills: [{
+        type: String
+      }]
+    },
+    status: {
+      type: String,
+      enum: ['approved', 'pending', 'rejected'],
+      default: 'approved'
+    },
+    role: {
+      type: String,
+      enum: ['member', 'lead', 'admin'],
+      default: 'member'
     }
   }],
   createdBy: {
