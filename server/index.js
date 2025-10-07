@@ -68,6 +68,7 @@ app.use('/api/help', require('./routes/help'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/call-slots', require('./routes/callSlots'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/shifts-test', require('./routes/shifts-test'));
 app.use('/api/shifts', require('./routes/shifts'));
 app.use('/api', require('./routes/invites'));
 app.use('/api/categories', require('./routes/categories'));
