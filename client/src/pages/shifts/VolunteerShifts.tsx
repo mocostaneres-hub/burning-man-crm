@@ -98,11 +98,11 @@ const VolunteerShifts: React.FC = () => {
       // Get camp ID from user context  
       let campId;
       if (user?.accountType === 'camp') {
-        const response = await api.get('/camps/my-camp');
-        campId = response.data?._id;
+        const camp = await api.get('/camps/my-camp');
+        campId = camp?._id;
       } else if (user?.accountType === 'admin' && user?.campName) {
-        const response = await api.get('/camps/my-camp');
-        campId = response.data?._id;
+        const camp = await api.get('/camps/my-camp');
+        campId = camp?._id;
       }
 
       if (!campId) {
@@ -167,15 +167,15 @@ const VolunteerShifts: React.FC = () => {
       if (user?.accountType === 'camp') {
         console.log('🔍 [Event Creation] Detected camp account, fetching camp data...');
         // For camp accounts, we need to get the camp ID
-        const response = await api.get('/camps/my-camp');
-        console.log('🔍 [Event Creation] Camp response:', response.data);
-        campId = response.data?._id;
+        const camp = await api.get('/camps/my-camp');
+        console.log('🔍 [Event Creation] Camp response:', camp);
+        campId = camp?._id;
       } else if (user?.accountType === 'admin' && user?.campName) {
         console.log('🔍 [Event Creation] Detected admin account with camp context...');
         // For admin accounts with camp context
-        const response = await api.get('/camps/my-camp');
-        console.log('🔍 [Event Creation] Camp response:', response.data);
-        campId = response.data?._id;
+        const camp = await api.get('/camps/my-camp');
+        console.log('🔍 [Event Creation] Camp response:', camp);
+        campId = camp?._id;
       }
 
       console.log('🔍 [Event Creation] Final campId:', campId);
