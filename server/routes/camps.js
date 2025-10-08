@@ -5,80 +5,7 @@ const { authenticateToken, requireCampLead, optionalAuth } = require('../middlew
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
-// 360 Contact Aggregation
-// @route   GET /api/camps/:campId/contacts/:userId
-// @desc    Aggregate a user's profile, roster history, applications, tasks, and volunteer shifts for a camp
-// @access  Private (camp_lead only)
-router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, async (req, res) => {
-  try {
-    const { campId, userId } = req.params;
-
-    // Verify the camp lead is accessing their own camp
-    const hasAccess = await canAccessCamp(req, campId);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Load models via adapter
-    const user = await db.findUser({ _id: userId });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    // Roster history (years from joinedAt in roster members)
-    const rosters = await db.findRosters({ camp: campId });
-    const rosterEntries = [];
-    for (const roster of rosters || []) {
-      const entry = (roster.members || []).find(m => m?.member?.toString?.() === userId.toString());
-      if (entry) {
-        rosterEntries.push({
-          rosterId: roster._id,
-          name: roster.name,
-          joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
-          duesStatus: entry.duesStatus || 'Unpaid',
-          overrides: entry.overrides || null
-        });
-      }
-    }
-
-    // Applications for this user/camp
-    const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
-
-    // Tasks assigned to user for this camp
-    const tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
-
-    // Shifts (events with shifts where memberIds includes userId)
-    const events = await db.findEvents({ camp: campId });
-    const volunteerShifts = [];
-    for (const ev of events || []) {
-      for (const shift of ev.shifts || []) {
-        const memberIds = shift.memberIds || [];
-        if (memberIds.map(id => id.toString()).includes(userId.toString())) {
-          volunteerShifts.push({
-            eventId: ev._id,
-            eventName: ev.name,
-            shiftId: shift._id,
-            title: shift.title,
-            date: shift.date,
-            startTime: shift.startTime,
-            endTime: shift.endTime
-          });
-        }
-      }
-    }
-
-    res.json({
-      user,
-      rosterHistory: rosterEntries
-        .sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt))
-        .map(e => ({ ...e, year: e.joinedAt ? new Date(e.joinedAt).getFullYear() : null })),
-      applications: applications || [],
-      tasks: tasks || [],
-      volunteerShifts
-    });
-  } catch (error) {
-    console.error('Contact aggregation error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+// (moved below after router initialization)
 
 // Configure multer for photo uploads (memory storage for mock)
 const upload = multer({
@@ -181,6 +108,74 @@ router.get('/', optionalAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Get camps error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// 360 Contact Aggregation
+// @route   GET /api/camps/:campId/contacts/:userId
+// @desc    Aggregate a user's profile, roster history, applications, tasks, and volunteer shifts for a camp
+// @access  Private (camp_lead only)
+router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, async (req, res) => {
+  try {
+    const { campId, userId } = req.params;
+
+    const hasAccess = await canAccessCamp(req, campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const user = await db.findUser({ _id: userId });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const rosters = await db.findRosters({ camp: campId });
+    const rosterEntries = [];
+    for (const roster of rosters || []) {
+      const entry = (roster.members || []).find(m => m?.member?.toString?.() === userId.toString());
+      if (entry) {
+        rosterEntries.push({
+          rosterId: roster._id,
+          name: roster.name,
+          joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
+          duesStatus: entry.duesStatus || 'Unpaid',
+          overrides: entry.overrides || null
+        });
+      }
+    }
+
+    const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
+    const tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
+
+    const events = await db.findEvents({ camp: campId });
+    const volunteerShifts = [];
+    for (const ev of events || []) {
+      for (const shift of ev.shifts || []) {
+        const memberIds = shift.memberIds || [];
+        if (memberIds.map(id => id.toString()).includes(userId.toString())) {
+          volunteerShifts.push({
+            eventId: ev._id,
+            eventName: ev.name,
+            shiftId: shift._id,
+            title: shift.title,
+            date: shift.date,
+            startTime: shift.startTime,
+            endTime: shift.endTime
+          });
+        }
+      }
+    }
+
+    res.json({
+      user,
+      rosterHistory: rosterEntries
+        .sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt))
+        .map(e => ({ ...e, year: e.joinedAt ? new Date(e.joinedAt).getFullYear() : null })),
+      applications: applications || [],
+      tasks: tasks || [],
+      volunteerShifts
+    });
+  } catch (error) {
+    console.error('Contact aggregation error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
