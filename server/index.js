@@ -90,6 +90,7 @@ app.use('/api/perks', require('./routes/perks'));
 app.use('/api/admin/perks', require('./routes/adminPerks'));
 app.use('/api/skills', require('./routes/skills'));
 app.use('/api/mudskippers', require('./routes/mudskippers-applications'));
+app.use('/api/migrate', require('./routes/migrate-application-statuses'));
 
 // Socket.io for real-time features
 io.on('connection', (socket) => {
