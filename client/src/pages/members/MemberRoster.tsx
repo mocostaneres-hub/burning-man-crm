@@ -19,6 +19,7 @@ interface RosterMember extends Member {
 
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
+  const authUser = user;
   const { skills: systemSkills } = useSkills();
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -925,8 +926,8 @@ const MemberRoster: React.FC = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {(user?.accountType === 'admin' || user?.accountType === 'camp') && user?.campId && (typeof selectedMember.user === 'object') && selectedMember.user?._id ? (
-                              <Link to={`/camp/${user.campId}/contacts/${(selectedMember.user as any)._id}`} className="text-custom-primary hover:underline">
+                            {(authUser?.accountType === 'admin' || authUser?.accountType === 'camp') && authUser?.campId && (user?._id) ? (
+                              <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-custom-primary hover:underline">
                                 {userName}
                               </Link>
                             ) : (
