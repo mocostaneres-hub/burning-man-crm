@@ -341,7 +341,20 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       }
     }
     
-    res.json({ applications: applicationsWithApplicants });
+    // Convert Mongoose documents to plain objects to ensure _id is accessible
+    const plainApplications = applicationsWithApplicants.map(app => {
+      // If it's a Mongoose document, convert to plain object
+      if (app._doc) {
+        return {
+          ...app._doc,
+          applicant: app.applicant,
+          applicationData: app.applicationData
+        };
+      }
+      return app;
+    });
+    
+    res.json({ applications: plainApplications });
   } catch (error) {
     console.error('Get camp applications error:', error);
     res.status(500).json({ message: 'Server error' });
