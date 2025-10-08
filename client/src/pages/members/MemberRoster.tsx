@@ -925,7 +925,13 @@ const MemberRoster: React.FC = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {userName}
+                            {(user?.accountType === 'admin' || user?.accountType === 'camp') && user?.campId && (typeof selectedMember.user === 'object') && selectedMember.user?._id ? (
+                              <Link to={`/camp/${user.campId}/contacts/${(selectedMember.user as any)._id}`} className="text-custom-primary hover:underline">
+                                {userName}
+                              </Link>
+                            ) : (
+                              <>{userName}</>
+                            )}
                           </div>
                         </div>
                       </div>
