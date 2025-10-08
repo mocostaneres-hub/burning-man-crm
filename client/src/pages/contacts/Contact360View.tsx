@@ -23,8 +23,12 @@ const Contact360View: React.FC = () => {
       try {
         setLoading(true);
         const res = await api.get(`/camps/${campId}/contacts/${userId}`);
+        console.log('🔍 [Contact360View] API Response:', res);
+        console.log('🔍 [Contact360View] Applications data:', res.applications);
+        console.log('🔍 [Contact360View] Applications length:', res.applications?.length);
         setData(res);
       } catch (e: any) {
+        console.error('❌ [Contact360View] Error loading contact:', e);
         setError(e?.response?.data?.message || 'Failed to load contact');
       } finally {
         setLoading(false);
@@ -93,6 +97,12 @@ const Contact360View: React.FC = () => {
       {/* Applications */}
       <Card className="p-6">
         <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Applications</h2>
+        {(() => {
+          console.log('🔍 [Contact360View] Rendering applications:', applications);
+          console.log('🔍 [Contact360View] Applications length:', applications?.length);
+          console.log('🔍 [Contact360View] Applications type:', typeof applications);
+          return null;
+        })()}
         {applications.length === 0 ? (
           <p className="text-custom-text-secondary">No applications for this camp.</p>
         ) : (
