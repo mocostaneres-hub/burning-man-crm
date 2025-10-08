@@ -128,18 +128,25 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
     const user = await db.findUser({ _id: userId });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const rosters = await db.findRosters({ camp: campId });
-    const rosterEntries = [];
-    for (const roster of rosters || []) {
-      const entry = (roster.members || []).find(m => m?.member?.toString?.() === userId.toString());
-      if (entry) {
-        rosterEntries.push({
-          rosterId: roster._id,
-          name: roster.name,
-          joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
-          duesStatus: entry.duesStatus || 'Unpaid',
-          overrides: entry.overrides || null
-        });
+    // Resolve the Member document(s) for this user within this camp
+    const memberDocs = await db.findMembers({ camp: campId, user: userId });
+    const memberIds = (memberDocs || []).map(m => m._id?.toString());
+
+    let rosterEntries = [];
+    if (memberIds.length > 0) {
+      // Find rosters that contain these member IDs
+      const rosters = await db.findRosters({ camp: campId, 'members.member': { $in: memberIds } });
+      for (const roster of rosters || []) {
+        const entry = (roster.members || []).find(m => memberIds.includes(m?.member?.toString?.()));
+        if (entry) {
+          rosterEntries.push({
+            rosterId: roster._id,
+            name: roster.name,
+            joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
+            duesStatus: entry.duesStatus || 'Unpaid',
+            overrides: entry.overrides || null
+          });
+        }
       }
     }
 
