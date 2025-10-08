@@ -356,8 +356,14 @@ router.put('/:applicationId/status', authenticateToken, [
   body('reviewNotes').optional().trim().isLength({ max: 1000 })
 ], async (req, res) => {
   try {
+    console.log('🔍 [PUT /api/applications/:id/status] Update application status');
+    console.log('🔍 [PUT /api/applications/:id/status] Application ID:', req.params.applicationId);
+    console.log('🔍 [PUT /api/applications/:id/status] User:', { _id: req.user._id, accountType: req.user.accountType, campId: req.user.campId });
+    console.log('🔍 [PUT /api/applications/:id/status] Request body:', req.body);
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ [PUT /api/applications/:id/status] Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -367,14 +373,18 @@ router.put('/:applicationId/status', authenticateToken, [
     // Get application
     const application = await db.findMemberApplication({ _id: applicationId });
     if (!application) {
+      console.log('❌ [PUT /api/applications/:id/status] Application not found');
       return res.status(404).json({ message: 'Application not found' });
     }
+    console.log('🔍 [PUT /api/applications/:id/status] Application found:', { _id: application._id, camp: application.camp, applicant: application.applicant });
 
     // Check if user is camp owner
     const camp = await db.findCamp({ _id: application.camp });
     if (!camp) {
+      console.log('❌ [PUT /api/applications/:id/status] Camp not found');
       return res.status(404).json({ message: 'Camp not found' });
     }
+    console.log('🔍 [PUT /api/applications/:id/status] Camp found:', { _id: camp._id, contactEmail: camp.contactEmail });
     
     const isCampOwner = camp.contactEmail === req.user.email || 
                         (req.user.campId && camp._id.toString() === req.user.campId.toString());
@@ -383,7 +393,10 @@ router.put('/:applicationId/status', authenticateToken, [
       (req.user.campId && camp._id.toString() === req.user.campId)
     );
     
+    console.log('🔍 [PUT /api/applications/:id/status] Permission check:', { isCampOwner, isAdminWithAccess });
+    
     if (!isCampOwner && !isAdminWithAccess) {
+      console.log('❌ [PUT /api/applications/:id/status] Access denied');
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -394,8 +407,10 @@ router.put('/:applicationId/status', authenticateToken, [
       reviewedAt: new Date(),
       reviewNotes: reviewNotes || ''
     };
-
+    
+    console.log('🔍 [PUT /api/applications/:id/status] Updating application with:', updateData);
     const updatedApplication = await db.updateMemberApplication(applicationId, updateData);
+    console.log('✅ [PUT /api/applications/:id/status] Application updated successfully');
 
     // If rejected, release the call slot
     if (status === 'rejected' && application.applicationData?.selectedCallSlotId) {
