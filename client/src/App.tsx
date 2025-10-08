@@ -24,6 +24,7 @@ import Principles from './pages/Principles';
 import SupportInbox from './components/support/SupportInbox';
 import ApplicationManagementTable from './pages/applications/ApplicationManagementTable';
 import MyApplications from './pages/applications/MyApplications';
+import Contact360View from './pages/contacts/Contact360View';
 import RosterManagement from './pages/rosters/RosterManagement';
 import MemberProfileEdit from './pages/members/MemberProfileEdit';
 import PublicMemberProfile from './pages/members/PublicMemberProfile';
@@ -106,6 +107,11 @@ function App() {
                   <Route path="/camp/shifts" element={
                     <ProtectedRoute requireCampAccount>
                       <VolunteerShifts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campId/contacts/:userId" element={
+                    <ProtectedRoute requireCampAccount>
+                      <Contact360View />
                     </ProtectedRoute>
                   } />
                   <Route path="/camp/invites" element={
