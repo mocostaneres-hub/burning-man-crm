@@ -128,6 +128,11 @@ const ApplicationManagementTable: React.FC = () => {
   const handleSaveStatusOnly = async () => {
     if (!selectedApplication) return;
     
+    console.log('🔍 [Frontend] Save status for application:', selectedApplication);
+    console.log('🔍 [Frontend] Application ID:', selectedApplication._id);
+    console.log('🔍 [Frontend] Selected status:', selectedStatus);
+    console.log('🔍 [Frontend] API URL:', `/applications/${selectedApplication._id}/status`);
+    
     try {
       setProcessing(selectedApplication._id);
       await api.put(`/applications/${selectedApplication._id}/status`, {
@@ -139,9 +144,11 @@ const ApplicationManagementTable: React.FC = () => {
       setShowApplicationModal(false);
       setSelectedApplication(null);
       setReviewNotes('');
-    } catch (err) {
-      console.error('Error updating application status:', err);
-      setError('Failed to update application status');
+    } catch (err: any) {
+      console.error('❌ [Frontend] Error updating application status:', err);
+      console.error('❌ [Frontend] Error response:', err.response?.data);
+      console.error('❌ [Frontend] Error status:', err.response?.status);
+      setError(err.response?.data?.message || 'Failed to update application status');
     } finally {
       setProcessing(null);
     }
