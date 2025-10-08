@@ -96,27 +96,65 @@ const Contact360View: React.FC = () => {
         {applications.length === 0 ? (
           <p className="text-custom-text-secondary">No applications for this camp.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Submitted</th>
-                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Status</th>
-                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Reviewed</th>
-                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Motivation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {applications.map((a) => (
-                  <tr key={a._id} className="border-t">
-                    <td className="px-4 py-2 text-sm">{a.appliedAt ? new Date(a.appliedAt).toLocaleDateString() : '-'}</td>
-                    <td className="px-4 py-2 text-sm"><Badge variant={a.status === 'approved' ? 'success' : a.status === 'rejected' ? 'error' : 'warning'}>{a.status}</Badge></td>
-                    <td className="px-4 py-2 text-sm">{a.reviewedAt ? new Date(a.reviewedAt).toLocaleDateString() : '-'}</td>
-                    <td className="px-4 py-2 text-sm">{a.applicationData?.motivation || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {applications.map((application) => (
+              <div key={application._id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-custom-text">
+                      Application #{application._id.slice(-6)}
+                    </h3>
+                    <p className="text-sm text-custom-text-secondary">
+                      Submitted: {application.appliedAt ? new Date(application.appliedAt).toLocaleDateString() : '-'}
+                    </p>
+                  </div>
+                  <Badge variant={
+                    application.status === 'approved' ? 'success' : 
+                    application.status === 'rejected' ? 'error' : 
+                    'warning'
+                  }>
+                    {application.status}
+                  </Badge>
+                </div>
+                
+                <p className="text-sm text-custom-text-secondary mb-3">
+                  <strong>Motivation:</strong> {application.applicationData?.motivation || '-'}
+                </p>
+                
+                {/* Action History */}
+                <div className="border-t pt-3">
+                  <h4 className="font-medium text-custom-text mb-2">Action History</h4>
+                  {application.actionHistory && application.actionHistory.length > 0 ? (
+                    <div className="space-y-2">
+                      {application.actionHistory.map((action: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs">
+                              {action.action.replace('_', ' ')}
+                            </Badge>
+                            {action.fromStatus && action.toStatus && (
+                              <span className="text-custom-text-secondary">
+                                {action.fromStatus} → {action.toStatus}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-custom-text-secondary">
+                              {action.performedBy?.firstName} {action.performedBy?.lastName}
+                            </div>
+                            <div className="text-xs text-custom-text-secondary">
+                              {new Date(action.timestamp).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-custom-text-secondary">No action history available</p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>

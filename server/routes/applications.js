@@ -127,7 +127,14 @@ router.post('/apply', authenticateToken, [
           ...applicationData,
           skills: applicationData.skills || []
         },
-        status: initialStatus
+        status: initialStatus,
+        actionHistory: [{
+          action: 'submitted',
+          toStatus: initialStatus,
+          performedBy: req.user._id,
+          notes: 'Application submitted',
+          timestamp: new Date()
+        }]
       });
     } catch (dbError) {
       // Handle race condition where duplicate was created between checks
@@ -413,12 +420,24 @@ router.put('/:applicationId/status', authenticateToken, [
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Track the status change manually for action history
+    const previousStatus = application.status;
+    const actionHistoryEntry = {
+      action: 'status_changed',
+      fromStatus: previousStatus,
+      toStatus: status,
+      performedBy: req.user._id,
+      notes: reviewNotes || '',
+      timestamp: new Date()
+    };
+    
     // Update application
     const updateData = {
       status,
       reviewedBy: req.user._id,
       reviewedAt: new Date(),
-      reviewNotes: reviewNotes || ''
+      reviewNotes: reviewNotes || '',
+      $push: { actionHistory: actionHistoryEntry }
     };
     
     console.log('🔍 [PUT /api/applications/:id/status] Updating application with:', updateData);

@@ -163,9 +163,30 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
       }
     }
 
-    // Get all applications (using correct field names)
+    // Get all applications with populated action history
     const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
     console.log('🔍 [360 Contact] Applications found:', applications?.length || 0);
+    
+    // Populate action history with user details
+    const applicationsWithHistory = await Promise.all((applications || []).map(async (app) => {
+      const populatedHistory = await Promise.all((app.actionHistory || []).map(async (action) => {
+        const performer = await db.findUser({ _id: action.performedBy });
+        return {
+          ...action,
+          performedBy: {
+            _id: action.performedBy,
+            firstName: performer?.firstName,
+            lastName: performer?.lastName,
+            email: performer?.email
+          }
+        };
+      }));
+      
+      return {
+        ...app,
+        actionHistory: populatedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+      };
+    }));
     const tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
 
     const events = await db.findEvents({ camp: campId });
@@ -192,7 +213,7 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
       rosterHistory: rosterEntries
         .sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt))
         .map(e => ({ ...e, year: e.joinedAt ? new Date(e.joinedAt).getFullYear() : null })),
-      applications: applications || [],
+      applications: applicationsWithHistory || [],
       tasks: tasks || [],
       volunteerShifts
     });

@@ -106,6 +106,30 @@ const memberApplicationSchema = new mongoose.Schema({
       },
       readAt: Date
     }]
+  }],
+  
+  // Action history to track all status changes and actions
+  actionHistory: [{
+    action: {
+      type: String,
+      enum: ['submitted', 'status_changed', 'reviewed', 'call_scheduled', 'approved', 'rejected', 'message_sent', 'notes_updated'],
+      required: true
+    },
+    fromStatus: String,
+    toStatus: String,
+    performedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    notes: String,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed
+    }
   }]
 }, {
   timestamps: true
@@ -134,9 +158,32 @@ memberApplicationSchema.virtual('unreadMessagesCount').get(function() {
   ).length;
 });
 
-// Pre-save middleware to update lastUpdated
+// Pre-save middleware to update lastUpdated and track status changes
 memberApplicationSchema.pre('save', function(next) {
   this.lastUpdated = new Date();
+  
+  // Track status changes if this is an update
+  if (!this.isNew && this.isModified('status')) {
+    const previousStatus = this.get('status', null, { getters: false });
+    const newStatus = this.status;
+    
+    // Only track if status actually changed
+    if (previousStatus && previousStatus !== newStatus) {
+      if (!this.actionHistory) {
+        this.actionHistory = [];
+      }
+      
+      this.actionHistory.push({
+        action: 'status_changed',
+        fromStatus: previousStatus,
+        toStatus: newStatus,
+        performedBy: this.reviewedBy || this.applicant, // Fallback to applicant if no reviewer
+        notes: this.reviewNotes || '',
+        timestamp: new Date()
+      });
+    }
+  }
+  
   next();
 });
 
