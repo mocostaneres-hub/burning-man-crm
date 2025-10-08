@@ -132,25 +132,40 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
     const memberDocs = await db.findMembers({ camp: campId, user: userId });
     const memberIds = (memberDocs || []).map(m => m._id?.toString());
 
+    console.log('🔍 [360 Contact] User ID:', userId);
+    console.log('🔍 [360 Contact] Camp ID:', campId);
+    console.log('🔍 [360 Contact] Member docs found:', memberDocs?.length || 0);
+    console.log('🔍 [360 Contact] Member IDs:', memberIds);
+
     let rosterEntries = [];
     if (memberIds.length > 0) {
       // Find rosters that contain these member IDs
       const rosters = await db.findRosters({ camp: campId, 'members.member': { $in: memberIds } });
+      console.log('🔍 [360 Contact] Rosters found:', rosters?.length || 0);
+      
       for (const roster of rosters || []) {
         const entry = (roster.members || []).find(m => memberIds.includes(m?.member?.toString?.()));
         if (entry) {
+          // Check if there's a related application
+          const relatedApp = await db.findMemberApplication({ applicant: userId, camp: campId, status: 'approved' });
+          
           rosterEntries.push({
             rosterId: roster._id,
             name: roster.name,
             joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
+            addedAt: entry.addedAt,
             duesStatus: entry.duesStatus || 'Unpaid',
-            overrides: entry.overrides || null
+            overrides: entry.overrides || null,
+            addedVia: relatedApp ? 'application' : 'manual',
+            addedBy: entry.addedBy
           });
         }
       }
     }
 
+    // Get all applications (using correct field names)
     const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
+    console.log('🔍 [360 Contact] Applications found:', applications?.length || 0);
     const tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
 
     const events = await db.findEvents({ camp: campId });

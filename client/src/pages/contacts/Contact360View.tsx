@@ -74,12 +74,15 @@ const Contact360View: React.FC = () => {
         {rosterHistory.length === 0 ? (
           <p className="text-custom-text-secondary">No roster entries found.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {rosterHistory.map((r) => (
-              <li key={`${r.rosterId}-${r.joinedAt}`} className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{r.name || 'Roster'}</div>
-                  <div className="text-sm text-custom-text-secondary">Year: {r.year || 'N/A'} · Dues: {r.duesStatus || 'Unpaid'}</div>
+              <li key={`${r.rosterId}-${r.joinedAt}`} className="border-b pb-2">
+                <div className="font-medium">{r.name || 'Roster'}</div>
+                <div className="text-sm text-custom-text-secondary">
+                  Year: {r.year || 'N/A'} · Dues: <span className={r.duesStatus === 'Paid' ? 'text-green-600 font-medium' : 'text-red-600'}>{r.duesStatus || 'Unpaid'}</span>
+                </div>
+                <div className="text-sm text-custom-text-secondary">
+                  Added: {r.addedAt ? new Date(r.addedAt).toLocaleDateString() : 'N/A'} · Via: <Badge variant={r.addedVia === 'application' ? 'success' : 'info'}>{r.addedVia === 'application' ? 'Application' : 'Manual'}</Badge>
                 </div>
               </li>
             ))}
@@ -99,14 +102,16 @@ const Contact360View: React.FC = () => {
                 <tr>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Submitted</th>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Status</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Reviewed</th>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Motivation</th>
                 </tr>
               </thead>
               <tbody>
                 {applications.map((a) => (
                   <tr key={a._id} className="border-t">
-                    <td className="px-4 py-2 text-sm">{new Date(a.appliedAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-2 text-sm">{a.status}</td>
+                    <td className="px-4 py-2 text-sm">{a.appliedAt ? new Date(a.appliedAt).toLocaleDateString() : '-'}</td>
+                    <td className="px-4 py-2 text-sm"><Badge variant={a.status === 'approved' ? 'success' : a.status === 'rejected' ? 'error' : 'warning'}>{a.status}</Badge></td>
+                    <td className="px-4 py-2 text-sm">{a.reviewedAt ? new Date(a.reviewedAt).toLocaleDateString() : '-'}</td>
                     <td className="px-4 py-2 text-sm">{a.applicationData?.motivation || '-'}</td>
                   </tr>
                 ))}
@@ -128,6 +133,7 @@ const Contact360View: React.FC = () => {
                 <tr>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Title</th>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Status</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Created</th>
                   <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Due</th>
                 </tr>
               </thead>
@@ -135,7 +141,8 @@ const Contact360View: React.FC = () => {
                 {tasks.map((t) => (
                   <tr key={t._id} className="border-t">
                     <td className="px-4 py-2 text-sm">{t.title}</td>
-                    <td className="px-4 py-2 text-sm">{t.status}</td>
+                    <td className="px-4 py-2 text-sm"><Badge variant={t.status === 'completed' ? 'success' : t.status === 'in_progress' ? 'info' : 'warning'}>{t.status}</Badge></td>
+                    <td className="px-4 py-2 text-sm">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}</td>
                     <td className="px-4 py-2 text-sm">{t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '-'}</td>
                   </tr>
                 ))}
@@ -151,18 +158,28 @@ const Contact360View: React.FC = () => {
         {volunteerShifts.length === 0 ? (
           <p className="text-custom-text-secondary">No volunteer shifts.</p>
         ) : (
-          <ul className="space-y-2">
-            {volunteerShifts.map((s) => (
-              <li key={s.shiftId} className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{s.eventName} · {s.title}</div>
-                  <div className="text-sm text-custom-text-secondary">
-                    {s.date ? new Date(s.date).toLocaleDateString() : ''} {s.startTime || ''}{s.endTime ? ` - ${s.endTime}` : ''}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Event</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Shift</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Date</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {volunteerShifts.map((s) => (
+                  <tr key={s.shiftId} className="border-t">
+                    <td className="px-4 py-2 text-sm font-medium">{s.eventName}</td>
+                    <td className="px-4 py-2 text-sm">{s.title}</td>
+                    <td className="px-4 py-2 text-sm">{s.date ? new Date(s.date).toLocaleDateString() : '-'}</td>
+                    <td className="px-4 py-2 text-sm">{s.startTime || '-'}{s.endTime ? ` - ${s.endTime}` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>
