@@ -166,10 +166,25 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
     // Get all applications with populated action history
     const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
     console.log('🔍 [360 Contact] Applications found:', applications?.length || 0);
+    if (applications && applications.length > 0) {
+      console.log('🔍 [360 Contact] First application structure:', {
+        hasDoc: !!applications[0]._doc,
+        hasActionHistory: !!applications[0].actionHistory,
+        actionHistoryLength: applications[0].actionHistory?.length || 0,
+        status: applications[0].status || applications[0]._doc?.status
+      });
+    }
     
-    // Populate action history with user details
+    // Convert Mongoose documents to plain objects and populate action history with user details
     const applicationsWithHistory = await Promise.all((applications || []).map(async (app) => {
-      const populatedHistory = await Promise.all((app.actionHistory || []).map(async (action) => {
+      // Convert Mongoose document to plain object
+      const plainApp = app._doc ? {
+        ...app._doc,
+        applicant: app.applicant,
+        applicationData: app.applicationData
+      } : app;
+      
+      const populatedHistory = await Promise.all((plainApp.actionHistory || []).map(async (action) => {
         const performer = await db.findUser({ _id: action.performedBy });
         return {
           ...action,
@@ -183,7 +198,7 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
       }));
       
       return {
-        ...app,
+        ...plainApp,
         actionHistory: populatedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
       };
     }));
