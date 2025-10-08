@@ -78,6 +78,9 @@ const ApplicationManagementTable: React.FC = () => {
       // Since api.get() returns response.data directly, response should be the data
       const applicationsData = response.applications || response;
       
+      console.log('📋 Applications fetched:', applicationsData?.length || 0);
+      console.log('📋 First application data:', applicationsData?.[0]);
+      
       setApplications(applicationsData);
     } catch (err) {
       console.error('Error fetching applications:', err);
