@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle, Info, X } from 'lucide-react';
 
 export interface NotificationProps {
   type: 'success' | 'error' | 'warning' | 'info';
@@ -37,9 +37,9 @@ const Notification: React.FC<NotificationProps> = ({
       case 'success':
         return <CheckCircle className="w-6 h-6 text-green-600" />;
       case 'error':
-        return <AlertCircle className="w-6 h-6 text-red-600" />;
+        return <X className="w-6 h-6 text-red-600" />;
       case 'warning':
-        return <AlertCircle className="w-6 h-6 text-yellow-600" />;
+        return <Info className="w-6 h-6 text-yellow-600" />;
       case 'info':
         return <Info className="w-6 h-6 text-blue-600" />;
       default:
