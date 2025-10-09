@@ -261,6 +261,8 @@ router.get('/public/:slug', async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Camp heroPhoto field:', camp?.heroPhoto);
     console.log('🔍 [GET /api/camps/public/:slug] Camp isPublic field:', camp?.isPublic);
     console.log('🔍 [GET /api/camps/public/:slug] Camp slug:', camp?.slug);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp acceptingNewMembers field:', camp?.acceptingNewMembers);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp showApplyNow field:', camp?.showApplyNow);
     
     if (!camp) {
       console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);
@@ -291,15 +293,18 @@ router.get('/public/:slug', async (req, res) => {
         };
       })) : [];
     
+    // Convert Mongoose document to plain object to avoid internal properties
+    const campData = camp.toObject ? camp.toObject() : camp;
+    
     // Return public camp data with members
     const publicCamp = {
-      ...camp,
-      campName: camp.name, // Frontend expects campName
+      ...campData,
+      campName: campData.name, // Frontend expects campName
       photos: processedPhotos,
-      primaryPhotoIndex: Math.min(camp.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
+      primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
-      acceptingNewMembers: camp.acceptingNewMembers || false, // Explicitly include these fields
-      showApplyNow: camp.showApplyNow || false,
+      acceptingNewMembers: campData.acceptingNewMembers || false, // Explicitly include these fields
+      showApplyNow: campData.showApplyNow || false,
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
