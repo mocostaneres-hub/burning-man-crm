@@ -11,15 +11,45 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: [
+      process.env.CLIENT_URL,
+      process.env.CORS_ORIGIN,
+      'https://g8road.com',
+      'https://www.g8road.com',
+      'https://burning-man-crm.vercel.app',
+      'http://localhost:3000'
+    ].filter(Boolean),
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Middleware
 app.use(helmet());
+
+// CORS configuration to support multiple origins
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.CORS_ORIGIN,
+  'https://g8road.com',
+  'https://www.g8road.com',
+  'https://burning-man-crm.vercel.app',
+  'http://localhost:3000'
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(allowed => origin.includes(allowed))) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      console.log('✅ Allowed origins:', allowedOrigins);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
