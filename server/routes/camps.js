@@ -347,6 +347,7 @@ router.get('/my-camp', authenticateToken, async (req, res) => {
     
     // Convert Mongoose document to plain object if needed
     const campResponse = camp.toObject ? camp.toObject() : camp;
+    console.log('🔍 [GET /api/camps/my-camp] Returning camp location:', campResponse.location);
     res.json(campResponse);
   } catch (error) {
     console.error('Get my camp error:', error);
@@ -654,8 +655,10 @@ router.put('/:id', authenticateToken, [
     }
 
     // Update camp (allow selectedPerks passthrough)
+    console.log('🔍 [PUT /api/camps/:id] Update data location field:', req.body.location);
     const updatedCamp = await db.updateCamp({ _id: camp._id }, req.body);
     console.log('✅ [PUT /api/camps/:id] Camp updated successfully');
+    console.log('🔍 [PUT /api/camps/:id] Updated camp location:', updatedCamp?.location);
 
     // Get owner info
     const owner = await db.findUser({ _id: camp.owner });
