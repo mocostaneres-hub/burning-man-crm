@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 
 class DatabaseAdapter {
   constructor() {
-    this.useMongoDB = false;
+    this.useMongoDB = !!process.env.MONGODB_URI;
     this.mockDB = mockDB;
   }
 
