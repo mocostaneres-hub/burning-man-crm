@@ -69,7 +69,6 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/call-slots', require('./routes/callSlots'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/shifts-test', require('./routes/shifts-test'));
-app.use('/api/fix-slugs', require('./routes/fix-slugs'));
 try {
   console.log('Loading shifts-minimal router...');
   app.use('/api/test-shifts', require('./routes/shifts-minimal'));
