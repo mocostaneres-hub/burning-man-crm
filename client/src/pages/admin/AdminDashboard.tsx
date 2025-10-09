@@ -1160,121 +1160,121 @@ const UserEditModal: React.FC<{
       </div>
     </Modal>
 
-      {/* Camp Edit Modal */}
-      <Modal
-        isOpen={showCampModal}
-        onClose={() => {
-          setShowCampModal(false);
-          setSelectedCamp(null);
-        }}
-        title="Edit Camp"
-      >
-        {selectedCamp && (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                Camp Name
-              </label>
-              <Input
-                value={selectedCamp.name}
-                onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                Description
-              </label>
-              <textarea
-                value={selectedCamp.description || ''}
-                onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent min-h-[100px]"
-              />
-            </div>
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                Theme
-              </label>
-              <Input
-                value={selectedCamp.theme || ''}
-                onChange={(e) => setSelectedCamp({ ...selectedCamp, theme: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                Hometown
-              </label>
-              <Input
-                value={selectedCamp.hometown || ''}
-                onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={selectedCamp.isActive !== false}
-                onChange={(e) => setSelectedCamp({ ...selectedCamp, isActive: e.target.checked })}
-                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-              />
-              <label className="text-sm text-custom-text">Active</label>
-            </div>
-            <div className="flex gap-3 pt-4">
-              <Button
-                onClick={() => handleCampSave(selectedCamp)}
-                className="flex-1"
-              >
-                Save Changes
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCampModal(false);
-                  setSelectedCamp(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
+    {/* Camp Edit Modal */}
+    <Modal
+      isOpen={showCampModal}
+      onClose={() => {
+        setShowCampModal(false);
+        setSelectedCamp(null);
+      }}
+      title="Edit Camp"
+    >
+      {selectedCamp && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">
+              Camp Name
+            </label>
+            <Input
+              value={selectedCamp.name}
+              onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
+            />
           </div>
-        )}
-      </Modal>
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">
+              Description
+            </label>
+            <textarea
+              value={selectedCamp.description || ''}
+              onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent min-h-[100px]"
+            />
+          </div>
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">
+              Theme
+            </label>
+            <Input
+              value={selectedCamp.theme || ''}
+              onChange={(e) => setSelectedCamp({ ...selectedCamp, theme: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">
+              Hometown
+            </label>
+            <Input
+              value={selectedCamp.hometown || ''}
+              onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={selectedCamp.isActive !== false}
+              onChange={(e) => setSelectedCamp({ ...selectedCamp, isActive: e.target.checked })}
+              className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+            />
+            <label className="text-sm text-custom-text">Active</label>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={() => handleCampSave(selectedCamp)}
+              className="flex-1"
+            >
+              Save Changes
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCampModal(false);
+                setSelectedCamp(null);
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
 
-      {/* Camp Delete Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteCampModal}
-        onClose={() => {
-          setShowDeleteCampModal(false);
-          setSelectedCamp(null);
-        }}
-        title="Delete Camp"
-      >
-        {selectedCamp && (
-          <div className="space-y-4">
-            <p className="text-custom-text">
-              Are you sure you want to delete <strong>{selectedCamp.name}</strong>? 
-              This action cannot be undone and will remove all associated data.
-            </p>
-            <div className="flex gap-3 pt-4">
-              <Button
-                onClick={confirmDeleteCamp}
-                className="flex-1 bg-red-600 hover:bg-red-700"
-              >
-                Delete Camp
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowDeleteCampModal(false);
-                  setSelectedCamp(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
+    {/* Camp Delete Confirmation Modal */}
+    <Modal
+      isOpen={showDeleteCampModal}
+      onClose={() => {
+        setShowDeleteCampModal(false);
+        setSelectedCamp(null);
+      }}
+      title="Delete Camp"
+    >
+      {selectedCamp && (
+        <div className="space-y-4">
+          <p className="text-custom-text">
+            Are you sure you want to delete <strong>{selectedCamp.name}</strong>? 
+            This action cannot be undone and will remove all associated data.
+          </p>
+          <div className="flex gap-3 pt-4">
+            <Button
+              onClick={confirmDeleteCamp}
+              className="flex-1 bg-red-600 hover:bg-red-700"
+            >
+              Delete Camp
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteCampModal(false);
+                setSelectedCamp(null);
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
+    </Modal>
     </div>
   );
 };
