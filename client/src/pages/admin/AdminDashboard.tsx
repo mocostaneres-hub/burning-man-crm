@@ -28,20 +28,13 @@ interface Camp {
   slug?: string;
   hometown?: string;
   location?: {
-    city?: string;
-    state?: string;
-    country?: string;
     street?: string;
-    crossStreet?: string;
-    time?: string;
-    description?: string;
   };
   memberCount?: number;
   members?: any[];
   isActive: boolean;
   createdAt: string;
   description?: string;
-  theme?: string;
   contactEmail?: string;
   website?: string;
   burningSince?: number;
@@ -55,43 +48,6 @@ interface Camp {
     twitter?: string;
     tiktok?: string;
   };
-  offerings?: {
-    water?: boolean;
-    fullPower?: boolean;
-    partialPower?: boolean;
-    rvPower?: boolean;
-    acceptsRVs?: boolean;
-    shadeForTents?: boolean;
-    showers?: boolean;
-    communalKitchen?: boolean;
-    storage?: boolean;
-    wifi?: boolean;
-    ice?: boolean;
-    food?: boolean;
-    coffee?: boolean;
-    bar?: boolean;
-    snacks?: boolean;
-    music?: boolean;
-    art?: boolean;
-    workshops?: boolean;
-    performances?: boolean;
-    games?: boolean;
-    yoga?: boolean;
-    meditation?: boolean;
-    bikeRepair?: boolean;
-    massage?: boolean;
-    hairStyling?: boolean;
-    facePainting?: boolean;
-    costumeRental?: boolean;
-    sharedSpace?: boolean;
-    campfire?: boolean;
-    socialEvents?: boolean;
-    welcomeNewbies?: boolean;
-  };
-  visibility?: 'public' | 'private';
-  isRecruiting?: boolean;
-  isPublic?: boolean;
-  showMemberCount?: boolean;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -661,32 +617,15 @@ const AdminDashboard: React.FC = () => {
             {/* Basic Information */}
             <div className="bg-gray-50 border rounded-lg p-4">
               <h3 className="text-lg font-medium text-custom-text mb-4">Basic Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-label font-medium text-custom-text mb-2">
-                    Camp Name *
+                    Camp Name
                   </label>
                   <Input
                     value={selectedCamp.name}
                     onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Theme
-                  </label>
-                  <Input
-                    value={selectedCamp.theme || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, theme: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Hometown
-                  </label>
-                  <Input
-                    value={selectedCamp.hometown || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
+                    placeholder="Enter camp name"
                   />
                 </div>
                 <div>
@@ -697,26 +636,38 @@ const AdminDashboard: React.FC = () => {
                     type="number"
                     value={selectedCamp.burningSince || new Date().getFullYear()}
                     onChange={(e) => setSelectedCamp({ ...selectedCamp, burningSince: parseInt(e.target.value) })}
+                    placeholder="Year"
                   />
                 </div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={selectedCamp.description || ''}
-                  onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent min-h-[100px]"
-                  placeholder="Tell us about your camp..."
-                />
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Hometown
+                  </label>
+                  <Input
+                    value={selectedCamp.hometown || ''}
+                    onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
+                    placeholder="Enter hometown"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={selectedCamp.description || ''}
+                    onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+                    placeholder="Describe your camp..."
+                    rows={4}
+                  />
+                </div>
               </div>
             </div>
 
             {/* Contact Information */}
             <div className="bg-gray-50 border rounded-lg p-4">
               <h3 className="text-lg font-medium text-custom-text mb-4">Contact Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-label font-medium text-custom-text mb-2">
                     Contact Email
@@ -725,6 +676,7 @@ const AdminDashboard: React.FC = () => {
                     type="email"
                     value={selectedCamp.contactEmail || ''}
                     onChange={(e) => setSelectedCamp({ ...selectedCamp, contactEmail: e.target.value })}
+                    placeholder="Enter contact email"
                   />
                 </div>
                 <div>
@@ -734,7 +686,20 @@ const AdminDashboard: React.FC = () => {
                   <Input
                     value={selectedCamp.website || ''}
                     onChange={(e) => setSelectedCamp({ ...selectedCamp, website: e.target.value })}
-                    placeholder="https://example.com"
+                    placeholder="Enter website URL"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Playa Location
+                  </label>
+                  <Input
+                    value={selectedCamp.location?.street || ''}
+                    onChange={(e) => setSelectedCamp({ 
+                      ...selectedCamp, 
+                      location: { ...selectedCamp.location, street: e.target.value }
+                    })}
+                    placeholder="Enter street address"
                   />
                 </div>
               </div>
@@ -743,7 +708,7 @@ const AdminDashboard: React.FC = () => {
             {/* Social Media */}
             <div className="bg-gray-50 border rounded-lg p-4">
               <h3 className="text-lg font-medium text-custom-text mb-4">Social Media</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-label font-medium text-custom-text mb-2">
                     Facebook
@@ -754,7 +719,7 @@ const AdminDashboard: React.FC = () => {
                       ...selectedCamp, 
                       socialMedia: { ...selectedCamp.socialMedia, facebook: e.target.value }
                     })}
-                    placeholder="https://facebook.com/yourpage"
+                    placeholder="https://facebook.com/yourcamp"
                   />
                 </div>
                 <div>
@@ -767,7 +732,7 @@ const AdminDashboard: React.FC = () => {
                       ...selectedCamp, 
                       socialMedia: { ...selectedCamp.socialMedia, instagram: e.target.value }
                     })}
-                    placeholder="@yourusername"
+                    placeholder="https://instagram.com/yourcamp"
                   />
                 </div>
                 <div>
@@ -780,7 +745,7 @@ const AdminDashboard: React.FC = () => {
                       ...selectedCamp, 
                       socialMedia: { ...selectedCamp.socialMedia, twitter: e.target.value }
                     })}
-                    placeholder="@yourusername"
+                    placeholder="https://twitter.com/yourcamp"
                   />
                 </div>
                 <div>
@@ -793,66 +758,7 @@ const AdminDashboard: React.FC = () => {
                       ...selectedCamp, 
                       socialMedia: { ...selectedCamp.socialMedia, tiktok: e.target.value }
                     })}
-                    placeholder="@yourusername"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Playa Location */}
-            <div className="bg-gray-50 border rounded-lg p-4">
-              <h3 className="text-lg font-medium text-custom-text mb-4">Playa Location</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Street Address
-                  </label>
-                  <Input
-                    value={selectedCamp.location?.street || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      location: { ...selectedCamp.location, street: e.target.value }
-                    })}
-                    placeholder="e.g., 4:30 & B"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Cross Street
-                  </label>
-                  <Input
-                    value={selectedCamp.location?.crossStreet || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      location: { ...selectedCamp.location, crossStreet: e.target.value }
-                    })}
-                    placeholder="e.g., 4:30 & B"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Time Period
-                  </label>
-                  <Input
-                    value={selectedCamp.location?.time || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      location: { ...selectedCamp.location, time: e.target.value }
-                    })}
-                    placeholder="e.g., Early Entry, Build Week"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Location Description
-                  </label>
-                  <Input
-                    value={selectedCamp.location?.description || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      location: { ...selectedCamp.location, description: e.target.value }
-                    })}
-                    placeholder="Additional location details"
+                    placeholder="https://tiktok.com/@yourcamp"
                   />
                 </div>
               </div>
@@ -861,60 +767,45 @@ const AdminDashboard: React.FC = () => {
             {/* Camp Settings */}
             <div className="bg-gray-50 border rounded-lg p-4">
               <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.isActive !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, isActive: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Active</label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-label font-medium text-custom-text mb-1">
+                      Accepting New Members
+                    </label>
+                    <p className="text-sm text-gray-600">
+                      Allow new people to apply to join your camp
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCamp.acceptingNewMembers !== false}
+                      onChange={(e) => setSelectedCamp({ ...selectedCamp, acceptingNewMembers: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.isRecruiting !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, isRecruiting: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Recruiting</label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.isPublic !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, isPublic: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Public Profile</label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.acceptingNewMembers !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, acceptingNewMembers: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Accepting New Members</label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.showApplyNow !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, showApplyNow: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Show Apply Now Button</label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedCamp.showMemberCount !== false}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, showMemberCount: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                  <label className="text-sm text-custom-text">Show Member Count</label>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-label font-medium text-custom-text mb-1">
+                      Show "Apply Now" Button
+                    </label>
+                    <p className="text-sm text-gray-600">
+                      Display the apply button on your public camp page
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCamp.showApplyNow !== false}
+                      onChange={(e) => setSelectedCamp({ ...selectedCamp, showApplyNow: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
                 </div>
               </div>
             </div>
