@@ -82,15 +82,18 @@ router.get('/', optionalAuth, async (req, res) => {
     
     // Format camps data for frontend
     const formattedCamps = camps.map(camp => {
-      const processedPhotos = camp.photos && camp.photos.length > 0 
-        ? camp.photos.map(photo => typeof photo === 'string' ? photo : photo.url).filter(Boolean)
-        : (camp.heroPhoto?.url ? [camp.heroPhoto.url] : []);
+      // Convert Mongoose document to plain object
+      const campObj = camp.toObject ? camp.toObject() : camp;
+      
+      const processedPhotos = campObj.photos && campObj.photos.length > 0 
+        ? campObj.photos.map(photo => typeof photo === 'string' ? photo : photo.url).filter(Boolean)
+        : (campObj.heroPhoto?.url ? [campObj.heroPhoto.url] : []);
       
       return {
-        ...camp,
-        campName: camp.name, // Frontend expects campName
+        ...campObj,
+        campName: campObj.name, // Frontend expects campName
         photos: processedPhotos,
-        primaryPhotoIndex: Math.min(camp.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1))
+        primaryPhotoIndex: Math.min(campObj.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1))
       };
     });
     
