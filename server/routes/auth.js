@@ -64,6 +64,45 @@ router.post('/register', [
     // Create and save user
     const user = await db.createUser(userData);
 
+    // For camp accounts, create the camp record immediately
+    if (accountType === 'camp') {
+      try {
+        // Generate slug from camp name
+        const slug = campName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+
+        // Create camp data
+        const campData = {
+          owner: user._id,
+          name: campName,
+          slug: slug,
+          description: `Welcome to ${campName}! We're excited to share our camp experience with you.`,
+          contactEmail: email,
+          status: 'active',
+          isRecruiting: true,
+          isPublic: true,
+          acceptingNewMembers: true,
+          showApplyNow: true,
+          showMemberCount: true
+        };
+
+        // Create camp record
+        const camp = await db.createCamp(campData);
+
+        // Update user with campId
+        await db.updateUserById(user._id, { campId: camp._id });
+
+        // Update user object for response
+        user.campId = camp._id;
+      } catch (campError) {
+        console.error('Camp creation error during registration:', campError);
+        // If camp creation fails, we should still allow user registration
+        // The camp can be created later when they edit their profile
+      }
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
