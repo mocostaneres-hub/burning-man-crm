@@ -232,8 +232,7 @@ const AdminDashboard: React.FC = () => {
 
   const filteredCamps = (camps || []).filter(camp =>
     (camp.name || camp.campName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (camp.location?.city && camp.location.city.toLowerCase().includes(searchTerm.toLowerCase()))
+    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (loading) {
@@ -514,7 +513,7 @@ const AdminDashboard: React.FC = () => {
                         {camp.name || camp.campName || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {camp.hometown || camp.location?.city || '-'}
+                        {camp.hometown || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.memberCount || camp.members?.length || 0}
