@@ -230,9 +230,78 @@ const CampProfile: React.FC = () => {
         photos: campResponse.photos || [],
         visibility: campResponse.isPublic ? 'public' : 'private'
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching camp profile:', err);
-      setError('Failed to load camp profile');
+      
+      // If camp doesn't exist yet (404), set up default values for new camp creation
+      if (err.response?.status === 404) {
+        console.log('🔍 [CampProfile] No camp found, setting up defaults for new camp creation');
+        setCampId(''); // No camp ID yet
+        
+        // Set default values for new camp creation
+        setCampData({
+          campName: user?.campName || '', // Use the camp name from user registration
+          burningSince: new Date().getFullYear(),
+          hometown: '',
+          contactEmail: user?.email || '',
+          website: '',
+          description: '',
+          categories: [],
+          selectedPerks: [],
+          acceptingNewMembers: true,
+          showApplyNow: true,
+          offerings: {
+            // Infrastructure
+            water: false,
+            fullPower: false,
+            partialPower: false,
+            rvPower: false,
+            acceptsRVs: false,
+            shadeForTents: false,
+            showers: false,
+            communalKitchen: false,
+            storage: false,
+            wifi: false,
+            ice: false,
+            // Food & Drink
+            food: false,
+            coffee: false,
+            bar: false,
+            snacks: false,
+            // Activities & Entertainment
+            music: false,
+            art: false,
+            workshops: false,
+            performances: false,
+            games: false,
+            yoga: false,
+            meditation: false,
+            // Services
+            bikeRepair: false,
+            massage: false,
+            hairStyling: false,
+            facePainting: false,
+            costumeRental: false,
+            // Community
+            sharedSpace: false,
+            campfire: false,
+            socialEvents: false,
+            welcomeNewbies: false
+          },
+          socialMedia: {},
+          location: {
+            street: '',
+            crossStreet: '',
+            time: '',
+            description: ''
+          },
+          photos: [],
+          visibility: 'public'
+        });
+        setError(''); // Clear any error since this is expected for new camps
+      } else {
+        setError('Failed to load camp profile');
+      }
     } finally {
       setLoading(false);
     }
@@ -315,10 +384,6 @@ const CampProfile: React.FC = () => {
       console.log('🔍 [CampProfile] User:', user);
       console.log('🔍 [CampProfile] Camp ID:', campId);
       
-      if (!campId) {
-        throw new Error('Camp ID not available');
-      }
-      
       // Prepare data for saving, including new fields
       const saveData = {
         ...campData,
@@ -327,10 +392,23 @@ const CampProfile: React.FC = () => {
         selectedPerks: campData.selectedPerks, // Array of selected perks
         isPublic: campData.visibility === 'public'
       };
+
+      let response;
+      
+      if (!campId) {
+        // No camp exists yet, create a new one
+        console.log('🔍 [CampProfile] Creating new camp...');
+        response = await api.post('/camps', saveData);
+        console.log('✅ [CampProfile] Camp created:', response);
+        setCampId(response._id?.toString() || '');
+      } else {
+        // Update existing camp
+        console.log('🔍 [CampProfile] Updating existing camp...');
+        response = await api.put(`/camps/${campId}`, saveData);
+        console.log('✅ [CampProfile] Camp updated:', response);
+      }
       
       console.log('🔍 [CampProfile] Save data:', saveData);
-      
-      const response = await api.put(`/camps/${campId}`, saveData);
       console.log('✅ [CampProfile] Save response:', response);
       setSuccess('Camp profile updated successfully!');
       setIsEditing(false);
