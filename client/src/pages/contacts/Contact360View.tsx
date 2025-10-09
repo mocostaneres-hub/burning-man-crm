@@ -139,7 +139,7 @@ const Contact360View: React.FC = () => {
                       {application.actionHistory.map((action: any, index: number) => (
                         <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
                           <div className="flex items-center space-x-2">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="neutral" className="text-xs">
                               {action.action.replace('_', ' ')}
                             </Badge>
                             {action.fromStatus && action.toStatus && (
