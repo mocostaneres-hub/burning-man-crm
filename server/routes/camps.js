@@ -402,7 +402,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // @access  Private (Camp account required)
 router.post('/', authenticateToken, [
   body('name').trim().isLength({ min: 2, max: 100 }),
-  body('description').trim().isLength({ min: 10, max: 2000 }),
+  body('description').optional().trim().isLength({ min: 10, max: 2000 }),
   body('theme').optional().trim(),
   body('location.city').optional().trim(),
   body('location.state').optional().trim(),
@@ -427,7 +427,8 @@ router.post('/', authenticateToken, [
 
     const campData = {
       ...req.body,
-      contactEmail: req.user.email
+      contactEmail: req.user.email,
+      description: req.body.description || `Welcome to ${req.body.name}! We're excited to share our camp experience with you.` // Provide default description if none given
     };
 
     const camp = await db.createCamp(campData);
