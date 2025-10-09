@@ -401,15 +401,20 @@ router.get('/search', authenticateToken, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/public/:id
-// @desc    Get public member profile
+// @route   GET /api/users/public/:identifier
+// @desc    Get public member profile by ID or URL slug
 // @access  Public
-router.get('/public/:id', async (req, res) => {
+router.get('/public/:identifier', async (req, res) => {
   try {
-    const { id } = req.params;
-    console.log('🔍 Public profile request for ID:', id);
+    const { identifier } = req.params;
+    console.log('🔍 Public profile request for identifier:', identifier);
 
-    const member = await db.findUser({ _id: parseInt(id) });
+    // Try to find by URL slug first, then by ID
+    let member = await db.findUser({ urlSlug: identifier });
+    if (!member) {
+      // If not found by slug, try by ID
+      member = await db.findUser({ _id: parseInt(identifier) });
+    }
     console.log('🔍 Member found:', member ? `ID: ${member._id}, Type: ${member.accountType}, Active: ${member.isActive}` : 'null');
     console.log('🔍 Profile visibility:', member?.preferences?.privacy?.profileVisibility);
     

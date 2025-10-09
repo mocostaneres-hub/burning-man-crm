@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Navbar from './components/layout/Navbar';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
@@ -61,6 +62,7 @@ function App() {
     <GoogleOAuthProvider clientId={googleClientId || 'not-configured'}>
       <AuthProvider>
         <SocketProvider>
+          <NotificationProvider>
           <Router>
             <div className="min-h-screen bg-custom-bg">
               <Navbar />
@@ -137,7 +139,8 @@ function App() {
                       <MemberProfileEdit />
                     </ProtectedRoute>
                   } />
-                  <Route path="/members/public/:id" element={<PublicMemberProfile />} />
+                  <Route path="/members/public/:identifier" element={<PublicMemberProfile />} />
+                  <Route path="/members/:identifier" element={<PublicMemberProfile />} />
                   <Route path="/user/profile" element={
                     <ProtectedRoute>
                       <UserProfile />

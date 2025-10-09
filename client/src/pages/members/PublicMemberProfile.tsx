@@ -27,23 +27,23 @@ interface MemberProfileData {
 }
 
 const PublicMemberProfile: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
   const [profileData, setProfileData] = useState<MemberProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (id) {
+    if (identifier) {
       fetchProfile();
     }
-  }, [id]);
+  }, [identifier]);
 
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get(`/members/${id}/public`);
-      setProfileData(response.data);
+      const response = await apiService.get(`/users/public/${identifier}`);
+      setProfileData(response.member);
     } catch (err) {
       console.error('Error fetching profile:', err);
       setError('Failed to load profile');

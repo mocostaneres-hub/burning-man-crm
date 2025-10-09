@@ -602,235 +602,247 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Camp Edit Modal */}
-      <Modal
-        isOpen={showCampModal}
-        onClose={() => {
-          setShowCampModal(false);
-          setSelectedCamp(null);
-        }}
-        title="Edit Camp"
-        className="max-w-4xl max-h-[90vh] overflow-y-auto"
-      >
-        {selectedCamp && (
-          <div className="space-y-6">
-            {/* Basic Information */}
-            <div className="bg-gray-50 border rounded-lg p-4">
-              <h3 className="text-lg font-medium text-custom-text mb-4">Basic Information</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Camp Name
-                  </label>
-                  <Input
-                    value={selectedCamp.name}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
-                    placeholder="Enter camp name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Burning Since
-                  </label>
-                  <Input
-                    type="number"
-                    value={selectedCamp.burningSince || new Date().getFullYear()}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, burningSince: parseInt(e.target.value) })}
-                    placeholder="Year"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Hometown
-                  </label>
-                  <Input
-                    value={selectedCamp.hometown || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
-                    placeholder="Enter hometown"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={selectedCamp.description || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
-                    placeholder="Describe your camp..."
-                    rows={4}
-                  />
-                </div>
+      {showCampModal && selectedCamp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-h2 font-lato-bold text-custom-text">
+                  Edit Camp
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowCampModal(false);
+                    setSelectedCamp(null);
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
-            </div>
 
-            {/* Contact Information */}
-            <div className="bg-gray-50 border rounded-lg p-4">
-              <h3 className="text-lg font-medium text-custom-text mb-4">Contact Information</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Contact Email
-                  </label>
-                  <Input
-                    type="email"
-                    value={selectedCamp.contactEmail || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, contactEmail: e.target.value })}
-                    placeholder="Enter contact email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Website
-                  </label>
-                  <Input
-                    value={selectedCamp.website || ''}
-                    onChange={(e) => setSelectedCamp({ ...selectedCamp, website: e.target.value })}
-                    placeholder="Enter website URL"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Playa Location
-                  </label>
-                  <Input
-                    value={selectedCamp.location?.street || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      location: { ...selectedCamp.location, street: e.target.value }
-                    })}
-                    placeholder="Enter street address"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Social Media */}
-            <div className="bg-gray-50 border rounded-lg p-4">
-              <h3 className="text-lg font-medium text-custom-text mb-4">Social Media</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Facebook
-                  </label>
-                  <Input
-                    value={selectedCamp.socialMedia?.facebook || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      socialMedia: { ...selectedCamp.socialMedia, facebook: e.target.value }
-                    })}
-                    placeholder="https://facebook.com/yourcamp"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Instagram
-                  </label>
-                  <Input
-                    value={selectedCamp.socialMedia?.instagram || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      socialMedia: { ...selectedCamp.socialMedia, instagram: e.target.value }
-                    })}
-                    placeholder="https://instagram.com/yourcamp"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Twitter
-                  </label>
-                  <Input
-                    value={selectedCamp.socialMedia?.twitter || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      socialMedia: { ...selectedCamp.socialMedia, twitter: e.target.value }
-                    })}
-                    placeholder="https://twitter.com/yourcamp"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    TikTok
-                  </label>
-                  <Input
-                    value={selectedCamp.socialMedia?.tiktok || ''}
-                    onChange={(e) => setSelectedCamp({ 
-                      ...selectedCamp, 
-                      socialMedia: { ...selectedCamp.socialMedia, tiktok: e.target.value }
-                    })}
-                    placeholder="https://tiktok.com/@yourcamp"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Camp Settings */}
-            <div className="bg-gray-50 border rounded-lg p-4">
-              <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-label font-medium text-custom-text mb-1">
-                      Accepting New Members
-                    </label>
-                    <p className="text-sm text-gray-600">
-                      Allow new people to apply to join your camp
-                    </p>
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div className="bg-gray-50 border rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-custom-text mb-4">Basic Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Camp Name
+                      </label>
+                      <Input
+                        value={selectedCamp.name}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
+                        placeholder="Enter camp name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Burning Since
+                      </label>
+                      <Input
+                        type="number"
+                        value={selectedCamp.burningSince || new Date().getFullYear()}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, burningSince: parseInt(e.target.value) })}
+                        placeholder="Year"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Hometown
+                      </label>
+                      <Input
+                        value={selectedCamp.hometown || ''}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
+                        placeholder="Enter hometown"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Description
+                      </label>
+                      <textarea
+                        value={selectedCamp.description || ''}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+                        placeholder="Describe your camp..."
+                        rows={4}
+                      />
+                    </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCamp.acceptingNewMembers !== false}
-                      onChange={(e) => setSelectedCamp({ ...selectedCamp, acceptingNewMembers: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-label font-medium text-custom-text mb-1">
-                      Show "Apply Now" Button
-                    </label>
-                    <p className="text-sm text-gray-600">
-                      Display the apply button on your public camp page
-                    </p>
+                {/* Contact Information */}
+                <div className="bg-gray-50 border rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-custom-text mb-4">Contact Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Contact Email
+                      </label>
+                      <Input
+                        type="email"
+                        value={selectedCamp.contactEmail || ''}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, contactEmail: e.target.value })}
+                        placeholder="Enter contact email"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Website
+                      </label>
+                      <Input
+                        value={selectedCamp.website || ''}
+                        onChange={(e) => setSelectedCamp({ ...selectedCamp, website: e.target.value })}
+                        placeholder="Enter website URL"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Playa Location
+                      </label>
+                      <Input
+                        value={selectedCamp.location?.street || ''}
+                        onChange={(e) => setSelectedCamp({ 
+                          ...selectedCamp, 
+                          location: { ...selectedCamp.location, street: e.target.value }
+                        })}
+                        placeholder="Enter street address"
+                      />
+                    </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCamp.showApplyNow !== false}
-                      onChange={(e) => setSelectedCamp({ ...selectedCamp, showApplyNow: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
+                </div>
+
+                {/* Social Media */}
+                <div className="bg-gray-50 border rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-custom-text mb-4">Social Media</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Facebook
+                      </label>
+                      <Input
+                        value={selectedCamp.socialMedia?.facebook || ''}
+                        onChange={(e) => setSelectedCamp({ 
+                          ...selectedCamp, 
+                          socialMedia: { ...selectedCamp.socialMedia, facebook: e.target.value }
+                        })}
+                        placeholder="https://facebook.com/yourcamp"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Instagram
+                      </label>
+                      <Input
+                        value={selectedCamp.socialMedia?.instagram || ''}
+                        onChange={(e) => setSelectedCamp({ 
+                          ...selectedCamp, 
+                          socialMedia: { ...selectedCamp.socialMedia, instagram: e.target.value }
+                        })}
+                        placeholder="https://instagram.com/yourcamp"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        Twitter
+                      </label>
+                      <Input
+                        value={selectedCamp.socialMedia?.twitter || ''}
+                        onChange={(e) => setSelectedCamp({ 
+                          ...selectedCamp, 
+                          socialMedia: { ...selectedCamp.socialMedia, twitter: e.target.value }
+                        })}
+                        placeholder="https://twitter.com/yourcamp"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        TikTok
+                      </label>
+                      <Input
+                        value={selectedCamp.socialMedia?.tiktok || ''}
+                        onChange={(e) => setSelectedCamp({ 
+                          ...selectedCamp, 
+                          socialMedia: { ...selectedCamp.socialMedia, tiktok: e.target.value }
+                        })}
+                        placeholder="https://tiktok.com/@yourcamp"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Camp Settings */}
+                <div className="bg-gray-50 border rounded-lg p-4">
+                  <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-label font-medium text-custom-text mb-1">
+                          Accepting New Members
+                        </label>
+                        <p className="text-sm text-gray-600">
+                          Allow new people to apply to join your camp
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCamp.acceptingNewMembers !== false}
+                          onChange={(e) => setSelectedCamp({ ...selectedCamp, acceptingNewMembers: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-label font-medium text-custom-text mb-1">
+                          Show "Apply Now" Button
+                        </label>
+                        <p className="text-sm text-gray-600">
+                          Display the apply button on your public camp page
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCamp.showApplyNow !== false}
+                          onChange={(e) => setSelectedCamp({ ...selectedCamp, showApplyNow: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <Button
+                    onClick={() => handleCampSave(selectedCamp)}
+                    className="flex-1"
+                  >
+                    Save Changes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowCampModal(false);
+                      setSelectedCamp(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                onClick={() => handleCampSave(selectedCamp)}
-                className="flex-1"
-              >
-                Save Changes
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCampModal(false);
-                  setSelectedCamp(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
 
       {/* Camp Delete Confirmation Modal */}
       <Modal

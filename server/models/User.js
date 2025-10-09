@@ -77,6 +77,13 @@ const userSchema = new mongoose.Schema({
     trim: true,
     maxlength: 100
   },
+  urlSlug: {
+    type: String,
+    unique: true,
+    sparse: true, // Allows multiple null values
+    lowercase: true,
+    trim: true
+  },
   profilePhoto: {
     type: String // Cloudinary URL
   },
@@ -209,6 +216,20 @@ userSchema.pre('save', async function(next) {
   } catch (error) {
     next(error);
   }
+});
+
+// Generate URL slug for personal accounts
+userSchema.pre('save', function(next) {
+  if (this.accountType === 'personal' && (this.isModified('firstName') || this.isModified('lastName') || this.isModified('playaName'))) {
+    const nameToUse = this.playaName || `${this.firstName || ''} ${this.lastName || ''}`.trim();
+    if (nameToUse) {
+      this.urlSlug = nameToUse
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+  }
+  next();
 });
 
 // Compare password method

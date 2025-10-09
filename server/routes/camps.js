@@ -242,13 +242,13 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
 });
 
 // @route   GET /api/camps/public/:slug
-// @desc    Get public camp profile by slug
+// @desc    Get public camp profile by slug or ID
 // @access  Public
 router.get('/public/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
     
-    // Find camp by slug or ID (fallback)
+    // Find camp by slug first, then by ID (fallback)
     let camp = await db.findCamp({ slug });
     if (!camp) {
       // If not found by slug, try by ID (fallback for null slugs)

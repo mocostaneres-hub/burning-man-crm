@@ -314,7 +314,8 @@ campSchema.virtual('primaryPhoto').get(function() {
 
 // Pre-save middleware to generate slug
 campSchema.pre('save', function(next) {
-  if (this.isModified('name') && !this.slug) {
+  if (this.isModified('name')) {
+    // Always regenerate slug when name changes to ensure consistency
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
