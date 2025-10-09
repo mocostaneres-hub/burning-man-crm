@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2 } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -25,6 +25,7 @@ interface Camp {
   _id: string;
   name: string;
   campName?: string; // Keep for backward compatibility
+  slug?: string;
   hometown?: string;
   location?: {
     city?: string;
@@ -35,6 +36,9 @@ interface Camp {
   members?: any[];
   isActive: boolean;
   createdAt: string;
+  description?: string;
+  theme?: string;
+  contactEmail?: string;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -53,6 +57,9 @@ const AdminDashboard: React.FC = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
+  const [showCampModal, setShowCampModal] = useState(false);
+  const [showDeleteCampModal, setShowDeleteCampModal] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -159,6 +166,52 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (err) {
       console.error('Error toggling user status:', err);
+    }
+  };
+
+  const handleCampView = (camp: Camp) => {
+    // Open camp in new tab
+    const slug = camp.slug || camp._id;
+    window.open(`/camps/public/${slug}`, '_blank');
+  };
+
+  const handleCampEdit = (camp: Camp) => {
+    setSelectedCamp(camp);
+    setShowCampModal(true);
+  };
+
+  const handleCampDelete = (camp: Camp) => {
+    setSelectedCamp(camp);
+    setShowDeleteCampModal(true);
+  };
+
+  const confirmDeleteCamp = async () => {
+    if (!selectedCamp) return;
+
+    try {
+      await apiService.delete(`/admin/camps/${selectedCamp._id}`);
+      setCamps(camps.filter(c => c._id !== selectedCamp._id));
+      setShowDeleteCampModal(false);
+      setSelectedCamp(null);
+      alert('Camp deleted successfully!');
+      loadStats(); // Refresh stats
+    } catch (err) {
+      console.error('Error deleting camp:', err);
+      alert('Failed to delete camp. Please try again.');
+    }
+  };
+
+  const handleCampSave = async (updatedCamp: Camp) => {
+    try {
+      const response = await apiService.put(`/admin/camps/${updatedCamp._id}`, updatedCamp);
+      const savedCamp = response.camp || response.data?.camp || updatedCamp;
+      setCamps(camps.map(c => c._id === updatedCamp._id ? savedCamp : c));
+      setShowCampModal(false);
+      setSelectedCamp(null);
+      alert('Camp updated successfully!');
+    } catch (err) {
+      console.error('Error updating camp:', err);
+      alert('Failed to update camp. Please try again.');
     }
   };
 
@@ -440,6 +493,9 @@ const AdminDashboard: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Created
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -461,6 +517,37 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.createdAt ? new Date(camp.createdAt).toLocaleDateString() : 'Invalid Date'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCampView(camp)}
+                            className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCampEdit(camp)}
+                            className="flex items-center gap-1"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCampDelete(camp)}
+                            className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1072,6 +1159,123 @@ const UserEditModal: React.FC<{
         </div>
       </div>
     </Modal>
+
+      {/* Camp Edit Modal */}
+      <Modal
+        isOpen={showCampModal}
+        onClose={() => {
+          setShowCampModal(false);
+          setSelectedCamp(null);
+        }}
+        title="Edit Camp"
+      >
+        {selectedCamp && (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Camp Name
+              </label>
+              <Input
+                value={selectedCamp.name}
+                onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Description
+              </label>
+              <textarea
+                value={selectedCamp.description || ''}
+                onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent min-h-[100px]"
+              />
+            </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Theme
+              </label>
+              <Input
+                value={selectedCamp.theme || ''}
+                onChange={(e) => setSelectedCamp({ ...selectedCamp, theme: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Hometown
+              </label>
+              <Input
+                value={selectedCamp.hometown || ''}
+                onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={selectedCamp.isActive !== false}
+                onChange={(e) => setSelectedCamp({ ...selectedCamp, isActive: e.target.checked })}
+                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+              />
+              <label className="text-sm text-custom-text">Active</label>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button
+                onClick={() => handleCampSave(selectedCamp)}
+                className="flex-1"
+              >
+                Save Changes
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCampModal(false);
+                  setSelectedCamp(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Camp Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteCampModal}
+        onClose={() => {
+          setShowDeleteCampModal(false);
+          setSelectedCamp(null);
+        }}
+        title="Delete Camp"
+      >
+        {selectedCamp && (
+          <div className="space-y-4">
+            <p className="text-custom-text">
+              Are you sure you want to delete <strong>{selectedCamp.name}</strong>? 
+              This action cannot be undone and will remove all associated data.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <Button
+                onClick={confirmDeleteCamp}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                Delete Camp
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteCampModal(false);
+                  setSelectedCamp(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
   );
 };
 

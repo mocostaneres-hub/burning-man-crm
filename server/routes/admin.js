@@ -119,11 +119,11 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
       status
     } = req.query;
 
-    // Get all users from mock database
+    // Get all users from mock database (exclude camp accounts - they should be in camps section)
     const allUsers = await db.findUsers();
     
-    // Apply filters
-    let filteredUsers = allUsers;
+    // Apply filters - exclude camp accounts from users list
+    let filteredUsers = allUsers.filter(user => user.accountType !== 'camp');
     
     if (search) {
       const searchLower = search.toLowerCase();
@@ -719,6 +719,39 @@ router.post('/restore-camp-admin/:campId', authenticateToken, async (req, res) =
   } catch (error) {
     console.error('❌ [RESTORE ADMIN] Error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/admin/camps/:id
+// @desc    Delete camp by admin
+// @access  Private (Admin only)
+router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if camp exists
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Log the admin action before deletion
+    const adminUser = await db.findUser({ _id: req.user._id });
+    console.log(`Admin ${adminUser.email} deleting camp: ${camp.name} (ID: ${id})`);
+
+    // Delete the camp
+    await db.deleteCamp(id);
+
+    res.json({ 
+      message: 'Camp deleted successfully',
+      deletedCamp: {
+        _id: camp._id,
+        name: camp.name
+      }
+    });
+  } catch (error) {
+    console.error('Delete camp error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
