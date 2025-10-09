@@ -60,14 +60,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (userData: RegisterData): Promise<void> => {
     try {
+      console.log('🔍 [AuthContext] Registering user with data:', userData);
       const response = await apiService.register(userData);
+      console.log('🔍 [AuthContext] Registration response:', response);
       const { token: newToken, user: newUser } = response;
 
+      console.log('🔍 [AuthContext] Setting user:', newUser);
+      console.log('🔍 [AuthContext] User account type:', newUser.accountType);
+      
       setToken(newToken);
       setUser(newUser);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(newUser));
     } catch (error: any) {
+      console.error('❌ [AuthContext] Registration error:', error);
       throw new Error(error.response?.data?.message || 'Registration failed');
     }
   };

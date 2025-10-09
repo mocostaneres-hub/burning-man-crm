@@ -102,11 +102,15 @@ const Register: React.FC = () => {
         }
       }
       
+      console.log('🔍 [Register] Calling registerUser with data:', registerData);
       await registerUser(registerData);
+      console.log('🔍 [Register] Registration successful, redirecting...');
       // Redirect new personal accounts to profile edit page
       if (data.accountType === 'personal') {
+        console.log('🔍 [Register] Redirecting personal account to /member/profile');
         navigate('/member/profile');
       } else {
+        console.log('🔍 [Register] Redirecting camp account to /dashboard');
         navigate('/dashboard');
       }
     } catch (err: any) {
