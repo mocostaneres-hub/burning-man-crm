@@ -252,13 +252,17 @@ router.get('/public/:slug', async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Camp name field:', camp?.name);
     console.log('🔍 [GET /api/camps/public/:slug] Camp photos field:', camp?.photos);
     console.log('🔍 [GET /api/camps/public/:slug] Camp heroPhoto field:', camp?.heroPhoto);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp isPublic field:', camp?.isPublic);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp slug:', camp?.slug);
     
     if (!camp) {
+      console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);
       return res.status(404).json({ message: 'Camp not found or not public' });
     }
     
     // Check if camp is public (or make it public if it's the owner's camp)
     if (!camp.isPublic) {
+      console.log('❌ [GET /api/camps/public/:slug] Camp is not public:', camp.name, 'isPublic:', camp.isPublic);
       return res.status(404).json({ message: 'Camp not found or not public' });
     }
 
