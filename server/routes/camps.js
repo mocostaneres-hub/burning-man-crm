@@ -410,16 +410,18 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // @desc    Create a new camp
 // @access  Private (Camp account required)
 router.post('/', authenticateToken, [
-  body('name').trim().isLength({ min: 2, max: 100 }),
+  body('name').optional().trim().isLength({ min: 2, max: 100 }),
+  body('campName').optional().trim().isLength({ min: 2, max: 100 }),
   body('description').optional().trim().isLength({ max: 2000 }),
   body('theme').optional().trim(),
   body('location.city').optional().trim(),
   body('location.state').optional().trim(),
-  body('contactEmail').isEmail().normalizeEmail()
+  body('contactEmail').optional().isEmail().normalizeEmail()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ [POST /camps] Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -434,13 +436,29 @@ router.post('/', authenticateToken, [
       return res.status(400).json({ message: 'User already has a camp' });
     }
 
+    // Handle both 'name' and 'campName' fields from frontend
+    const campName = req.body.name || req.body.campName;
+    if (!campName) {
+      return res.status(400).json({ message: 'Camp name is required' });
+    }
+
     const campData = {
       ...req.body,
+      name: campName, // Ensure 'name' field is set
       contactEmail: req.user.email,
-      description: req.body.description || `Welcome to ${req.body.name}! We're excited to share our camp experience with you.` // Provide default description if none given
+      owner: req.user._id,
+      description: req.body.description || `Welcome to ${campName}! We're excited to share our camp experience with you.` // Provide default description if none given
     };
 
+    console.log('🏕️ [POST /camps] Creating camp with data:', JSON.stringify(campData, null, 2));
+
     const camp = await db.createCamp(campData);
+
+    console.log('✅ [POST /camps] Camp created successfully:', camp._id);
+
+    // Update user's campId field
+    await db.updateUser(req.user._id, { campId: camp._id });
+    console.log('✅ [POST /camps] Updated user campId:', camp._id);
 
     // Create camp lead membership
     const memberData = {
