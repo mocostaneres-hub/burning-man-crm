@@ -245,8 +245,12 @@ router.get('/public/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
     
-    // Find camp by slug
-    const camp = await db.findCamp({ slug });
+    // Find camp by slug or ID (fallback)
+    let camp = await db.findCamp({ slug });
+    if (!camp) {
+      // If not found by slug, try by ID (fallback for null slugs)
+      camp = await db.findCamp({ _id: slug });
+    }
     
     console.log('🔍 [GET /api/camps/public/:slug] Raw camp from DB:', JSON.stringify(camp, null, 2));
     console.log('🔍 [GET /api/camps/public/:slug] Camp name field:', camp?.name);
