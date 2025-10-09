@@ -17,8 +17,9 @@ const campSchema = new mongoose.Schema({
   },
   slug: {
     type: String,
-    required: true,
+    required: false, // Generated automatically in pre-save hook
     unique: true,
+    sparse: true, // Allows null values while maintaining uniqueness
     lowercase: true
   },
   description: {
@@ -314,8 +315,8 @@ campSchema.virtual('primaryPhoto').get(function() {
 
 // Pre-save middleware to generate slug
 campSchema.pre('save', function(next) {
-  if (this.isModified('name')) {
-    // Always regenerate slug when name changes to ensure consistency
+  if (this.isModified('name') || !this.slug) {
+    // Always regenerate slug when name changes OR if slug doesn't exist
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
