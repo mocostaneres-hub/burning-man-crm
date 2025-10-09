@@ -185,12 +185,15 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     
     // Enrich camps with owner information
     const enrichedCamps = await Promise.all(allCamps.map(async (camp) => {
+      // Convert Mongoose document to plain object to avoid internal properties
+      const campData = camp.toObject ? camp.toObject() : camp;
+      
       let owner = null;
-      if (camp.contactEmail) {
-        owner = await db.findUser({ email: camp.contactEmail });
+      if (campData.contactEmail) {
+        owner = await db.findUser({ email: campData.contactEmail });
       }
       return {
-        ...camp,
+        ...campData,
         owner: owner ? {
           _id: owner._id,
           firstName: owner.firstName,
