@@ -298,6 +298,8 @@ router.get('/public/:slug', async (req, res) => {
       photos: processedPhotos,
       primaryPhotoIndex: Math.min(camp.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
+      acceptingNewMembers: camp.acceptingNewMembers || false, // Explicitly include these fields
+      showApplyNow: camp.showApplyNow || false,
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
@@ -311,6 +313,8 @@ router.get('/public/:slug', async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Camp name:', publicCamp.campName);
     console.log('🔍 [GET /api/camps/public/:slug] Camp photos:', publicCamp.photos);
     console.log('🔍 [GET /api/camps/public/:slug] Primary photo index:', publicCamp.primaryPhotoIndex);
+    console.log('🔍 [GET /api/camps/public/:slug] Accepting new members:', publicCamp.acceptingNewMembers);
+    console.log('🔍 [GET /api/camps/public/:slug] Show apply now:', publicCamp.showApplyNow);
 
     res.json(publicCamp);
   } catch (error) {
