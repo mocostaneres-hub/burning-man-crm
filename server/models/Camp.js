@@ -64,7 +64,11 @@ const campSchema = new mongoose.Schema({
       type: String,
       default: 'USA'
     },
-    playaLocation: String, // Where they camp on the playa
+    street: String, // Playa location (e.g., "7:30 & C")
+    playaLocation: String, // Alias for backward compatibility
+    crossStreet: String,
+    time: String,
+    description: String,
     coordinates: {
       lat: Number,
       lng: Number
