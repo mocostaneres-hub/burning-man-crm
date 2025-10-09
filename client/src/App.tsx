@@ -183,6 +183,7 @@ function App() {
               </main>
             </div>
           </Router>
+          </NotificationProvider>
         </SocketProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
