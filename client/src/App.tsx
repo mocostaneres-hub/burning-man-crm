@@ -38,11 +38,16 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 const DashboardRedirect: React.FC = () => {
   const { user } = useAuth();
   
+  console.log('🔍 [DashboardRedirect] User account type:', user?.accountType);
+  console.log('🔍 [DashboardRedirect] User data:', user);
+  
   // Personal accounts go to profile, others see the dashboard
   if (user?.accountType === 'personal') {
+    console.log('🔍 [DashboardRedirect] Redirecting personal account to /user/profile');
     return <Navigate to="/user/profile" replace />;
   }
   
+  console.log('🔍 [DashboardRedirect] Showing dashboard for account type:', user?.accountType);
   return <Dashboard />;
 };
 
