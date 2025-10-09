@@ -134,6 +134,8 @@ const PublicCampProfile: React.FC = () => {
       console.log('🔍 [PublicCampProfile] Camp photos:', response.photos);
       console.log('🔍 [PublicCampProfile] Primary photo index:', response.primaryPhotoIndex);
       console.log('🔍 [PublicCampProfile] Photo at index:', response.photos?.[response.primaryPhotoIndex || 0]);
+      console.log('🔍 [PublicCampProfile] Accepting new members:', response.acceptingNewMembers);
+      console.log('🔍 [PublicCampProfile] Show apply now:', response.showApplyNow);
       setCamp(response);
     } catch (err: any) {
       console.error('❌ [PublicCampProfile] Error fetching camp:', err);
