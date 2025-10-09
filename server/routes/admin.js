@@ -183,7 +183,7 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     // Get all camps from mock database
     const allCamps = await db.findCamps();
     
-    // Enrich camps with owner information
+    // Enrich camps with owner information and member count
     const enrichedCamps = await Promise.all(allCamps.map(async (camp) => {
       // Convert Mongoose document to plain object to avoid internal properties
       const campData = camp.toObject ? camp.toObject() : camp;
@@ -192,8 +192,21 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       if (campData.contactEmail) {
         owner = await db.findUser({ email: campData.contactEmail });
       }
+
+      // Get actual member count from roster
+      let memberCount = 0;
+      try {
+        const activeRoster = await db.findActiveRoster({ camp: campData._id });
+        if (activeRoster && activeRoster.members) {
+          memberCount = activeRoster.members.length;
+        }
+      } catch (rosterError) {
+        console.warn(`Could not get roster for camp ${campData._id}:`, rosterError.message);
+      }
+
       return {
         ...campData,
+        memberCount, // Override with actual roster member count
         owner: owner ? {
           _id: owner._id,
           firstName: owner.firstName,
