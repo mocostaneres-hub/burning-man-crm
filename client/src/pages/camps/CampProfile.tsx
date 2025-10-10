@@ -886,14 +886,52 @@ const CampProfile: React.FC = () => {
         <Card className="p-6">
           <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
             <Camera className="w-5 h-5 inline mr-2" />
-            Photos
+            Camp Photos
           </h2>
           
-          <PhotoUpload
-            photos={campData.photos}
-            onPhotosChange={(photos: string[]) => handleInputChange('photos', photos)}
-            isEditing={isEditing}
-          />
+          {isEditing ? (
+            <div className="space-y-4">
+              <PhotoUpload
+                photos={campData.photos}
+                onPhotosChange={(photos: string[]) => handleInputChange('photos', photos)}
+                isEditing={isEditing}
+              />
+              <p className="text-sm text-gray-600 mt-2">
+                Upload a photo to represent your camp. This will be displayed on your camp profile and in camp discovery.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {campData.photos && campData.photos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {campData.photos.map((photo, index) => (
+                    <div
+                      key={index}
+                      className="aspect-square rounded-lg overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <img
+                        src={photo}
+                        alt={`Camp photo ${index + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.error('🖼️ [CampProfile] Image failed to load:', photo.substring(0, 100));
+                        }}
+                        onLoad={() => {
+                          console.log('✅ [CampProfile] Image loaded successfully:', index);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <Camera className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                  <p className="text-gray-600">No photos uploaded yet</p>
+                  <p className="text-sm text-gray-500 mt-1">Click Edit to add photos</p>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 
