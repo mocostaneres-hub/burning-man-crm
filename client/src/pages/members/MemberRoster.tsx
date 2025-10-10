@@ -30,7 +30,7 @@ const MemberRoster: React.FC = () => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<any>>>({});
-  const [hasActiveRoster, setHasActiveRoster] = useState(true); // TODO: Get from API
+  const [hasActiveRoster, setHasActiveRoster] = useState(false); // Will be set to true if active roster is found
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [duesConfirmModal, setDuesConfirmModal] = useState<{
@@ -302,12 +302,29 @@ const MemberRoster: React.FC = () => {
     
     try {
       setLoading(true);
+      setError(''); // Clear any previous errors
       
       // Get roster data which now includes populated user information
-      const rosterResponse = await api.get('/rosters/active').catch(() => ({ members: [] }));
+      const rosterResponse = await api.get('/rosters/active').catch((err) => {
+        console.log('ℹ️ [MemberRoster] No active roster found (expected for new camps):', err.response?.status);
+        return null; // Return null if no roster exists
+      });
       
       console.log('🔍 [MemberRoster] Roster response:', rosterResponse);
       
+      // Check if roster exists
+      if (!rosterResponse || !rosterResponse._id) {
+        console.log('ℹ️ [MemberRoster] No active roster - camp needs to create one');
+        setHasActiveRoster(false);
+        setMembers([]);
+        setRosterId(null);
+        setRosterName('Member Roster');
+        setLoading(false);
+        return;
+      }
+      
+      // Roster exists
+      setHasActiveRoster(true);
       const roster = rosterResponse;
       
       // Extract roster name and ID
@@ -349,8 +366,9 @@ const MemberRoster: React.FC = () => {
       setLocalEdits({});
       setEditingMemberId(null);
     } catch (err) {
-      console.error('Error fetching members and roster:', err);
-      setError('Failed to load members and roster data');
+      console.error('❌ [MemberRoster] Unexpected error fetching roster:', err);
+      setError('An unexpected error occurred. Please try again.');
+      setHasActiveRoster(false);
     } finally {
       setLoading(false);
     }
@@ -1247,13 +1265,48 @@ const MemberRoster: React.FC = () => {
         </div>
 
         {/* Empty states */}
-        {members.length === 0 && (
+        {members.length === 0 && !hasActiveRoster && (
+          <div className="text-center py-12 bg-blue-50 rounded-lg border-2 border-blue-200">
+            <Users className="w-16 h-16 mx-auto text-blue-500 mb-4" />
+            <h3 className="text-h3 font-lato-bold text-custom-text mb-2">
+              No Active Roster
+            </h3>
+            <p className="text-body text-custom-text-secondary mb-4">
+              Your camp doesn't have an active roster yet. Create a new roster to start managing your members.
+            </p>
+            {canEdit && (
+              <Button
+                variant="primary"
+                onClick={handleCreateRoster}
+                disabled={createLoading}
+                className="flex items-center gap-2 mx-auto"
+              >
+                {createLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Create New Roster
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {members.length === 0 && hasActiveRoster && (
           <div className="text-center py-12">
             <h3 className="text-h3 font-lato-bold text-custom-text-secondary mb-2">
-              No members found
+              Roster is Empty
             </h3>
-            <p className="text-body text-custom-text-secondary">
-              Your camp members will appear here once they join.
+            <p className="text-body text-custom-text-secondary mb-4">
+              Your roster has been created but has no members yet.
+            </p>
+            <p className="text-sm text-custom-text-secondary">
+              Add members by approving applications or using the "Add Member" button above.
             </p>
           </div>
         )}
