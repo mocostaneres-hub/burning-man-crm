@@ -836,14 +836,13 @@ router.post('/upload-photo', authenticateToken, upload.single('photo'), async (r
 router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    const numericCampId = parseInt(campId);
     
     // Check if user is camp owner/admin
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    const camp = await db.findCamp({ _id: numericCampId });
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -858,7 +857,7 @@ router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
     }
 
     // Find the active roster
-    const activeRoster = await db.findActiveRoster({ camp: numericCampId });
+    const activeRoster = await db.findActiveRoster({ camp: campId });
     if (!activeRoster) {
       return res.status(404).json({ message: 'No active roster found' });
     }
@@ -882,48 +881,66 @@ router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
 router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    const numericCampId = parseInt(campId);
     const { name = `${new Date().getFullYear()} Roster`, description = 'Active camp roster' } = req.body;
+    
+    console.log('🔍 [POST /api/camps/:campId/roster/create] Camp ID:', campId);
+    console.log('🔍 [POST /api/camps/:campId/roster/create] User:', { _id: req.user._id, accountType: req.user.accountType, campId: req.user.campId });
     
     // Check if user is camp owner/admin
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
+      console.log('❌ [POST /api/camps/:campId/roster/create] Not a camp or admin account');
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    const camp = await db.findCamp({ _id: numericCampId });
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
+      console.log('❌ [POST /api/camps/:campId/roster/create] Camp not found');
       return res.status(404).json({ message: 'Camp not found' });
     }
+
+    console.log('✅ [POST /api/camps/:campId/roster/create] Camp found:', camp.name);
 
     // Verify user has access to this camp
     // Check camp ownership using helper
     const isCampOwner = await canAccessCamp(req, camp._id);
     const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
     
+    console.log('🔍 [POST /api/camps/:campId/roster/create] Is camp owner?', isCampOwner);
+    console.log('🔍 [POST /api/camps/:campId/roster/create] Is admin?', isAdmin);
+    
     if (!isCampOwner && !isAdmin) {
+      console.log('❌ [POST /api/camps/:campId/roster/create] Access denied');
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
     }
 
     // Check if there's already an active roster
-    const existingActiveRoster = await db.findActiveRoster({ camp: numericCampId });
+    const existingActiveRoster = await db.findActiveRoster({ camp: campId });
+    
+    if (existingActiveRoster) {
+      console.log('ℹ️ [POST /api/camps/:campId/roster/create] Existing active roster found, will archive it');
+    }
     
     // Create the roster
+    console.log('🔄 [POST /api/camps/:campId/roster/create] Creating new roster...');
     const roster = await db.createRoster({
-      camp: numericCampId,
+      camp: campId,
       name,
       description,
       isActive: true,
       createdBy: req.user._id
     });
 
+    console.log('✅ [POST /api/camps/:campId/roster/create] Roster created:', roster._id);
+
     // If there was an existing active roster, archive it
     if (existingActiveRoster) {
       await db.archiveRoster(existingActiveRoster._id, req.user._id);
+      console.log('✅ [POST /api/camps/:campId/roster/create] Archived previous roster');
     }
 
     // Add all approved members to the new roster
     const approvedMembers = await db.findManyMembers({ 
-      camp: numericCampId, 
+      camp: campId, 
       status: 'active' 
     });
 
@@ -933,11 +950,15 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
 
     res.status(201).json({ message: 'Roster created successfully', roster });
   } catch (error) {
-    console.error('Create roster error:', error);
+    console.error('❌ [POST /api/camps/:campId/roster/create] Error:', error);
+    console.error('❌ [POST /api/camps/:campId/roster/create] Error code:', error.code);
+    console.error('❌ [POST /api/camps/:campId/roster/create] Error message:', error.message);
+    console.error('❌ [POST /api/camps/:campId/roster/create] Error stack:', error.stack);
+    
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Only one active roster is allowed per camp' });
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -947,14 +968,13 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
 router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req, res) => {
   try {
     const { campId, memberId } = req.params;
-    const numericCampId = parseInt(campId);
     
     // Check if user is camp owner/admin
     if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
       return res.status(403).json({ message: 'Camp admin/lead access required' });
     }
 
-    const camp = await db.findCamp({ _id: numericCampId });
+    const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
@@ -975,7 +995,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     }
 
     // Find the active roster for this camp
-    const activeRoster = await db.findActiveRoster({ camp: numericCampId });
+    const activeRoster = await db.findActiveRoster({ camp: campId });
     if (!activeRoster) {
       return res.status(404).json({ message: 'No active roster found' });
     }
@@ -1004,7 +1024,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     // Step 3: Find and reset the corresponding application record
     const application = await db.findMemberApplication({ 
       applicant: member.user, 
-      camp: numericCampId,
+      camp: campId,
       // Get the current year's application
       createdAt: {
         $gte: new Date(new Date().getFullYear(), 0, 1), // Start of current year
