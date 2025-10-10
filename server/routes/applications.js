@@ -99,10 +99,16 @@ router.post('/apply', authenticateToken, [
       return res.status(403).json({ message: 'Only personal accounts can apply to camps' });
     }
 
-    // Check if personal profile is complete
-    if (!isPersonalProfileComplete(req.user)) {
-      console.error('❌ [Applications] Incomplete profile for user:', req.user.email);
-      console.error('User data:', JSON.stringify(req.user, null, 2));
+    // Fetch fresh user data from database (JWT might have stale data)
+    const freshUser = await db.findUser({ _id: req.user._id });
+    if (!freshUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if personal profile is complete (using fresh data)
+    if (!isPersonalProfileComplete(freshUser)) {
+      console.error('❌ [Applications] Incomplete profile for user:', freshUser.email);
+      console.error('User data:', JSON.stringify(freshUser, null, 2));
       return res.status(400).json({ 
         message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Phone Number, City, Years Burned, Bio, and Burning Man Plans (Interested in Early Arrival/Strike Team).',
         incompleteProfile: true,
