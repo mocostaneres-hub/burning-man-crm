@@ -481,11 +481,23 @@ router.put('/:applicationId/status', authenticateToken, [
       
       const newMember = await db.createMember(memberData);
       
-      // Add member to active roster if one exists
-      const activeRoster = await db.findActiveRoster({ camp: camp._id });
-      if (activeRoster) {
-        await db.addMemberToRoster(activeRoster._id, newMember._id, req.user._id);
+      // Add member to active roster - create roster if one doesn't exist
+      let activeRoster = await db.findActiveRoster({ camp: camp._id });
+      
+      if (!activeRoster) {
+        console.log('ℹ️ [Application Approval] No active roster found, creating one automatically');
+        activeRoster = await db.createRoster({
+          camp: camp._id,
+          name: `${new Date().getFullYear()} Roster`,
+          description: 'Active camp roster (auto-created on first approval)',
+          isActive: true,
+          createdBy: req.user._id
+        });
+        console.log('✅ [Application Approval] Auto-created roster:', activeRoster._id);
       }
+      
+      await db.addMemberToRoster(activeRoster._id, newMember._id, req.user._id);
+      console.log('✅ [Application Approval] Added member to roster:', newMember._id);
       
       // Update camp member count
       if (camp.stats) {

@@ -938,15 +938,8 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
       console.log('✅ [POST /api/camps/:campId/roster/create] Archived previous roster');
     }
 
-    // Add all approved members to the new roster
-    const approvedMembers = await db.findManyMembers({ 
-      camp: campId, 
-      status: 'active' 
-    });
-
-    for (const member of approvedMembers) {
-      await db.addMemberToRoster(roster._id, member._id, req.user._id);
-    }
+    // Roster starts empty - members will be added when applications are approved
+    console.log('✅ [POST /api/camps/:campId/roster/create] Roster created with 0 members (will add via application approval)');
 
     res.status(201).json({ message: 'Roster created successfully', roster });
   } catch (error) {
