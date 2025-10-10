@@ -12,35 +12,68 @@ const isPersonalProfileComplete = (user) => {
     return true; // Not a personal account, no validation needed
   }
 
-  const requiredFields = [
-    'firstName',
-    'lastName', 
-    'phoneNumber',
-    'city',
-    'yearsBurned',
-    'bio',
-    'interestedInEAP',
-    'interestedInStrike'
-  ];
+  console.log('🔍 [Profile Validation] Checking profile completeness for user:', user.email);
+  console.log('🔍 [Profile Validation] User data:', {
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phoneNumber: user.phoneNumber,
+    city: user.city,
+    locationCity: user.location?.city,
+    yearsBurned: user.yearsBurned,
+    bio: user.bio,
+    interestedInEAP: user.interestedInEAP,
+    interestedInStrike: user.interestedInStrike
+  });
 
-  // Check required fields
-  for (const field of requiredFields) {
-    if (typeof user[field] === 'boolean') {
-      // Boolean fields are always valid (true or false)
-      continue;
-    } else if (field === 'yearsBurned') {
-      // yearsBurned is valid if it's 0 (first burn) or any positive number
-      if (typeof user[field] !== 'number' || user[field] < 0) {
-        return false;
-      }
-    } else if (!user[field] || (typeof user[field] === 'string' && user[field].trim() === '')) {
-      return false;
-    }
+  const missingFields = [];
+
+  // Check firstName
+  if (!user.firstName || user.firstName.trim() === '') {
+    missingFields.push('First Name');
   }
 
-  // hasTicket and hasVehiclePass are optional (can be true, false, or null for "Not informed")
-  // They don't need to be validated as required fields
+  // Check lastName
+  if (!user.lastName || user.lastName.trim() === '') {
+    missingFields.push('Last Name');
+  }
 
+  // Check phoneNumber
+  if (!user.phoneNumber || user.phoneNumber.trim() === '') {
+    missingFields.push('Phone Number');
+  }
+
+  // Check city (check both top-level and location.city)
+  const hasCity = (user.city && user.city.trim() !== '') || (user.location?.city && user.location.city.trim() !== '');
+  if (!hasCity) {
+    missingFields.push('City');
+  }
+
+  // Check yearsBurned (0 is valid for first-timers)
+  if (typeof user.yearsBurned !== 'number' || user.yearsBurned < 0) {
+    missingFields.push('Years Burned');
+  }
+
+  // Check bio
+  if (!user.bio || user.bio.trim() === '') {
+    missingFields.push('Bio');
+  }
+
+  // Check interestedInEAP (boolean, so just check if it's defined)
+  if (typeof user.interestedInEAP !== 'boolean') {
+    missingFields.push('Interested in Early Arrival');
+  }
+
+  // Check interestedInStrike (boolean, so just check if it's defined)
+  if (typeof user.interestedInStrike !== 'boolean') {
+    missingFields.push('Interested in Strike Team');
+  }
+
+  if (missingFields.length > 0) {
+    console.log('❌ [Profile Validation] Missing fields:', missingFields);
+    return false;
+  }
+
+  console.log('✅ [Profile Validation] Profile is complete');
   return true;
 };
 
