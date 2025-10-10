@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug User Profile</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        .valid {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .invalid {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        pre {
+            background: #272822;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .field-check {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .field-check.valid {
+            background-color: #d4edda;
+            border-color: #28a745;
+        }
+        .field-check.invalid {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug User Profile</h1>
+        <p>Check if a user's profile is complete for camp applications.</p>
+        
+        <div class="input-group">
+            <label for="userId">User ID:</label>
+            <input 
+                type="text" 
+                id="userId" 
+                placeholder="e.g., 68e73fc6cf9aaf071e461ea0"
+                value="68e73fc6cf9aaf071e461ea0"
+            />
+        </div>
+        
+        <button onclick="checkProfile()">Check Profile</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function checkProfile() {
+            const userId = document.getElementById('userId').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!userId) {
+                resultDiv.innerHTML = '<p style="color: red;">Please enter a User ID</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch(`/api/debug/user/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    resultDiv.innerHTML = `<div class="result"><p style="color: red;">Error: ${data.message}</p></div>`;
+                    return;
+                }
+                
+                let html = '<div class="result">';
+                html += `<h2>User: ${data.email}</h2>`;
+                html += `<p><strong>Account Type:</strong> ${data.accountType}</p>`;
+                html += `<p><strong>Profile Complete:</strong> <span class="${data.isComplete ? 'valid' : 'invalid'}">${data.isComplete ? '✅ YES' : '❌ NO'}</span></p>`;
+                
+                if (data.missingFields.length > 0) {
+                    html += `<p><strong class="invalid">Missing Fields:</strong> ${data.missingFields.join(', ')}</p>`;
+                }
+                
+                html += '<h3>Field Validation:</h3>';
+                
+                for (const [field, fieldData] of Object.entries(data.profileCheck)) {
+                    const validClass = fieldData.valid ? 'valid' : 'invalid';
+                    html += `<div class="field-check ${validClass}">`;
+                    html += `<strong>${field}:</strong> `;
+                    html += `<span class="${validClass}">${fieldData.valid ? '✅' : '❌'}</span><br>`;
+                    html += `Value: <code>${JSON.stringify(fieldData.value)}</code>`;
+                    if (fieldData.topLevel !== undefined) {
+                        html += `<br>Top-level: <code>${fieldData.topLevel}</code>`;
+                        html += `<br>Nested: <code>${fieldData.nested}</code>`;
+                    }
+                    html += '</div>';
+                }
+                
+                html += '<h3>Full User Data:</h3>';
+                html += `<pre>${JSON.stringify(data.fullUserData, null, 2)}</pre>`;
+                html += '</div>';
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result"><p style="color: red;">Error: ${error.message}</p></div>`;
+            }
+        }
+        
+        // Auto-check on page load if userId is provided
+        window.addEventListener('load', () => {
+            const userId = document.getElementById('userId').value;
+            if (userId) {
+                checkProfile();
+            }
+        });
+    </script>
+</body>
+</html>
+

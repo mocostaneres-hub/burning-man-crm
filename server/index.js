@@ -122,6 +122,7 @@ app.use('/api/skills', require('./routes/skills'));
 app.use('/api/mudskippers', require('./routes/mudskippers-applications'));
 app.use('/api/migrate', require('./routes/migrate-application-statuses'));
 app.use('/api/migrate', require('./routes/migrate-slugs'));
+app.use('/api/debug', require('./routes/debug-user'));
 
 // Socket.io for real-time features
 io.on('connection', (socket) => {
