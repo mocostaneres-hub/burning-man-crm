@@ -84,6 +84,11 @@ const rosterSchema = new mongoose.Schema({
       type: String,
       enum: ['member', 'lead', 'admin'],
       default: 'member'
+    },
+    duesStatus: {
+      type: String,
+      enum: ['Paid', 'Unpaid'],
+      default: 'Unpaid'
     }
   }],
   createdBy: {

@@ -339,20 +339,22 @@ const MemberRoster: React.FC = () => {
       // Transform roster member entries into the format expected by the component
       const enhancedMembers = (roster.members || []).map((memberEntry: any) => {
         console.log('🔍 [MemberRoster] Processing member entry:', memberEntry);
+        console.log('🔍 [MemberRoster] Member entry duesStatus:', memberEntry.duesStatus);
         console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
         console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
         
-            // Map duesStatus string to duesPaid boolean for frontend compatibility
-            const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
+        // Map duesStatus string to duesPaid boolean for frontend compatibility
+        // duesStatus is stored at the top level of memberEntry (roster.members[].duesStatus)
+        const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
         
         return {
           _id: memberEntry.member?._id || memberEntry.member, // The member ID (handle both object and string)
           member: memberEntry.member, // The full member object with nested user data
           user: memberEntry.member?.user,  // The populated user data from the backend
-              duesPaid: duesPaid,
-          duesStatus: memberEntry.duesStatus,
-              addedAt: memberEntry.addedAt,
-              addedBy: memberEntry.addedBy,
+          duesPaid: duesPaid,
+          duesStatus: memberEntry.duesStatus || 'Unpaid', // Ensure we always have a duesStatus
+          addedAt: memberEntry.addedAt,
+          addedBy: memberEntry.addedBy,
           rosterStatus: memberEntry.status || 'active',
           overrides: memberEntry.overrides || {} // Roster-specific overrides
         };
