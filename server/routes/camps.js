@@ -294,11 +294,10 @@ router.get('/public/:slug', async (req, res) => {
       })) : [];
     
     // Categories are already populated by the database adapter
-    // Store populated categories before converting to object
-    const populatedCategories = camp.categories;
     
     // Convert Mongoose document to plain object to avoid internal properties
-    const campData = camp.toObject ? camp.toObject() : camp;
+    // Use toObject({ virtuals: true }) to preserve populated fields
+    const campData = camp.toObject ? camp.toObject({ virtuals: true, getters: true }) : camp;
     
     // Return public camp data with members
     const publicCamp = {
@@ -307,7 +306,7 @@ router.get('/public/:slug', async (req, res) => {
       photos: processedPhotos,
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
-      categories: populatedCategories, // Use the populated categories stored before toObject()
+      categories: campData.categories, // Categories should be preserved by toObject() with options
       acceptingNewMembers: campData.acceptingNewMembers || false, // Explicitly include these fields
       showApplyNow: campData.showApplyNow || false,
       members: members.map(member => ({
