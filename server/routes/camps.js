@@ -80,8 +80,8 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const total = await db.countCamps(query);
     
-    // Format camps data for frontend
-    const formattedCamps = camps.map(camp => {
+    // Format camps data for frontend and manually populate categories
+    const formattedCamps = await Promise.all(camps.map(async (camp) => {
       // Convert Mongoose document to plain object
       const campObj = camp.toObject ? camp.toObject() : camp;
       
@@ -89,13 +89,26 @@ router.get('/', optionalAuth, async (req, res) => {
         ? campObj.photos.map(photo => typeof photo === 'string' ? photo : photo.url).filter(Boolean)
         : (campObj.heroPhoto?.url ? [campObj.heroPhoto.url] : []);
       
+      // Manually populate categories
+      let populatedCategories = [];
+      if (campObj.categories && campObj.categories.length > 0) {
+        populatedCategories = await Promise.all(
+          campObj.categories.map(async (categoryId) => {
+            const category = await db.findCampCategory({ _id: categoryId });
+            return category ? { _id: category._id, name: category.name } : null;
+          })
+        );
+        populatedCategories = populatedCategories.filter(Boolean);
+      }
+      
       return {
         ...campObj,
         campName: campObj.name, // Frontend expects campName
         photos: processedPhotos,
-        primaryPhotoIndex: Math.min(campObj.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1))
+        primaryPhotoIndex: Math.min(campObj.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
+        categories: populatedCategories
       };
-    });
+    }));
     
     console.log('🏕️ [Backend] Found', formattedCamps.length, 'camps out of', total, 'total');
     console.log('🏕️ [Backend] First camp:', formattedCamps[0]?.campName);
@@ -293,11 +306,20 @@ router.get('/public/:slug', async (req, res) => {
         };
       })) : [];
     
-    // Categories are already populated by the database adapter
+    // Manually populate categories before converting to object
+    let populatedCategories = [];
+    if (camp.categories && camp.categories.length > 0) {
+      populatedCategories = await Promise.all(
+        camp.categories.map(async (categoryId) => {
+          const category = await db.findCampCategory({ _id: categoryId });
+          return category ? { _id: category._id, name: category.name } : null;
+        })
+      );
+      populatedCategories = populatedCategories.filter(Boolean);
+    }
     
     // Convert Mongoose document to plain object to avoid internal properties
-    // Use toObject({ virtuals: true }) to preserve populated fields
-    const campData = camp.toObject ? camp.toObject({ virtuals: true, getters: true }) : camp;
+    const campData = camp.toObject ? camp.toObject() : camp;
     
     // Return public camp data with members
     const publicCamp = {
@@ -306,7 +328,7 @@ router.get('/public/:slug', async (req, res) => {
       photos: processedPhotos,
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
-      categories: campData.categories, // Categories should be preserved by toObject() with options
+      categories: populatedCategories, // Use manually populated categories
       acceptingNewMembers: campData.acceptingNewMembers || false, // Explicitly include these fields
       showApplyNow: campData.showApplyNow || false,
       members: members.map(member => ({
