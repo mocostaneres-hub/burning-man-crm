@@ -131,6 +131,7 @@ class DatabaseAdapter {
       const Camp = require('../models/Camp');
       return await Camp.find(query)
         .populate('owner', 'campName email')
+        .populate('categories', 'name')
         .sort(options.sort || { createdAt: -1 })
         .limit(options.limit || 10)
         .skip(options.skip || 0);

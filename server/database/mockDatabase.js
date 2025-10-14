@@ -431,48 +431,65 @@ class MockDatabase {
   async findCamp(query) {
     await this.ensureLoaded();
     
+    let foundCamp = null;
+    
     if (query._id) {
       for (let camp of this.collections.camps.values()) {
         // Handle both string and numeric ID comparisons
         if (camp._id === query._id || camp._id === parseInt(query._id) || camp._id.toString() === query._id.toString()) {
-          return camp;
+          foundCamp = camp;
+          break;
         }
       }
     }
-    if (query.slug) {
+    if (!foundCamp && query.slug) {
       for (let camp of this.collections.camps.values()) {
         if (camp.slug === query.slug) {
-          return camp;
+          foundCamp = camp;
+          break;
         }
       }
     }
-    if (query.owner) {
+    if (!foundCamp && query.owner) {
       for (let camp of this.collections.camps.values()) {
         try {
           // Direct numeric comparison
           if (camp && camp.owner === query.owner) {
-            return camp;
+            foundCamp = camp;
+            break;
           }
         } catch (error) {
           // Continue to next camp if there's an error with this one
         }
       }
     }
-    if (query.contactEmail) {
+    if (!foundCamp && query.contactEmail) {
       for (let camp of this.collections.camps.values()) {
         if (camp && camp.contactEmail === query.contactEmail) {
-          return camp;
+          foundCamp = camp;
+          break;
         }
       }
     }
-    if (query.campName) {
+    if (!foundCamp && query.campName) {
       for (let camp of this.collections.camps.values()) {
         if (camp && camp.campName === query.campName) {
-          return camp;
+          foundCamp = camp;
+          break;
         }
       }
     }
-    return null;
+    
+    // Populate categories if camp was found
+    if (foundCamp && foundCamp.categories && foundCamp.categories.length > 0) {
+      const populatedCategories = foundCamp.categories.map(categoryId => {
+        const category = this.collections.campCategories.get(parseInt(categoryId));
+        return category ? { _id: category._id, name: category.name } : null;
+      }).filter(Boolean);
+      foundCamp = { ...foundCamp, categories: populatedCategories };
+    }
+    
+    return foundCamp;
   }
 
   async findAdmin(query) {
@@ -676,6 +693,18 @@ class MockDatabase {
     const skip = options.skip || 0;
     const limit = options.limit || 10;
     camps = camps.slice(skip, skip + limit);
+    
+    // Populate categories
+    camps = camps.map(camp => {
+      if (camp.categories && camp.categories.length > 0) {
+        const populatedCategories = camp.categories.map(categoryId => {
+          const category = this.collections.campCategories.get(parseInt(categoryId));
+          return category ? { _id: category._id, name: category.name } : null;
+        }).filter(Boolean);
+        return { ...camp, categories: populatedCategories };
+      }
+      return camp;
+    });
     
     return camps;
   }
@@ -1859,3 +1888,4 @@ class MockDatabase {
 const mockDB = new MockDatabase();
 
 module.exports = mockDB;
+
