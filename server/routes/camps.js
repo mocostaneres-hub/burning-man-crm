@@ -80,8 +80,12 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const total = await db.countCamps(query);
     
+    // Fetch all categories once for efficient lookup
+    const allCategories = await db.findCampCategories();
+    const categoryMap = new Map(allCategories.map(cat => [cat._id.toString(), cat]));
+    
     // Format camps data for frontend and manually populate categories
-    const formattedCamps = await Promise.all(camps.map(async (camp) => {
+    const formattedCamps = camps.map(camp => {
       // Convert Mongoose document to plain object
       const campObj = camp.toObject ? camp.toObject() : camp;
       
@@ -89,16 +93,14 @@ router.get('/', optionalAuth, async (req, res) => {
         ? campObj.photos.map(photo => typeof photo === 'string' ? photo : photo.url).filter(Boolean)
         : (campObj.heroPhoto?.url ? [campObj.heroPhoto.url] : []);
       
-      // Manually populate categories
+      // Manually populate categories using the category map
       let populatedCategories = [];
       if (campObj.categories && campObj.categories.length > 0) {
-        populatedCategories = await Promise.all(
-          campObj.categories.map(async (categoryId) => {
-            const category = await db.findCampCategory({ _id: categoryId });
-            return category ? { _id: category._id, name: category.name } : null;
-          })
-        );
-        populatedCategories = populatedCategories.filter(Boolean);
+        populatedCategories = campObj.categories.map(categoryId => {
+          const categoryIdStr = categoryId.toString();
+          const category = categoryMap.get(categoryIdStr);
+          return category ? { _id: category._id, name: category.name } : null;
+        }).filter(Boolean);
       }
       
       return {
@@ -108,7 +110,7 @@ router.get('/', optionalAuth, async (req, res) => {
         primaryPhotoIndex: Math.min(campObj.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
         categories: populatedCategories
       };
-    }));
+    });
     
     console.log('🏕️ [Backend] Found', formattedCamps.length, 'camps out of', total, 'total');
     console.log('🏕️ [Backend] First camp:', formattedCamps[0]?.campName);
@@ -307,15 +309,16 @@ router.get('/public/:slug', async (req, res) => {
       })) : [];
     
     // Manually populate categories before converting to object
+    const allCategories = await db.findCampCategories();
+    const categoryMap = new Map(allCategories.map(cat => [cat._id.toString(), cat]));
+    
     let populatedCategories = [];
     if (camp.categories && camp.categories.length > 0) {
-      populatedCategories = await Promise.all(
-        camp.categories.map(async (categoryId) => {
-          const category = await db.findCampCategory({ _id: categoryId });
-          return category ? { _id: category._id, name: category.name } : null;
-        })
-      );
-      populatedCategories = populatedCategories.filter(Boolean);
+      populatedCategories = camp.categories.map(categoryId => {
+        const categoryIdStr = categoryId.toString();
+        const category = categoryMap.get(categoryIdStr);
+        return category ? { _id: category._id, name: category.name } : null;
+      }).filter(Boolean);
     }
     
     // Convert Mongoose document to plain object to avoid internal properties
