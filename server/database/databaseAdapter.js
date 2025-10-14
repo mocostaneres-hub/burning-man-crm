@@ -65,7 +65,7 @@ class DatabaseAdapter {
   async findCamp(query) {
     if (this.useMongoDB) {
       const Camp = require('../models/Camp');
-      return await Camp.findOne(query).populate('categories', 'name');
+      return await Camp.findOne(query);
     } else {
       return await this.mockDB.findCamp(query);
     }
@@ -74,7 +74,7 @@ class DatabaseAdapter {
   async findCamps(query = {}) {
     if (this.useMongoDB) {
       const Camp = require('../models/Camp');
-      return await Camp.find(query).populate('categories', 'name');
+      return await Camp.find(query);
     } else {
       return await this.mockDB.findCamps(query);
     }
