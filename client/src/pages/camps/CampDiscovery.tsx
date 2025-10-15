@@ -13,6 +13,7 @@ interface CampCategory {
 interface GlobalPerk {
   _id: string;
   name: string;
+  icon: string;
   color: string;
 }
 
