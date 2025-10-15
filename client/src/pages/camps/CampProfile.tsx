@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import PhotoUpload from '../../components/profile/PhotoUpload';
@@ -83,6 +84,15 @@ interface CampProfileData {
   photos: string[];
   visibility: 'public' | 'private';
 }
+
+// Helper function to dynamically render Lucide icons
+const renderIcon = (iconName: string) => {
+  const IconComponent = (LucideIcons as any)[iconName];
+  if (IconComponent) {
+    return <IconComponent className="w-4 h-4" />;
+  }
+  return null;
+};
 
 const CampProfile: React.FC = () => {
   const { user } = useAuth();
@@ -870,8 +880,11 @@ const CampProfile: React.FC = () => {
               {campData.selectedPerks.filter(sp => sp.isOn).map((selectedPerk) => {
                 const perk = globalPerks.find(p => p._id === selectedPerk.perkId);
                 return perk ? (
-                  <div key={selectedPerk.perkId} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${perk.color}`}>
-                    <span className="font-medium text-sm text-gray-700">{perk.name}</span>
+                  <div key={selectedPerk.perkId} className="flex items-center gap-2">
+                    <div className={`flex items-center justify-center w-8 h-8 rounded ${perk.color}`}>
+                      {renderIcon(perk.icon)}
+                    </div>
+                    <span className="font-medium text-sm text-custom-text">{perk.name}</span>
                   </div>
                 ) : null;
               })}
