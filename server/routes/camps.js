@@ -322,8 +322,14 @@ router.get('/public/:slug', async (req, res) => {
       await Promise.all(camp.selectedPerks.map(async (perk) => {
         const offering = await db.findGlobalPerk({ _id: perk.perkId });
         return {
-          ...perk,
-          offering: offering || null
+          perkId: perk.perkId,
+          isOn: perk.isOn,
+          offering: offering ? { 
+            _id: offering._id, 
+            name: offering.name, 
+            icon: offering.icon, 
+            color: offering.color 
+          } : null
         };
       })) : [];
     
