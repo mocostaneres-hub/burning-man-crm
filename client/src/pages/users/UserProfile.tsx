@@ -228,7 +228,7 @@ const UserProfile: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-end md:justify-between -mt-16 mb-6">
             {/* Profile Photo Section */}
             <div className="flex flex-col md:flex-row md:items-end gap-6">
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 {profileData.profilePhoto ? (
                   <img
                     src={profileData.profilePhoto}
@@ -241,7 +241,7 @@ const UserProfile: React.FC = () => {
                   </div>
                 )}
                 {isEditing && (
-                  <div className="mt-4">
+                  <div className="mt-4 max-w-[180px]">
                     <PhotoUpload
                       profilePhoto={profileData.profilePhoto}
                       onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
@@ -252,10 +252,10 @@ const UserProfile: React.FC = () => {
               </div>
               
               {/* Name and Basic Info */}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 {isEditing ? (
-                  <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                    <div className="min-w-0">
                       <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
                         First Name
                       </label>
@@ -263,10 +263,10 @@ const UserProfile: React.FC = () => {
                         value={profileData.firstName}
                         onChange={(e) => handleInputChange('firstName', e.target.value)}
                         placeholder="First name"
-                        className="bg-white"
+                        className="bg-white w-full"
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
                         Last Name
                       </label>
@@ -274,7 +274,7 @@ const UserProfile: React.FC = () => {
                         value={profileData.lastName}
                         onChange={(e) => handleInputChange('lastName', e.target.value)}
                         placeholder="Last name"
-                        className="bg-white"
+                        className="bg-white w-full"
                       />
                     </div>
                   </div>
