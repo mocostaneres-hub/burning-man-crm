@@ -6,6 +6,7 @@ import {
   Users, ArrowLeft, Send, Loader2, CheckCircle, AlertTriangle,
   Home
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -94,6 +95,15 @@ interface Camp {
     totalMembers?: number;
   };
 }
+
+// Helper function to dynamically render Lucide icons
+const renderIcon = (iconName: string) => {
+  const IconComponent = (LucideIcons as any)[iconName];
+  if (IconComponent) {
+    return <IconComponent className="w-4 h-4" />;
+  }
+  return null;
+};
 
 const PublicCampProfile: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -331,31 +341,69 @@ const PublicCampProfile: React.FC = () => {
               {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Shared Amenities</h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {camp.selectedPerks
                       .filter(sp => sp.isOn && sp.offering)
                       .map((selectedPerk) => (
                         <div
                           key={selectedPerk.perkId}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg ${selectedPerk.offering!.color}`}
+                          className="flex items-center gap-2"
                         >
-                          <span className="font-medium text-sm text-gray-700">{selectedPerk.offering!.name}</span>
+                          <div className={`flex items-center justify-center w-8 h-8 rounded ${selectedPerk.offering!.color}`}>
+                            {renderIcon(selectedPerk.offering!.icon)}
+                          </div>
+                          <span className="font-medium text-sm text-custom-text">{selectedPerk.offering!.name}</span>
                         </div>
                       ))}
                   </div>
                 </div>
               )}
 
+              {/* Description */}
               {camp.description && (
-                <p className="text-body text-custom-text-secondary mb-4">
-                  {camp.description}
-                </p>
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">About</h3>
+                  <p className="text-body text-custom-text-secondary">{camp.description}</p>
+                </div>
               )}
 
+              {/* Bio */}
+              {camp.bio && (
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">Our Story</h3>
+                  <p className="text-body text-custom-text-secondary whitespace-pre-wrap">{camp.bio}</p>
+                </div>
+              )}
+
+              {/* Theme */}
               {camp.theme && (
-                <div className="mb-4">
+                <div className="mb-6">
                   <h3 className="text-h3 font-lato-bold text-custom-text mb-2">Theme</h3>
                   <p className="text-body text-custom-text-secondary">{camp.theme}</p>
+                </div>
+              )}
+
+              {/* Playa Location */}
+              {camp.location && (camp.location.street || camp.location.time || camp.location.description) && (
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Playa Location</h3>
+                  <div className="space-y-2">
+                    {(camp.location.time || camp.location.street) && (
+                      <div className="flex items-start gap-2">
+                        <Home className="w-5 h-5 text-custom-text-secondary mt-0.5" />
+                        <div>
+                          {camp.location.time && <p className="text-body text-custom-text">{camp.location.time}</p>}
+                          {camp.location.street && <p className="text-body text-custom-text">{camp.location.street}</p>}
+                          {camp.location.crossStreet && (
+                            <p className="text-sm text-custom-text-secondary">Near: {camp.location.crossStreet}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {camp.location.description && (
+                      <p className="text-sm text-custom-text-secondary ml-7">{camp.location.description}</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -386,59 +434,86 @@ const PublicCampProfile: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* Contact & Social */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              Connect With Us
-            </h2>
-            <div className="space-y-3">
-              {camp.website && (
-                <a
-                  href={camp.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-custom-primary hover:text-custom-primary-dark"
-                >
-                  <Globe className="w-4 h-4" />
-                  Visit Website
-                </a>
-              )}
-              
-              <div className="flex gap-3">
-                {camp.socialMedia?.facebook && (
+        {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter || camp.socialMedia?.tiktok) && (
+          <Card>
+            <div className="p-6">
+              <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
+                Connect With Us
+              </h2>
+              <div className="space-y-4">
+                {camp.website && (
                   <a
-                    href={camp.socialMedia.facebook}
+                    href={camp.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800"
+                    className="flex items-center gap-3 text-custom-primary hover:text-custom-primary-dark transition-colors group"
                   >
-                    <Facebook className="w-5 h-5" />
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-custom-primary/10 group-hover:bg-custom-primary/20 transition-colors">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Visit Our Website</p>
+                      <p className="text-sm text-custom-text-secondary">{camp.website}</p>
+                    </div>
                   </a>
                 )}
-                {camp.socialMedia?.instagram && (
-                  <a
-                    href={camp.socialMedia.instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-pink-600 hover:text-pink-800"
-                  >
-                    <Instagram className="w-5 h-5" />
-                  </a>
-                )}
-                {camp.socialMedia?.twitter && (
-                  <a
-                    href={camp.socialMedia.twitter}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-600"
-                  >
-                    <Twitter className="w-5 h-5" />
-                  </a>
+                
+                {/* Social Media Links */}
+                {(camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter || camp.socialMedia?.tiktok) && (
+                  <div>
+                    <p className="text-sm font-medium text-custom-text mb-3">Follow Us</p>
+                    <div className="flex flex-wrap gap-3">
+                      {camp.socialMedia?.facebook && (
+                        <a
+                          href={camp.socialMedia.facebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                          title="Facebook"
+                        >
+                          <Facebook className="w-5 h-5" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.instagram && (
+                        <a
+                          href={camp.socialMedia.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors"
+                          title="Instagram"
+                        >
+                          <Instagram className="w-5 h-5" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.twitter && (
+                        <a
+                          href={camp.socialMedia.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-400 hover:bg-blue-100 transition-colors"
+                          title="Twitter"
+                        >
+                          <Twitter className="w-5 h-5" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.tiktok && (
+                        <a
+                          href={camp.socialMedia.tiktok}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                          title="TikTok"
+                        >
+                          <Globe className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       {/* Application Modal */}

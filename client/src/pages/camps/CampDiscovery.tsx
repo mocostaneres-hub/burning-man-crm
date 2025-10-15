@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Card, Badge } from '../../components/ui';
-import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2 } from 'lucide-react';
+import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2, Globe, Twitter, Home } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -68,23 +68,26 @@ const CampDiscovery: React.FC = () => {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [filteredCamps, setFilteredCamps] = useState<Camp[]>([]);
   const [campCategories, setCampCategories] = useState<CampCategory[]>([]);
+  const [globalPerks, setGlobalPerks] = useState<GlobalPerk[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'members' | 'burningSince'>('name');
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchCamps();
     loadCategories();
+    loadPerks();
   }, []);
 
   useEffect(() => {
     filterAndSortCamps();
-  }, [camps, searchTerm, selectedCategories, sortBy]);
+  }, [camps, searchTerm, selectedCategories, selectedAmenities, sortBy]);
 
   const loadCategories = async () => {
     try {
@@ -92,6 +95,15 @@ const CampDiscovery: React.FC = () => {
       setCampCategories(response.categories || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
+    }
+  };
+
+  const loadPerks = async () => {
+    try {
+      const response = await api.get('/perks');
+      setGlobalPerks(response.perks || []);
+    } catch (error) {
+      console.error('Failed to load perks:', error);
     }
   };
 
@@ -146,7 +158,15 @@ const CampDiscovery: React.FC = () => {
           });
         }));
       
-      return matchesSearch && matchesCategories;
+      const matchesAmenities = selectedAmenities.length === 0 ||
+        (camp.selectedPerks && selectedAmenities.every(selectedPerkId => {
+          // Check if camp has this amenity enabled
+          return camp.selectedPerks!.some(sp => 
+            sp.perkId === selectedPerkId && sp.isOn
+          );
+        }));
+      
+      return matchesSearch && matchesCategories && matchesAmenities;
     });
 
     // Sort camps
@@ -164,7 +184,7 @@ const CampDiscovery: React.FC = () => {
     });
 
     setFilteredCamps(filtered);
-  }, [camps, searchTerm, selectedCategories, sortBy]);
+  }, [camps, searchTerm, selectedCategories, selectedAmenities, sortBy]);
 
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories(prev => 
@@ -174,9 +194,18 @@ const CampDiscovery: React.FC = () => {
     );
   };
 
+  const handleAmenityToggle = (amenityId: string) => {
+    setSelectedAmenities(prev => 
+      prev.includes(amenityId)
+        ? prev.filter(a => a !== amenityId)
+        : [...prev, amenityId]
+    );
+  };
+
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedCategories([]);
+    setSelectedAmenities([]);
     setSortBy('name');
   };
 
@@ -234,32 +263,37 @@ const CampDiscovery: React.FC = () => {
         {/* Filters Panel */}
         {showFilters && (
           <Card className="p-6 mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
               {/* Sort Options */}
               <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
+                <label className="block text-sm font-semibold text-custom-text mb-3">
                   Sort By
                 </label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent bg-white"
                 >
                   <option value="name">Name (A-Z)</option>
-                  <option value="members">Member Count</option>
-                  <option value="burningSince">Years Burning</option>
+                  <option value="members">Most Members</option>
+                  <option value="burningSince">Most Experienced</option>
                 </select>
               </div>
 
               {/* Category Filter */}
               <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Categories
+                <label className="block text-sm font-semibold text-custom-text mb-3">
+                  Filter by Categories
+                  {selectedCategories.length > 0 && (
+                    <span className="ml-2 text-xs font-normal text-custom-primary">
+                      ({selectedCategories.length} selected)
+                    </span>
+                  )}
                 </label>
-                <div className="max-h-32 overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-1">
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {campCategories.map((category) => (
-                      <label key={category._id} className="flex items-center space-x-2 cursor-pointer">
+                      <label key={category._id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded transition-colors">
                         <input
                           type="checkbox"
                           checked={selectedCategories.includes(category._id)}
@@ -272,17 +306,52 @@ const CampDiscovery: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Amenity Filter */}
+              <div>
+                <label className="block text-sm font-semibold text-custom-text mb-3">
+                  Filter by Shared Amenities
+                  {selectedAmenities.length > 0 && (
+                    <span className="ml-2 text-xs font-normal text-custom-primary">
+                      ({selectedAmenities.length} selected)
+                    </span>
+                  )}
+                </label>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {globalPerks.map((perk) => (
+                      <label key={perk._id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedAmenities.includes(perk._id)}
+                          onChange={() => handleAmenityToggle(perk._id)}
+                          className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                        />
+                        <div className="flex items-center gap-2">
+                          <div className={`flex items-center justify-center w-5 h-5 rounded ${perk.color}`}>
+                            {renderIcon(perk.icon)}
+                          </div>
+                          <span className="text-sm text-custom-text">{perk.name}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-custom-text-secondary mt-2">
+                  Showing camps that have all selected amenities
+                </p>
+              </div>
             </div>
 
-            <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
               <Button
                 variant="outline"
                 onClick={clearFilters}
                 size="sm"
               >
-                Clear Filters
+                Clear All Filters
               </Button>
-              <span className="text-sm text-custom-text-secondary">
+              <span className="text-sm font-medium text-custom-text">
                 {filteredCamps.length} camp{filteredCamps.length !== 1 ? 's' : ''} found
               </span>
             </div>
@@ -341,10 +410,76 @@ const CampDiscovery: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Playa Location */}
+                  {camp.location && (camp.location.street || camp.location.time) && (
+                    <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
+                      <Home className="w-4 h-4" />
+                      <span>
+                        {camp.location.time && `${camp.location.time}`}
+                        {camp.location.time && camp.location.street && ' & '}
+                        {camp.location.street && camp.location.street}
+                      </span>
+                    </div>
+                  )}
+
                   {camp.burningSince && (
                     <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
                       <Calendar className="w-4 h-4" />
                       Burning since {camp.burningSince}
+                    </div>
+                  )}
+
+                  {/* Social Links and Website */}
+                  {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter) && (
+                    <div className="flex items-center gap-2 text-sm">
+                      {camp.website && (
+                        <a
+                          href={camp.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-custom-primary hover:text-custom-primary-dark"
+                          title="Visit Website"
+                        >
+                          <Globe className="w-4 h-4" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.facebook && (
+                        <a
+                          href={camp.socialMedia.facebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Facebook"
+                        >
+                          <Facebook className="w-4 h-4" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.instagram && (
+                        <a
+                          href={camp.socialMedia.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-pink-600 hover:text-pink-800"
+                          title="Instagram"
+                        >
+                          <Instagram className="w-4 h-4" />
+                        </a>
+                      )}
+                      {camp.socialMedia?.twitter && (
+                        <a
+                          href={camp.socialMedia.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-400 hover:text-blue-600"
+                          title="Twitter"
+                        >
+                          <Twitter className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -397,34 +532,6 @@ const CampDiscovery: React.FC = () => {
                           </div>
                         ))}
                     </div>
-                  </div>
-                )}
-
-                {/* Social Links */}
-                {(camp.socialMedia?.facebook || camp.socialMedia?.instagram) && (
-                  <div className="flex gap-2 pt-2">
-                    {camp.socialMedia.facebook && (
-                      <a
-                        href={camp.socialMedia.facebook}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <Facebook className="w-4 h-4" />
-                      </a>
-                    )}
-                    {camp.socialMedia.instagram && (
-                      <a
-                        href={camp.socialMedia.instagram}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-pink-600 hover:text-pink-800"
-                      >
-                        <Instagram className="w-4 h-4" />
-                      </a>
-                    )}
                   </div>
                 )}
               </div>
