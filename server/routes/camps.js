@@ -84,7 +84,11 @@ router.get('/', optionalAuth, async (req, res) => {
     const allCategories = await db.findCampCategories();
     const categoryMap = new Map(allCategories.map(cat => [cat._id.toString(), cat]));
     
-    // Format camps data for frontend and manually populate categories
+    // Fetch all global perks once for efficient lookup
+    const allPerks = await db.findGlobalPerks();
+    const perkMap = new Map(allPerks.map(perk => [perk._id.toString(), perk]));
+    
+    // Format camps data for frontend and manually populate categories and perks
     const formattedCamps = camps.map(camp => {
       // Convert Mongoose document to plain object
       const campObj = camp.toObject ? camp.toObject() : camp;
@@ -103,12 +107,27 @@ router.get('/', optionalAuth, async (req, res) => {
         }).filter(Boolean);
       }
       
+      // Manually populate selectedPerks with offering data
+      let populatedPerks = [];
+      if (campObj.selectedPerks && campObj.selectedPerks.length > 0) {
+        populatedPerks = campObj.selectedPerks.map(selectedPerk => {
+          const perkIdStr = selectedPerk.perkId?.toString();
+          const offering = perkIdStr ? perkMap.get(perkIdStr) : null;
+          return {
+            perkId: selectedPerk.perkId,
+            isOn: selectedPerk.isOn,
+            offering: offering ? { _id: offering._id, name: offering.name, color: offering.color } : null
+          };
+        });
+      }
+      
       return {
         ...campObj,
         campName: campObj.name, // Frontend expects campName
         photos: processedPhotos,
         primaryPhotoIndex: Math.min(campObj.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
-        categories: populatedCategories
+        categories: populatedCategories,
+        selectedPerks: populatedPerks
       };
     });
     

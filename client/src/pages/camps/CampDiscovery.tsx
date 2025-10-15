@@ -9,6 +9,18 @@ interface CampCategory {
   name: string;
 }
 
+interface GlobalPerk {
+  _id: string;
+  name: string;
+  color: string;
+}
+
+interface SelectedPerk {
+  perkId: string;
+  isOn: boolean;
+  offering?: GlobalPerk;
+}
+
 interface Camp {
   _id: string;
   campName: string;
@@ -21,6 +33,7 @@ interface Camp {
   contactEmail?: string;
   website?: string;
   categories?: Array<CampCategory | string>; // Can be populated objects or just IDs
+  selectedPerks?: SelectedPerk[]; // Shared amenities
   socialMedia?: {
     facebook?: string;
     instagram?: string;
@@ -348,6 +361,30 @@ const CampDiscovery: React.FC = () => {
                       <Badge variant="neutral" size="sm">
                         +{camp.categories.length - 3} more
                       </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Shared Amenities */}
+                {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {camp.selectedPerks
+                      .filter(sp => sp.isOn && sp.offering)
+                      .slice(0, 4)
+                      .map((selectedPerk) => (
+                        <div
+                          key={selectedPerk.perkId}
+                          className={`flex items-center px-2 py-1 rounded-md text-xs ${selectedPerk.offering!.color}`}
+                        >
+                          <span className="font-medium">{selectedPerk.offering!.name}</span>
+                        </div>
+                      ))}
+                    {camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 4 && (
+                      <div className="flex items-center px-2 py-1 rounded-md text-xs bg-gray-100 text-gray-600">
+                        <span className="font-medium">
+                          +{camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length - 4} more
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
