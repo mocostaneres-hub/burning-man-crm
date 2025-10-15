@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -51,6 +52,15 @@ interface Camp {
   visibility?: 'public' | 'private';
   memberCount?: number;
 }
+
+// Helper function to dynamically render Lucide icons
+const renderIcon = (iconName: string) => {
+  const IconComponent = (LucideIcons as any)[iconName];
+  if (IconComponent) {
+    return <IconComponent className="w-4 h-4" />;
+  }
+  return null;
+};
 
 const CampDiscovery: React.FC = () => {
   const navigate = useNavigate();
@@ -367,25 +377,25 @@ const CampDiscovery: React.FC = () => {
 
                 {/* Shared Amenities */}
                 {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {camp.selectedPerks
-                      .filter(sp => sp.isOn && sp.offering)
-                      .slice(0, 4)
-                      .map((selectedPerk) => (
-                        <div
-                          key={selectedPerk.perkId}
-                          className={`flex items-center px-2 py-1 rounded-md text-xs ${selectedPerk.offering!.color}`}
-                        >
-                          <span className="font-medium">{selectedPerk.offering!.name}</span>
-                        </div>
-                      ))}
-                    {camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 4 && (
-                      <div className="flex items-center px-2 py-1 rounded-md text-xs bg-gray-100 text-gray-600">
-                        <span className="font-medium">
-                          +{camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length - 4} more
-                        </span>
-                      </div>
-                    )}
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-custom-text mb-2">Shared Amenities</h4>
+                    <div className="space-y-1.5">
+                      {camp.selectedPerks
+                        .filter(sp => sp.isOn && sp.offering)
+                        .map((selectedPerk) => (
+                          <div
+                            key={selectedPerk.perkId}
+                            className="flex items-center gap-2"
+                          >
+                            <div className={`flex items-center justify-center w-6 h-6 rounded ${selectedPerk.offering!.color}`}>
+                              {renderIcon(selectedPerk.offering!.icon)}
+                            </div>
+                            <span className="text-sm text-custom-text-secondary">
+                              {selectedPerk.offering!.name}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
 

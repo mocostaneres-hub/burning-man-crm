@@ -116,7 +116,7 @@ router.get('/', optionalAuth, async (req, res) => {
           return {
             perkId: selectedPerk.perkId,
             isOn: selectedPerk.isOn,
-            offering: offering ? { _id: offering._id, name: offering.name, color: offering.color } : null
+            offering: offering ? { _id: offering._id, name: offering.name, icon: offering.icon, color: offering.color } : null
           };
         });
       }
