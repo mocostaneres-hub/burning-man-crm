@@ -298,10 +298,12 @@ const PublicCampProfile: React.FC = () => {
 
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div className="flex-1">
+              {/* 1. Title */}
               <h1 className="text-h1 font-lato-bold text-custom-text mb-4">
                 {camp.campName}
               </h1>
               
+              {/* 2. Camp Hometown, Burning Since, Number of Members */}
               <div className="flex flex-wrap gap-3 mb-6">
                 {camp.hometown && (
                   <Badge variant="neutral" className="flex items-center gap-1">
@@ -323,67 +325,70 @@ const PublicCampProfile: React.FC = () => {
                 )}
               </div>
 
-              {/* Camp Categories */}
-              {camp.categories && camp.categories.length > 0 && (
+              {/* 3. Socials & Website */}
+              {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter || camp.socialMedia?.tiktok) && (
                 <div className="mb-6">
-                  <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Categories</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {camp.categories.map((category) => (
-                      <Badge key={category._id} variant="neutral" className="px-3 py-1">
-                        {category.name}
-                      </Badge>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {camp.website && (
+                      <a
+                        href={camp.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-custom-primary/10 hover:bg-custom-primary/20 text-custom-primary transition-colors"
+                        title="Website"
+                      >
+                        <Globe className="w-5 h-5" />
+                      </a>
+                    )}
+                    {camp.socialMedia?.facebook && (
+                      <a
+                        href={camp.socialMedia.facebook}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                        title="Facebook"
+                      >
+                        <Facebook className="w-5 h-5" />
+                      </a>
+                    )}
+                    {camp.socialMedia?.instagram && (
+                      <a
+                        href={camp.socialMedia.instagram}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors"
+                        title="Instagram"
+                      >
+                        <Instagram className="w-5 h-5" />
+                      </a>
+                    )}
+                    {camp.socialMedia?.twitter && (
+                      <a
+                        href={camp.socialMedia.twitter}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-400 hover:bg-blue-100 transition-colors"
+                        title="Twitter"
+                      >
+                        <Twitter className="w-5 h-5" />
+                      </a>
+                    )}
+                    {camp.socialMedia?.tiktok && (
+                      <a
+                        href={camp.socialMedia.tiktok}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                        title="TikTok"
+                      >
+                        <Globe className="w-5 h-5" />
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Shared Amenities */}
-              {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Shared Amenities</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {camp.selectedPerks
-                      .filter(sp => sp.isOn && sp.offering)
-                      .map((selectedPerk) => (
-                        <div
-                          key={selectedPerk.perkId}
-                          className="flex items-center gap-2"
-                        >
-                          <div className={`flex items-center justify-center w-8 h-8 rounded ${selectedPerk.offering!.color}`}>
-                            {renderIcon(selectedPerk.offering!.icon)}
-                          </div>
-                          <span className="font-medium text-sm text-custom-text">{selectedPerk.offering!.name}</span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Description */}
-              {camp.description && (
-                <div className="mb-6">
-                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">About</h3>
-                  <p className="text-body text-custom-text-secondary">{camp.description}</p>
-                </div>
-              )}
-
-              {/* Bio */}
-              {camp.bio && (
-                <div className="mb-6">
-                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">Our Story</h3>
-                  <p className="text-body text-custom-text-secondary whitespace-pre-wrap">{camp.bio}</p>
-                </div>
-              )}
-
-              {/* Theme */}
-              {camp.theme && (
-                <div className="mb-6">
-                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">Theme</h3>
-                  <p className="text-body text-custom-text-secondary">{camp.theme}</p>
-                </div>
-              )}
-
-              {/* Playa Location */}
+              {/* 4. Playa Location */}
               {camp.location && (camp.location.street || camp.location.time || camp.location.description) && (
                 <div className="mb-6">
                   <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Playa Location</h3>
@@ -403,6 +408,50 @@ const PublicCampProfile: React.FC = () => {
                     {camp.location.description && (
                       <p className="text-sm text-custom-text-secondary ml-7">{camp.location.description}</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* 5. Categories */}
+              {camp.categories && camp.categories.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Categories</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {camp.categories.map((category) => (
+                      <Badge key={category._id} variant="neutral" className="px-3 py-1">
+                        {category.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. About */}
+              {camp.description && (
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-2">About</h3>
+                  <p className="text-body text-custom-text-secondary">{camp.description}</p>
+                </div>
+              )}
+
+              {/* 7. Shared Amenities */}
+              {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-h3 font-lato-bold text-custom-text mb-3">Shared Amenities</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {camp.selectedPerks
+                      .filter(sp => sp.isOn && sp.offering)
+                      .map((selectedPerk) => (
+                        <div
+                          key={selectedPerk.perkId}
+                          className="flex items-center gap-2"
+                        >
+                          <div className={`flex items-center justify-center w-8 h-8 rounded ${selectedPerk.offering!.color}`}>
+                            {renderIcon(selectedPerk.offering!.icon)}
+                          </div>
+                          <span className="font-medium text-sm text-custom-text">{selectedPerk.offering!.name}</span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
@@ -430,91 +479,6 @@ const PublicCampProfile: React.FC = () => {
           </div>
         </div>
       </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-        {/* Contact & Social */}
-        {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter || camp.socialMedia?.tiktok) && (
-          <Card>
-            <div className="p-6">
-              <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-                Connect With Us
-              </h2>
-              <div className="space-y-4">
-                {camp.website && (
-                  <a
-                    href={camp.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 text-custom-primary hover:text-custom-primary-dark transition-colors group"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-custom-primary/10 group-hover:bg-custom-primary/20 transition-colors">
-                      <Globe className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Visit Our Website</p>
-                      <p className="text-sm text-custom-text-secondary">{camp.website}</p>
-                    </div>
-                  </a>
-                )}
-                
-                {/* Social Media Links */}
-                {(camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter || camp.socialMedia?.tiktok) && (
-                  <div>
-                    <p className="text-sm font-medium text-custom-text mb-3">Follow Us</p>
-                    <div className="flex flex-wrap gap-3">
-                      {camp.socialMedia?.facebook && (
-                        <a
-                          href={camp.socialMedia.facebook}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
-                          title="Facebook"
-                        >
-                          <Facebook className="w-5 h-5" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.instagram && (
-                        <a
-                          href={camp.socialMedia.instagram}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center w-10 h-10 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors"
-                          title="Instagram"
-                        >
-                          <Instagram className="w-5 h-5" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.twitter && (
-                        <a
-                          href={camp.socialMedia.twitter}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-400 hover:bg-blue-100 transition-colors"
-                          title="Twitter"
-                        >
-                          <Twitter className="w-5 h-5" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.tiktok && (
-                        <a
-                          href={camp.socialMedia.tiktok}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                          title="TikTok"
-                        >
-                          <Globe className="w-5 h-5" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
-      </div>
 
       {/* Application Modal */}
       <Modal
