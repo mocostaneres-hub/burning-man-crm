@@ -58,13 +58,15 @@ const isPersonalProfileComplete = (user) => {
     missingFields.push('Bio');
   }
 
-  // Check interestedInEAP (boolean, so just check if it's defined)
-  if (typeof user.interestedInEAP !== 'boolean') {
+  // Check interestedInEAP (boolean, allow undefined/null as valid - defaults to false)
+  // Only fail if explicitly set to a non-boolean value
+  if (user.interestedInEAP !== undefined && user.interestedInEAP !== null && typeof user.interestedInEAP !== 'boolean') {
     missingFields.push('Interested in Early Arrival');
   }
 
-  // Check interestedInStrike (boolean, so just check if it's defined)
-  if (typeof user.interestedInStrike !== 'boolean') {
+  // Check interestedInStrike (boolean, allow undefined/null as valid - defaults to false)
+  // Only fail if explicitly set to a non-boolean value
+  if (user.interestedInStrike !== undefined && user.interestedInStrike !== null && typeof user.interestedInStrike !== 'boolean') {
     missingFields.push('Interested in Strike Team');
   }
 

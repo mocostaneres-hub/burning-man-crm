@@ -132,6 +132,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  interestedInStrike: {
+    type: Boolean,
+    default: false
+  },
   
   // Camp account fields
   campName: {
