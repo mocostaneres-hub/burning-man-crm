@@ -470,9 +470,9 @@ const PublicCampProfile: React.FC = () => {
               )}
             </div>
 
-            {/* Apply Button - Only show for non-camp accounts */}
+            {/* Apply Button - Only show for personal accounts */}
             <div className="lg:ml-8">
-              {camp.acceptingNewMembers && camp.showApplyNow && (!user || user.accountType !== 'camp') ? (
+              {camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'personal' ? (
                 <Button 
                   onClick={handleApplyNow}
                   size="lg"
@@ -481,7 +481,16 @@ const PublicCampProfile: React.FC = () => {
                   <Send className="w-4 h-4 mr-2" />
                   Apply Now
                 </Button>
-              ) : camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'camp' ? (
+              ) : camp.acceptingNewMembers && camp.showApplyNow && !user ? (
+                <Button 
+                  onClick={handleApplyNow}
+                  size="lg"
+                  className="w-full lg:w-auto"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Apply Now
+                </Button>
+              ) : camp.acceptingNewMembers && camp.showApplyNow && (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) ? (
                 <div className="text-center p-4 bg-gray-100 rounded-lg">
                   <p className="text-custom-text-secondary">
                     Camp accounts cannot apply to other camps

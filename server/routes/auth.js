@@ -177,6 +177,19 @@ router.post('/login', [
       user.urlSlug = slug;
     }
 
+    // For admin accounts with campId, fetch the camp's slug and set it
+    if (user.accountType === 'admin' && user.campId && !user.urlSlug) {
+      try {
+        const camp = await db.findCamp({ _id: user.campId });
+        if (camp && camp.slug) {
+          await db.updateUserById(user._id, { urlSlug: camp.slug });
+          user.urlSlug = camp.slug;
+        }
+      } catch (error) {
+        console.error('Error fetching camp slug for admin:', error);
+      }
+    }
+
     // Update last login
     await db.updateUser(email, { lastLogin: new Date() });
 
