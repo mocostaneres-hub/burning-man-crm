@@ -523,25 +523,31 @@ const CampDiscovery: React.FC = () => {
 
                         {/* Shared Amenities */}
                         {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-semibold text-custom-text-secondary mr-1">Amenities:</span>
-                            {camp.selectedPerks
-                              .filter(sp => sp.isOn && sp.offering)
-                              .slice(0, 5)
-                              .map((selectedPerk) => (
-                                <div
-                                  key={selectedPerk.perkId}
-                                  className={`flex items-center justify-center w-6 h-6 rounded ${selectedPerk.offering!.color}`}
-                                  title={selectedPerk.offering!.name}
-                                >
-                                  {renderIcon(selectedPerk.offering!.icon)}
-                                </div>
-                              ))}
-                            {camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 5 && (
-                              <span className="text-xs text-custom-text-secondary">
-                                +{camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length - 5}
-                              </span>
-                            )}
+                          <div className="flex flex-col gap-2">
+                            <span className="text-xs font-semibold text-custom-text-secondary">Amenities:</span>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {camp.selectedPerks
+                                .filter(sp => sp.isOn && sp.offering)
+                                .slice(0, 6)
+                                .map((selectedPerk) => (
+                                  <div
+                                    key={selectedPerk.perkId}
+                                    className="flex items-center gap-1.5"
+                                  >
+                                    <div className={`flex items-center justify-center w-5 h-5 rounded ${selectedPerk.offering!.color}`}>
+                                      {renderIcon(selectedPerk.offering!.icon)}
+                                    </div>
+                                    <span className="text-xs text-custom-text">
+                                      {selectedPerk.offering!.name}
+                                    </span>
+                                  </div>
+                                ))}
+                              {camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 6 && (
+                                <span className="text-xs text-custom-text-secondary font-medium">
+                                  +{camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length - 6} more
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
