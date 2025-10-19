@@ -292,7 +292,7 @@ const PublicCampProfile: React.FC = () => {
         
         {isCampOwner && (
           <Button 
-            onClick={() => navigate('/camp/profile')} 
+            onClick={() => navigate('/camp/profile', { state: { editMode: true } })} 
             className="flex items-center gap-2"
           >
             <Edit className="w-4 h-4" />
@@ -491,7 +491,7 @@ const PublicCampProfile: React.FC = () => {
                     This is your camp's public facing profile
                   </p>
                   <Button 
-                    onClick={() => navigate('/camp/profile')} 
+                    onClick={() => navigate('/camp/profile', { state: { editMode: true } })} 
                     size="lg"
                     className="w-full lg:w-auto"
                   >

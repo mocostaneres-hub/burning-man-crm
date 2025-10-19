@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -96,6 +97,7 @@ const renderIcon = (iconName: string) => {
 
 const CampProfile: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
   const [campCategories, setCampCategories] = useState<CampCategory[]>([]);
   const [globalPerks, setGlobalPerks] = useState<GlobalPerk[]>([]);
   const [campData, setCampData] = useState<CampProfileData>({
@@ -172,17 +174,20 @@ const CampProfile: React.FC = () => {
     }
   }, [user]);
 
-  // Auto-enable edit mode for new camps with minimal data
+  // Auto-enable edit mode for new camps with minimal data or when coming from public profile
   useEffect(() => {
     if (!loading && campData.campName) {
       // Check if this is a newly created camp (minimal profile data)
       const isNewCamp = !campData.description || campData.description.includes('We\'re excited to share our camp experience');
-      if (isNewCamp) {
-        console.log('🔍 [CampProfile] New camp detected, enabling edit mode');
+      // Check if user came from public profile with editMode flag
+      const shouldEdit = location.state?.editMode;
+      
+      if (isNewCamp || shouldEdit) {
+        console.log('🔍 [CampProfile] Enabling edit mode:', { isNewCamp, shouldEdit });
         setIsEditing(true);
       }
     }
-  }, [loading, campData.campName]);
+  }, [loading, campData.campName, location.state]);
 
   const fetchCampProfile = async () => {
     try {
