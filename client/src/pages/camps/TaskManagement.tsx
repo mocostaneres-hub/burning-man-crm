@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
-import { Plus, Eye, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, Archive, RotateCcw, Users, UserPlus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
@@ -10,6 +10,7 @@ interface Task {
   title: string;
   description: string;
   assignedTo: string[];
+  watchers?: string[]; // New field for watchers
   dueDate?: string;
   status: 'open' | 'closed';
   priority: 'low' | 'medium' | 'high';
@@ -18,6 +19,7 @@ interface Task {
   updatedAt: string;
   completedAt?: string;
   completedBy?: string;
+  type?: string; // To distinguish between regular tasks and event tasks
 }
 
 const TaskManagement: React.FC = () => {
@@ -38,17 +40,22 @@ const TaskManagement: React.FC = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showWatchersModal, setShowWatchersModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editTask, setEditTask] = useState({
     title: '',
     description: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
     dueDate: '',
-    status: 'open' as 'open' | 'closed'
+    status: 'open' as 'open' | 'closed',
+    assignedTo: [] as string[],
+    watchers: [] as string[]
   });
   const [assignTo, setAssignTo] = useState<string[]>([]);
+  const [watchers, setWatchers] = useState<string[]>([]);
   const [rosterMembers, setRosterMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
 
   const fetchCampData = async () => {
     try {
@@ -66,7 +73,9 @@ const TaskManagement: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.getTasks(campId);
-      setTasks(response);
+      // Filter out event tasks (only show regular tasks)
+      const regularTasks = response.filter((task: Task) => !task.type || task.type !== 'event');
+      setTasks(regularTasks);
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setError('Failed to load tasks');
@@ -104,6 +113,58 @@ const TaskManagement: React.FC = () => {
     }
   };
 
+  // Filter tasks based on active tab
+  const filteredTasks = tasks.filter(task => task.status === activeTab);
+
+  // Handle task title click
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setShowViewModal(true);
+  };
+
+  // Handle close task
+  const handleCloseTask = async (taskId: string) => {
+    try {
+      await api.updateTask(taskId, { status: 'closed' });
+      await fetchTasks();
+      setShowViewModal(false);
+    } catch (err) {
+      console.error('Error closing task:', err);
+      setError('Failed to close task');
+    }
+  };
+
+  // Handle reopen task
+  const handleReopenTask = async (taskId: string) => {
+    try {
+      await api.updateTask(taskId, { status: 'open' });
+      await fetchTasks();
+      setShowViewModal(false);
+    } catch (err) {
+      console.error('Error reopening task:', err);
+      setError('Failed to reopen task');
+    }
+  };
+
+  // Handle edit from view modal
+  const handleEditFromView = () => {
+    if (selectedTask) {
+      setEditTask({
+        title: selectedTask.title,
+        description: selectedTask.description,
+        priority: selectedTask.priority,
+        dueDate: selectedTask.dueDate || '',
+        status: selectedTask.status,
+        assignedTo: selectedTask.assignedTo || [],
+        watchers: selectedTask.watchers || []
+      });
+      setAssignTo(selectedTask.assignedTo || []);
+      setWatchers(selectedTask.watchers || []);
+      setShowViewModal(false);
+      setShowEditModal(true);
+    }
+  };
+
   const handleCreateTask = async () => {
     if (!campId || !newTask.title.trim()) {
       setError('Please fill in all required fields');
@@ -112,14 +173,12 @@ const TaskManagement: React.FC = () => {
 
     try {
       setCreateLoading(true);
-      const taskData = {
+      await api.createTask({
         ...newTask,
         campId,
-        status: 'open'
-      };
+        assignedTo: newTask.assignedTo
+      });
       
-      await api.createTask(taskData);
-      setShowCreateModal(false);
       setNewTask({
         title: '',
         description: '',
@@ -127,6 +186,7 @@ const TaskManagement: React.FC = () => {
         dueDate: '',
         assignedTo: []
       });
+      setShowCreateModal(false);
       await fetchTasks();
     } catch (err) {
       console.error('Error creating task:', err);
@@ -136,31 +196,16 @@ const TaskManagement: React.FC = () => {
     }
   };
 
-  const handleViewTask = (task: Task) => {
-    setSelectedTask(task);
-    setShowViewModal(true);
-  };
-
-  const handleEditTask = (task: Task) => {
-    setSelectedTask(task);
-    setEditTask({
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      dueDate: task.dueDate ? task.dueDate.split('T')[0] : '',
-      status: task.status
-    });
-    setShowEditModal(true);
-  };
-
   const handleUpdateTask = async () => {
-    if (!selectedTask || !editTask.title.trim()) {
-      setError('Please fill in all required fields');
-      return;
-    }
+    if (!selectedTask) return;
 
     try {
-      await api.updateTask(selectedTask._id, editTask);
+      await api.updateTask(selectedTask._id, {
+        ...editTask,
+        assignedTo: assignTo,
+        watchers: watchers
+      });
+      
       setShowEditModal(false);
       setSelectedTask(null);
       await fetchTasks();
@@ -170,13 +215,11 @@ const TaskManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteTask = async (task: Task) => {
-    if (!window.confirm(`Are you sure you want to delete "${task.title}"?`)) {
-      return;
-    }
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
 
     try {
-      await api.deleteTask(task._id);
+      await api.deleteTask(taskId);
       await fetchTasks();
     } catch (err) {
       console.error('Error deleting task:', err);
@@ -184,63 +227,47 @@ const TaskManagement: React.FC = () => {
     }
   };
 
-  const handleAssignTask = (task: Task) => {
-    setSelectedTask(task);
-    // Convert assignedTo to strings for checkbox matching
-    setAssignTo(task.assignedTo.map(id => id.toString()));
-    fetchRosterMembers();
-    setShowAssignModal(true);
-  };
-
-  const fetchRosterMembers = async () => {
+  const loadRosterMembers = async () => {
     if (!campId) return;
     
     try {
       setLoadingMembers(true);
-      const response = await api.get(`/rosters/camp/${campId}`);
-      // The API returns a roster object directly with a members array
-      if (response.data && response.data.members) {
-        setRosterMembers(response.data.members);
-      } else if (response.members) {
-        // Fallback if response is already the roster object
-        setRosterMembers(response.members);
-      }
+      const response = await api.getRosterMembers(campId);
+      setRosterMembers(response);
     } catch (err) {
-      console.error('Error fetching roster members:', err);
+      console.error('Error loading roster members:', err);
     } finally {
       setLoadingMembers(false);
     }
   };
 
-  const handleUpdateAssignment = async () => {
+  const handleAssignTask = async () => {
     if (!selectedTask) return;
 
     try {
-      console.log('🔄 [Task Assignment] Assigning task:', {
-        taskId: selectedTask._id,
-        taskTitle: selectedTask.title,
-        assignedTo: assignTo,
-        assignedCount: assignTo.length
-      });
-      
-      const updatedTask = await api.assignTask(selectedTask._id, assignTo);
-      
-      console.log('✅ [Task Assignment] Assignment successful:', {
-        taskId: updatedTask._id,
-        assignedTo: updatedTask.assignedTo,
-        assignedCount: updatedTask.assignedTo?.length || 0
-      });
-      
+      await api.assignTask(selectedTask._id, assignTo);
       setShowAssignModal(false);
       setSelectedTask(null);
       await fetchTasks();
     } catch (err) {
-      console.error('❌ [Task Assignment] Error assigning task:', err);
+      console.error('Error assigning task:', err);
       setError('Failed to assign task');
     }
   };
 
-  // Using shared date formatting utility
+  const handleUpdateWatchers = async () => {
+    if (!selectedTask) return;
+
+    try {
+      await api.updateTask(selectedTask._id, { watchers });
+      setShowWatchersModal(false);
+      setSelectedTask(null);
+      await fetchTasks();
+    } catch (err) {
+      console.error('Error updating watchers:', err);
+      setError('Failed to update watchers');
+    }
+  };
 
   if (loading) {
     return (
@@ -290,6 +317,34 @@ const TaskManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Task Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('open')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'open'
+                  ? 'border-custom-primary text-custom-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Open Tasks ({tasks.filter(t => t.status === 'open').length})
+            </button>
+            <button
+              onClick={() => setActiveTab('closed')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'closed'
+                  ? 'border-custom-primary text-custom-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Archived ({tasks.filter(t => t.status === 'closed').length})
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Tasks List */}
       <Card>
         <div className="overflow-x-auto">
@@ -312,18 +367,21 @@ const TaskManagement: React.FC = () => {
                   Assigned To
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                  Watchers
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <tr key={task._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <button
+                        onClick={() => handleTaskClick(task)}
+                        className="text-sm font-medium text-custom-primary hover:text-custom-primary/80 hover:underline text-left"
+                      >
                         {task.title}
-                      </div>
+                      </button>
                       <div className="text-sm text-gray-500 line-clamp-2 max-w-xs">
                         {task.description}
                       </div>
@@ -348,409 +406,386 @@ const TaskManagement: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {task.assignedTo.length} member{task.assignedTo.length !== 1 ? 's' : ''}
+                    {task.assignedTo?.length || 0} assigned
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        onClick={() => handleViewTask(task)}
-                      >
-                        <Eye className="w-3 h-3" />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        onClick={() => handleEditTask(task)}
-                      >
-                        <Edit className="w-3 h-3" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
-                        onClick={() => handleAssignTask(task)}
-                      >
-                        <Plus className="w-3 h-3" />
-                        Assign
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
-                        onClick={() => handleDeleteTask(task)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Delete
-                      </Button>
-                    </div>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {task.watchers?.length || 0} watchers
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {tasks.length === 0 && (
-          <div className="text-center py-12">
-            <h3 className="text-h3 font-lato-bold text-custom-text-secondary mb-2">
-              No tasks found
-            </h3>
-            <p className="text-body text-custom-text-secondary">
-              Create your first task to get started with camp management.
-            </p>
-          </div>
-        )}
       </Card>
 
-      {/* Create Task Modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create New Task"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Task Title *
-            </label>
-            <Input
-              type="text"
-              value={newTask.title}
-              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-              placeholder="Enter task title"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <Textarea
-              value={newTask.description}
-              onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              placeholder="Enter task description"
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Priority
-            </label>
-            <select
-              value={newTask.priority}
-              onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Due Date
-            </label>
-            <Input
-              type="date"
-              value={newTask.dueDate}
-              onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateModal(false)}
-              disabled={createLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreateTask}
-              disabled={createLoading || !newTask.title.trim()}
-              className="flex items-center gap-2"
-            >
-              {createLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Create Task
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* View Task Modal */}
-      <Modal
-        isOpen={showViewModal}
-        onClose={() => setShowViewModal(false)}
-        title="Task Details"
-      >
-        {selectedTask && (
+      {showViewModal && selectedTask && (
+        <Modal
+          isOpen={showViewModal}
+          onClose={() => setShowViewModal(false)}
+          title="Task Details"
+        >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Title
-              </label>
-              <div className="p-3 bg-gray-50 rounded-md">
-                {selectedTask.title}
-              </div>
+              <h3 className="text-lg font-semibold text-gray-900">{selectedTask.title}</h3>
+              <p className="text-gray-600 mt-2">{selectedTask.description}</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <div className="p-3 bg-gray-50 rounded-md min-h-[100px]">
-                {selectedTask.description}
-              </div>
-            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority
-                </label>
-                <Badge variant={getPriorityVariant(selectedTask.priority)}>
+                <label className="text-sm font-medium text-gray-500">Priority</label>
+                <Badge variant={getPriorityVariant(selectedTask.priority)} className="ml-2">
                   {selectedTask.priority}
                 </Badge>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <Badge variant={getStatusVariant(selectedTask.status)}>
+                <label className="text-sm font-medium text-gray-500">Status</label>
+                <Badge variant={getStatusVariant(selectedTask.status)} className="ml-2">
                   {selectedTask.status}
                 </Badge>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date
-              </label>
-              <div className="p-3 bg-gray-50 rounded-md">
-                {selectedTask.dueDate ? formatEventDate(selectedTask.dueDate) : 'No due date'}
+              <div>
+                <label className="text-sm font-medium text-gray-500">Due Date</label>
+                <p className="text-sm text-gray-900">
+                  {selectedTask.dueDate ? formatEventDate(selectedTask.dueDate) : 'No due date'}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Assigned To</label>
+                <p className="text-sm text-gray-900">{selectedTask.assignedTo?.length || 0} members</p>
               </div>
             </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleEditFromView} className="flex items-center gap-2">
+                <Edit className="w-4 h-4" />
+                Edit
+              </Button>
+              {selectedTask.status === 'open' ? (
+                <Button 
+                  onClick={() => handleCloseTask(selectedTask._id)}
+                  variant="outline"
+                  className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+                >
+                  <Archive className="w-4 h-4" />
+                  Close Task
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => handleReopenTask(selectedTask._id)}
+                  variant="outline"
+                  className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Re-Open
+                </Button>
+              )}
+              <Button
+                onClick={() => {
+                  setAssignTo(selectedTask.assignedTo || []);
+                  setShowAssignModal(true);
+                }}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Users className="w-4 h-4" />
+                Assign
+              </Button>
+              <Button
+                onClick={() => {
+                  setWatchers(selectedTask.watchers || []);
+                  setShowWatchersModal(true);
+                }}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Watchers
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Task Modal */}
+      {showEditModal && (
+        <Modal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          title="Edit Task"
+        >
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assigned To
-              </label>
-              <div className="p-3 bg-gray-50 rounded-md">
-                {selectedTask.assignedTo.length === 0 ? (
-                  <span className="text-gray-500">No members assigned</span>
-                ) : (
-                  <div>
-                    <div className="font-medium mb-1">
-                      {selectedTask.assignedTo.length} member{selectedTask.assignedTo.length !== 1 ? 's' : ''}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Click "Assign" button to view or modify assignments
-                    </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <Input
+                value={editTask.title}
+                onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
+                placeholder="Task title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <Textarea
+                value={editTask.description}
+                onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
+                placeholder="Task description"
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                <select
+                  value={editTask.priority}
+                  onChange={(e) => setEditTask({ ...editTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <Input
+                  type="date"
+                  value={editTask.dueDate}
+                  onChange={(e) => setEditTask({ ...editTask, dueDate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleUpdateTask}>
+                Save Changes
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowEditModal(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Assign Task Modal */}
+      {showAssignModal && (
+        <Modal
+          isOpen={showAssignModal}
+          onClose={() => setShowAssignModal(false)}
+          title="Assign Task"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Select members to assign this task to:</p>
+            
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {rosterMembers.map((member) => {
+                  const userId = member.user?._id?.toString();
+                  return (
+                    <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={assignTo.includes(userId)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAssignTo([...assignTo, userId]);
+                          } else {
+                            setAssignTo(assignTo.filter(id => id !== userId));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {member.user?.firstName} {member.user?.lastName}
+                          {member.user?.playaName && (
+                            <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {member.user?.email}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+                {rosterMembers.length === 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No roster members found
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+            )}
 
-      {/* Edit Task Modal */}
-      <Modal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        title="Edit Task"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Task Title *
-            </label>
-            <Input
-              type="text"
-              value={editTask.title}
-              onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
-              placeholder="Enter task title"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <Textarea
-              value={editTask.description}
-              onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
-              placeholder="Enter task description"
-              rows={3}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority
-              </label>
-              <select
-                value={editTask.priority}
-                onChange={(e) => setEditTask({ ...editTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                value={editTask.status}
-                onChange={(e) => setEditTask({ ...editTask, status: e.target.value as 'open' | 'closed' })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-              >
-                <option value="open">Open</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Due Date
-            </label>
-            <Input
-              type="date"
-              value={editTask.dueDate}
-              onChange={(e) => setEditTask({ ...editTask, dueDate: e.target.value })}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowEditModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleUpdateTask}
-              disabled={!editTask.title.trim()}
-            >
-              Update Task
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Assign Task Modal */}
-      <Modal
-        isOpen={showAssignModal}
-        onClose={() => setShowAssignModal(false)}
-        title="Assign Task to Members"
-      >
-        {selectedTask && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Members to Assign
-              </label>
-              {loadingMembers ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
-                </div>
-              ) : (
-                <>
-                  {rosterMembers.length > 0 && (
-                    <div className="mb-3 pb-3 border-b border-gray-200">
-                      <label className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={assignTo.length === rosterMembers.length && rosterMembers.length > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              // Assign to all members
-                              setAssignTo(rosterMembers.map(m => m.user._id.toString()));
-                            } else {
-                              // Unassign all
-                              setAssignTo([]);
-                            }
-                          }}
-                          className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                        />
-                        <div className="font-medium text-gray-900">
-                          Assign to Entire Roster ({rosterMembers.length} members)
-                        </div>
-                      </label>
-                    </div>
-                  )}
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {rosterMembers.map((member) => {
-                      const userId = member.user?._id?.toString();
-                      return (
-                        <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={assignTo.includes(userId)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setAssignTo([...assignTo, userId]);
-                              } else {
-                                setAssignTo(assignTo.filter(id => id !== userId));
-                              }
-                            }}
-                            className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {member.user?.firstName} {member.user?.lastName}
-                              {member.user?.playaName && (
-                                <span className="text-gray-500 ml-2">({member.user.playaName})</span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {member.user?.email}
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })}
-                    {rosterMembers.length === 0 && (
-                      <div className="text-center py-4 text-gray-500">
-                        No roster members found
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                variant="outline"
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleAssignTask}>
+                Assign Task
+              </Button>
+              <Button 
+                variant="outline" 
                 onClick={() => setShowAssignModal(false)}
               >
                 Cancel
               </Button>
-              <Button
-                variant="primary"
-                onClick={handleUpdateAssignment}
-                disabled={assignTo.length === 0}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Watchers Modal */}
+      {showWatchersModal && (
+        <Modal
+          isOpen={showWatchersModal}
+          onClose={() => setShowWatchersModal(false)}
+          title="Task Watchers"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Select members to watch this task (they'll be notified of changes):</p>
+            
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {rosterMembers.map((member) => {
+                  const userId = member.user?._id?.toString();
+                  return (
+                    <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchers.includes(userId)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setWatchers([...watchers, userId]);
+                          } else {
+                            setWatchers(watchers.filter(id => id !== userId));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {member.user?.firstName} {member.user?.lastName}
+                          {member.user?.playaName && (
+                            <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {member.user?.email}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+                {rosterMembers.length === 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No roster members found
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleUpdateWatchers}>
+                Update Watchers
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowWatchersModal(false)}
               >
-                Assign Task ({assignTo.length})
+                Cancel
               </Button>
             </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
+      )}
+
+      {/* Create Task Modal */}
+      {showCreateModal && (
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Create New Task"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+              <Input
+                value={newTask.title}
+                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                placeholder="Task title"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <Textarea
+                value={newTask.description}
+                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                placeholder="Task description"
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                <select
+                  value={newTask.priority}
+                  onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <Input
+                  type="date"
+                  value={newTask.dueDate}
+                  onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={handleCreateTask}
+                disabled={createLoading}
+              >
+                {createLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Task'
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowCreateModal(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

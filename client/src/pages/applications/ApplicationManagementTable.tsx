@@ -362,7 +362,7 @@ const ApplicationManagementTable: React.FC = () => {
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
                           {(user?.accountType === 'admin' || user?.accountType === 'camp') && user?.campId && application.applicant?._id ? (
-                            <Link to={`/camp/${user.campId}/contacts/${application.applicant._id}`} className="text-custom-primary hover:underline">
+                            <Link to={`/camp/${user.campId}/contacts/${application.applicant._id}`} className="text-black hover:underline">
                               {application.applicant?.firstName || 'Unknown'} {application.applicant?.lastName || 'User'}
                             </Link>
                           ) : (
