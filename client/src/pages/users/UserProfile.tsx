@@ -103,6 +103,18 @@ const UserProfile: React.FC = () => {
     setLoading(false);
   }, [user]);
 
+  // Auto-enable edit mode for new users with minimal profile data
+  useEffect(() => {
+    if (!loading && user && profileData.firstName) {
+      // Check if this is a newly created account (minimal profile data)
+      const isNewUser = !profileData.bio && !profileData.playaName && profileData.yearsBurned === 0;
+      if (isNewUser) {
+        console.log('🔍 [UserProfile] New user detected, enabling edit mode');
+        setIsEditing(true);
+      }
+    }
+  }, [loading, profileData.firstName]);
+
   const handleSave = async () => {
     try {
       setSaving(true);

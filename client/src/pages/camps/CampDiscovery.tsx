@@ -359,8 +359,8 @@ const CampDiscovery: React.FC = () => {
         )}
       </div>
 
-      {/* Results */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Results - Horizontal Full-Width Cards */}
+      <div className="space-y-4">
         {filteredCamps.map((camp) => {
           // Simple fallback slug generation
           const campSlug = camp.slug || camp._id;
@@ -371,170 +371,183 @@ const CampDiscovery: React.FC = () => {
               className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
               onClick={() => navigate(`/camps/${campSlug}`)}
             >
-              <div className="p-6">
-              {/* Camp Photo */}
-              {camp.photos && camp.photos.length > 0 && (
-                <div className="mb-4">
-                  <img
-                    src={camp.photos[Math.min(camp.primaryPhotoIndex || 0, camp.photos.length - 1)]}
-                    alt={camp.campName || 'Camp Photo'}
-                    className="w-full h-48 object-cover rounded-lg"
-                    onError={(e) => {
-                      console.error('🖼️ [CampDiscovery] Image failed to load:', e.currentTarget.src);
-                    }}
-                    onLoad={() => {
-                      console.log('✅ [CampDiscovery] Image loaded successfully');
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Camp Info */}
-              <div className="space-y-3">
-                <h3 className="text-h3 font-lato-bold text-custom-text">
-                  {camp.campName}
-                </h3>
-
-                {camp.description && (
-                  <p className="text-body text-custom-text-secondary line-clamp-3">
-                    {camp.description}
-                  </p>
-                )}
-
-                {/* Camp Details */}
-                <div className="space-y-2">
-                  {camp.hometown && (
-                    <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
-                      <MapPin className="w-4 h-4" />
-                      {camp.hometown}
-                    </div>
-                  )}
-
-                  {/* Playa Location */}
-                  {camp.location && (camp.location.street || camp.location.time) && (
-                    <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
-                      <Home className="w-4 h-4" />
-                      <span>
-                        {camp.location.time && `${camp.location.time}`}
-                        {camp.location.time && camp.location.street && ' & '}
-                        {camp.location.street && camp.location.street}
-                      </span>
-                    </div>
-                  )}
-
-                  {camp.burningSince && (
-                    <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
-                      <Calendar className="w-4 h-4" />
-                      Burning since {camp.burningSince}
-                    </div>
-                  )}
-
-                  {/* Social Links and Website */}
-                  {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter) && (
-                    <div className="flex items-center gap-2 text-sm">
-                      {camp.website && (
-                        <a
-                          href={camp.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-custom-primary hover:text-custom-primary-dark"
-                          title="Visit Website"
-                        >
-                          <Globe className="w-4 h-4" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.facebook && (
-                        <a
-                          href={camp.socialMedia.facebook}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Facebook"
-                        >
-                          <Facebook className="w-4 h-4" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.instagram && (
-                        <a
-                          href={camp.socialMedia.instagram}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-pink-600 hover:text-pink-800"
-                          title="Instagram"
-                        >
-                          <Instagram className="w-4 h-4" />
-                        </a>
-                      )}
-                      {camp.socialMedia?.twitter && (
-                        <a
-                          href={camp.socialMedia.twitter}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-blue-400 hover:text-blue-600"
-                          title="Twitter"
-                        >
-                          <Twitter className="w-4 h-4" />
-                        </a>
-                      )}
-                    </div>
-                  )}
-
-                  {camp.memberCount && (
-                    <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
-                      <Users className="w-4 h-4" />
-                      {camp.memberCount} member{camp.memberCount !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                </div>
-
-                {/* Categories */}
-                {camp.categories && camp.categories.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {camp.categories.slice(0, 3).map((category) => {
-                      const categoryName = typeof category === 'object' ? category.name : category;
-                      const categoryId = typeof category === 'object' ? category._id : category;
-                      return (
-                        <Badge key={categoryId} variant="neutral" size="sm">
-                          {categoryName}
-                        </Badge>
-                      );
-                    })}
-                    {camp.categories.length > 3 && (
-                      <Badge variant="neutral" size="sm">
-                        +{camp.categories.length - 3} more
-                      </Badge>
-                    )}
+              <div className="flex flex-col md:flex-row">
+                {/* Camp Photo - Left Side */}
+                {camp.photos && camp.photos.length > 0 && (
+                  <div className="md:w-1/3 lg:w-1/4">
+                    <img
+                      src={camp.photos[Math.min(camp.primaryPhotoIndex || 0, camp.photos.length - 1)]}
+                      alt={camp.campName || 'Camp Photo'}
+                      className="w-full h-64 md:h-full object-cover md:rounded-l-lg"
+                      onError={(e) => {
+                        console.error('🖼️ [CampDiscovery] Image failed to load:', e.currentTarget.src);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ [CampDiscovery] Image loaded successfully');
+                      }}
+                    />
                   </div>
                 )}
 
-                {/* Shared Amenities */}
-                {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-custom-text mb-2">Shared Amenities</h4>
-                    <div className="space-y-1.5">
-                      {camp.selectedPerks
-                        .filter(sp => sp.isOn && sp.offering)
-                        .map((selectedPerk) => (
-                          <div
-                            key={selectedPerk.perkId}
-                            className="flex items-center gap-2"
-                          >
-                            <div className={`flex items-center justify-center w-6 h-6 rounded ${selectedPerk.offering!.color}`}>
-                              {renderIcon(selectedPerk.offering!.icon)}
-                            </div>
-                            <span className="text-sm text-custom-text-secondary">
-                              {selectedPerk.offering!.name}
-                            </span>
+                {/* Camp Info - Right Side */}
+                <div className={`flex-1 p-6 ${camp.photos && camp.photos.length > 0 ? '' : 'w-full'}`}>
+                  <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="mb-4">
+                      <h3 className="text-h2 font-lato-bold text-custom-text mb-2">
+                        {camp.campName}
+                      </h3>
+                      
+                      {camp.description && (
+                        <p className="text-body text-custom-text-secondary line-clamp-2">
+                          {camp.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                      {/* Location */}
+                      {camp.hometown && (
+                        <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
+                          <MapPin className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{camp.hometown}</span>
+                        </div>
+                      )}
+
+                      {/* Playa Location */}
+                      {camp.location && (camp.location.street || camp.location.time) && (
+                        <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
+                          <Home className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">
+                            {camp.location.time && `${camp.location.time}`}
+                            {camp.location.time && camp.location.street && ' & '}
+                            {camp.location.street && camp.location.street}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Burning Since */}
+                      {camp.burningSince && (
+                        <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
+                          <Calendar className="w-4 h-4 flex-shrink-0" />
+                          <span>Burning since {camp.burningSince}</span>
+                        </div>
+                      )}
+
+                      {/* Members */}
+                      {camp.memberCount && (
+                        <div className="flex items-center gap-2 text-sm text-custom-text-secondary">
+                          <Users className="w-4 h-4 flex-shrink-0" />
+                          <span>{camp.memberCount} member{camp.memberCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      )}
+
+                      {/* Social Links */}
+                      {(camp.website || camp.socialMedia?.facebook || camp.socialMedia?.instagram || camp.socialMedia?.twitter) && (
+                        <div className="flex items-center gap-3 text-sm">
+                          {camp.website && (
+                            <a
+                              href={camp.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-custom-primary hover:text-custom-primary-dark"
+                              title="Visit Website"
+                            >
+                              <Globe className="w-4 h-4" />
+                            </a>
+                          )}
+                          {camp.socialMedia?.facebook && (
+                            <a
+                              href={camp.socialMedia.facebook}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Facebook"
+                            >
+                              <Facebook className="w-4 h-4" />
+                            </a>
+                          )}
+                          {camp.socialMedia?.instagram && (
+                            <a
+                              href={camp.socialMedia.instagram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-pink-600 hover:text-pink-800"
+                              title="Instagram"
+                            >
+                              <Instagram className="w-4 h-4" />
+                            </a>
+                          )}
+                          {camp.socialMedia?.twitter && (
+                            <a
+                              href={camp.socialMedia.twitter}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-400 hover:text-blue-600"
+                              title="Twitter"
+                            >
+                              <Twitter className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Categories and Amenities Row */}
+                    <div className="mt-auto pt-4 border-t border-gray-200">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        {/* Categories */}
+                        {camp.categories && camp.categories.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {camp.categories.slice(0, 4).map((category) => {
+                              const categoryName = typeof category === 'object' ? category.name : category;
+                              const categoryId = typeof category === 'object' ? category._id : category;
+                              return (
+                                <Badge key={categoryId} variant="neutral" size="sm">
+                                  {categoryName}
+                                </Badge>
+                              );
+                            })}
+                            {camp.categories.length > 4 && (
+                              <Badge variant="neutral" size="sm">
+                                +{camp.categories.length - 4}
+                              </Badge>
+                            )}
                           </div>
-                        ))}
+                        )}
+
+                        {/* Shared Amenities */}
+                        {camp.selectedPerks && camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-custom-text-secondary mr-1">Amenities:</span>
+                            {camp.selectedPerks
+                              .filter(sp => sp.isOn && sp.offering)
+                              .slice(0, 5)
+                              .map((selectedPerk) => (
+                                <div
+                                  key={selectedPerk.perkId}
+                                  className={`flex items-center justify-center w-6 h-6 rounded ${selectedPerk.offering!.color}`}
+                                  title={selectedPerk.offering!.name}
+                                >
+                                  {renderIcon(selectedPerk.offering!.icon)}
+                                </div>
+                              ))}
+                            {camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length > 5 && (
+                              <span className="text-xs text-custom-text-secondary">
+                                +{camp.selectedPerks.filter(sp => sp.isOn && sp.offering).length - 5}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
               </div>
             </Card>
           );

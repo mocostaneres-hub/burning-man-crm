@@ -115,9 +115,9 @@ const Register: React.FC = () => {
         console.log('🔍 [Register] Redirecting new camp account to /camp/edit');
         navigate('/camp/edit');
       } else {
-        // Personal accounts go to member profile
-        console.log('🔍 [Register] Redirecting personal account to /member/profile');
-        navigate('/member/profile');
+        // Personal accounts go to user profile (with auto-edit mode)
+        console.log('🔍 [Register] Redirecting personal account to /user/profile');
+        navigate('/user/profile');
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -135,8 +135,8 @@ const Register: React.FC = () => {
       console.log('🔍 [Register] Redirecting new camp account (OAuth) to /camp/edit');
       navigate('/camp/edit');
     } else {
-      console.log('🔍 [Register] Redirecting personal account (OAuth) to /member/profile');
-      navigate('/member/profile');
+      console.log('🔍 [Register] Redirecting personal account (OAuth) to /user/profile');
+      navigate('/user/profile');
     }
   };
 
