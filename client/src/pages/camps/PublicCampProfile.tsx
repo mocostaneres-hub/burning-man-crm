@@ -263,9 +263,19 @@ const PublicCampProfile: React.FC = () => {
 
 
   // Check if current user is the camp owner
-  // Generate slug from campName if urlSlug not available
-  const currentUserSlug = user?.urlSlug || (user?.campName ? user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : null);
-  const isCampOwner = (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) && currentUserSlug === slug;
+  // For admin accounts, compare campId with camp._id
+  // For camp accounts, generate slug from campName if urlSlug not available
+  const isCampOwner = (() => {
+    if (user?.accountType === 'admin' && user?.campId) {
+      // Admin accounts: compare campId with camp's _id
+      return camp?._id === user.campId;
+    } else if (user?.accountType === 'camp') {
+      // Camp accounts: compare slug
+      const currentUserSlug = user.urlSlug || (user.campName ? user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : null);
+      return currentUserSlug === slug;
+    }
+    return false;
+  })();
 
   return (
     <div className="container mx-auto px-4 py-8">
