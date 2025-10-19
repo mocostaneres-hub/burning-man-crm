@@ -232,8 +232,14 @@ const TaskManagement: React.FC = () => {
     
     try {
       setLoadingMembers(true);
-      const response = await api.getRosterMembers(campId);
-      setRosterMembers(response);
+      const response = await api.get(`/rosters/camp/${campId}`);
+      // The API returns a roster object directly with a members array
+      if (response.data && response.data.members) {
+        setRosterMembers(response.data.members);
+      } else if (response.members) {
+        // Fallback if response is already the roster object
+        setRosterMembers(response.members);
+      }
     } catch (err) {
       console.error('Error loading roster members:', err);
     } finally {
@@ -483,6 +489,7 @@ const TaskManagement: React.FC = () => {
               <Button
                 onClick={() => {
                   setAssignTo(selectedTask.assignedTo || []);
+                  loadRosterMembers();
                   setShowAssignModal(true);
                 }}
                 variant="outline"
@@ -494,6 +501,7 @@ const TaskManagement: React.FC = () => {
               <Button
                 onClick={() => {
                   setWatchers(selectedTask.watchers || []);
+                  loadRosterMembers();
                   setShowWatchersModal(true);
                 }}
                 variant="outline"
