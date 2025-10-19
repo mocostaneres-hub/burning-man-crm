@@ -4,27 +4,44 @@ import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } f
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
-import { Task as GlobalTask, User as GlobalUser, TaskComment } from '../../types';
 
-// Helper function to safely get user array from assignedTo/watchers
-const getUserArray = (field: string[] | GlobalUser[] | undefined): GlobalUser[] => {
-  if (!field) return [];
-  if (field.length === 0) return [];
-  // Check if first element is a string (ID) or object (populated User)
-  if (typeof field[0] === 'string') return [];
-  return field as GlobalUser[];
-};
+interface User {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  playaName?: string;
+  profilePhoto?: string;
+}
 
-// Helper function to get user object from createdBy/completedBy
-const getUser = (field: string | GlobalUser | undefined): GlobalUser | null => {
-  if (!field) return null;
-  if (typeof field === 'string') return null;
-  return field as GlobalUser;
-};
+interface Comment {
+  _id?: string;
+  user: User;
+  text: string;
+  createdAt: string;
+}
+
+interface Task {
+  _id: string;
+  title: string;
+  description: string;
+  assignedTo: User[];
+  watchers?: User[];
+  comments?: Comment[];
+  dueDate?: string;
+  status: 'open' | 'closed';
+  priority: 'low' | 'medium' | 'high';
+  createdAt: string;
+  createdBy: User;
+  updatedAt: string;
+  completedAt?: string;
+  completedBy?: User;
+  type?: string;
+}
 
 const TaskManagement: React.FC = () => {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<GlobalTask[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [campId, setCampId] = useState<string | null>(null);
@@ -38,7 +55,7 @@ const TaskManagement: React.FC = () => {
   });
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<GlobalTask | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editTask, setEditTask] = useState({
     title: '',
     description: '',
@@ -71,8 +88,8 @@ const TaskManagement: React.FC = () => {
       setLoading(true);
       const response = await api.getTasks(campId);
       // Filter out event tasks (only show regular tasks)
-      const regularTasks = response.filter((task: any) => !task.type || task.type !== 'event');
-      setTasks(regularTasks as Task[]);
+      const regularTasks = response.filter((task: Task) => !task.type || task.type !== 'event');
+      setTasks(regularTasks);
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setError('Failed to load tasks');
@@ -138,18 +155,16 @@ const TaskManagement: React.FC = () => {
 
   const filteredTasks = tasks.filter(task => task.status === activeTab);
 
-  const handleTaskClick = async (task: GlobalTask) => {
+  const handleTaskClick = async (task: Task) => {
     setSelectedTask(task);
-    const assignees = getUserArray(task.assignedTo);
-    const taskWatchers = getUserArray(task.watchers);
     setEditTask({
       title: task.title,
       description: task.description,
       priority: task.priority,
       dueDate: task.dueDate || '',
       status: task.status,
-      assignedTo: assignees.map(u => u._id.toString()),
-      watchers: taskWatchers.map(u => u._id.toString())
+      assignedTo: task.assignedTo?.map(u => u._id) || [],
+      watchers: task.watchers?.map(u => u._id) || []
     });
     setIsEditMode(false);
     setShowTaskModal(true);
@@ -424,10 +439,10 @@ const TaskManagement: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {getUserArray(task.assignedTo).length} assigned
+                    {task.assignedTo?.length || 0} assigned
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {getUserArray(task.watchers).length} watchers
+                    {task.watchers?.length || 0} watchers
                   </td>
                 </tr>
               ))}
@@ -483,16 +498,16 @@ const TaskManagement: React.FC = () => {
                   <div>
                     <label className="text-sm font-medium text-gray-500">Created By</label>
                     <p className="text-sm text-gray-900 mt-1">
-                      {getUser(selectedTask.createdBy)?.firstName} {getUser(selectedTask.createdBy)?.lastName}
+                      {selectedTask.createdBy?.firstName} {selectedTask.createdBy?.lastName}
                     </p>
                   </div>
                 </div>
 
                 <div>
                   <label className="text-sm font-medium text-gray-500 mb-2 block">Assigned To</label>
-                  {getUserArray(selectedTask.assignedTo).length > 0 ? (
+                  {selectedTask.assignedTo && selectedTask.assignedTo.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {getUserArray(selectedTask.assignedTo).map(assignee => (
+                      {selectedTask.assignedTo.map(assignee => (
                         <Badge key={assignee._id} variant="info">
                           {assignee.firstName} {assignee.lastName}
                           {assignee.playaName && ` (${assignee.playaName})`}
@@ -506,9 +521,9 @@ const TaskManagement: React.FC = () => {
 
                 <div>
                   <label className="text-sm font-medium text-gray-500 mb-2 block">Watchers</label>
-                  {getUserArray(selectedTask.watchers).length > 0 ? (
+                  {selectedTask.watchers && selectedTask.watchers.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {getUserArray(selectedTask.watchers).map(watcher => (
+                      {selectedTask.watchers.map(watcher => (
                         <Badge key={watcher._id} variant="neutral">
                           {watcher.firstName} {watcher.lastName}
                           {watcher.playaName && ` (${watcher.playaName})`}
@@ -523,7 +538,7 @@ const TaskManagement: React.FC = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-500 mb-2 block">History</label>
                   <div className="text-sm text-gray-600 space-y-1">
-                    <p>Created: {formatEventDate(selectedTask.createdAt)} by {getUser(selectedTask.createdBy)?.firstName} {getUser(selectedTask.createdBy)?.lastName}</p>
+                    <p>Created: {formatEventDate(selectedTask.createdAt)} by {selectedTask.createdBy?.firstName} {selectedTask.createdBy?.lastName}</p>
                     <p>Last Updated: {formatEventDate(selectedTask.updatedAt)}</p>
                     {selectedTask.completedAt && (
                       <p>Completed: {formatEventDate(selectedTask.completedAt)}</p>

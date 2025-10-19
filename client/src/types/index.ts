@@ -330,20 +330,29 @@ export interface CallSlot {
   updatedAt: string;
 }
 
+export interface TaskComment {
+  _id?: string;
+  user: User;
+  text: string;
+  createdAt: string;
+}
+
 export interface Task {
   _id: string;
   campId: string;
   title: string;
   description: string;
-  assignedTo: string[];
+  assignedTo: string[] | User[];  // Can be IDs or populated User objects
+  watchers?: string[] | User[];   // Can be IDs or populated User objects
+  comments?: TaskComment[];
   dueDate?: string;
   status: 'open' | 'closed';
   priority: 'low' | 'medium' | 'high';
   createdAt: string;
-  createdBy: string;
+  createdBy: string | User;  // Can be ID or populated User object
   updatedAt: string;
   completedAt?: string;
-  completedBy?: string;
+  completedBy?: string | User;  // Can be ID or populated User object
   type?: string;
   metadata?: {
     eventId?: string;
