@@ -46,7 +46,14 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const tasks = await db.findTasks({ campId });
+    // Use mongoose directly to populate fields
+    const tasks = await Task.find({ campId })
+      .populate('createdBy', 'firstName lastName email playaName profilePhoto')
+      .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
+      .populate('watchers', 'firstName lastName email playaName profilePhoto')
+      .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .sort({ createdAt: -1 });
+    
     res.json(tasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -105,7 +112,7 @@ router.get('/my-tasks', authenticateToken, async (req, res) => {
 });
 
 // @route   GET /api/tasks/assigned/:userId
-// @desc    Get tasks assigned to a specific user
+// @desc    Get tasks assigned to a specific user OR where user is a watcher
 // @access  Private
 router.get('/assigned/:userId', authenticateToken, async (req, res) => {
   try {
@@ -116,7 +123,19 @@ router.get('/assigned/:userId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const tasks = await db.findTasks({ assignedTo: userId });
+    // Find tasks where user is assigned OR watching
+    const tasks = await Task.find({
+      $or: [
+        { assignedTo: userId },
+        { watchers: userId }
+      ]
+    })
+      .populate('createdBy', 'firstName lastName email playaName profilePhoto')
+      .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
+      .populate('watchers', 'firstName lastName email playaName profilePhoto')
+      .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .sort({ createdAt: -1 });
+    
     res.json(tasks);
   } catch (error) {
     console.error('Error fetching assigned tasks:', error);
@@ -487,6 +506,83 @@ router.get('/my-events', authenticateToken, async (req, res) => {
       message: 'Server error fetching events',
       error: error.message
     });
+  }
+});
+
+// @route   POST /api/tasks/:id/comments
+// @desc    Add a comment to a task
+// @access  Private
+router.post('/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Check if user has access to this task's camp
+    const hasAccess = await canAccessCamp(req, task.campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Add comment
+    task.comments.push({
+      user: req.user._id,
+      text: text.trim(),
+      createdAt: new Date()
+    });
+
+    await task.save();
+
+    // Populate the user details for the new comment
+    await task.populate({
+      path: 'comments.user',
+      select: 'firstName lastName email playaName profilePhoto'
+    });
+
+    // Return the newly added comment
+    const newComment = task.comments[task.comments.length - 1];
+
+    res.json(newComment);
+  } catch (error) {
+    console.error('Add comment error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/tasks/:id/comments
+// @desc    Get all comments for a task
+// @access  Private
+router.get('/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const task = await Task.findById(id).populate({
+      path: 'comments.user',
+      select: 'firstName lastName email playaName profilePhoto'
+    });
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Check if user has access to this task's camp
+    const hasAccess = await canAccessCamp(req, task.campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json(task.comments);
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
