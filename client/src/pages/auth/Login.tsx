@@ -42,12 +42,17 @@ const Login: React.FC = () => {
     setError('');
 
     try {
-      await login(data.email, data.password);
+      const result = await login(data.email, data.password);
       
-      // Note: user context will be updated after login, we'll redirect based on the from path
-      // or default to /dashboard which will handle the redirect for personal accounts
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
+      // If this is a first-time login for a camp account, redirect to camp edit page
+      if (result.isFirstLogin) {
+        console.log('🔍 [Login] First-time camp admin login detected, redirecting to /camp/edit');
+        navigate('/camp/edit', { replace: true });
+      } else {
+        // Otherwise, redirect based on the from path or default to /dashboard
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -58,8 +63,15 @@ const Login: React.FC = () => {
   const handleOAuthSuccess = (user: any) => {
     setOauthLoading(false);
     setError('');
-    const from = location.state?.from?.pathname || '/dashboard';
-    navigate(from, { replace: true });
+    
+    // Check if this is a new camp account (no lastLogin)
+    if (user.accountType === 'camp' && !user.lastLogin) {
+      console.log('🔍 [Login] First-time camp admin login (OAuth) detected, redirecting to /camp/edit');
+      navigate('/camp/edit', { replace: true });
+    } else {
+      const from = location.state?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+    }
   };
 
   const handleOAuthError = (error: string) => {

@@ -105,13 +105,16 @@ const Register: React.FC = () => {
       console.log('🔍 [Register] Calling registerUser with data:', registerData);
       await registerUser(registerData);
       console.log('🔍 [Register] Registration successful, redirecting...');
-      // Redirect new personal accounts to profile edit page
-      if (data.accountType === 'personal') {
+      
+      // Redirect based on account type
+      if (data.accountType === 'camp') {
+        // New camp accounts go directly to camp profile edit page
+        console.log('🔍 [Register] Redirecting new camp account to /camp/edit');
+        navigate('/camp/edit');
+      } else {
+        // Personal accounts go to member profile
         console.log('🔍 [Register] Redirecting personal account to /member/profile');
         navigate('/member/profile');
-      } else {
-        console.log('🔍 [Register] Redirecting camp account to /dashboard');
-        navigate('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -123,8 +126,15 @@ const Register: React.FC = () => {
   const handleOAuthSuccess = (user: any) => {
     setOauthLoading(false);
     setError('');
-    // Redirect new personal accounts to profile edit page
-    navigate('/member/profile');
+    
+    // Redirect based on account type
+    if (user.accountType === 'camp') {
+      console.log('🔍 [Register] Redirecting new camp account (OAuth) to /camp/edit');
+      navigate('/camp/edit');
+    } else {
+      console.log('🔍 [Register] Redirecting personal account (OAuth) to /member/profile');
+      navigate('/member/profile');
+    }
   };
 
   const handleOAuthError = (error: string) => {

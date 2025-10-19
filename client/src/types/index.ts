@@ -297,7 +297,7 @@ export interface Admin {
 export interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ isFirstLogin?: boolean }>;
   register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
   loading: boolean;

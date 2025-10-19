@@ -44,15 +44,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string): Promise<{ isFirstLogin?: boolean }> => {
     try {
       const response = await apiService.login(email, password);
-      const { token: newToken, user: userData } = response;
+      const { token: newToken, user: userData, isFirstLogin } = response;
 
       setToken(newToken);
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      
+      return { isFirstLogin };
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Login failed');
     }

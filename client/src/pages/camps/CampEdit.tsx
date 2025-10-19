@@ -1,18 +1,15 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 
+/**
+ * CampEdit component redirects to CampProfile
+ * The camp profile page has built-in edit functionality
+ * accessed via the edit button in the UI
+ */
 const CampEdit: React.FC = () => {
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-h1 font-lato-bold text-custom-text mb-6">
-        Edit Camp
-      </h1>
-      <div className="text-center py-16">
-        <h2 className="text-h3 font-lato-bold text-custom-text-secondary">
-          Camp editing feature coming soon!
-        </h2>
-      </div>
-    </div>
-  );
+  // Redirect to camp profile page
+  // The profile page has comprehensive editing functionality
+  return <Navigate to="/camp/profile" replace />;
 };
 
 export default CampEdit;

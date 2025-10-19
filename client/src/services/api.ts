@@ -58,10 +58,10 @@ class ApiService {
   }
 
   // Auth endpoints
-  async login(email: string, password: string): Promise<{ token: string; user: User }> {
+  async login(email: string, password: string): Promise<{ token: string; user: User; isFirstLogin?: boolean }> {
     console.log('🔐 [DEBUG] API Service - Login attempt:', { email, baseURL: this.api.defaults.baseURL });
     try {
-      const response: AxiosResponse<{ token: string; user: User }> = await this.api.post('/auth/login', {
+      const response: AxiosResponse<{ token: string; user: User; isFirstLogin?: boolean }> = await this.api.post('/auth/login', {
         email,
         password,
       });
@@ -74,8 +74,8 @@ class ApiService {
     }
   }
 
-  async register(userData: RegisterData): Promise<{ token: string; user: User }> {
-    const response: AxiosResponse<{ token: string; user: User }> = await this.api.post('/auth/register', userData);
+  async register(userData: RegisterData): Promise<{ token: string; user: User; isNewAccount?: boolean }> {
+    const response: AxiosResponse<{ token: string; user: User; isNewAccount?: boolean }> = await this.api.post('/auth/register', userData);
     return response.data;
   }
 

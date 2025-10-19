@@ -113,7 +113,8 @@ router.post('/register', [
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: userResponse
+      user: userResponse,
+      isNewAccount: true // Flag to indicate this is a new account
     });
 
   } catch (error) {
@@ -165,10 +166,14 @@ router.post('/login', [
     const userResponse = user.toObject ? user.toObject() : { ...user };
     delete userResponse.password;
 
+    // Check if this is a first login for camp account (no lastLogin means first time)
+    const isFirstLogin = !user.lastLogin && user.accountType === 'camp';
+
     res.json({
       message: 'Login successful',
       token,
-      user: userResponse
+      user: userResponse,
+      isFirstLogin // Flag to indicate if this is the first login
     });
 
   } catch (error) {

@@ -172,6 +172,18 @@ const CampProfile: React.FC = () => {
     }
   }, [user]);
 
+  // Auto-enable edit mode for new camps with minimal data
+  useEffect(() => {
+    if (!loading && campData.campName) {
+      // Check if this is a newly created camp (minimal profile data)
+      const isNewCamp = !campData.description || campData.description.includes('We\'re excited to share our camp experience');
+      if (isNewCamp) {
+        console.log('🔍 [CampProfile] New camp detected, enabling edit mode');
+        setIsEditing(true);
+      }
+    }
+  }, [loading, campData.campName]);
+
   const fetchCampProfile = async () => {
     try {
       setLoading(true);
