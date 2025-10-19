@@ -457,9 +457,9 @@ const PublicCampProfile: React.FC = () => {
               )}
             </div>
 
-            {/* Apply Button */}
+            {/* Apply Button - Only show for non-camp accounts */}
             <div className="lg:ml-8">
-              {camp.acceptingNewMembers && camp.showApplyNow ? (
+              {camp.acceptingNewMembers && camp.showApplyNow && (!user || user.accountType !== 'camp') ? (
                 <Button 
                   onClick={handleApplyNow}
                   size="lg"
@@ -468,6 +468,12 @@ const PublicCampProfile: React.FC = () => {
                   <Send className="w-4 h-4 mr-2" />
                   Apply Now
                 </Button>
+              ) : camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'camp' ? (
+                <div className="text-center p-4 bg-gray-100 rounded-lg">
+                  <p className="text-custom-text-secondary">
+                    Camp accounts cannot apply to other camps
+                  </p>
+                </div>
               ) : (
                 <div className="text-center p-4 bg-gray-100 rounded-lg">
                   <p className="text-custom-text-secondary">
