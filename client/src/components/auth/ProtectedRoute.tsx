@@ -51,6 +51,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (requireCampAccount && user?.accountType !== 'camp' && !(user?.accountType === 'admin' && user?.campId)) {
+    console.log('🔍 [ProtectedRoute] Camp account access denied');
+    console.log('🔍 [ProtectedRoute] User account type:', user?.accountType);
+    console.log('🔍 [ProtectedRoute] User data:', JSON.stringify(user, null, 2));
+    console.log('🔍 [ProtectedRoute] isAuthenticated:', isAuthenticated);
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
         <h1 className="text-h1 text-red-600">
@@ -58,6 +62,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         </h1>
         <p className="text-body text-custom-text-secondary">
           This page is only accessible to camp accounts.
+        </p>
+        <p className="text-sm text-custom-text-secondary">
+          Current account type: {user?.accountType || 'None'}
         </p>
       </div>
     );

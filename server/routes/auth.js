@@ -107,8 +107,15 @@ router.post('/register', [
     const token = generateToken(user._id);
 
     // Return user data (without password)
-    const userResponse = { ...user };
+    // Convert Mongoose document to plain object if needed
+    const userResponse = user.toObject ? user.toObject() : { ...user };
     delete userResponse.password;
+
+    // Debug logging
+    console.log('🔍 [Auth] Registration successful');
+    console.log('🔍 [Auth] User accountType:', userResponse.accountType);
+    console.log('🔍 [Auth] User campId:', userResponse.campId);
+    console.log('🔍 [Auth] Full user response:', JSON.stringify(userResponse, null, 2));
 
     res.status(201).json({
       message: 'User registered successfully',

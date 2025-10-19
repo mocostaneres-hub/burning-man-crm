@@ -106,6 +106,9 @@ const Register: React.FC = () => {
       await registerUser(registerData);
       console.log('🔍 [Register] Registration successful, redirecting...');
       
+      // Small delay to ensure auth context is fully updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Redirect based on account type
       if (data.accountType === 'camp') {
         // New camp accounts go directly to camp profile edit page
