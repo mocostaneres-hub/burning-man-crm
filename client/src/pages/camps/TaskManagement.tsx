@@ -72,7 +72,7 @@ const TaskManagement: React.FC = () => {
       const response = await api.getTasks(campId);
       // Filter out event tasks (only show regular tasks)
       const regularTasks = response.filter((task: any) => !task.type || task.type !== 'event');
-      setTasks(regularTasks as Task[]);
+      setTasks(regularTasks as GlobalTask[]);
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setError('Failed to load tasks');
