@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
-import { Plus, Eye, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, FolderX, RotateCcw, Users, UserPlus } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, RotateCcw, Users, UserPlus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
@@ -467,7 +467,7 @@ const TaskManagement: React.FC = () => {
                    variant="outline"
                    className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
                  >
-                   <FolderX className="w-4 h-4" />
+                   <X className="w-4 h-4" />
                    Close Task
                  </Button>
               ) : (
