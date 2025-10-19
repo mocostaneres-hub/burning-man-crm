@@ -603,245 +603,14 @@ const AdminDashboard: React.FC = () => {
 
       {/* Camp Edit Modal */}
       {showCampModal && selectedCamp && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-h2 font-lato-bold text-custom-text">
-                  Edit Camp
-                </h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setShowCampModal(false);
-                    setSelectedCamp(null);
-                  }}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div className="bg-gray-50 border rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-custom-text mb-4">Basic Information</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Camp Name
-                      </label>
-                      <Input
-                        value={selectedCamp.name}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, name: e.target.value })}
-                        placeholder="Enter camp name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Burning Since
-                      </label>
-                      <Input
-                        type="number"
-                        value={selectedCamp.burningSince || new Date().getFullYear()}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, burningSince: parseInt(e.target.value) })}
-                        placeholder="Year"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Hometown
-                      </label>
-                      <Input
-                        value={selectedCamp.hometown || ''}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, hometown: e.target.value })}
-                        placeholder="Enter hometown"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        value={selectedCamp.description || ''}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, description: e.target.value })}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
-                        placeholder="Describe your camp..."
-                        rows={4}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contact Information */}
-                <div className="bg-gray-50 border rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-custom-text mb-4">Contact Information</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Contact Email
-                      </label>
-                      <Input
-                        type="email"
-                        value={selectedCamp.contactEmail || ''}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, contactEmail: e.target.value })}
-                        placeholder="Enter contact email"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Website
-                      </label>
-                      <Input
-                        value={selectedCamp.website || ''}
-                        onChange={(e) => setSelectedCamp({ ...selectedCamp, website: e.target.value })}
-                        placeholder="Enter website URL"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Playa Location
-                      </label>
-                      <Input
-                        value={selectedCamp.location?.street || ''}
-                        onChange={(e) => setSelectedCamp({ 
-                          ...selectedCamp, 
-                          location: { ...selectedCamp.location, street: e.target.value }
-                        })}
-                        placeholder="Enter street address"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Social Media */}
-                <div className="bg-gray-50 border rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-custom-text mb-4">Social Media</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Facebook
-                      </label>
-                      <Input
-                        value={selectedCamp.socialMedia?.facebook || ''}
-                        onChange={(e) => setSelectedCamp({ 
-                          ...selectedCamp, 
-                          socialMedia: { ...selectedCamp.socialMedia, facebook: e.target.value }
-                        })}
-                        placeholder="https://facebook.com/yourcamp"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Instagram
-                      </label>
-                      <Input
-                        value={selectedCamp.socialMedia?.instagram || ''}
-                        onChange={(e) => setSelectedCamp({ 
-                          ...selectedCamp, 
-                          socialMedia: { ...selectedCamp.socialMedia, instagram: e.target.value }
-                        })}
-                        placeholder="https://instagram.com/yourcamp"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        Twitter
-                      </label>
-                      <Input
-                        value={selectedCamp.socialMedia?.twitter || ''}
-                        onChange={(e) => setSelectedCamp({ 
-                          ...selectedCamp, 
-                          socialMedia: { ...selectedCamp.socialMedia, twitter: e.target.value }
-                        })}
-                        placeholder="https://twitter.com/yourcamp"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-label font-medium text-custom-text mb-2">
-                        TikTok
-                      </label>
-                      <Input
-                        value={selectedCamp.socialMedia?.tiktok || ''}
-                        onChange={(e) => setSelectedCamp({ 
-                          ...selectedCamp, 
-                          socialMedia: { ...selectedCamp.socialMedia, tiktok: e.target.value }
-                        })}
-                        placeholder="https://tiktok.com/@yourcamp"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Camp Settings */}
-                <div className="bg-gray-50 border rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="block text-label font-medium text-custom-text mb-1">
-                          Accepting New Members
-                        </label>
-                        <p className="text-sm text-gray-600">
-                          Allow new people to apply to join your camp
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedCamp.acceptingNewMembers !== false}
-                          onChange={(e) => setSelectedCamp({ ...selectedCamp, acceptingNewMembers: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="block text-label font-medium text-custom-text mb-1">
-                          Show "Apply Now" Button
-                        </label>
-                        <p className="text-sm text-gray-600">
-                          Display the apply button on your public camp page
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedCamp.showApplyNow !== false}
-                          onChange={(e) => setSelectedCamp({ ...selectedCamp, showApplyNow: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button
-                    onClick={() => handleCampSave(selectedCamp)}
-                    className="flex-1"
-                  >
-                    Save Changes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCampModal(false);
-                      setSelectedCamp(null);
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CampEditModal
+          camp={selectedCamp}
+          onClose={() => {
+            setShowCampModal(false);
+            setSelectedCamp(null);
+          }}
+          onSave={handleCampSave}
+        />
       )}
 
       {/* Camp Delete Confirmation Modal */}
@@ -898,6 +667,8 @@ const UserEditModal: React.FC<{
   } as ExtendedUser);
   const [photoPreview, setPhotoPreview] = useState<string | null>(user.profilePhoto || null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
@@ -1069,6 +840,39 @@ const UserEditModal: React.FC<{
           </div>
         </div>
 
+        {/* Password Reset */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-lg font-medium text-custom-text mb-2">Reset Password</h3>
+          <p className="text-sm text-gray-600 mb-4">Leave blank to keep current password</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                New Password
+              </label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 6 characters)"
+              />
+            </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Confirm Password
+              </label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+              />
+              {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Personal Details */}
         <div className="bg-white border rounded-lg p-4">
           <h3 className="text-lg font-medium text-custom-text mb-4">Personal Details</h3>
@@ -1162,20 +966,11 @@ const UserEditModal: React.FC<{
 
           <div className="mt-4">
             <label className="block text-label font-medium text-custom-text mb-2">
-              Burning Man Experience
+              Years Burned {formData.yearsBurned === 0 && <span className="text-purple-600 font-semibold ml-2">(Virgin)</span>}
             </label>
-            <select
-              value={formData.burningManExperience || ''}
-              onChange={(e) => setFormData({ ...formData, burningManExperience: e.target.value as any })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-            >
-              <option value="">Select experience level</option>
-              <option value="first-timer">First-timer</option>
-              <option value="1-2-years">1-2 years</option>
-              <option value="3-5-years">3-5 years</option>
-              <option value="5+ years">5+ years</option>
-              <option value="veteran">Veteran</option>
-            </select>
+            <p className="text-sm text-gray-600 mb-2">
+              {formData.yearsBurned === 0 ? 'This user is a Burning Man virgin (0 years)' : `This user has attended Burning Man for ${formData.yearsBurned} year${formData.yearsBurned !== 1 ? 's' : ''}`}
+            </p>
           </div>
         </div>
 
@@ -1447,6 +1242,311 @@ const UserEditModal: React.FC<{
         </div>
       </div>
     </Modal>
+  );
+};
+
+// Camp Edit Modal Component - Full features for System Admin
+const CampEditModal: React.FC<{
+  camp: Camp;
+  onClose: () => void;
+  onSave: (camp: Camp) => void;
+}> = ({ camp, onClose, onSave }) => {
+  const [formData, setFormData] = useState<Camp>(camp);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [campCategories, setCampCategories] = useState<{_id: string, name: string}[]>([]);
+  const [globalPerks, setGlobalPerks] = useState<{_id: string, name: string, icon: string, color: string}[]>([]);
+
+  useEffect(() => {
+    loadCategoriesAndPerks();
+  }, []);
+
+  const loadCategoriesAndPerks = async () => {
+    try {
+      const [categoriesRes, perksRes] = await Promise.all([
+        apiService.get('/categories'),
+        apiService.get('/perks')
+      ]);
+      setCampCategories(categoriesRes.categories || []);
+      setGlobalPerks(perksRes.perks || []);
+    } catch (err) {
+      console.error('Failed to load categories and perks:', err);
+    }
+  };
+
+  const handleCategoryToggle = (categoryId: string) => {
+    const currentCategories = formData.categories || [];
+    const updated = currentCategories.includes(categoryId)
+      ? currentCategories.filter(id => id !== categoryId)
+      : [...currentCategories, categoryId];
+    setFormData({ ...formData, categories: updated });
+  };
+
+  const handlePerkToggle = (perkId: string) => {
+    const currentPerks = formData.selectedPerks || [];
+    const existingIndex = currentPerks.findIndex(p => p.perkId === perkId);
+    
+    if (existingIndex >= 0) {
+      // Toggle off
+      const updated = currentPerks.filter(p => p.perkId !== perkId);
+      setFormData({ ...formData, selectedPerks: updated });
+    } else {
+      // Toggle on
+      const updated = [...currentPerks, { perkId, isOn: true }];
+      setFormData({ ...formData, selectedPerks: updated });
+    }
+  };
+
+  const handleSave = () => {
+    // Validate password if provided
+    if (newPassword && newPassword !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    // Add password to save data if provided
+    const saveData = { ...formData };
+    if (newPassword && newPassword.length >= 6) {
+      (saveData as any).newPassword = newPassword;
+    }
+    
+    onSave(saveData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-h2 font-lato-bold text-custom-text">
+              SystemAdmin: Edit Camp
+            </h2>
+            <Button variant="outline" size="sm" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="space-y-6">
+            {/* Password Reset for Camp Account */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-2">Reset Camp Account Password</h3>
+              <p className="text-sm text-gray-600 mb-4">Leave blank to keep current password</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    New Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Confirm Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                  />
+                  {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                    <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Basic Information */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Basic Information</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Camp Name
+                  </label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Enter camp name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-label font-medium text-custom-text mb-2">
+                      Burning Since
+                    </label>
+                    <Input
+                      type="number"
+                      value={formData.burningSince || new Date().getFullYear()}
+                      onChange={(e) => setFormData({ ...formData, burningSince: parseInt(e.target.value) })}
+                      placeholder="Year"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-label font-medium text-custom-text mb-2">
+                      Hometown
+                    </label>
+                    <Input
+                      value={formData.hometown || ''}
+                      onChange={(e) => setFormData({ ...formData, hometown: e.target.value })}
+                      placeholder="Enter hometown"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+                    placeholder="Describe your camp..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Categories */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Camp Categories</h3>
+              <div className="grid grid-cols-3 gap-3 max-h-48 overflow-y-auto">
+                {campCategories.map((category) => (
+                  <label key={category._id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={formData.categories?.includes(category._id)}
+                      onChange={() => handleCategoryToggle(category._id)}
+                      className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                    />
+                    <span className="text-sm text-custom-text">{category.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Shared Amenities */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Shared Amenities</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                {globalPerks.map((perk) => (
+                  <label key={perk._id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={formData.selectedPerks?.some(p => p.perkId === perk._id)}
+                      onChange={() => handlePerkToggle(perk._id)}
+                      className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                    />
+                    <span className="text-sm text-custom-text">{perk.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Contact Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Contact Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={formData.contactEmail || ''}
+                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                    placeholder="Enter contact email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Website
+                  </label>
+                  <Input
+                    value={formData.website || ''}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    placeholder="Enter website URL"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Social Media - Only Facebook and Instagram */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Social Media</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Facebook
+                  </label>
+                  <Input
+                    value={formData.socialMedia?.facebook || ''}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      socialMedia: { ...formData.socialMedia, facebook: e.target.value }
+                    })}
+                    placeholder="https://facebook.com/yourcamp"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    Instagram
+                  </label>
+                  <Input
+                    value={formData.socialMedia?.instagram || ''}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      socialMedia: { ...formData.socialMedia, instagram: e.target.value }
+                    })}
+                    placeholder="https://instagram.com/yourcamp"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Camp Settings */}
+            <div className="bg-gray-50 border rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-custom-text">Accepting New Members</label>
+                  <input
+                    type="checkbox"
+                    checked={formData.acceptingNewMembers !== false}
+                    onChange={(e) => setFormData({ ...formData, acceptingNewMembers: e.target.checked })}
+                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-custom-text">Show "Apply Now" Button</label>
+                  <input
+                    type="checkbox"
+                    checked={formData.showApplyNow !== false}
+                    onChange={(e) => setFormData({ ...formData, showApplyNow: e.target.checked })}
+                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button onClick={handleSave} className="flex-1">
+                Save Changes
+              </Button>
+              <Button variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
