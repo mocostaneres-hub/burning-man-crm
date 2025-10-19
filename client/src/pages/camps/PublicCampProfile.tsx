@@ -4,7 +4,7 @@ import { Button, Card, Badge, Modal } from '../../components/ui';
 import { 
   MapPin, Globe, Facebook, Instagram, Twitter, Calendar, 
   Users, ArrowLeft, Send, Loader2, CheckCircle, AlertTriangle,
-  Home
+  Home, Edit
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -262,10 +262,13 @@ const PublicCampProfile: React.FC = () => {
   }
 
 
+  // Check if current user is the camp owner
+  const isCampOwner = user?.accountType === 'camp' && user?.urlSlug === slug;
+
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Back Button */}
-      <div className="mb-6">
+      {/* Back Button and Edit Button */}
+      <div className="mb-6 flex justify-between items-center">
         <Button 
           onClick={() => navigate('/camps')} 
           variant="outline"
@@ -274,6 +277,16 @@ const PublicCampProfile: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           Back to Camps
         </Button>
+        
+        {isCampOwner && (
+          <Button 
+            onClick={() => navigate('/camp/profile')} 
+            className="flex items-center gap-2"
+          >
+            <Edit className="w-4 h-4" />
+            Edit Camp
+          </Button>
+        )}
       </div>
 
       {/* Hero Section */}

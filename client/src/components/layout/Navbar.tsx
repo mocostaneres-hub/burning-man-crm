@@ -46,8 +46,9 @@ const Navbar: React.FC = () => {
 
     // Camp/Admin accounts navigation (ordered as requested)
     if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+      const campProfilePath = user?.urlSlug ? `/camps/${user.urlSlug}` : '/camp/profile';
       return [
-        { label: 'My Camp', path: '/camp/profile', icon: <AccountCircle size={18} /> },
+        { label: 'My Camp', path: campProfilePath, icon: <AccountCircle size={18} /> },
         { label: 'Roster', path: '/camp/rosters', icon: <People size={18} /> },
         { label: 'Applications', path: '/camp/applications', icon: <Assignment size={18} /> },
         { label: 'Tasks', path: '/camp/tasks', icon: <Task size={18} /> },

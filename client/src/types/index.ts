@@ -46,6 +46,7 @@ export interface User {
   campYearFounded?: number;
   campWebsite?: string;
   campEmail?: string;
+  urlSlug?: string; // URL slug for camp or personal profile
   isActive: boolean;
   isVerified: boolean;
   lastLogin?: string;
