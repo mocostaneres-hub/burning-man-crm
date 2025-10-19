@@ -263,7 +263,9 @@ const PublicCampProfile: React.FC = () => {
 
 
   // Check if current user is the camp owner
-  const isCampOwner = user?.accountType === 'camp' && user?.urlSlug === slug;
+  // Generate slug from campName if urlSlug not available
+  const currentUserSlug = user?.urlSlug || (user?.campName ? user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : null);
+  const isCampOwner = (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) && currentUserSlug === slug;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -472,7 +474,22 @@ const PublicCampProfile: React.FC = () => {
 
             {/* Apply Button - Only show for personal accounts */}
             <div className="lg:ml-8">
-              {camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'personal' ? (
+              {isCampOwner ? (
+                // Camp owner viewing their own profile
+                <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-custom-text font-medium mb-3">
+                    This is your camp's public facing profile
+                  </p>
+                  <Button 
+                    onClick={() => navigate('/camp/profile')} 
+                    size="lg"
+                    className="w-full lg:w-auto"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Camp
+                  </Button>
+                </div>
+              ) : camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'personal' ? (
                 <Button 
                   onClick={handleApplyNow}
                   size="lg"
