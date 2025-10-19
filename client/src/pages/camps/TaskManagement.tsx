@@ -197,7 +197,7 @@ const TaskManagement: React.FC = () => {
       setIsEditMode(false);
       // Refresh selected task to show updated data
       const updatedTasks = await api.getTasks(campId!);
-      const refreshedTask = updatedTasks.find((t: Task) => t._id === selectedTask._id);
+      const refreshedTask = updatedTasks.find((t: GlobalTask) => t._id === selectedTask._id);
       if (refreshedTask) {
         setSelectedTask(refreshedTask);
       }
