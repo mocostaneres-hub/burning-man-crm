@@ -91,11 +91,15 @@ router.post('/register', [
         // Create camp record
         const camp = await db.createCamp(campData);
 
-        // Update user with campId
-        await db.updateUserById(user._id, { campId: camp._id });
+        // Update user with campId and urlSlug
+        await db.updateUserById(user._id, { 
+          campId: camp._id,
+          urlSlug: slug 
+        });
 
         // Update user object for response
         user.campId = camp._id;
+        user.urlSlug = slug;
       } catch (campError) {
         console.error('Camp creation error during registration:', campError);
         // If camp creation fails, we should still allow user registration
@@ -160,6 +164,17 @@ router.post('/login', [
     const isPasswordValid = await db.comparePassword(user, password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // For camp accounts without urlSlug, generate and save it
+    if (user.accountType === 'camp' && !user.urlSlug && user.campName) {
+      const slug = user.campName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      
+      await db.updateUserById(user._id, { urlSlug: slug });
+      user.urlSlug = slug;
     }
 
     // Update last login

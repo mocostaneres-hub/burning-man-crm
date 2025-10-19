@@ -947,7 +947,7 @@ const MemberRoster: React.FC = () => {
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
                             {(authUser?.accountType === 'admin' || authUser?.accountType === 'camp') && authUser?.campId && (user?._id) ? (
-                              <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-custom-primary hover:underline">
+                              <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
                                 {userName}
                               </Link>
                             ) : (
