@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui';
+import api from '../../services/api';
 import {
   Menu as MenuIcon,
   User as AccountCircle,
@@ -23,6 +24,7 @@ const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [campSlug, setCampSlug] = useState<string | null>(null);
 
 
   const handleLogout = () => {
@@ -33,6 +35,23 @@ const Navbar: React.FC = () => {
   const isActive = (path: string) => {
     return location.pathname === path;
   };
+
+  // Fetch camp slug for admin users if needed
+  useEffect(() => {
+    const fetchCampSlug = async () => {
+      if (user?.accountType === 'admin' && user?.campId && !user?.campName && !campSlug) {
+        try {
+          const response = await api.get('/camps/my-camp');
+          if (response.slug) {
+            setCampSlug(response.slug);
+          }
+        } catch (error) {
+          console.error('Error fetching camp slug:', error);
+        }
+      }
+    };
+    fetchCampSlug();
+  }, [user, campSlug]);
 
   // Define navigation items based on user type
   const getNavItems = () => {
@@ -46,7 +65,23 @@ const Navbar: React.FC = () => {
 
     // Camp/Admin accounts navigation (ordered as requested)
     if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
-      const campProfilePath = user?.urlSlug ? `/camps/${user.urlSlug}` : '/camp/profile';
+      // Generate slug from campName if urlSlug not available
+      let campProfilePath = '/camp/profile'; // fallback
+      
+      if (user?.urlSlug) {
+        campProfilePath = `/camps/${user.urlSlug}`;
+      } else if (user?.campName) {
+        // Generate slug from campName on the fly
+        const slug = user.campName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        campProfilePath = `/camps/${slug}`;
+      } else if (campSlug) {
+        // Use fetched camp slug for admin accounts
+        campProfilePath = `/camps/${campSlug}`;
+      }
+      
       return [
         { label: 'My Camp', path: campProfilePath, icon: <AccountCircle size={18} /> },
         { label: 'Roster', path: '/camp/rosters', icon: <People size={18} /> },
