@@ -611,14 +611,14 @@ const TaskManagement: React.FC = () => {
                     {selectedTask.comments && selectedTask.comments.length > 0 ? (
                       selectedTask.comments.map((comment, idx) => (
                         <div key={idx} className="border-l-4 border-gray-300 pl-4 py-2">
-                          <div className="flex justify-between items-start mb-1">
+                          <div className="mb-1">
                             <span className="font-medium text-sm text-gray-900">
                               {comment.user.firstName} {comment.user.lastName}
                               {comment.user.playaName && ` (${comment.user.playaName})`}
                             </span>
-                            <span className="text-xs text-gray-500">
-                              {formatEventDate(comment.createdAt)}
-                            </span>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {formatTaskHistoryTimestamp(comment.createdAt)}
+                            </p>
                           </div>
                           <p className="text-sm text-gray-700">{comment.text}</p>
                         </div>

@@ -278,13 +278,13 @@ const TaskDetailsPage: React.FC = () => {
             {task.comments && task.comments.length > 0 ? (
               task.comments.map((comment) => (
                 <div key={comment._id} className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="mb-2">
                     <span className="font-medium text-gray-900">
                       {comment.user.firstName} {comment.user.lastName}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {formatEventDate(comment.createdAt)}
-                    </span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {formatTaskHistoryTimestamp(comment.createdAt)}
+                    </p>
                   </div>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.text}</p>
                 </div>
@@ -319,6 +319,13 @@ const TaskDetailsPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4 border-t">
+          <Button
+            onClick={() => navigate('/camp/tasks')}
+            variant="outline"
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Back to Edit
+          </Button>
           {task.status === 'open' ? (
             <Button
               onClick={handleCloseTask}
