@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
-import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
@@ -455,10 +455,10 @@ const TaskManagement: React.FC = () => {
                             navigator.clipboard.writeText(`${window.location.origin}/tasks/${task.taskIdCode}`);
                             alert('Task URL copied to clipboard!');
                           }}
-                          className="text-custom-primary hover:text-custom-primary-dark"
+                          className="text-xs text-custom-primary hover:text-custom-primary-dark hover:underline"
                           title="Copy task URL"
                         >
-                          <Copy className="w-3 h-3" />
+                          [copy]
                         </button>
                       </div>
                       <div className="text-sm text-gray-500 line-clamp-2 max-w-xs">
