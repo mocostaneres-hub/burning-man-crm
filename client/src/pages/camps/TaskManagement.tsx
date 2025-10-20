@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
 import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,6 +68,7 @@ const renderHistoryText = (entry: TaskHistoryEntry): string => {
 const TaskManagement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [tasks, setTasks] = useState<GlobalTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -136,6 +137,19 @@ const TaskManagement: React.FC = () => {
       fetchTasks();
     }
   }, [campId, fetchTasks]);
+
+  // Check if we need to open a specific task in edit mode
+  useEffect(() => {
+    if (location.state?.editTaskId && tasks.length > 0) {
+      const taskToEdit = tasks.find(task => task._id === location.state.editTaskId);
+      if (taskToEdit) {
+        handleTaskClick(taskToEdit);
+        setIsEditMode(true);
+        // Clear the state to prevent re-opening on refresh
+        navigate(location.pathname, { replace: true });
+      }
+    }
+  }, [location.state, tasks, navigate]);
 
   const loadRosterMembers = async () => {
     if (!campId || rosterMembers.length > 0) return;
