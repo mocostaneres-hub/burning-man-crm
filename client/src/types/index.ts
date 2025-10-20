@@ -349,7 +349,7 @@ export interface TaskHistoryEntry {
 
 export interface Task {
   _id: string;
-  taskIdCode: string;  // Unique 6-character alphanumeric ID (e.g., T9B4L1)
+  taskIdCode?: string;  // Unique 6-character alphanumeric ID (e.g., T9B4L1) - optional for backward compatibility
   campId: string;
   title: string;
   description: string;

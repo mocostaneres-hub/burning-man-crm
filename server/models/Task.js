@@ -3,8 +3,9 @@ const mongoose = require('mongoose');
 const taskSchema = new mongoose.Schema({
   taskIdCode: {
     type: String,
-    required: true,
+    required: false,  // Made optional for backward compatibility with existing tasks
     unique: true,
+    sparse: true,  // Allow null values, only enforce uniqueness on non-null values
     uppercase: true,
     minlength: 6,
     maxlength: 6

@@ -442,25 +442,27 @@ const TaskManagement: React.FC = () => {
                   <td className="px-6 py-4">
                     <div>
                       <div 
-                        className="text-sm font-medium text-custom-primary hover:underline cursor-pointer"
-                        onClick={() => navigate(`/tasks/${task.taskIdCode}`)}
+                        className={`text-sm font-medium ${task.taskIdCode ? 'text-custom-primary hover:underline cursor-pointer' : 'text-gray-900'}`}
+                        onClick={() => task.taskIdCode && navigate(`/tasks/${task.taskIdCode}`)}
                       >
                         {task.title}
                       </div>
-                      <div className="text-xs text-gray-400 font-mono mb-1 flex items-center gap-2">
-                        {task.taskIdCode}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(`${window.location.origin}/tasks/${task.taskIdCode}`);
-                            alert('Task URL copied to clipboard!');
-                          }}
-                          className="text-xs text-custom-primary hover:text-custom-primary-dark hover:underline"
-                          title="Copy task URL"
-                        >
-                          [copy]
-                        </button>
-                      </div>
+                      {task.taskIdCode && (
+                        <div className="text-xs text-gray-400 font-mono mb-1 flex items-center gap-2">
+                          {task.taskIdCode}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(`${window.location.origin}/tasks/${task.taskIdCode}`);
+                              alert('Task URL copied to clipboard!');
+                            }}
+                            className="text-xs text-custom-primary hover:text-custom-primary-dark hover:underline"
+                            title="Copy task URL"
+                          >
+                            [copy]
+                          </button>
+                        </div>
+                      )}
                       <div className="text-sm text-gray-500 line-clamp-2 max-w-xs">
                         {task.description}
                       </div>
