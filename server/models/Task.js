@@ -1,6 +1,14 @@
 const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema({
+  taskIdCode: {
+    type: String,
+    required: true,
+    unique: true,
+    uppercase: true,
+    minlength: 6,
+    maxlength: 6
+  },
   campId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Camp',

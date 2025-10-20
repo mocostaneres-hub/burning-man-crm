@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
-import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } from 'lucide-react';
+import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send, ExternalLink, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
@@ -66,6 +67,7 @@ const renderHistoryText = (entry: TaskHistoryEntry): string => {
 
 const TaskManagement: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<GlobalTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -436,11 +438,29 @@ const TaskManagement: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredTasks.map((task) => (
-                <tr key={task._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleTaskClick(task)}>
+                <tr key={task._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-custom-primary">
+                      <div 
+                        className="text-sm font-medium text-custom-primary hover:underline cursor-pointer flex items-center gap-2"
+                        onClick={() => navigate(`/tasks/${task.taskIdCode}`)}
+                      >
                         {task.title}
+                        <ExternalLink className="w-3 h-3" />
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono mb-1 flex items-center gap-2">
+                        {task.taskIdCode}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(`${window.location.origin}/tasks/${task.taskIdCode}`);
+                            alert('Task URL copied to clipboard!');
+                          }}
+                          className="text-custom-primary hover:text-custom-primary-dark"
+                          title="Copy task URL"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
                       </div>
                       <div className="text-sm text-gray-500 line-clamp-2 max-w-xs">
                         {task.description}

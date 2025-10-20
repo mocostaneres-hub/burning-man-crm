@@ -30,6 +30,7 @@ import MemberProfileEdit from './pages/members/MemberProfileEdit';
 import PublicMemberProfile from './pages/members/PublicMemberProfile';
 import CallSlotManagement from './pages/camps/CallSlotManagement';
 import TaskManagement from './pages/camps/TaskManagement';
+import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
 import InviteTrackingPage from './pages/invites/InviteTrackingPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -107,6 +108,11 @@ function App() {
                   <Route path="/camp/tasks" element={
                     <ProtectedRoute requireCampAccount>
                       <TaskManagement />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/tasks/:taskIdCode" element={
+                    <ProtectedRoute>
+                      <TaskDetailsPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/camp/shifts" element={

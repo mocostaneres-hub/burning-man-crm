@@ -5,6 +5,7 @@ const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { generateUniqueTaskIdCode } = require('../utils/taskIdGenerator');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
 // @access  Private (Camp accounts and admins)
@@ -22,6 +23,42 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 // (moved requires to the top so authenticateToken is initialized before first use)
+
+// @route   GET /api/tasks/code/:taskIdCode
+// @desc    Get a single task by its unique code
+// @access  Private (Camp owners, assigned users, or watchers)
+router.get('/code/:taskIdCode', authenticateToken, async (req, res) => {
+  try {
+    const { taskIdCode } = req.params;
+    
+    // Find the task by taskIdCode
+    const task = await Task.findOne({ taskIdCode: taskIdCode.toUpperCase() })
+      .populate('createdBy', 'firstName lastName email playaName profilePhoto')
+      .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
+      .populate('watchers', 'firstName lastName email playaName profilePhoto')
+      .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .populate('history.user', 'firstName lastName email playaName profilePhoto')
+      .populate('completedBy', 'firstName lastName email playaName profilePhoto');
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Check if user has access to this task
+    const hasAccess = await canAccessCamp(req, task.campId);
+    const isAssigned = task.assignedTo.some(user => user._id.toString() === req.user._id.toString());
+    const isWatcher = task.watchers && task.watchers.some(user => user._id.toString() === req.user._id.toString());
+    
+    if (!hasAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json(task);
+  } catch (error) {
+    console.error('Error fetching task by code:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // @route   GET /api/tasks/camp/:campId
 // @desc    Get all tasks for a camp
@@ -170,7 +207,14 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Generate unique task ID code
+    const taskIdCode = await generateUniqueTaskIdCode(async (code) => {
+      const existingTask = await Task.findOne({ taskIdCode: code });
+      return !!existingTask; // Return true if exists, false if unique
+    });
+
     const taskData = {
+      taskIdCode,
       campId,
       title,
       description,
