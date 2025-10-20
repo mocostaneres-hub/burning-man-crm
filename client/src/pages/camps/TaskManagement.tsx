@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
-import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send, ExternalLink, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send, Link, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
@@ -446,7 +446,7 @@ const TaskManagement: React.FC = () => {
                         onClick={() => navigate(`/tasks/${task.taskIdCode}`)}
                       >
                         {task.title}
-                        <ExternalLink className="w-3 h-3" />
+                        <Link className="w-3 h-3" />
                       </div>
                       <div className="text-xs text-gray-400 font-mono mb-1 flex items-center gap-2">
                         {task.taskIdCode}
