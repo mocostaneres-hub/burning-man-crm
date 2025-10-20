@@ -114,3 +114,45 @@ export const formatDateTime = (dateString: string | Date): string => {
   
   return `${datePart} at ${timePart}`;
 };
+
+/**
+ * Formats timestamp for task history with Pacific Time
+ * Output: "Oct 20, 2025 at 3:45 PM PST"
+ */
+export const formatTaskHistoryTimestamp = (dateString: string | Date): string => {
+  if (!dateString) return 'Not specified';
+  
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    
+    if (isNaN(date.getTime())) {
+      return 'Not specified';
+    }
+    
+    // Format date and time in Pacific timezone
+    const dateStr = date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'America/Los_Angeles'
+    });
+    
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'America/Los_Angeles'
+    });
+    
+    // Determine if PST or PDT based on date
+    const jan = new Date(date.getFullYear(), 0, 1);
+    const jul = new Date(date.getFullYear(), 6, 1);
+    const stdOffset = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+    const isDST = date.getTimezoneOffset() < stdOffset;
+    const timezone = isDST ? 'PDT' : 'PST';
+    
+    return `${dateStr} at ${timeStr} ${timezone}`;
+  } catch (error) {
+    return 'Not specified';
+  }
+};

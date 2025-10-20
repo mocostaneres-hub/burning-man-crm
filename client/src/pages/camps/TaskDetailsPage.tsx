@@ -4,7 +4,7 @@ import { Button, Card, Badge, Input, Textarea } from '../../components/ui';
 import { ArrowLeft, Edit, CheckCircle, Clock, Loader2, Send, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import { formatEventDate } from '../../utils/dateFormatters';
+import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFormatters';
 import { Task as GlobalTask, User as GlobalUser, TaskHistoryEntry } from '../../types';
 
 // Helper function to safely get user array from assignedTo/watchers
@@ -260,7 +260,7 @@ const TaskDetailsPage: React.FC = () => {
                   <div className="flex-1">
                     <p className="text-gray-900">{renderHistoryText(entry)}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {formatEventDate(entry.timestamp)}
+                      {formatTaskHistoryTimestamp(entry.timestamp)}
                     </p>
                   </div>
                 </div>
@@ -319,13 +319,6 @@ const TaskDetailsPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4 border-t">
-          <Button
-            onClick={() => navigate(`/camp/tasks`)}
-            variant="outline"
-          >
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Task
-          </Button>
           {task.status === 'open' ? (
             <Button
               onClick={handleCloseTask}

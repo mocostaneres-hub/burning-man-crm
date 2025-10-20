@@ -4,7 +4,7 @@ import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui
 import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import { formatEventDate } from '../../utils/dateFormatters';
+import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFormatters';
 import { Task as GlobalTask, User as GlobalUser, TaskComment, TaskHistoryEntry } from '../../types';
 
 // Helper function to safely get user array from assignedTo/watchers
@@ -593,7 +593,7 @@ const TaskManagement: React.FC = () => {
                           <div className="flex-1">
                             <p className="text-gray-900">{renderHistoryText(entry)}</p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {formatEventDate(entry.timestamp)}
+                              {formatTaskHistoryTimestamp(entry.timestamp)}
                             </p>
                           </div>
                         </div>
