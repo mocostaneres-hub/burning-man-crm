@@ -202,7 +202,7 @@ router.post('/', authenticateToken, async (req, res) => {
     // Check if user owns this camp
     const camp = await db.findCamp({ _id: campId });
     // Check camp ownership using helper
-    const hasAccess = await canAccessCamp(req, task.campId);
+    const hasAccess = await canAccessCamp(req, campId);
     if (!camp || !hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
     }
