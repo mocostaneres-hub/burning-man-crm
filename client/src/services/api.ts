@@ -440,6 +440,11 @@ class ApiService {
     return response.data;
   }
 
+  async postTaskComment(taskId: string, text: string): Promise<any> {
+    const response: AxiosResponse<any> = await this.api.post(`/tasks/${taskId}/comments`, { text });
+    return response.data;
+  }
+
   // Invite methods
   async getInviteTemplates(campId: string): Promise<{inviteTemplateEmail: string, inviteTemplateSMS: string}> {
     const response = await this.api.get(`/camps/${campId}/invites/template`);
