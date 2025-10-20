@@ -5,7 +5,7 @@ import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } f
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFormatters';
-import { Task as GlobalTask, User as GlobalUser, TaskComment, TaskHistoryEntry } from '../../types';
+import { Task as GlobalTask, User as GlobalUser, TaskHistoryEntry } from '../../types';
 
 // Helper function to safely get user array from assignedTo/watchers
 const getUserArray = (field: string[] | GlobalUser[] | undefined): GlobalUser[] => {
@@ -138,18 +138,6 @@ const TaskManagement: React.FC = () => {
     }
   }, [campId, fetchTasks]);
 
-  // Check if we need to open a specific task in edit mode
-  useEffect(() => {
-    if (location.state?.editTaskId && tasks.length > 0) {
-      const taskToEdit = tasks.find(task => task._id === location.state.editTaskId);
-      if (taskToEdit) {
-        handleTaskClick(taskToEdit);
-        setIsEditMode(true);
-        // Clear the state to prevent re-opening on refresh
-        navigate(location.pathname, { replace: true });
-      }
-    }
-  }, [location.state, tasks, navigate]);
 
   const loadRosterMembers = async () => {
     if (!campId || rosterMembers.length > 0) return;
@@ -196,7 +184,7 @@ const TaskManagement: React.FC = () => {
 
   const filteredTasks = tasks.filter(task => task.status === activeTab);
 
-  const handleTaskClick = async (task: GlobalTask) => {
+  const handleTaskClick = useCallback(async (task: GlobalTask) => {
     setSelectedTask(task);
     const assignees = getUserArray(task.assignedTo);
     const taskWatchers = getUserArray(task.watchers);
@@ -212,7 +200,20 @@ const TaskManagement: React.FC = () => {
     setIsEditMode(false);
     setShowTaskModal(true);
     await loadRosterMembers();
-  };
+  }, [loadRosterMembers]);
+
+  // Check if we need to open a specific task in edit mode
+  useEffect(() => {
+    if (location.state?.editTaskId && tasks.length > 0) {
+      const taskToEdit = tasks.find(task => task._id === location.state.editTaskId);
+      if (taskToEdit) {
+        handleTaskClick(taskToEdit);
+        setIsEditMode(true);
+        // Clear the state to prevent re-opening on refresh
+        navigate(location.pathname, { replace: true });
+      }
+    }
+  }, [location.state, tasks, navigate, handleTaskClick, location.pathname]);
 
   const handleEditClick = () => {
     setIsEditMode(true);

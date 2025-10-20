@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Card, Badge, Input, Textarea } from '../../components/ui';
-import { ArrowLeft, Edit, CheckCircle, Clock, Loader2, Send, RefreshCw, X } from 'lucide-react';
+import { Button, Card, Badge, Textarea } from '../../components/ui';
+import { ArrowLeft, Edit, CheckCircle, Clock, Loader2, Send, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFormatters';
@@ -71,13 +71,7 @@ const TaskDetailsPage: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
 
-  useEffect(() => {
-    if (taskIdCode) {
-      loadTask();
-    }
-  }, [taskIdCode]);
-
-  const loadTask = async () => {
+  const loadTask = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -89,7 +83,13 @@ const TaskDetailsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskIdCode]);
+
+  useEffect(() => {
+    if (taskIdCode) {
+      loadTask();
+    }
+  }, [taskIdCode, loadTask]);
 
   const handlePostComment = async () => {
     if (!task || !newComment.trim()) return;
