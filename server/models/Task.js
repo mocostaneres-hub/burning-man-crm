@@ -39,6 +39,30 @@ const taskSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  history: [{
+    action: {
+      type: String,
+      required: true
+    },
+    field: {
+      type: String
+    },
+    oldValue: {
+      type: mongoose.Schema.Types.Mixed
+    },
+    newValue: {
+      type: mongoose.Schema.Types.Mixed
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   dueDate: {
     type: Date
   },

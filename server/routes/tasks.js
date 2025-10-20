@@ -52,6 +52,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
       .populate('watchers', 'firstName lastName email playaName profilePhoto')
       .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .populate('history.user', 'firstName lastName email playaName profilePhoto')
       .sort({ createdAt: -1 });
     
     res.json(tasks);
@@ -134,6 +135,7 @@ router.get('/assigned/:userId', authenticateToken, async (req, res) => {
       .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
       .populate('watchers', 'firstName lastName email playaName profilePhoto')
       .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .populate('history.user', 'firstName lastName email playaName profilePhoto')
       .sort({ createdAt: -1 });
     
     res.json(tasks);
@@ -175,16 +177,162 @@ router.post('/', authenticateToken, async (req, res) => {
       assignedTo: assignedTo || [],
       dueDate: dueDate ? new Date(dueDate) : null,
       priority,
-      createdBy: req.user._id
+      createdBy: req.user._id,
+      history: [{
+        action: 'created',
+        user: req.user._id,
+        timestamp: new Date()
+      }]
     };
 
-    const task = await db.createTask(taskData);
-    res.status(201).json(task);
+    const newTask = await Task.create(taskData);
+    
+    // Populate the created task
+    const populatedTask = await Task.findById(newTask._id)
+      .populate('createdBy', 'firstName lastName email playaName profilePhoto')
+      .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
+      .populate('watchers', 'firstName lastName email playaName profilePhoto')
+      .populate('history.user', 'firstName lastName email playaName profilePhoto');
+    
+    res.status(201).json(populatedTask);
   } catch (error) {
     console.error('Error creating task:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Helper function to track changes and generate history entries
+const trackTaskChanges = (oldTask, updates, userId) => {
+  const historyEntries = [];
+  const timestamp = new Date();
+
+  // Track title change
+  if (updates.title && updates.title !== oldTask.title) {
+    historyEntries.push({
+      action: 'updated',
+      field: 'title',
+      oldValue: oldTask.title,
+      newValue: updates.title,
+      user: userId,
+      timestamp
+    });
+  }
+
+  // Track description change
+  if (updates.description && updates.description !== oldTask.description) {
+    historyEntries.push({
+      action: 'updated',
+      field: 'description',
+      oldValue: oldTask.description,
+      newValue: updates.description,
+      user: userId,
+      timestamp
+    });
+  }
+
+  // Track priority change
+  if (updates.priority && updates.priority !== oldTask.priority) {
+    historyEntries.push({
+      action: 'updated',
+      field: 'priority',
+      oldValue: oldTask.priority,
+      newValue: updates.priority,
+      user: userId,
+      timestamp
+    });
+  }
+
+  // Track due date change
+  if (updates.dueDate !== undefined) {
+    const oldDate = oldTask.dueDate ? new Date(oldTask.dueDate).toISOString() : null;
+    const newDate = updates.dueDate ? new Date(updates.dueDate).toISOString() : null;
+    if (oldDate !== newDate) {
+      historyEntries.push({
+        action: 'updated',
+        field: 'dueDate',
+        oldValue: oldDate,
+        newValue: newDate,
+        user: userId,
+        timestamp
+      });
+    }
+  }
+
+  // Track status change
+  if (updates.status && updates.status !== oldTask.status) {
+    const action = updates.status === 'closed' ? 'closed' : 'reopened';
+    historyEntries.push({
+      action,
+      field: 'status',
+      oldValue: oldTask.status,
+      newValue: updates.status,
+      user: userId,
+      timestamp
+    });
+  }
+
+  // Track assignedTo changes
+  if (updates.assignedTo) {
+    const oldAssignees = oldTask.assignedTo.map(id => id.toString());
+    const newAssignees = updates.assignedTo.map(id => id.toString());
+    
+    // Find added assignees
+    const addedAssignees = newAssignees.filter(id => !oldAssignees.includes(id));
+    addedAssignees.forEach(userId => {
+      historyEntries.push({
+        action: 'assigned',
+        field: 'assignedTo',
+        newValue: userId,
+        user: userId,
+        timestamp
+      });
+    });
+
+    // Find removed assignees
+    const removedAssignees = oldAssignees.filter(id => !newAssignees.includes(id));
+    removedAssignees.forEach(userId => {
+      historyEntries.push({
+        action: 'unassigned',
+        field: 'assignedTo',
+        oldValue: userId,
+        user: userId,
+        timestamp
+      });
+    });
+  }
+
+  // Track watchers changes
+  if (updates.watchers) {
+    const oldWatchers = (oldTask.watchers || []).map(id => id.toString());
+    const newWatchers = updates.watchers.map(id => id.toString());
+    
+    // Find added watchers
+    const addedWatchers = newWatchers.filter(id => !oldWatchers.includes(id));
+    addedWatchers.forEach(userId => {
+      historyEntries.push({
+        action: 'added_watcher',
+        field: 'watchers',
+        newValue: userId,
+        user: userId,
+        timestamp
+      });
+    });
+
+    // Find removed watchers
+    const removedWatchers = oldWatchers.filter(id => !newWatchers.includes(id));
+    removedWatchers.forEach(userId => {
+      historyEntries.push({
+        action: 'removed_watcher',
+        field: 'watchers',
+        oldValue: userId,
+        user: userId,
+        timestamp
+      });
+    });
+  }
+
+  return historyEntries;
+};
 
 // @route   PUT /api/tasks/:id
 // @desc    Update a task
@@ -194,7 +342,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    const task = await db.findTask({ _id: id });
+    const task = await Task.findById(id);
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -210,13 +358,36 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Track changes before updating
+    const historyEntries = trackTaskChanges(task, updates, req.user._id);
+
     // If updating status to closed, set completedBy
     if (updates.status === 'closed' && !task.completedBy) {
       updates.completedBy = req.user._id;
     }
 
-    const updatedTask = await db.updateTask(id, updates);
-    res.json(updatedTask);
+    // Add history entries to the task
+    if (!task.history) {
+      task.history = [];
+    }
+    task.history.push(...historyEntries);
+
+    // Apply updates
+    Object.keys(updates).forEach(key => {
+      task[key] = updates[key];
+    });
+
+    await task.save();
+
+    // Populate the updated task
+    const populatedTask = await Task.findById(id)
+      .populate('createdBy', 'firstName lastName email playaName profilePhoto')
+      .populate('assignedTo', 'firstName lastName email playaName profilePhoto')
+      .populate('watchers', 'firstName lastName email playaName profilePhoto')
+      .populate('comments.user', 'firstName lastName email playaName profilePhoto')
+      .populate('history.user', 'firstName lastName email playaName profilePhoto');
+
+    res.json(populatedTask);
   } catch (error) {
     console.error('Error updating task:', error);
     res.status(500).json({ message: 'Server error' });

@@ -4,7 +4,7 @@ import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } f
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate } from '../../utils/dateFormatters';
-import { Task as GlobalTask, User as GlobalUser, TaskComment } from '../../types';
+import { Task as GlobalTask, User as GlobalUser, TaskComment, TaskHistoryEntry } from '../../types';
 
 // Helper function to safely get user array from assignedTo/watchers
 const getUserArray = (field: string[] | GlobalUser[] | undefined): GlobalUser[] => {
@@ -20,6 +20,48 @@ const getUser = (field: string | GlobalUser | undefined): GlobalUser | null => {
   if (!field) return null;
   if (typeof field === 'string') return null;
   return field as GlobalUser;
+};
+
+// Helper function to render history entry text
+const renderHistoryText = (entry: TaskHistoryEntry): string => {
+  const user = getUser(entry.user);
+  const userName = user ? `${user.firstName} ${user.lastName}` : 'Someone';
+  
+  switch (entry.action) {
+    case 'created':
+      return `${userName} created this task`;
+    case 'updated':
+      if (entry.field === 'title') {
+        return `${userName} changed title from "${entry.oldValue}" to "${entry.newValue}"`;
+      } else if (entry.field === 'description') {
+        return `${userName} updated the description`;
+      } else if (entry.field === 'priority') {
+        return `${userName} changed priority from ${entry.oldValue} to ${entry.newValue}`;
+      } else if (entry.field === 'dueDate') {
+        const oldDate = entry.oldValue ? formatEventDate(entry.oldValue) : 'none';
+        const newDate = entry.newValue ? formatEventDate(entry.newValue) : 'none';
+        return `${userName} changed due date from ${oldDate} to ${newDate}`;
+      }
+      return `${userName} updated ${entry.field}`;
+    case 'closed':
+      return `${userName} closed this task`;
+    case 'reopened':
+      return `${userName} reopened this task`;
+    case 'assigned':
+      const assignee = getUser(entry.newValue);
+      return `${userName} assigned ${assignee ? `${assignee.firstName} ${assignee.lastName}` : 'a member'} to this task`;
+    case 'unassigned':
+      const unassignee = getUser(entry.oldValue);
+      return `${userName} removed ${unassignee ? `${unassignee.firstName} ${unassignee.lastName}` : 'a member'} from this task`;
+    case 'added_watcher':
+      const watcher = getUser(entry.newValue);
+      return `${userName} added ${watcher ? `${watcher.firstName} ${watcher.lastName}` : 'a member'} as a watcher`;
+    case 'removed_watcher':
+      const removedWatcher = getUser(entry.oldValue);
+      return `${userName} removed ${removedWatcher ? `${removedWatcher.firstName} ${removedWatcher.lastName}` : 'a member'} from watchers`;
+    default:
+      return `${userName} performed an action`;
+  }
 };
 
 const TaskManagement: React.FC = () => {
@@ -521,12 +563,22 @@ const TaskManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-500 mb-2 block">History</label>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <p>Created: {formatEventDate(selectedTask.createdAt)} by {getUser(selectedTask.createdBy)?.firstName} {getUser(selectedTask.createdBy)?.lastName}</p>
-                    <p>Last Updated: {formatEventDate(selectedTask.updatedAt)}</p>
-                    {selectedTask.completedAt && (
-                      <p>Completed: {formatEventDate(selectedTask.completedAt)}</p>
+                  <label className="text-sm font-medium text-gray-500 mb-2 block">Task History</label>
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {selectedTask.history && selectedTask.history.length > 0 ? (
+                      selectedTask.history.map((entry, idx) => (
+                        <div key={idx} className="flex gap-3 text-sm">
+                          <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-custom-primary"></div>
+                          <div className="flex-1">
+                            <p className="text-gray-900">{renderHistoryText(entry)}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {formatEventDate(entry.timestamp)}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No history available</p>
                     )}
                   </div>
                 </div>

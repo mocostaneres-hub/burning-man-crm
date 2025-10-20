@@ -337,6 +337,16 @@ export interface TaskComment {
   createdAt: string;
 }
 
+export interface TaskHistoryEntry {
+  _id?: string;
+  action: string;
+  field?: string;
+  oldValue?: any;
+  newValue?: any;
+  user: string | User;
+  timestamp: string;
+}
+
 export interface Task {
   _id: string;
   campId: string;
@@ -345,6 +355,7 @@ export interface Task {
   assignedTo: string[] | User[];  // Can be IDs or populated User objects
   watchers?: string[] | User[];   // Can be IDs or populated User objects
   comments?: TaskComment[];
+  history?: TaskHistoryEntry[];
   dueDate?: string;
   status: 'open' | 'closed';
   priority: 'low' | 'medium' | 'high';
