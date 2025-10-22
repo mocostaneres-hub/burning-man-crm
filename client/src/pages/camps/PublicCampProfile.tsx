@@ -188,8 +188,9 @@ const PublicCampProfile: React.FC = () => {
 
     try {
       setApplicationLoading(true);
+      console.log('🔄 [PublicCampProfile] Submitting application to camp:', camp?._id);
       
-      await api.post('/applications/apply', {
+      const response = await api.post('/applications/apply', {
         campId: camp?._id,
         applicationData: {
           motivation: applicationData.motivation,
@@ -199,16 +200,23 @@ const PublicCampProfile: React.FC = () => {
         }
       });
       
+      console.log('✅ [PublicCampProfile] Application submitted successfully:', response);
+      
       setApplicationSuccess(true);
+      
+      // Auto-close modal after showing success message
       setTimeout(() => {
         setShowApplicationModal(false);
         setApplicationSuccess(false);
         setApplicationData({ motivation: '', experience: '', skills: [], selectedCallSlotId: '' });
-      }, 2000);
+      }, 3500);
       
     } catch (err: any) {
-      console.error('Application error:', err);
-      alert(err.response?.data?.message || 'Failed to submit application');
+      console.error('❌ [PublicCampProfile] Application error:', err);
+      console.error('❌ [PublicCampProfile] Error response:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || 'Failed to submit application';
+      alert(errorMessage);
     } finally {
       setApplicationLoading(false);
     }
@@ -546,11 +554,11 @@ const PublicCampProfile: React.FC = () => {
           <div className="text-center py-8">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
             <h3 className="text-h3 font-lato-bold text-custom-text mb-2">
-              Application Submitted!
+              Application Submitted Successfully!
             </h3>
             <p className="text-custom-text-secondary">
-              Your application has been sent to {camp.campName}. 
-              You'll hear back from them soon!
+              You've successfully submitted your application to join {camp.name}. 
+              Their leads will review your info and get in touch for next steps.
             </p>
           </div>
         ) : (
