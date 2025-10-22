@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 import { Card, Table, TableColumn, Modal, Badge, Button } from '../../components/ui';
@@ -30,6 +31,7 @@ interface Task {
   completedAt?: string;
   completedBy?: string;
   type?: string;
+  taskIdCode?: string;
   metadata?: {
     eventId?: string;
     shiftId?: string;
@@ -45,6 +47,7 @@ interface Task {
 
 const MyTasks: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,12 +167,19 @@ const MyTasks: React.FC = () => {
   };
 
   const handleViewTask = async (task: Task) => {
-    setSelectedTask(task);
-    setViewDialogOpen(true);
-    
     // Check if this is a volunteer shift task (by type or title pattern)
     const isVolunteerShiftTask = task.type === 'volunteer_shift' || 
       task.title.toLowerCase().startsWith('volunteer shift:');
+    
+    // For regular tasks, navigate to TaskDetailsPage if taskIdCode exists
+    if (!isVolunteerShiftTask && task.taskIdCode) {
+      navigate(`/tasks/${task.taskIdCode}`);
+      return;
+    }
+    
+    // For volunteer shift tasks or tasks without taskIdCode, show modal
+    setSelectedTask(task);
+    setViewDialogOpen(true);
     
     if (isVolunteerShiftTask && task.metadata?.eventId) {
       await loadEventShifts(task.metadata.eventId);
