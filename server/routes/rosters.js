@@ -1043,66 +1043,93 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    const numericCampId = parseInt(campId);
+    console.log('🔍 [GET /api/rosters/camp/:campId] Request for campId:', campId);
     
-    // Check if camp exists
-    const camp = await db.findCamp({ _id: numericCampId });
+    // Try both string and numeric versions of campId
+    let camp;
+    try {
+      camp = await db.findCamp({ _id: campId });
+    } catch (err) {
+      console.log('⚠️ [GET /api/rosters/camp/:campId] Failed with string campId, trying numeric...');
+      const numericCampId = parseInt(campId);
+      camp = await db.findCamp({ _id: numericCampId });
+    }
+    
     if (!camp) {
+      console.log('❌ [GET /api/rosters/camp/:campId] Camp not found');
       return res.status(404).json({ message: 'Camp not found' });
     }
+
+    console.log('✅ [GET /api/rosters/camp/:campId] Camp found:', camp._id);
 
     // Check if user is camp owner or member
     // Check camp ownership using helper
     const isCampOwner = await canAccessCamp(req, camp._id);
-    const isCampMember = await db.findMember({ camp: numericCampId, user: req.user._id, status: 'active' });
+    const isCampMember = await db.findMember({ camp: camp._id, user: req.user._id, status: 'active' });
+    
+    console.log('🔐 [GET /api/rosters/camp/:campId] Access check:', { isCampOwner, isCampMember: !!isCampMember });
     
     if (!isCampOwner && !isCampMember) {
+      console.log('❌ [GET /api/rosters/camp/:campId] Access denied');
       return res.status(403).json({ message: 'Access denied - must be camp owner or member' });
     }
 
-    const roster = await db.findActiveRoster({ camp: numericCampId });
+    const roster = await db.findActiveRoster({ camp: camp._id });
     
-    if (!roster) {
+    console.log('📋 [GET /api/rosters/camp/:campId] Roster found:', roster ? `with ${roster.members?.length || 0} members` : 'none');
+    
+    if (!roster || !roster.members || roster.members.length === 0) {
+      console.log('⚠️ [GET /api/rosters/camp/:campId] No roster or members found');
       return res.json({ members: [] });
     }
 
-    // Populate member details
-    const membersWithDetails = await Promise.all(roster.members.map(async (member) => {
-      // First find the member record
-      const memberRecord = await db.findMember({ _id: member.member });
-      if (!memberRecord) {
-        return {
+    // Populate member details with better error handling
+    const membersWithDetails = [];
+    for (const member of roster.members) {
+      try {
+        // First find the member record
+        const memberRecord = await db.findMember({ _id: member.member });
+        if (!memberRecord) {
+          console.warn(`⚠️ [GET /api/rosters/camp/:campId] Member record not found for ID: ${member.member}`);
+          continue;
+        }
+        
+        // Then find the user record
+        const user = await db.findUser({ _id: memberRecord.user });
+        if (!user) {
+          console.warn(`⚠️ [GET /api/rosters/camp/:campId] User not found for member: ${member.member}`);
+          continue;
+        }
+        
+        membersWithDetails.push({
           ...member,
-          user: null
-        };
+          user: {
+            _id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            profilePhoto: user.profilePhoto,
+            bio: user.bio,
+            playaName: user.playaName,
+            city: user.city,
+            yearsBurned: user.yearsBurned,
+            skills: user.skills
+          }
+        });
+      } catch (memberError) {
+        console.error(`❌ [GET /api/rosters/camp/:campId] Error processing member ${member.member}:`, memberError);
+        // Continue with next member instead of failing entire request
       }
-      
-      // Then find the user record
-      const user = await db.findUser({ _id: memberRecord.user });
-      return {
-        ...member,
-        user: user ? {
-          _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          profilePhoto: user.profilePhoto,
-          bio: user.bio,
-          playaName: user.playaName,
-          city: user.city,
-          yearsBurned: user.yearsBurned,
-          skills: user.skills
-        } : null
-      };
-    }));
+    }
+
+    console.log('✅ [GET /api/rosters/camp/:campId] Returning', membersWithDetails.length, 'members');
 
     res.json({
-      ...roster,
       members: membersWithDetails
     });
   } catch (error) {
-    console.error('Get camp roster error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [GET /api/rosters/camp/:campId] Fatal error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

@@ -184,14 +184,9 @@ router.get('/assigned/:userId', authenticateToken, async (req, res) => {
 
 // @route   POST /api/tasks
 // @desc    Create a new task
-// @access  Private (Camp owners only)
+// @access  Private (Camp owners and roster members)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const { campId, title, description, assignedTo, dueDate, priority = 'medium' } = req.body;
 
     // Validate required fields
@@ -199,13 +194,32 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Check if user owns this camp
+    // Check if user has access to this camp (camp owner OR roster member)
     const camp = await db.findCamp({ _id: campId });
-    // Check camp ownership using helper
-    const hasAccess = await canAccessCamp(req, campId);
-    if (!camp || !hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
     }
+
+    // Check camp ownership using helper
+    const isCampOwner = await canAccessCamp(req, campId);
+    
+    // Check if user is an active roster member
+    const isRosterMember = await db.findMember({ 
+      camp: campId, 
+      user: req.user._id, 
+      status: 'active' 
+    });
+
+    // Allow camp owners, admins with campId, or active roster members
+    if (!isCampOwner && !isRosterMember) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner or roster member' });
+    }
+
+    console.log('✅ [POST /api/tasks] User authorized to create task:', {
+      userId: req.user._id,
+      isCampOwner,
+      isRosterMember: !!isRosterMember
+    });
 
     // Generate unique task ID code
     const taskIdCode = await generateUniqueTaskIdCode(async (code) => {
@@ -380,7 +394,7 @@ const trackTaskChanges = (oldTask, updates, userId) => {
 
 // @route   PUT /api/tasks/:id
 // @desc    Update a task
-// @access  Private (Camp owners or assigned users)
+// @access  Private (Camp owners, roster members, assigned users, or watchers)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -391,16 +405,38 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user is camp owner or assigned to the task
+    // Check if user has access to update this task
     const camp = await db.findCamp({ _id: task.campId });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
     // Check camp ownership using helper
-    const isCampOwner = camp && await canAccessCamp(req, task.campId);
+    const isCampOwner = await canAccessCamp(req, task.campId);
+    
+    // Check if user is an active roster member
+    const isRosterMember = await db.findMember({ 
+      camp: task.campId, 
+      user: req.user._id, 
+      status: 'active' 
+    });
+    
     const isAssigned = task.assignedTo.includes(req.user._id.toString());
+    const isWatcher = task.watchers && task.watchers.includes(req.user._id.toString());
     const isAdmin = req.user.accountType === 'admin';
 
-    if (!isCampOwner && !isAssigned && !isAdmin) {
-      return res.status(403).json({ message: 'Access denied' });
+    // Allow camp owners, roster members, assigned users, watchers, or admins
+    if (!isCampOwner && !isRosterMember && !isAssigned && !isWatcher && !isAdmin) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner, roster member, assigned to task, or watcher' });
     }
+
+    console.log('✅ [PUT /api/tasks/:id] User authorized to update task:', {
+      userId: req.user._id,
+      isCampOwner,
+      isRosterMember: !!isRosterMember,
+      isAssigned,
+      isWatcher
+    });
 
     // Track changes before updating
     const historyEntries = trackTaskChanges(task, updates, req.user._id);
