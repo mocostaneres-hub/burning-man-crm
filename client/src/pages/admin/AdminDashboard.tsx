@@ -680,9 +680,16 @@ const UserEditModal: React.FC<{
   const [confirmPassword, setConfirmPassword] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleSave = () => {
-    // TODO: Handle photo upload if photoFile exists
-    onSave(formData as UserType);
+  const handleSave = async () => {
+    try {
+      // Photo data is already in formData from handlePhotoUpload/handlePhotoDelete
+      // Just validate and save
+      console.log('💾 [AdminDashboard] Saving user with photo:', formData.profilePhoto ? 'Photo included' : 'No photo');
+      onSave(formData as UserType);
+    } catch (err) {
+      console.error('Error preparing user data:', err);
+      alert('Failed to prepare user data. Please try again.');
+    }
   };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -691,7 +698,10 @@ const UserEditModal: React.FC<{
       setPhotoFile(file);
       const reader = new FileReader();
       reader.onload = (e) => {
-        setPhotoPreview(e.target?.result as string);
+        const base64Result = e.target?.result as string;
+        setPhotoPreview(base64Result);
+        // Update formData immediately so it's ready for save
+        setFormData({ ...formData, profilePhoto: base64Result });
       };
       reader.readAsDataURL(file);
     }
