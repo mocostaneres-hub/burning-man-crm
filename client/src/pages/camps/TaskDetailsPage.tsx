@@ -280,7 +280,7 @@ const TaskDetailsPage: React.FC = () => {
                 <div key={comment._id} className="bg-gray-50 p-3 rounded-lg">
                   <div className="mb-2">
                     <span className="font-medium text-gray-900">
-                      {comment.user.firstName} {comment.user.lastName}
+                      {comment.user ? `${comment.user.firstName} ${comment.user.lastName}` : 'Unknown User'}
                     </span>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {formatTaskHistoryTimestamp(comment.createdAt)}

@@ -320,18 +320,22 @@ const TaskManagement: React.FC = () => {
 
     try {
       setSubmittingComment(true);
-      const comment = await api.post(`/tasks/${selectedTask._id}/comments`, { text: newComment });
+      console.log('🔄 [TaskManagement] Adding comment to task:', selectedTask._id);
+      const comment = await api.postTaskComment(selectedTask._id, newComment.trim());
+      console.log('✅ [TaskManagement] Comment added successfully:', comment);
       
       // Update selected task with new comment
       setSelectedTask({
         ...selectedTask,
-        comments: [...(selectedTask.comments || []), comment.data]
+        comments: [...(selectedTask.comments || []), comment]
       });
       
       setNewComment('');
-    } catch (err) {
-      console.error('Error adding comment:', err);
-      setError('Failed to add comment');
+    } catch (err: any) {
+      console.error('❌ [TaskManagement] Error adding comment:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to add comment';
+      setError(errorMessage);
+      alert(`Failed to add comment: ${errorMessage}`);
     } finally {
       setSubmittingComment(false);
     }
@@ -631,11 +635,11 @@ const TaskManagement: React.FC = () => {
                   <div className="space-y-4 mb-4 max-h-60 overflow-y-auto">
                     {selectedTask.comments && selectedTask.comments.length > 0 ? (
                       selectedTask.comments.map((comment, idx) => (
-                        <div key={idx} className="border-l-4 border-gray-300 pl-4 py-2">
+                        <div key={comment._id || idx} className="border-l-4 border-gray-300 pl-4 py-2">
                           <div className="mb-1">
                             <span className="font-medium text-sm text-gray-900">
-                              {comment.user.firstName} {comment.user.lastName}
-                              {comment.user.playaName && ` (${comment.user.playaName})`}
+                              {comment.user ? `${comment.user.firstName} ${comment.user.lastName}` : 'Unknown User'}
+                              {comment.user?.playaName && ` (${comment.user.playaName})`}
                             </span>
                             <p className="text-xs text-gray-500 mt-0.5">
                               {formatTaskHistoryTimestamp(comment.createdAt)}
