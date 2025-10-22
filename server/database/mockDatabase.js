@@ -948,13 +948,28 @@ class MockDatabase {
     await this.ensureLoaded();
     
     // Double-check for duplicates right before creation (prevents race conditions)
+    // Allow re-application if previous application is in a terminal status
     const existingApplication = await this.findMemberApplication({
       applicant: applicationData.applicant,
       camp: applicationData.camp
     });
     
-    if (existingApplication) {
+    // Define terminal statuses that allow re-application
+    const terminalStatuses = ['deleted', 'withdrawn', 'rejected'];
+    
+    if (existingApplication && !terminalStatuses.includes(existingApplication.status)) {
+      console.log('❌ [MockDB] Cannot create application - non-terminal application exists:', {
+        existingId: existingApplication._id,
+        status: existingApplication.status
+      });
       throw new Error('Application already exists for this user and camp');
+    }
+    
+    if (existingApplication && terminalStatuses.includes(existingApplication.status)) {
+      console.log('✅ [MockDB] Creating new application after terminal status:', {
+        previousId: existingApplication._id,
+        previousStatus: existingApplication.status
+      });
     }
     
     const application = {
