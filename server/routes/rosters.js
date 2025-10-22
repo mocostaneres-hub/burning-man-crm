@@ -591,33 +591,36 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
     // Remove member from roster
     const updatedRoster = await db.removeMemberFromRoster(activeRoster._id, memberId);
     
-    // Find and update the member's application status to rejected
+    // Find and update the member's application status to withdrawn (allows re-application)
     const member = await db.findMember({ _id: memberId });
     if (member) {
-      // Update the member record
+      console.log('🔄 [Roster Removal] Updating member and application status to "withdrawn"');
+      
+      // Update the member record to withdrawn status
       await db.updateMember(memberId, { 
-        status: 'rejected',
+        status: 'withdrawn',
         reviewedAt: new Date(),
         reviewedBy: req.user._id,
-        reviewNotes: 'Removed from active roster'
+        reviewNotes: 'Removed from active roster - eligible to reapply'
       });
       
-      // Also update the corresponding application record
+      // Also update the corresponding application record to withdrawn
       const application = await db.findMemberApplication({ 
         applicant: member.user, 
         camp: camp._id 
       });
       if (application) {
         await db.updateMemberApplication(application._id, {
-          status: 'rejected',
+          status: 'withdrawn',
           reviewedAt: new Date(),
           reviewedBy: req.user._id,
-          reviewNotes: 'Removed from active roster'
+          reviewNotes: 'Removed from active roster - eligible to reapply'
         });
+        console.log('✅ [Roster Removal] Application status updated to "withdrawn":', application._id);
       }
     }
 
-    res.json({ message: 'Member removed from roster and marked as rejected' });
+    res.json({ message: 'Member removed from roster and can now reapply' });
   } catch (error) {
     console.error('Remove member from roster error:', error);
     res.status(500).json({ message: 'Server error' });

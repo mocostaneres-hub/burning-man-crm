@@ -131,19 +131,36 @@ router.post('/apply', authenticateToken, [
     }
 
     // Check if user already applied to this camp (comprehensive check)
-    // Allow re-application if previous application was deleted (roster removal reset)
+    // Allow re-application if previous application was deleted, withdrawn, or rejected
     const existingApplication = await db.findMemberApplication({ 
       applicant: req.user._id, 
       camp: campId 
     });
     
-    if (existingApplication && existingApplication.status !== 'deleted') {
+    // Define terminal statuses that allow re-application
+    const terminalStatuses = ['deleted', 'withdrawn', 'rejected'];
+    
+    if (existingApplication && !terminalStatuses.includes(existingApplication.status)) {
+      console.log('❌ [Applications] User has active application:', {
+        applicationId: existingApplication._id,
+        status: existingApplication.status,
+        appliedAt: existingApplication.appliedAt
+      });
+      
       return res.status(400).json({ 
         message: 'You have already applied to this camp',
         applicationId: existingApplication._id,
         status: existingApplication.status,
         appliedAt: existingApplication.appliedAt,
         isDuplicate: true
+      });
+    }
+    
+    // Log if user is re-applying after a terminal status
+    if (existingApplication && terminalStatuses.includes(existingApplication.status)) {
+      console.log('✅ [Applications] User is re-applying after terminal status:', {
+        previousStatus: existingApplication.status,
+        previousApplicationId: existingApplication._id
       });
     }
 
