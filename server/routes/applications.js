@@ -489,13 +489,19 @@ router.put('/:applicationId/status', authenticateToken, [
       timestamp: new Date()
     };
     
+    // Add action history entry to the application's actionHistory array
+    if (!application.actionHistory) {
+      application.actionHistory = [];
+    }
+    application.actionHistory.push(actionHistoryEntry);
+    
     // Update application
     const updateData = {
       status,
       reviewedBy: req.user._id,
       reviewedAt: new Date(),
       reviewNotes: reviewNotes || '',
-      $push: { actionHistory: actionHistoryEntry }
+      actionHistory: application.actionHistory
     };
     
     console.log('🔍 [PUT /api/applications/:id/status] Updating application with:', updateData);
