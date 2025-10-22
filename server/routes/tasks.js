@@ -4,7 +4,7 @@ const router = express.Router();
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
-const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canAccessCampResources } = require('../utils/permissionHelpers');
 const { generateUniqueTaskIdCode } = require('../utils/taskIdGenerator');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
@@ -45,12 +45,13 @@ router.get('/code/:taskIdCode', authenticateToken, async (req, res) => {
     }
 
     // Check if user has access to this task
-    const hasAccess = await canAccessCamp(req, task.campId);
+    // Access granted if: camp owner, active roster member, assigned, or watcher
+    const hasCampAccess = await canAccessCampResources(req, task.campId);
     const isAssigned = task.assignedTo.some(user => user._id.toString() === req.user._id.toString());
     const isWatcher = task.watchers && task.watchers.some(user => user._id.toString() === req.user._id.toString());
     
-    if (!hasAccess && !isAssigned && !isWatcher) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (!hasCampAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied - must be camp member, assigned, or watcher' });
     }
 
     res.json(task);
@@ -62,25 +63,20 @@ router.get('/code/:taskIdCode', authenticateToken, async (req, res) => {
 
 // @route   GET /api/tasks/camp/:campId
 // @desc    Get all tasks for a camp
-// @access  Private (Camp owners only)
+// @access  Private (Camp owners and active roster members)
 router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
 
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if user owns this camp using helper
-    const hasAccess = await canAccessCamp(req, campId);
+    // Check if user has access to this camp's resources
+    const hasAccess = await canAccessCampResources(req, campId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner or active roster member' });
     }
 
     // Use mongoose directly to populate fields
@@ -411,29 +407,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, task.campId);
+    // Check comprehensive camp access (owner or active roster member)
+    const hasCampAccess = await canAccessCampResources(req, task.campId);
     
-    // Check if user is an active roster member
-    const isRosterMember = await db.findMember({ 
-      camp: task.campId, 
-      user: req.user._id, 
-      status: 'active' 
-    });
-    
+    // Check if user is specifically assigned or watching
     const isAssigned = task.assignedTo.includes(req.user._id.toString());
     const isWatcher = task.watchers && task.watchers.includes(req.user._id.toString());
-    const isAdmin = req.user.accountType === 'admin';
 
-    // Allow camp owners, roster members, assigned users, watchers, or admins
-    if (!isCampOwner && !isRosterMember && !isAssigned && !isWatcher && !isAdmin) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner, roster member, assigned to task, or watcher' });
+    // Allow camp owners, active roster members, assigned users, or watchers
+    if (!hasCampAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner, active roster member, assigned to task, or watcher' });
     }
 
     console.log('✅ [PUT /api/tasks/:id] User authorized to update task:', {
       userId: req.user._id,
-      isCampOwner,
-      isRosterMember: !!isRosterMember,
+      hasCampAccess,
       isAssigned,
       isWatcher
     });
@@ -762,7 +750,7 @@ router.get('/my-events', authenticateToken, async (req, res) => {
 
 // @route   POST /api/tasks/:id/comments
 // @desc    Add a comment to a task
-// @access  Private (Camp owners, assignees, and watchers)
+// @access  Private (Camp owners, active roster members, assignees, and watchers)
 router.post('/:id/comments', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -778,13 +766,12 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     }
 
     // Check if user has access to this task's camp, is assigned, or is a watcher
-    const hasAccess = await canAccessCamp(req, task.campId);
+    const hasCampAccess = await canAccessCampResources(req, task.campId);
     const isAssigned = task.assignedTo && task.assignedTo.some(userId => userId.toString() === req.user._id.toString());
     const isWatcher = task.watchers && task.watchers.some(userId => userId.toString() === req.user._id.toString());
-    const isAdmin = req.user.accountType === 'admin';
     
-    if (!hasAccess && !isAssigned && !isWatcher && !isAdmin) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner, assigned to task, or watcher' });
+    if (!hasCampAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner, active roster member, assigned to task, or watcher' });
     }
 
     // Add comment
@@ -814,7 +801,7 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
 
 // @route   GET /api/tasks/:id/comments
 // @desc    Get all comments for a task
-// @access  Private (Camp owners, assignees, and watchers)
+// @access  Private (Camp owners, active roster members, assignees, and watchers)
 router.get('/:id/comments', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -829,13 +816,12 @@ router.get('/:id/comments', authenticateToken, async (req, res) => {
     }
 
     // Check if user has access to this task's camp, is assigned, or is a watcher
-    const hasAccess = await canAccessCamp(req, task.campId);
+    const hasCampAccess = await canAccessCampResources(req, task.campId);
     const isAssigned = task.assignedTo && task.assignedTo.some(userId => userId.toString() === req.user._id.toString());
     const isWatcher = task.watchers && task.watchers.some(userId => userId.toString() === req.user._id.toString());
-    const isAdmin = req.user.accountType === 'admin';
     
-    if (!hasAccess && !isAssigned && !isWatcher && !isAdmin) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner, assigned to task, or watcher' });
+    if (!hasCampAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner, active roster member, assigned to task, or watcher' });
     }
 
     res.json(task.comments);
