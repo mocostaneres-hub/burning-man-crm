@@ -5,6 +5,7 @@ import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
 import UserProfileHistory from '../../components/admin/UserProfileHistory';
+import { useSkills } from '../../hooks/useSkills';
 
 // Extended User interface for admin editing with all fields
 interface ExtendedUser extends UserType {
@@ -665,8 +666,10 @@ const UserEditModal: React.FC<{
   onClose: () => void;
   onSave: (user: UserType) => void;
 }> = ({ user, onClose, onSave }) => {
+  const { skills: availableSkills, loading: skillsLoading } = useSkills();
   const [formData, setFormData] = useState<ExtendedUser>({
     ...user,
+    skills: user.skills || [],
     location: typeof user.location === 'string' 
       ? { city: user.location, state: '', country: '' }
       : user.location || { city: '', state: '', country: '' }
@@ -1213,6 +1216,55 @@ const UserEditModal: React.FC<{
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
                 placeholder="Describe the camp's mission, activities, and what makes it special..."
               />
+            </div>
+          </div>
+        )}
+
+        {/* Skills & Interests (for personal accounts) */}
+        {formData.accountType === 'personal' && (
+          <div className="bg-white border rounded-lg p-4">
+            <h3 className="text-lg font-medium text-custom-text mb-4">Skills & Interests</h3>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 mb-4">
+                {formData.skills?.map((skill, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                    <span>{skill}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSkills = formData.skills?.filter((_, i) => i !== index) || [];
+                        setFormData({ ...formData, skills: newSkills });
+                      }}
+                      className="hover:bg-green-200 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="block text-label font-medium text-custom-text mb-2">
+                  Select Skills
+                </label>
+                <select
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent text-gray-900"
+                  value=""
+                  onChange={(e) => {
+                    const skill = e.target.value;
+                    if (skill && !formData.skills?.includes(skill)) {
+                      setFormData({ ...formData, skills: [...(formData.skills || []), skill].sort() });
+                    }
+                    // Reset dropdown
+                    e.target.value = '';
+                  }}
+                  disabled={skillsLoading}
+                >
+                  <option value="">{skillsLoading ? 'Loading skills...' : 'Choose a skill to add...'}</option>
+                  {availableSkills.map((skill) => (
+                    <option key={skill} value={skill}>{skill}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}
