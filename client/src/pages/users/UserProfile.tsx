@@ -42,8 +42,8 @@ const UserProfile: React.FC = () => {
     yearsBurned: 0,
     bio: '',
     playaName: '',
-    hasTicket: null,
-    hasVehiclePass: null,
+    hasTicket: false,
+    hasVehiclePass: false,
     interestedInEAP: false,
     interestedInStrike: false,
     skills: [],
@@ -90,8 +90,8 @@ const UserProfile: React.FC = () => {
         bio: user.bio || '',
         playaName: user.playaName || '',
         profilePhoto: user.profilePhoto,
-        hasTicket: user.hasTicket === true ? true : user.hasTicket === false ? false : null,
-        hasVehiclePass: user.hasVehiclePass === true ? true : user.hasVehiclePass === false ? false : null,
+        hasTicket: user.hasTicket === true ? true : false,
+        hasVehiclePass: user.hasVehiclePass === true ? true : false,
         interestedInEAP: user.interestedInEAP || false,
         interestedInStrike: user.interestedInStrike || false,
         arrivalDate: dateToString(user.arrivalDate),
@@ -157,8 +157,8 @@ const UserProfile: React.FC = () => {
         bio: user.bio || '',
         playaName: user.playaName || '',
         profilePhoto: user.profilePhoto,
-        hasTicket: user.hasTicket === true ? true : user.hasTicket === false ? false : null,
-        hasVehiclePass: user.hasVehiclePass === true ? true : user.hasVehiclePass === false ? false : null,
+        hasTicket: user.hasTicket === true ? true : false,
+        hasVehiclePass: user.hasVehiclePass === true ? true : false,
         interestedInEAP: user.interestedInEAP || false,
         interestedInStrike: user.interestedInStrike || false,
         arrivalDate: dateToString(user.arrivalDate),
@@ -510,16 +510,6 @@ const UserProfile: React.FC = () => {
                   />
                   <span className="text-gray-900">No</span>
                 </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasTicket"
-                    checked={profileData.hasTicket === null || profileData.hasTicket === undefined}
-                    onChange={() => handleInputChange('hasTicket', null)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">Not informed</span>
-                </label>
               </div>
             </div>
             <div>
@@ -547,16 +537,6 @@ const UserProfile: React.FC = () => {
                   />
                   <span className="text-gray-900">No</span>
                 </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasVehiclePass"
-                    checked={profileData.hasVehiclePass === null || profileData.hasVehiclePass === undefined}
-                    onChange={() => handleInputChange('hasVehiclePass', null)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">Not informed</span>
-                </label>
               </div>
             </div>
           </div>
@@ -565,25 +545,17 @@ const UserProfile: React.FC = () => {
             <div>
               <span className="text-sm text-gray-600">Ticket: </span>
               <span className={`font-medium ${
-                profileData.hasTicket === true ? 'text-green-600' : 
-                profileData.hasTicket === false ? 'text-red-600' : 
-                'text-gray-500'
+                profileData.hasTicket === true ? 'text-green-600' : 'text-red-600'
               }`}>
-                {profileData.hasTicket === true ? '✓ Yes' : 
-                 profileData.hasTicket === false ? '✗ No' : 
-                 'Not informed'}
+                {profileData.hasTicket === true ? '✓ Yes' : '✗ No'}
               </span>
             </div>
             <div>
               <span className="text-sm text-gray-600">Has VP: </span>
               <span className={`font-medium ${
-                profileData.hasVehiclePass === true ? 'text-green-600' : 
-                profileData.hasVehiclePass === false ? 'text-red-600' : 
-                'text-gray-500'
+                profileData.hasVehiclePass === true ? 'text-green-600' : 'text-red-600'
               }`}>
-                {profileData.hasVehiclePass === true ? '✓ Yes' : 
-                 profileData.hasVehiclePass === false ? '✗ No' : 
-                 'Not informed'}
+                {profileData.hasVehiclePass === true ? '✓ Yes' : '✗ No'}
               </span>
             </div>
           </div>

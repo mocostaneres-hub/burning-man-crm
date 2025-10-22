@@ -1093,17 +1093,6 @@ const UserEditModal: React.FC<{
                   />
                   <span className="text-sm text-custom-text">No</span>
                 </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="hasTicket"
-                    value="null"
-                    checked={formData.hasTicket === null || formData.hasTicket === undefined}
-                    onChange={() => setFormData({ ...formData, hasTicket: null })}
-                    className="text-custom-primary focus:ring-custom-primary"
-                  />
-                  <span className="text-sm text-custom-text">Not informed</span>
-                </label>
               </div>
             </div>
             <div>
@@ -1132,17 +1121,6 @@ const UserEditModal: React.FC<{
                     className="text-custom-primary focus:ring-custom-primary"
                   />
                   <span className="text-sm text-custom-text">No</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="hasVehiclePass"
-                    value="null"
-                    checked={formData.hasVehiclePass === null || formData.hasVehiclePass === undefined}
-                    onChange={() => setFormData({ ...formData, hasVehiclePass: null })}
-                    className="text-custom-primary focus:ring-custom-primary"
-                  />
-                  <span className="text-sm text-custom-text">Not informed</span>
                 </label>
               </div>
             </div>
