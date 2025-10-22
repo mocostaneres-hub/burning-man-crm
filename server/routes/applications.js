@@ -632,4 +632,71 @@ router.post('/:applicationId/message', authenticateToken, [
 });
 
 
+// @route   PATCH /api/applications/reset/:applicantId/:campId
+// @desc    Reset application status to withdrawn for a specific user and camp (Admin only)
+// @access  Private (Admin only)
+router.patch('/reset/:applicantId/:campId', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.accountType !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { applicantId, campId } = req.params;
+
+    console.log('🔄 [Application Reset] Starting reset for:', { applicantId, campId });
+
+    // Find all applications from this user to this camp
+    const applications = await db.findMemberApplications({
+      applicant: applicantId,
+      camp: campId
+    });
+
+    if (!applications || applications.length === 0) {
+      console.log('❌ [Application Reset] No applications found');
+      return res.status(404).json({ message: 'No applications found for this user and camp' });
+    }
+
+    console.log(`✅ [Application Reset] Found ${applications.length} application(s)`);
+
+    // Define terminal statuses
+    const terminalStatuses = ['deleted', 'withdrawn', 'rejected'];
+    let updatedCount = 0;
+
+    // Update any non-terminal applications to 'withdrawn'
+    for (const app of applications) {
+      if (!terminalStatuses.includes(app.status)) {
+        console.log(`🔄 [Application Reset] Updating application ${app._id} from '${app.status}' to 'withdrawn'`);
+        
+        await db.updateMemberApplication(app._id, {
+          status: 'withdrawn',
+          reviewedAt: new Date(),
+          reviewedBy: req.user._id,
+          reviewNotes: 'Removed from roster - eligible to reapply (admin reset)'
+        });
+        
+        updatedCount++;
+        console.log('✅ [Application Reset] Application updated to "withdrawn"');
+      } else {
+        console.log(`ℹ️  [Application Reset] Application ${app._id} already has terminal status '${app.status}'`);
+      }
+    }
+
+    res.json({
+      message: `Reset complete. ${updatedCount} application(s) updated to withdrawn status.`,
+      totalApplications: applications.length,
+      updatedCount: updatedCount,
+      applications: applications.map(app => ({
+        _id: app._id,
+        status: app.status,
+        appliedAt: app.appliedAt
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ [Application Reset] Error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
