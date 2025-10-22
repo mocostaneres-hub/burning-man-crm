@@ -289,10 +289,16 @@ const TaskManagement: React.FC = () => {
 
     try {
       setCreateLoading(true);
+      console.log('🔄 [TaskManagement] Creating task with creator auto-assigned');
+      
+      // Auto-assign the task creator
       await api.createTask({
         ...newTask,
-        campId
+        campId,
+        assignedTo: [user?._id] // Auto-assign creator
       });
+      
+      console.log('✅ [TaskManagement] Task created with creator assigned');
       
       setNewTask({
         title: '',
@@ -303,7 +309,7 @@ const TaskManagement: React.FC = () => {
       setShowCreateModal(false);
       await fetchTasks();
     } catch (err) {
-      console.error('Error creating task:', err);
+      console.error('❌ [TaskManagement] Error creating task:', err);
       setError('Failed to create task');
     } finally {
       setCreateLoading(false);
@@ -520,11 +526,33 @@ const TaskManagement: React.FC = () => {
                       <span className="text-gray-500">No due date</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {getUserArray(task.assignedTo).length} assigned
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {getUserArray(task.assignedTo).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {getUserArray(task.assignedTo).map((assignee, idx) => (
+                          <span key={assignee._id} className="text-gray-700">
+                            {assignee.firstName} {assignee.lastName}
+                            {idx < getUserArray(task.assignedTo).length - 1 && ','}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">Not assigned</span>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {getUserArray(task.watchers).length} watchers
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {getUserArray(task.watchers).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {getUserArray(task.watchers).map((watcher, idx) => (
+                          <span key={watcher._id} className="text-gray-700">
+                            {watcher.firstName} {watcher.lastName}
+                            {idx < getUserArray(task.watchers).length - 1 && ','}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">None</span>
+                    )}
                   </td>
                 </tr>
               ))}
