@@ -490,7 +490,7 @@ const PublicCampProfile: React.FC = () => {
               )}
             </div>
 
-            {/* Apply Button - Only show for personal accounts */}
+            {/* Apply Button - Only show for personal accounts or non-logged in users */}
             <div className="lg:ml-8">
               {isCampOwner ? (
                 // Camp owner viewing their own profile
@@ -507,36 +507,27 @@ const PublicCampProfile: React.FC = () => {
                     Edit Camp
                   </Button>
                 </div>
-              ) : camp.acceptingNewMembers && camp.showApplyNow && user?.accountType === 'personal' ? (
-                <Button 
-                  onClick={handleApplyNow}
-                  size="lg"
-                  className="w-full lg:w-auto"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Apply Now
-                </Button>
-              ) : camp.acceptingNewMembers && camp.showApplyNow && !user ? (
-                <Button 
-                  onClick={handleApplyNow}
-                  size="lg"
-                  className="w-full lg:w-auto"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Apply Now
-                </Button>
-              ) : camp.acceptingNewMembers && camp.showApplyNow && (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) ? (
-                <div className="text-center p-4 bg-gray-100 rounded-lg">
-                  <p className="text-custom-text-secondary">
-                    Camp accounts cannot apply to other camps
-                  </p>
-                </div>
+              ) : camp.acceptingNewMembers && camp.showApplyNow ? (
+                // Show Apply Now button only for personal accounts or non-logged in users
+                (user?.accountType === 'personal' || !user) ? (
+                  <Button 
+                    onClick={handleApplyNow}
+                    size="lg"
+                    className="w-full lg:w-auto"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Apply Now
+                  </Button>
+                ) : null
               ) : (
-                <div className="text-center p-4 bg-gray-100 rounded-lg">
-                  <p className="text-custom-text-secondary">
-                    Not currently accepting applications
-                  </p>
-                </div>
+                // Camp is not accepting applications
+                user?.accountType === 'personal' || !user ? (
+                  <div className="text-center p-4 bg-gray-100 rounded-lg">
+                    <p className="text-custom-text-secondary">
+                      Not currently accepting applications
+                    </p>
+                  </div>
+                ) : null
               )}
             </div>
           </div>
