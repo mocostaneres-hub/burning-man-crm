@@ -23,7 +23,35 @@ class ApiService {
         const token = localStorage.getItem('token');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          
+          // Log token info for debugging (only first/last few chars for security)
+          console.log('🔑 [API Interceptor] Token present:', 
+            `${token.substring(0, 10)}...${token.substring(token.length - 10)}`
+          );
+          
+          // Try to decode JWT to check expiration (without verifying signature)
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const now = Math.floor(Date.now() / 1000);
+            const expiresIn = payload.exp - now;
+            
+            if (expiresIn < 0) {
+              console.warn('⚠️ [API Interceptor] Token appears to be expired!', {
+                expired: new Date(payload.exp * 1000).toISOString(),
+                now: new Date(now * 1000).toISOString()
+              });
+            } else if (expiresIn < 300) { // Less than 5 minutes
+              console.warn('⚠️ [API Interceptor] Token expires soon:', expiresIn, 'seconds');
+            } else {
+              console.log('✅ [API Interceptor] Token valid for:', Math.floor(expiresIn / 60), 'minutes');
+            }
+          } catch (e) {
+            console.error('❌ [API Interceptor] Could not decode token:', e);
+          }
+        } else {
+          console.warn('⚠️ [API Interceptor] No token found in localStorage');
         }
+        
         console.log('🔄 [API Interceptor] Request:', config.method?.toUpperCase(), config.url);
         if (config.data) {
           console.log('🔄 [API Interceptor] Request Data:', JSON.stringify(config.data, null, 2));
@@ -43,13 +71,28 @@ class ApiService {
         return response;
       },
       (error) => {
-        if (error.response?.status === 401) {
-          // Only redirect to login if the error message indicates invalid/expired token
+        console.error('❌ [API Interceptor] Error:', error.response?.status, error.response?.data);
+        
+        if (error.response?.status === 401 || error.response?.status === 403) {
           const errorMessage = error.response?.data?.message || '';
-          if (errorMessage.includes('Invalid') || errorMessage.includes('expired') || errorMessage.includes('token')) {
+          console.error('❌ [API Interceptor] Auth error:', errorMessage);
+          
+          // Only redirect to login if it's specifically a token issue
+          // Don't redirect for other 403 errors (like permission denied)
+          if (errorMessage.includes('Invalid or expired token') || 
+              errorMessage.includes('Access token required') ||
+              errorMessage === 'Invalid token') {
+            console.warn('⚠️ [API Interceptor] Token invalid, clearing and redirecting to login');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            window.location.href = '/login';
+            
+            // Don't redirect if already on login page
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
+          } else {
+            // For other auth errors, let the component handle them
+            console.log('ℹ️ [API Interceptor] Auth error will be handled by component:', errorMessage);
           }
         }
         return Promise.reject(error);
