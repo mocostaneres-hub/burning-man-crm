@@ -1473,10 +1473,10 @@ const MemberRoster: React.FC = () => {
                     </div>
                   </div>
 
-                      {/* Ticket & Vehicle Pass */}
+                      {/* Ticket & VP */}
                   <div>
                     <h3 className="text-lg font-lato-bold text-custom-text mb-2">
-                      Ticket & Vehicle Pass
+                      Ticket & VP
                     </h3>
                     <div className="text-sm space-y-1">
                           <div>Ticket: <span className={
@@ -1878,7 +1878,7 @@ const MemberRoster: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-custom-text mb-2">
-                          Has Vehicle Pass
+                          Has VP
                         </label>
                         <select
                           value={user?.hasVehiclePass ? 'yes' : 'no'}

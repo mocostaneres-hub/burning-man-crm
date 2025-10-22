@@ -575,7 +575,7 @@ const UserProfile: React.FC = () => {
               </span>
             </div>
             <div>
-              <span className="text-sm text-gray-600">Vehicle Pass: </span>
+              <span className="text-sm text-gray-600">Has VP: </span>
               <span className={`font-medium ${
                 profileData.hasVehiclePass === true ? 'text-green-600' : 
                 profileData.hasVehiclePass === false ? 'text-red-600' : 

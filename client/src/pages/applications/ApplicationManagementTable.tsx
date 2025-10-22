@@ -703,10 +703,10 @@ const ApplicationManagementTable: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Ticket & Vehicle Pass */}
+                {/* Ticket & VP */}
                 <div>
                   <h3 className="text-lg font-lato-bold text-custom-text mb-2">
-                    Ticket & Vehicle Pass
+                    Ticket & VP
                   </h3>
                   <div className="text-sm space-y-1">
                     <div>Ticket: <span className={

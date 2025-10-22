@@ -1108,7 +1108,7 @@ const UserEditModal: React.FC<{
             </div>
             <div>
               <label className="block text-label font-medium text-custom-text mb-3">
-                Has Vehicle Pass
+                Has VP
               </label>
               <div className="space-y-2">
                 <label className="flex items-center space-x-2">

@@ -200,7 +200,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
           />
         </div>
 
-        {/* Ticket & Vehicle Pass Status */}
+        {/* Ticket & VP Status */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Logistics</h3>
           
@@ -244,7 +244,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Has Vehicle Pass?
+              Has VP?
             </label>
             <div className="flex gap-4">
               <label className="flex items-center">

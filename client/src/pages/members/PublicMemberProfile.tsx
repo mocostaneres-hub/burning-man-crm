@@ -277,13 +277,13 @@ const PublicMemberProfile: React.FC = () => {
                 </div>
               </div>
 
-              {/* Vehicle Pass */}
+              {/* VP */}
               <div className="flex items-center gap-3">
                 <CarIcon className="w-5 h-5 text-custom-primary" />
                 <div>
-                  <p className="text-sm font-medium text-custom-text">Vehicle Pass</p>
+                  <p className="text-sm font-medium text-custom-text">Has VP</p>
                   <p className="text-sm text-custom-text-secondary">
-                    {profileData.hasVehiclePass ? 'Has vehicle pass' : 'No vehicle pass'}
+                    {profileData.hasVehiclePass ? 'Has VP' : 'No VP'}
                   </p>
                 </div>
               </div>
