@@ -139,8 +139,8 @@ const TaskManagement: React.FC = () => {
   }, [campId, fetchTasks]);
 
 
-  const loadRosterMembers = async () => {
-    if (!campId || rosterMembers.length > 0) return;
+  const loadRosterMembers = useCallback(async () => {
+    if (!campId) return;
     
     try {
       setLoadingMembers(true);
@@ -163,7 +163,7 @@ const TaskManagement: React.FC = () => {
     } finally {
       setLoadingMembers(false);
     }
-  };
+  }, [campId]);
 
   const getPriorityVariant = (priority: string): 'success' | 'warning' | 'error' | 'info' | 'neutral' => {
     switch (priority) {
@@ -199,6 +199,9 @@ const TaskManagement: React.FC = () => {
     });
     setIsEditMode(false);
     setShowTaskModal(true);
+    
+    // Load roster members for assign/watchers dropdowns
+    console.log('🔄 [TaskManagement] Loading roster members for task modal');
     await loadRosterMembers();
   }, [loadRosterMembers]);
 
@@ -251,18 +254,21 @@ const TaskManagement: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      await api.updateTask(selectedTask._id, editTask);
+      console.log('🔄 [TaskManagement] Updating task:', selectedTask._id, 'with data:', editTask);
+      const updatedTask = await api.updateTask(selectedTask._id, editTask);
+      console.log('✅ [TaskManagement] Task updated successfully:', updatedTask);
+      
+      // Refresh the tasks list
       await fetchTasks();
+      
+      // Update the selected task with the new data
+      setSelectedTask(updatedTask);
       setIsEditMode(false);
-      // Refresh selected task to show updated data
-      const updatedTasks = await api.getTasks(campId!);
-      const refreshedTask = updatedTasks.find((t: GlobalTask) => t._id === selectedTask._id);
-      if (refreshedTask) {
-        setSelectedTask(refreshedTask);
-      }
-    } catch (err) {
-      console.error('Error updating task:', err);
-      setError('Failed to update task');
+    } catch (err: any) {
+      console.error('❌ [TaskManagement] Error updating task:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to update task';
+      setError(errorMessage);
+      alert(`Failed to update task: ${errorMessage}`);
     }
   };
 
@@ -831,7 +837,23 @@ const TaskManagement: React.FC = () => {
                   </Button>
                   <Button 
                     variant="outline" 
-                    onClick={() => setIsEditMode(false)}
+                    onClick={() => {
+                      // Reset form to original task data
+                      if (selectedTask) {
+                        const assignees = getUserArray(selectedTask.assignedTo);
+                        const taskWatchers = getUserArray(selectedTask.watchers);
+                        setEditTask({
+                          title: selectedTask.title,
+                          description: selectedTask.description,
+                          priority: selectedTask.priority,
+                          dueDate: selectedTask.dueDate || '',
+                          status: selectedTask.status,
+                          assignedTo: assignees.map(u => u._id.toString()),
+                          watchers: taskWatchers.map(u => u._id.toString())
+                        });
+                      }
+                      setIsEditMode(false);
+                    }}
                   >
                     Cancel
                   </Button>
