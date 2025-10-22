@@ -625,7 +625,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const user = await db.findUser({ _id: parseInt(id) });
+    const user = await db.findUser({ _id: id });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -691,8 +691,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
     console.log('🔍 [PUT /api/users/:id] Admin ID:', req.user._id);
     console.log('🔍 [PUT /api/users/:id] Target user ID:', id);
 
-    // Find target user
-    const targetUser = await db.findUser({ _id: parseInt(id) });
+    // Find target user (handle both MongoDB ObjectId strings and numeric IDs)
+    const targetUser = await db.findUser({ _id: id });
     if (!targetUser) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -715,7 +715,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
     if (Object.keys(changes).length > 0) {
       const historyEntry = {
         _id: Date.now(), // Simple ID generation for mock database
-        userId: parseInt(id),
+        userId: id,
         editorId: req.user._id,
         editorName: `${adminUser.firstName} ${adminUser.lastName}`,
         changes: changes,
@@ -731,8 +731,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
       updateData.userHistory = targetUser.userHistory;
     }
 
-    // Update user using database adapter
-    const updatedUser = await db.updateUserById(parseInt(id), updateData);
+    // Update user using database adapter (handle both MongoDB ObjectId strings and numeric IDs)
+    const updatedUser = await db.updateUserById(id, updateData);
     
     if (!updatedUser) {
       return res.status(404).json({ message: 'User not found or update failed' });
@@ -742,8 +742,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
     try {
       console.log('🔄 [PUT /api/users/:id] Starting applications and roster sync...');
       
-      // Update applications where this user is the applicant
-      const applications = await db.findMemberApplications({ applicant: parseInt(id) });
+      // Update applications where this user is the applicant (handle both MongoDB ObjectId strings and numeric IDs)
+      const applications = await db.findMemberApplications({ applicant: id });
       console.log(`🔍 [PUT /api/users/:id] Found ${applications.length} applications to update`);
       
       for (const application of applications) {
@@ -853,7 +853,7 @@ router.get('/:id/history', authenticateToken, requireAdmin, async (req, res) => 
   try {
     const { id } = req.params;
     
-    const user = await db.findUser({ _id: parseInt(id) });
+    const user = await db.findUser({ _id: id });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
