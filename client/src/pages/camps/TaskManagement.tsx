@@ -140,12 +140,17 @@ const TaskManagement: React.FC = () => {
 
 
   const loadRosterMembers = useCallback(async () => {
-    if (!campId) return;
+    if (!campId) {
+      console.log('⚠️ [TaskManagement] No campId available for loading roster');
+      return;
+    }
     
+    // Always reload roster members when called
     try {
       setLoadingMembers(true);
+      console.log('🔄 [TaskManagement] Loading roster members for camp:', campId);
       const response = await api.get(`/rosters/camp/${campId}`);
-      console.log('🔍 [TaskManagement] Roster response:', response);
+      console.log('✅ [TaskManagement] Roster response:', response);
       
       if (response.data && response.data.members) {
         console.log('📋 [TaskManagement] Members from response.data.members:', response.data.members);
@@ -153,12 +158,16 @@ const TaskManagement: React.FC = () => {
       } else if (response.members) {
         console.log('📋 [TaskManagement] Members from response.members:', response.members);
         setRosterMembers(response.members);
+      } else if (Array.isArray(response)) {
+        console.log('📋 [TaskManagement] Response is array, using directly:', response);
+        setRosterMembers(response);
       } else {
         console.warn('⚠️ [TaskManagement] No members found in response');
         setRosterMembers([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ [TaskManagement] Error loading roster members:', err);
+      console.error('❌ [TaskManagement] Error details:', err.response?.data || err.message);
       setRosterMembers([]);
     } finally {
       setLoadingMembers(false);
