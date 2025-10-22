@@ -701,7 +701,7 @@ const UserEditModal: React.FC<{
         const base64Result = e.target?.result as string;
         setPhotoPreview(base64Result);
         // Update formData immediately so it's ready for save
-        setFormData({ ...formData, profilePhoto: base64Result });
+        setFormData(prev => ({ ...prev, profilePhoto: base64Result }));
       };
       reader.readAsDataURL(file);
     }
