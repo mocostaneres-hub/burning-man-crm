@@ -557,7 +557,7 @@ const PublicCampProfile: React.FC = () => {
               Application Submitted Successfully!
             </h3>
             <p className="text-custom-text-secondary">
-              You've successfully submitted your application to join {camp.name}. 
+              You've successfully submitted your application to join {camp.campName}. 
               Their leads will review your info and get in touch for next steps.
             </p>
           </div>
