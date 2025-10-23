@@ -411,8 +411,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const hasCampAccess = await canAccessCampResources(req, task.campId);
     
     // Check if user is specifically assigned or watching
-    const isAssigned = task.assignedTo.includes(req.user._id.toString());
-    const isWatcher = task.watchers && task.watchers.includes(req.user._id.toString());
+    const currentUserId = req.user._id.toString();
+    const isAssigned = task.assignedTo && task.assignedTo.some(assigneeId => assigneeId.toString() === currentUserId);
+    const isWatcher = task.watchers && task.watchers.some(watcherId => watcherId.toString() === currentUserId);
 
     // Allow camp owners, active roster members, assigned users, or watchers
     if (!hasCampAccess && !isAssigned && !isWatcher) {
@@ -420,10 +421,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     console.log('✅ [PUT /api/tasks/:id] User authorized to update task:', {
-      userId: req.user._id,
+      userId: currentUserId,
       hasCampAccess,
       isAssigned,
-      isWatcher
+      isWatcher,
+      assignedToArray: task.assignedTo.map(id => id.toString()),
+      watchersArray: task.watchers ? task.watchers.map(id => id.toString()) : []
     });
 
     // Track changes before updating
