@@ -125,18 +125,42 @@ async function isActiveRosterMember(req, targetCampId) {
       return false;
     }
 
+    const currentUserId = req.user._id.toString();
+    console.log('🔍 [Permission] Checking roster membership for user:', currentUserId);
+    console.log('🔍 [Permission] Roster has', activeRoster.members.length, 'members');
+
     // Check if user is in the active roster
-    const isMember = activeRoster.members.some(member => {
-      // Handle both populated and non-populated member references
-      const memberId = member.member?._id || member.member;
-      const userId = member.member?.user?._id || member.member?.user;
+    const isMember = activeRoster.members.some(rosterEntry => {
+      // The roster structure is: roster.members[].member (Member doc) -> member.user (User ID)
+      // When populated: member.member.user._id
+      // When not populated: member.member (Member ID)
       
-      // Check if this roster entry matches the current user
-      return userId && userId.toString() === req.user._id.toString();
+      let userId = null;
+      
+      if (rosterEntry.member) {
+        if (rosterEntry.member.user) {
+          // Populated: member.user could be an object or an ID
+          userId = rosterEntry.member.user._id || rosterEntry.member.user;
+        } else if (rosterEntry.user) {
+          // Some structures have user directly on the roster entry
+          userId = rosterEntry.user._id || rosterEntry.user;
+        }
+      } else if (rosterEntry.user) {
+        // Direct user reference on roster entry
+        userId = rosterEntry.user._id || rosterEntry.user;
+      }
+      
+      if (userId) {
+        const userIdStr = userId.toString();
+        console.log('🔍 [Permission] Comparing roster user:', userIdStr, 'with current user:', currentUserId);
+        return userIdStr === currentUserId;
+      }
+      
+      return false;
     });
 
     console.log(`${isMember ? '✅' : '❌'} [Permission] Roster member check:`, {
-      userId: req.user._id.toString(),
+      userId: currentUserId,
       campId: targetCampId.toString(),
       isMember
     });
