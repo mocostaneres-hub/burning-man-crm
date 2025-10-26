@@ -89,7 +89,7 @@ const Navbar: React.FC = () => {
         { label: 'Tasks', path: '/camp/tasks', icon: <Task size={18} /> },
         { label: 'Events', path: '/camp/shifts', icon: <Calendar size={18} /> },
         { label: 'Dashboard', path: '/dashboard', icon: <Dashboard size={18} /> },
-        { label: 'Help', path: '/help', icon: <Help size={18} /> },
+        { label: 'Help', path: '/camp/help', icon: <Help size={18} /> },
         ...(user?.accountType === 'admin' ? [
           { label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> }
         ] : [])
@@ -104,7 +104,7 @@ const Navbar: React.FC = () => {
         { label: 'My Tasks', path: '/tasks', icon: <Task size={18} /> },
         { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> },
         { label: 'Principles', path: '/principles', icon: <Book size={18} /> },
-        { label: 'Help', path: '/help', icon: <Help size={18} /> }
+        { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
       ];
     }
 

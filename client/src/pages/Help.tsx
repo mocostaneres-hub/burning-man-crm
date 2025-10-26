@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Card, Input, Modal } from '../components/ui';
 import { Send, MessageCircle as MessageCircleIcon, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
 
 interface FAQ {
@@ -28,6 +28,7 @@ interface SupportMessage {
 const Help: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,15 +40,25 @@ const Help: React.FC = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // Determine the target audience based on URL or user account type
+  // Determine the target audience based on URL
   const getTargetAudience = () => {
-    if (location.pathname === '/help/camps') return 'camps';
-    if (location.pathname === '/help/members') return 'members';
-    if (user?.accountType === 'camp') return 'camps';
-    if (user?.accountType === 'personal') return 'members';
+    if (location.pathname === '/camp/help') return 'camps';
+    if (location.pathname === '/member/help') return 'members';
     if (user?.accountType === 'admin') return 'all';
-    return 'both'; // Default for non-authenticated users
+    return 'both'; // Default for non-authenticated users on /help
   };
+
+  // Redirect authenticated users from /help to their appropriate help page
+  useEffect(() => {
+    if (location.pathname === '/help' && user) {
+      if (user.accountType === 'camp') {
+        navigate('/camp/help', { replace: true });
+      } else if (user.accountType === 'personal') {
+        navigate('/member/help', { replace: true });
+      }
+      // Admin users stay on /help to see all FAQs
+    }
+  }, [location.pathname, user, navigate]);
 
   useEffect(() => {
     loadHelpData();
