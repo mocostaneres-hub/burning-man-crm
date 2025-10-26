@@ -316,7 +316,7 @@ const AdminDashboard: React.FC = () => {
       <div className="mb-6">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
-            {['Users', 'Camps', 'Configuration'].map((tab, index) => (
+            {['Users', 'Camps', 'Configuration', 'FAQ Management'].map((tab, index) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(index)}
@@ -334,7 +334,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Search - only show for Users and Camps tabs */}
-      {activeTab !== 2 && (
+      {activeTab !== 2 && activeTab !== 3 && (
         <div className="mb-6">
           <div className="relative max-w-md">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -582,6 +582,39 @@ const AdminDashboard: React.FC = () => {
       {/* Configuration Tab */}
       {activeTab === 2 && (
         <SystemConfig />
+      )}
+
+      {/* FAQ Management Tab */}
+      {activeTab === 3 && (
+        <Card>
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-h2 font-lato-bold text-custom-text">
+                FAQ Management
+              </h2>
+              <Button
+                onClick={() => window.open('/help/admin', '_blank')}
+                className="bg-custom-primary hover:bg-custom-primary-dark text-white"
+              >
+                Open FAQ Admin
+              </Button>
+            </div>
+            <div className="text-custom-text-secondary">
+              <p className="mb-4">
+                Manage frequently asked questions for different user types. You can create, edit, and organize FAQs that will be displayed to users based on their account type.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-medium text-blue-900 mb-2">FAQ Features:</h3>
+                <ul className="text-blue-800 space-y-1">
+                  <li>• Create and edit FAQs with categories</li>
+                  <li>• Set display audience (Camps, Members, or Both)</li>
+                  <li>• Control FAQ ordering and active status</li>
+                  <li>• Automatic filtering based on user account type</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* User Edit Modal */}

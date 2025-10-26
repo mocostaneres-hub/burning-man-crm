@@ -11,7 +11,21 @@ interface FAQ {
   category: string;
   order: number;
   isActive: boolean;
-  audience?: 'camps' | 'members' | 'both';
+  audience: 'camps' | 'members' | 'both';
+  createdBy?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  updatedBy?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 const FAQAdmin: React.FC = () => {
@@ -47,7 +61,7 @@ const FAQAdmin: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiService.get('/admin/faqs');
-      setFaqs(response.data);
+      setFaqs(response.faqs || []);
     } catch (err) {
       console.error('Error loading FAQs:', err);
       setError('Failed to load FAQs');
@@ -68,12 +82,12 @@ const FAQAdmin: React.FC = () => {
 
       if (editingFAQ._id) {
         // Update existing FAQ
-        await apiService.put(`/admin/faqs/${editingFAQ._id}`, editingFAQ);
-        setFaqs(faqs.map(faq => faq._id === editingFAQ._id ? editingFAQ : faq));
+        const response = await apiService.put(`/admin/faqs/${editingFAQ._id}`, editingFAQ);
+        setFaqs(faqs.map(faq => faq._id === editingFAQ._id ? response.faq : faq));
       } else {
         // Create new FAQ
         const response = await apiService.post('/admin/faqs', editingFAQ);
-        setFaqs([...faqs, response.data]);
+        setFaqs([...faqs, response.faq]);
       }
 
       setEditingFAQ(null);

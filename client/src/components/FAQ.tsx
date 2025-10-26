@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
 
 interface FAQItem {
   question: string;
@@ -136,13 +137,30 @@ const memberFAQData: FAQItem[] = [
 const FAQ: React.FC = () => {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState<string | false>(false);
+  const [faqData, setFaqData] = useState<FAQItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const handleToggle = (panel: string) => {
     setExpanded(expanded === panel ? false : panel);
   };
 
-  // Use appropriate FAQ data based on user account type
-  const faqData = user?.accountType === 'camp' ? campFAQData : memberFAQData;
+  useEffect(() => {
+    const loadFAQs = async () => {
+      try {
+        setLoading(true);
+        const response = await apiService.get('/help/faqs');
+        setFaqData(response.faqs || []);
+      } catch (error) {
+        console.error('Error loading FAQs:', error);
+        // Fallback to static data if API fails
+        setFaqData(user?.accountType === 'camp' ? campFAQData : memberFAQData);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFAQs();
+  }, [user?.accountType]);
 
   return (
     <div className="py-16 bg-custom-bg">
@@ -163,7 +181,13 @@ const FAQ: React.FC = () => {
         </div>
 
         <div className="max-w-4xl mx-auto">
-          {faqData.map((faq, index) => (
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-custom-primary"></div>
+              <p className="mt-2 text-custom-text-secondary">Loading FAQs...</p>
+            </div>
+          ) : (
+            faqData.map((faq, index) => (
             <div
               key={index}
               className="mb-4 bg-white border border-gray-200 rounded-lg overflow-hidden"
@@ -189,7 +213,8 @@ const FAQ: React.FC = () => {
                 </div>
               )}
             </div>
-          ))}
+          ))
+          )}
         </div>
 
         <div className="text-center mt-12">
