@@ -127,16 +127,35 @@ const TaskManagement: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    // Redirect personal accounts to their My Tasks page
-    if (user?.accountType === 'personal') {
-      navigate('/tasks');
-      return;
-    }
-    
     if (user?.campId) {
       fetchCampData();
     }
-  }, [user?.campId, user?.accountType, navigate]);
+  }, [user?.campId]);
+
+  // Handle editTaskId from location state (for personal accounts)
+  useEffect(() => {
+    const handleEditFromState = async () => {
+      if (location.state?.editTaskId && !campId) {
+        try {
+          // Fetch the task to get its campId
+          const task = await api.get(`/tasks/${location.state.editTaskId}`);
+          if (task.campId) {
+            setCampId(task.campId);
+            // Wait for tasks to load, then open the task in edit mode
+            setTimeout(() => {
+              const taskToEdit = tasks.find(t => t._id === location.state.editTaskId);
+              if (taskToEdit) {
+                handleTaskClick(taskToEdit);
+              }
+            }, 500);
+          }
+        } catch (err) {
+          console.error('Error loading task for editing:', err);
+        }
+      }
+    };
+    handleEditFromState();
+  }, [location.state, campId, tasks]);
 
   useEffect(() => {
     if (campId) {

@@ -319,16 +319,13 @@ const TaskDetailsPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4 border-t">
-          {/* Only show Edit button for camp/admin accounts */}
-          {(user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) && (
-            <Button
-              onClick={() => navigate('/camp/tasks', { state: { editTaskId: task._id } })}
-              variant="outline"
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit
-            </Button>
-          )}
+          <Button
+            onClick={() => navigate('/camp/tasks', { state: { editTaskId: task._id } })}
+            variant="outline"
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
           {task.status === 'open' ? (
             <Button
               onClick={handleCloseTask}
