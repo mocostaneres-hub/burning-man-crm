@@ -106,7 +106,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="/camp/tasks" element={
-                    <ProtectedRoute requireCampAccount>
+                    <ProtectedRoute>
                       <TaskManagement />
                     </ProtectedRoute>
                   } />
