@@ -124,4 +124,137 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// @route   POST /api/admin/faqs/restore
+// @desc    Restore original FAQs (Admin only)
+// @access  Private (Admin only)
+router.post('/restore', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const originalFAQs = [
+      {
+        question: 'How do I create a camp profile?',
+        answer: 'To create a camp profile, go to your dashboard and click "Create Camp". Fill out all the required information including camp name, contact email, and Playa location.',
+        category: 'Camp Management',
+        order: 1,
+        isActive: true,
+        audience: 'camps',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'How do I add members to my camp?',
+        answer: 'You can add members by going to the "Manage Members" section in your dashboard. Click "Add Member" and fill out their information.',
+        category: 'Camp Management',
+        order: 2,
+        isActive: true,
+        audience: 'camps',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'Can I edit my camp profile after creating it?',
+        answer: 'Yes! You can edit your camp profile at any time by going to "Your Camp" in the navigation menu.',
+        category: 'Camp Management',
+        order: 3,
+        isActive: true,
+        audience: 'camps',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'How do I contact support?',
+        answer: 'You can contact our support team using the contact form on the Help page. We typically respond within 24 hours.',
+        category: 'Technical Support',
+        order: 1,
+        isActive: true,
+        audience: 'both',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'What if I forget my password?',
+        answer: 'Click "Forgot your password?" on the login page and enter your email address. We\'ll send you a link to reset your password.',
+        category: 'Account Management',
+        order: 1,
+        isActive: true,
+        audience: 'both',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'How do I find a camp to join?',
+        answer: 'Use the "Discover Camps" section to browse available camps. You can search by interests, location, or camp type. Read camp profiles to learn about their mission and what they\'re looking for in members.',
+        category: 'Applications',
+        order: 1,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'What should I include in my camp application?',
+        answer: 'Be honest about your G8Road experience, skills you can contribute, availability during the event, and what you hope to get out of joining the camp. Include relevant experience with art, cooking, construction, or other valuable skills.',
+        category: 'Applications',
+        order: 2,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'How long does it take to hear back from camps?',
+        answer: 'Response times vary by camp, but most camps try to respond within a few days to a week. If you don\'t hear back, you can send a follow-up message or apply to other camps that interest you.',
+        category: 'Applications',
+        order: 3,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'Can I apply to multiple camps?',
+        answer: 'Yes! You can apply to multiple camps to increase your chances of finding the right fit. Just be transparent with camps if you\'re accepted by multiple and need to make a decision.',
+        category: 'Applications',
+        order: 4,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'What if I\'m new to G8Road?',
+        answer: 'Many camps welcome newcomers! Look for camps that specifically mention being newbie-friendly or that offer orientation programs. Don\'t be afraid to mention your new status in applications - enthusiasm and willingness to learn are valuable qualities.',
+        category: 'Applications',
+        order: 5,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'How do I discover events and experiences?',
+        answer: 'Use our events calendar to find workshops, art installations, performances, and community events happening throughout G8Road week. You can filter by type, time, location, and interests.',
+        category: 'General',
+        order: 1,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+      {
+        question: 'Can I message camps directly?',
+        answer: 'Yes! Our messaging system allows you to communicate directly with camp leaders to ask questions, learn more about their community, and discuss your potential fit with the camp.',
+        category: 'General',
+        order: 2,
+        isActive: true,
+        audience: 'members',
+        createdBy: req.user._id,
+      },
+    ];
+
+    // Clear existing FAQs
+    await FAQ.deleteMany({});
+    
+    // Insert the original FAQs
+    const insertedFAQs = await FAQ.insertMany(originalFAQs);
+    
+    res.json({ 
+      message: 'FAQs restored successfully',
+      count: insertedFAQs.length,
+      faqs: insertedFAQs
+    });
+  } catch (error) {
+    console.error('Restore FAQs error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

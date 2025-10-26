@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Modal, Input, Badge } from '../../components/ui';
-import { Plus, Edit, Trash2, Save as SaveIcon, X, Loader2, HelpCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Save as SaveIcon, X, Loader2, HelpCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 
@@ -135,6 +135,25 @@ const FAQAdmin: React.FC = () => {
     setEditingFAQ(prev => prev ? { ...prev, [field]: value } : null);
   };
 
+  const handleRestoreFAQs = async () => {
+    if (!window.confirm('Are you sure you want to restore the original FAQs? This will delete all existing FAQs and replace them with the default set.')) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError('');
+      const response = await apiService.post('/admin/faqs/restore');
+      await loadFAQs(); // Reload the FAQs
+      alert(`Successfully restored ${response.count} FAQs!`);
+    } catch (err) {
+      console.error('Error restoring FAQs:', err);
+      setError('Failed to restore FAQs');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -157,14 +176,29 @@ const FAQAdmin: React.FC = () => {
             Manage frequently asked questions and answers
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={handleCreateFAQ}
-          className="flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add FAQ
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleRestoreFAQs}
+            disabled={saving}
+            className="flex items-center gap-2"
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            Restore FAQs
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleCreateFAQ}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add FAQ
+          </Button>
+        </div>
       </div>
 
       {error && (
