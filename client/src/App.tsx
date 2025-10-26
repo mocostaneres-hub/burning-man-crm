@@ -156,6 +156,8 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="/help" element={<Help />} />
+                  <Route path="/help/camps" element={<Help />} />
+                  <Route path="/help/members" element={<Help />} />
                   <Route path="/help/admin" element={
                     <ProtectedRoute requireAdmin>
                       <FAQAdmin />

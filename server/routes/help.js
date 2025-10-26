@@ -6,21 +6,37 @@ const FAQ = require('../models/FAQ');
 
 const router = express.Router();
 
+// Optional authentication middleware
+const optionalAuth = (req, res, next) => {
+  // Try to authenticate, but don't fail if no token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    // If token exists, use normal authentication
+    return authenticateToken(req, res, next);
+  } else {
+    // No token, continue without user
+    req.user = null;
+    next();
+  }
+};
+
 // @route   GET /api/help/faqs
-// @desc    Get all active FAQs
-// @access  Public
-router.get('/faqs', async (req, res) => {
+// @desc    Get all active FAQs filtered by account type
+// @access  Public (with optional authentication)
+router.get('/faqs', optionalAuth, async (req, res) => {
   try {
     // Build audience filter based on user account type
     let audienceFilter = ['both']; // Default for non-authenticated users
     
     if (req.user) {
-      if (req.user.accountType === 'camp') {
+      if (req.user.accountType === 'admin') {
+        // Admin users see all FAQs
+        audienceFilter = ['both', 'camps', 'members'];
+      } else if (req.user.accountType === 'camp') {
         audienceFilter = ['both', 'camps'];
       } else if (req.user.accountType === 'personal') {
         audienceFilter = ['both', 'members'];
       }
-      // Admin users see all FAQs
     }
 
     const faqs = await FAQ.find({

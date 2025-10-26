@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Input, Modal } from '../components/ui';
 import { Send, MessageCircle as MessageCircleIcon, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
-// import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import apiService from '../services/api';
 
 interface FAQ {
@@ -25,7 +26,8 @@ interface SupportMessage {
 }
 
 const Help: React.FC = () => {
-  // const { } = useAuth(); // Removed unused auth
+  const { user } = useAuth();
+  const location = useLocation();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,9 +39,19 @@ const Help: React.FC = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Determine the target audience based on URL or user account type
+  const getTargetAudience = () => {
+    if (location.pathname === '/help/camps') return 'camps';
+    if (location.pathname === '/help/members') return 'members';
+    if (user?.accountType === 'camp') return 'camps';
+    if (user?.accountType === 'personal') return 'members';
+    if (user?.accountType === 'admin') return 'all';
+    return 'both'; // Default for non-authenticated users
+  };
+
   useEffect(() => {
     loadHelpData();
-  }, []);
+  }, [location.pathname, user?.accountType]);
 
   const loadHelpData = async () => {
     try {
@@ -58,7 +70,22 @@ const Help: React.FC = () => {
   const loadFAQs = async () => {
     try {
       const response = await apiService.get('/help/faqs');
-      setFaqs(response.faqs || []);
+      const allFaqs = response.faqs || [];
+      
+      // Filter FAQs based on target audience
+      const targetAudience = getTargetAudience();
+      let filteredFaqs = allFaqs;
+      
+      if (targetAudience === 'camps') {
+        filteredFaqs = allFaqs.filter(faq => faq.audience === 'camps' || faq.audience === 'both');
+      } else if (targetAudience === 'members') {
+        filteredFaqs = allFaqs.filter(faq => faq.audience === 'members' || faq.audience === 'both');
+      } else if (targetAudience === 'both') {
+        filteredFaqs = allFaqs.filter(faq => faq.audience === 'both');
+      }
+      // For 'all' (admin), show all FAQs
+      
+      setFaqs(filteredFaqs);
     } catch (err) {
       console.error('Error loading FAQs:', err);
     }
@@ -106,7 +133,16 @@ const Help: React.FC = () => {
           Help & Support
         </h1>
         <p className="text-body text-custom-text-secondary">
-          Find answers to common questions or contact our support team
+          {(() => {
+            const targetAudience = getTargetAudience();
+            if (targetAudience === 'camps') {
+              return 'Find answers to common questions about managing your camp or contact our support team';
+            } else if (targetAudience === 'members') {
+              return 'Find answers to common questions about finding camps and your G8Road experience or contact our support team';
+            } else {
+              return 'Find answers to common questions or contact our support team';
+            }
+          })()}
         </p>
       </div>
 
@@ -142,7 +178,16 @@ const Help: React.FC = () => {
               Frequently Asked Questions
             </h2>
             <p className="text-body text-custom-text-secondary">
-              Find quick answers to common questions about using the G8Road CRM
+              {(() => {
+                const targetAudience = getTargetAudience();
+                if (targetAudience === 'camps') {
+                  return 'Find quick answers to common questions about managing your camp';
+                } else if (targetAudience === 'members') {
+                  return 'Find quick answers to common questions about finding camps and your G8Road experience';
+                } else {
+                  return 'Find quick answers to common questions about using the G8Road CRM';
+                }
+              })()}
             </p>
           </div>
 
