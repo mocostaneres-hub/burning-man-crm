@@ -136,26 +136,40 @@ const TaskManagement: React.FC = () => {
   useEffect(() => {
     const handleEditFromState = async () => {
       if (location.state?.editTaskId && !campId) {
-        try {
-          // Fetch the task to get its campId
-          const task = await api.get(`/tasks/${location.state.editTaskId}`);
-          if (task.campId) {
-            setCampId(task.campId);
-            // Wait for tasks to load, then open the task in edit mode
-            setTimeout(() => {
-              const taskToEdit = tasks.find(t => t._id === location.state.editTaskId);
-              if (taskToEdit) {
-                handleTaskClick(taskToEdit);
-              }
-            }, 500);
+        // Use campId from location state if available
+        if (location.state.campId) {
+          setCampId(location.state.campId);
+          // Wait for tasks to load, then open the task in edit mode
+          setTimeout(() => {
+            const taskToEdit = tasks.find(t => t._id === location.state.editTaskId);
+            if (taskToEdit) {
+              handleTaskClick(taskToEdit);
+            }
+          }, 500);
+        } else {
+          // Fallback: try to find the task in assigned tasks
+          try {
+            const assignedTasks = await api.get(`/tasks/assigned/${user?._id}`);
+            const taskToEdit = assignedTasks.find((t: any) => t._id === location.state.editTaskId);
+            
+            if (taskToEdit && taskToEdit.campId) {
+              setCampId(taskToEdit.campId);
+              // Wait for tasks to load, then open the task in edit mode
+              setTimeout(() => {
+                const taskToEditAfterLoad = tasks.find(t => t._id === location.state.editTaskId);
+                if (taskToEditAfterLoad) {
+                  handleTaskClick(taskToEditAfterLoad);
+                }
+              }, 500);
+            }
+          } catch (err) {
+            console.error('Error loading task for editing:', err);
           }
-        } catch (err) {
-          console.error('Error loading task for editing:', err);
         }
       }
     };
     handleEditFromState();
-  }, [location.state, campId, tasks]);
+  }, [location.state, campId, tasks, user?._id]);
 
   useEffect(() => {
     if (campId) {
