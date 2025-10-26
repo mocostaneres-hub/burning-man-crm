@@ -127,10 +127,16 @@ const TaskManagement: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
+    // Redirect personal accounts to their My Tasks page
+    if (user?.accountType === 'personal') {
+      navigate('/tasks');
+      return;
+    }
+    
     if (user?.campId) {
       fetchCampData();
     }
-  }, [user?.campId]);
+  }, [user?.campId, user?.accountType, navigate]);
 
   useEffect(() => {
     if (campId) {
