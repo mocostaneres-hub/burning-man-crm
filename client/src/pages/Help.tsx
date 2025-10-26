@@ -58,7 +58,7 @@ const Help: React.FC = () => {
   const loadFAQs = async () => {
     try {
       const response = await apiService.get('/help/faqs');
-      setFaqs(response);
+      setFaqs(response.faqs || []);
     } catch (err) {
       console.error('Error loading FAQs:', err);
     }
