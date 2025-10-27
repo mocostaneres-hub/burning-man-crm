@@ -153,7 +153,14 @@ const FAQ: React.FC = () => {
       } catch (error) {
         console.error('Error loading FAQs:', error);
         // Fallback to static data if API fails
-        setFaqData(user?.accountType === 'camp' ? campFAQData : memberFAQData);
+        if (user?.accountType === 'camp') {
+          setFaqData(campFAQData);
+        } else if (user?.accountType === 'personal') {
+          setFaqData(memberFAQData);
+        } else {
+          // For non-authenticated users or admin, show general FAQs (both camp and member)
+          setFaqData([...campFAQData, ...memberFAQData]);
+        }
       } finally {
         setLoading(false);
       }
