@@ -50,7 +50,8 @@ const FAQAdmin: React.FC = () => {
   const audiences = [
     { value: 'both', label: 'Both Camps & Members' },
     { value: 'camps', label: 'Camps Only' },
-    { value: 'members', label: 'Members Only' }
+    { value: 'members', label: 'Members Only' },
+    { value: 'homepage', label: 'Homepage' }
   ];
 
   useEffect(() => {

@@ -210,24 +210,10 @@ const FAQ: React.FC = () => {
         setLoading(true);
         const response = await apiService.get('/help/faqs');
         const apiFaqs = response.faqs || [];
-        
-        // If API returns very few FAQs and user is not authenticated, use general FAQs
-        if (apiFaqs.length < 5 && !user) {
-          setFaqData(generalFAQData);
-        } else {
-          setFaqData(apiFaqs);
-        }
+        setFaqData(apiFaqs);
       } catch (error) {
         console.error('Error loading FAQs:', error);
-        // Fallback to static data if API fails
-        if (user?.accountType === 'camp') {
-          setFaqData(campFAQData);
-        } else if (user?.accountType === 'personal') {
-          setFaqData(memberFAQData);
-        } else {
-          // For non-authenticated users or admin, show general FAQs
-          setFaqData(generalFAQData);
-        }
+        setFaqData([]);
       } finally {
         setLoading(false);
       }

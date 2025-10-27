@@ -37,7 +37,7 @@ const faqSchema = new mongoose.Schema({
   audience: {
     type: String,
     required: true,
-    enum: ['both', 'camps', 'members'],
+    enum: ['both', 'camps', 'members', 'homepage'],
     default: 'both'
   },
   createdBy: {

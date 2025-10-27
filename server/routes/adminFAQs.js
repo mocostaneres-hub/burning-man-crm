@@ -30,7 +30,7 @@ router.post('/', authenticateToken, requireAdmin, [
   body('answer').notEmpty().withMessage('Answer is required'),
   body('category').notEmpty().withMessage('Category is required'),
   body('order').isInt({ min: 1 }).withMessage('Order must be a positive integer'),
-  body('audience').isIn(['both', 'camps', 'members']).withMessage('Invalid audience type')
+  body('audience').isIn(['both', 'camps', 'members', 'homepage']).withMessage('Invalid audience type')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -68,7 +68,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
   body('answer').notEmpty().withMessage('Answer is required'),
   body('category').notEmpty().withMessage('Category is required'),
   body('order').isInt({ min: 1 }).withMessage('Order must be a positive integer'),
-  body('audience').isIn(['both', 'camps', 'members']).withMessage('Invalid audience type')
+  body('audience').isIn(['both', 'camps', 'members', 'homepage']).withMessage('Invalid audience type')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
