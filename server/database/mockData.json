@@ -12,8 +12,8 @@
         "firstName": "Mo",
         "lastName": "Costa-Neres",
         "createdAt": "2025-09-20T23:28:55.551Z",
-        "updatedAt": "2025-10-06T00:43:24.142Z",
-        "lastLogin": "2025-10-06T00:43:24.142Z",
+        "updatedAt": "2025-10-27T22:21:09.683Z",
+        "lastLogin": "2025-10-27T22:21:09.683Z",
         "phoneNumber": "+1 310-890-8708",
         "city": "Venice, CA",
         "yearsBurned": 0,
@@ -4589,6 +4589,218 @@
         "createdBy": 1000005,
         "createdAt": "2025-10-06T03:14:17.964Z",
         "updatedAt": "2025-10-06T03:14:17.964Z"
+      }
+    ]
+  ],
+  "faqs": [
+    [
+      10000002,
+      {
+        "_id": 10000002,
+        "question": "What is this platform?",
+        "answer": "This is a comprehensive platform designed to help you find and connect with G8Road camps, discover events and experiences, and build lasting relationships within the burner community. Whether you're looking to join a camp or manage one, we've got you covered.",
+        "category": "General",
+        "order": 1,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.185Z",
+        "updatedAt": "2025-10-27T22:21:28.185Z"
+      }
+    ],
+    [
+      10000003,
+      {
+        "_id": 10000003,
+        "question": "How do I find camps to join?",
+        "answer": "Browse our camp directory to discover amazing camps that match your interests, values, and G8Road goals. Each camp profile shows their mission, activities, requirements, and what they're looking for in members.",
+        "category": "General",
+        "order": 2,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.195Z",
+        "updatedAt": "2025-10-27T22:21:28.195Z"
+      }
+    ],
+    [
+      10000004,
+      {
+        "_id": 10000004,
+        "question": "How do I apply to join a camp?",
+        "answer": "Once you find a camp you're interested in, you can apply directly through the platform. Share your skills, interests, and what you can contribute to make your application stand out to camp leaders.",
+        "category": "Applications",
+        "order": 3,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.205Z",
+        "updatedAt": "2025-10-27T22:21:28.205Z"
+      }
+    ],
+    [
+      10000005,
+      {
+        "_id": 10000005,
+        "question": "What information should I include in my application?",
+        "answer": "Be honest about your G8Road experience, skills you can contribute, availability during the event, and what you're hoping to get out of joining the camp. Include relevant experience with art, cooking, construction, or other valuable skills.",
+        "category": "Applications",
+        "order": 4,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.215Z",
+        "updatedAt": "2025-10-27T22:21:28.215Z"
+      }
+    ],
+    [
+      10000006,
+      {
+        "_id": 10000006,
+        "question": "How do I create a camp profile?",
+        "answer": "To create a camp profile, go to your dashboard and click 'Create Camp'. Fill out all the required information including camp name, contact email, and Playa location.",
+        "category": "Camp Management",
+        "order": 5,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.224Z",
+        "updatedAt": "2025-10-27T22:21:28.224Z"
+      }
+    ],
+    [
+      10000007,
+      {
+        "_id": 10000007,
+        "question": "How do I add members to my camp?",
+        "answer": "You can add members by going to the 'Manage Members' section in your dashboard. Click 'Add Member' and fill out their information.",
+        "category": "Camp Management",
+        "order": 6,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.234Z",
+        "updatedAt": "2025-10-27T22:21:28.234Z"
+      }
+    ],
+    [
+      10000008,
+      {
+        "_id": 10000008,
+        "question": "Can I edit my camp profile after creating it?",
+        "answer": "Yes! You can edit your camp profile at any time by going to 'Your Camp' in the navigation menu.",
+        "category": "Camp Management",
+        "order": 7,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.244Z",
+        "updatedAt": "2025-10-27T22:21:28.244Z"
+      }
+    ],
+    [
+      10000009,
+      {
+        "_id": 10000009,
+        "question": "How long does it take to hear back from camps?",
+        "answer": "Response times vary by camp, but most camps try to respond within a few days to a week. If you don't hear back, you can send a follow-up message or apply to other camps that interest you.",
+        "category": "Applications",
+        "order": 8,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.253Z",
+        "updatedAt": "2025-10-27T22:21:28.253Z"
+      }
+    ],
+    [
+      10000010,
+      {
+        "_id": 10000010,
+        "question": "Can I apply to multiple camps?",
+        "answer": "Yes! You can apply to multiple camps to increase your chances of finding the right fit. Just be transparent with camps if you're accepted by multiple and need to make a decision.",
+        "category": "Applications",
+        "order": 9,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.262Z",
+        "updatedAt": "2025-10-27T22:21:28.262Z"
+      }
+    ],
+    [
+      10000011,
+      {
+        "_id": 10000011,
+        "question": "What if I'm new to G8Road?",
+        "answer": "Many camps welcome newcomers! Look for camps that specifically mention being newbie-friendly or that offer orientation programs. Don't be afraid to mention your new status in applications - enthusiasm and willingness to learn are valuable qualities.",
+        "category": "General",
+        "order": 10,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.272Z",
+        "updatedAt": "2025-10-27T22:21:28.272Z"
+      }
+    ],
+    [
+      10000012,
+      {
+        "_id": 10000012,
+        "question": "How do I discover events and experiences?",
+        "answer": "Use our events calendar to find workshops, art installations, performances, and community events happening throughout G8Road week. You can filter by type, time, location, and interests.",
+        "category": "General",
+        "order": 11,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.282Z",
+        "updatedAt": "2025-10-27T22:21:28.282Z"
+      }
+    ],
+    [
+      10000013,
+      {
+        "_id": 10000013,
+        "question": "How do I contact support?",
+        "answer": "You can contact our support team using the contact form on the Help page. We typically respond within 24 hours.",
+        "category": "Technical Support",
+        "order": 12,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.292Z",
+        "updatedAt": "2025-10-27T22:21:28.292Z"
+      }
+    ],
+    [
+      10000014,
+      {
+        "_id": 10000014,
+        "question": "What if I forget my password?",
+        "answer": "Click 'Forgot your password?' on the login page and enter your email address. We'll send you a link to reset your password.",
+        "category": "Account Management",
+        "order": 13,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.301Z",
+        "updatedAt": "2025-10-27T22:21:28.301Z"
+      }
+    ],
+    [
+      10000015,
+      {
+        "_id": 10000015,
+        "question": "Is my information secure?",
+        "answer": "Absolutely. We use industry-standard security practices to protect your information. Your personal details are only shared with camps you choose to apply to, and you control what information is visible.",
+        "category": "Technical Support",
+        "order": 14,
+        "isActive": true,
+        "audience": "homepage",
+        "createdBy": 1000006,
+        "createdAt": "2025-10-27T22:21:28.311Z",
+        "updatedAt": "2025-10-27T22:21:28.311Z"
       }
     ]
   ]

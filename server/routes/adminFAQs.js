@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const FAQ = require('../models/FAQ');
+const db = require('../database/databaseAdapter');
 
 const router = express.Router();
 
@@ -10,10 +10,7 @@ const router = express.Router();
 // @access  Private (Admin only)
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const faqs = await FAQ.find()
-      .populate('createdBy', 'firstName lastName email')
-      .populate('updatedBy', 'firstName lastName email')
-      .sort({ category: 1, order: 1 });
+    const faqs = await db.findFAQs();
 
     res.json({ faqs });
   } catch (error) {
@@ -40,7 +37,7 @@ router.post('/', authenticateToken, requireAdmin, [
 
     const { question, answer, category, order, isActive = true, audience = 'both' } = req.body;
 
-    const newFAQ = new FAQ({
+    const faqData = {
       question,
       answer,
       category,
@@ -48,10 +45,9 @@ router.post('/', authenticateToken, requireAdmin, [
       isActive,
       audience,
       createdBy: req.user._id
-    });
+    };
 
-    await newFAQ.save();
-    await newFAQ.populate('createdBy', 'firstName lastName email');
+    const newFAQ = await db.createFAQ(faqData);
 
     res.status(201).json({ faq: newFAQ });
   } catch (error) {
@@ -79,22 +75,20 @@ router.put('/:id', authenticateToken, requireAdmin, [
     const { id } = req.params;
     const { question, answer, category, order, isActive, audience } = req.body;
 
-    const faq = await FAQ.findById(id);
+    const updateData = {
+      question,
+      answer,
+      category,
+      order,
+      isActive,
+      audience,
+      updatedBy: req.user._id
+    };
+
+    const faq = await db.updateFAQ(id, updateData);
     if (!faq) {
       return res.status(404).json({ message: 'FAQ not found' });
     }
-
-    faq.question = question;
-    faq.answer = answer;
-    faq.category = category;
-    faq.order = order;
-    faq.isActive = isActive;
-    faq.audience = audience;
-    faq.updatedBy = req.user._id;
-
-    await faq.save();
-    await faq.populate('createdBy', 'firstName lastName email');
-    await faq.populate('updatedBy', 'firstName lastName email');
 
     res.json({ faq });
   } catch (error) {
@@ -110,12 +104,10 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const faq = await FAQ.findById(id);
+    const faq = await db.deleteFAQ(id);
     if (!faq) {
       return res.status(404).json({ message: 'FAQ not found' });
     }
-
-    await FAQ.findByIdAndDelete(id);
 
     res.json({ message: 'FAQ deleted successfully' });
   } catch (error) {

@@ -160,7 +160,8 @@ class MockDatabase {
       invites: new Map(),
       campCategories: new Map(),
       globalPerks: new Map(),
-      skills: new Map()
+      skills: new Map(),
+      faqs: new Map()
     };
     this.loaded = false;
   }
@@ -200,6 +201,7 @@ class MockDatabase {
       this.collections.campCategories = new Map(parsed.campCategories || []);
       this.collections.globalPerks = new Map(parsed.globalPerks || []);
       this.collections.skills = new Map(parsed.skills || []);
+      this.collections.faqs = new Map(parsed.faqs || []);
       
       // Convert string IDs back to numbers (numeric IDs are stored as strings in JSON)
       for (let [key, user] of this.collections.users.entries()) {
@@ -337,7 +339,8 @@ class MockDatabase {
         invites: Array.from(this.collections.invites.entries()),
         campCategories: Array.from(this.collections.campCategories.entries()),
         globalPerks: Array.from(this.collections.globalPerks.entries()),
-        skills: Array.from(this.collections.skills.entries())
+        skills: Array.from(this.collections.skills.entries()),
+        faqs: Array.from(this.collections.faqs.entries())
       };
       
       await fs.writeFile(this.dataFile, JSON.stringify(cleanData, null, 2));
@@ -1896,6 +1899,100 @@ class MockDatabase {
     await this.saveData();
     
     return skill;
+  }
+
+  // ==================== FAQ Methods ====================
+  
+  async findFAQs(query = {}) {
+    await this.ensureLoaded();
+    let faqs = Array.from(this.collections.faqs.values());
+    
+    // Filter by isActive (default to only active FAQs)
+    if (query.isActive !== undefined) {
+      faqs = faqs.filter(faq => faq.isActive === query.isActive);
+    } else {
+      // By default, only return active FAQs
+      faqs = faqs.filter(faq => faq.isActive !== false);
+    }
+    
+    // Filter by audience
+    if (query.audience) {
+      if (Array.isArray(query.audience)) {
+        faqs = faqs.filter(faq => query.audience.includes(faq.audience));
+      } else {
+        faqs = faqs.filter(faq => faq.audience === query.audience);
+      }
+    }
+    
+    // Sort by category and order
+    faqs.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.order - b.order;
+    });
+    
+    return faqs;
+  }
+  
+  async findFAQById(id) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    return this.collections.faqs.get(numericId);
+  }
+  
+  async createFAQ(faqData) {
+    await this.ensureLoaded();
+    
+    const faq = {
+      _id: generateNumericId('faq'),
+      question: faqData.question,
+      answer: faqData.answer,
+      category: faqData.category,
+      order: faqData.order,
+      isActive: faqData.isActive !== undefined ? faqData.isActive : true,
+      audience: faqData.audience || 'both',
+      createdBy: faqData.createdBy,
+      updatedBy: faqData.updatedBy,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.collections.faqs.set(faq._id, faq);
+    await this.saveData();
+    return faq;
+  }
+  
+  async updateFAQ(id, updateData) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    const faq = this.collections.faqs.get(numericId);
+    
+    if (!faq) {
+      throw new Error('FAQ not found');
+    }
+    
+    const updatedFAQ = {
+      ...faq,
+      ...updateData,
+      updatedAt: new Date()
+    };
+    
+    this.collections.faqs.set(numericId, updatedFAQ);
+    return updatedFAQ;
+  }
+  
+  async deleteFAQ(id) {
+    await this.ensureLoaded();
+    const numericId = typeof id === 'string' ? parseInt(id) : id;
+    const faq = this.collections.faqs.get(numericId);
+    
+    if (!faq) {
+      throw new Error('FAQ not found');
+    }
+    
+    this.collections.faqs.delete(numericId);
+    return faq;
   }
 }
 

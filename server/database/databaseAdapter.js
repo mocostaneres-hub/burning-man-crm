@@ -636,6 +636,53 @@ class DatabaseAdapter {
 
   // Set database mode
 
+  // FAQ operations
+  async findFAQs(query = {}) {
+    if (this.useMongoDB) {
+      const FAQ = require('../models/FAQ');
+      return await FAQ.find(query).sort({ category: 1, order: 1 });
+    } else {
+      return await this.mockDB.findFAQs(query);
+    }
+  }
+
+  async findFAQById(id) {
+    if (this.useMongoDB) {
+      const FAQ = require('../models/FAQ');
+      return await FAQ.findById(id);
+    } else {
+      return await this.mockDB.findFAQById(id);
+    }
+  }
+
+  async createFAQ(faqData) {
+    if (this.useMongoDB) {
+      const FAQ = require('../models/FAQ');
+      const faq = new FAQ(faqData);
+      return await faq.save();
+    } else {
+      return await this.mockDB.createFAQ(faqData);
+    }
+  }
+
+  async updateFAQ(id, updateData) {
+    if (this.useMongoDB) {
+      const FAQ = require('../models/FAQ');
+      return await FAQ.findByIdAndUpdate(id, updateData, { new: true });
+    } else {
+      return await this.mockDB.updateFAQ(id, updateData);
+    }
+  }
+
+  async deleteFAQ(id) {
+    if (this.useMongoDB) {
+      const FAQ = require('../models/FAQ');
+      return await FAQ.findByIdAndDelete(id);
+    } else {
+      return await this.mockDB.deleteFAQ(id);
+    }
+  }
+
   // Camp Category operations
   async findCampCategory(query) {
     if (this.useMongoDB) {

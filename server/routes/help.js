@@ -39,12 +39,10 @@ router.get('/faqs', optionalAuth, async (req, res) => {
       }
     }
 
-    const faqs = await FAQ.find({
+    const faqs = await db.findFAQs({
       isActive: true,
-      audience: { $in: audienceFilter }
-    })
-    .sort({ category: 1, order: 1 })
-    .select('question answer category order audience');
+      audience: audienceFilter
+    });
 
     res.json({ faqs });
   } catch (error) {
