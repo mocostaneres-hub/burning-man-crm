@@ -134,6 +134,66 @@ const memberFAQData: FAQItem[] = [
   }
 ];
 
+// General FAQs for non-authenticated users (combination of both)
+const generalFAQData: FAQItem[] = [
+  {
+    question: "What is this platform?",
+    answer: "This is a comprehensive platform designed to help you find and connect with G8Road camps, discover events and experiences, and build lasting relationships within the burner community. Whether you're looking to join a camp or manage one, we've got you covered."
+  },
+  {
+    question: "How do I find camps to join?",
+    answer: "Browse our camp directory to discover amazing camps that match your interests, values, and G8Road goals. Each camp profile shows their mission, activities, requirements, and what they're looking for in members."
+  },
+  {
+    question: "How do I apply to join a camp?",
+    answer: "Once you find a camp you're interested in, you can apply directly through the platform. Share your skills, interests, and what you can contribute to make your application stand out to camp leaders."
+  },
+  {
+    question: "What information should I include in my application?",
+    answer: "Be honest about your G8Road experience, skills you can contribute, availability during the event, and what you're hoping to get out of joining the camp. Include relevant experience with art, cooking, construction, or other valuable skills."
+  },
+  {
+    question: "How do I create a camp profile?",
+    answer: "To create a camp profile, go to your dashboard and click 'Create Camp'. Fill out all the required information including camp name, contact email, and Playa location."
+  },
+  {
+    question: "How do I add members to my camp?",
+    answer: "You can add members by going to the 'Manage Members' section in your dashboard. Click 'Add Member' and fill out their information."
+  },
+  {
+    question: "Can I edit my camp profile after creating it?",
+    answer: "Yes! You can edit your camp profile at any time by going to 'Your Camp' in the navigation menu."
+  },
+  {
+    question: "How long does it take to hear back from camps?",
+    answer: "Response times vary by camp, but most camps try to respond within a few days to a week. If you don't hear back, you can send a follow-up message or apply to other camps that interest you."
+  },
+  {
+    question: "Can I apply to multiple camps?",
+    answer: "Yes! You can apply to multiple camps to increase your chances of finding the right fit. Just be transparent with camps if you're accepted by multiple and need to make a decision."
+  },
+  {
+    question: "What if I'm new to G8Road?",
+    answer: "Many camps welcome newcomers! Look for camps that specifically mention being newbie-friendly or that offer orientation programs. Don't be afraid to mention your new status in applications - enthusiasm and willingness to learn are valuable qualities."
+  },
+  {
+    question: "How do I discover events and experiences?",
+    answer: "Use our events calendar to find workshops, art installations, performances, and community events happening throughout G8Road week. You can filter by type, time, location, and interests."
+  },
+  {
+    question: "How do I contact support?",
+    answer: "You can contact our support team using the contact form on the Help page. We typically respond within 24 hours."
+  },
+  {
+    question: "What if I forget my password?",
+    answer: "Click 'Forgot your password?' on the login page and enter your email address. We'll send you a link to reset your password."
+  },
+  {
+    question: "Is my information secure?",
+    answer: "Absolutely. We use industry-standard security practices to protect your information. Your personal details are only shared with camps you choose to apply to, and you control what information is visible."
+  }
+];
+
 const FAQ: React.FC = () => {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState<string | false>(false);
@@ -149,7 +209,14 @@ const FAQ: React.FC = () => {
       try {
         setLoading(true);
         const response = await apiService.get('/help/faqs');
-        setFaqData(response.faqs || []);
+        const apiFaqs = response.faqs || [];
+        
+        // If API returns very few FAQs and user is not authenticated, use general FAQs
+        if (apiFaqs.length < 5 && !user) {
+          setFaqData(generalFAQData);
+        } else {
+          setFaqData(apiFaqs);
+        }
       } catch (error) {
         console.error('Error loading FAQs:', error);
         // Fallback to static data if API fails
@@ -158,8 +225,8 @@ const FAQ: React.FC = () => {
         } else if (user?.accountType === 'personal') {
           setFaqData(memberFAQData);
         } else {
-          // For non-authenticated users or admin, show general FAQs (both camp and member)
-          setFaqData([...campFAQData, ...memberFAQData]);
+          // For non-authenticated users or admin, show general FAQs
+          setFaqData(generalFAQData);
         }
       } finally {
         setLoading(false);
