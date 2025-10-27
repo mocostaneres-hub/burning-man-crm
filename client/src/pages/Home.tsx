@@ -33,7 +33,7 @@ const Home: React.FC = () => {
               className="text-3xl md:text-4xl lg:text-5xl font-lato font-bold text-white mb-8"
               style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}
             >
-              Your Burning Man Journey Starts Here
+              Your Playa Journey Starts Here
             </h1>
             <p
               className="text-xl text-white mb-8 max-w-4xl mx-auto"
@@ -41,17 +41,17 @@ const Home: React.FC = () => {
             >
               {user?.accountType === 'camp' 
                 ? 'Manage your roster, recruit members, and build your community with our comprehensive CRM platform.'
-                : 'Find amazing camps to join, discover events and experiences, and connect with the Burning Man community.'
+                : 'Find amazing camps to join, discover events and experiences, and connect with the burner community.'
               }
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               {!isAuthenticated ? (
                 <>
                   <Button
-                    variant="primary"
+                    variant="outline"
                     size="lg"
                     onClick={() => navigate('/register')}
-                    className="bg-white text-custom-primary hover:bg-gray-100"
+                    className="border-white text-white hover:bg-white hover:text-custom-primary"
                   >
                     Get Started
                   </Button>
