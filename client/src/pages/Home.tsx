@@ -97,14 +97,14 @@ const Home: React.FC = () => {
           <h2 className="text-3xl font-lato font-bold text-custom-text text-center mb-12">
             {user?.accountType === 'camp' 
               ? 'Everything You Need to Manage Your Camp'
-              : 'Discover Your Perfect Burning Man Experience'
+              : 'Discover Your Perfect Theme Camp Experience'
             }
           </h2>
           <div className="text-center py-8">
             <p className="text-lg text-gray-600">
               {user?.accountType === 'camp' 
                 ? '🏕️ Camp Management • 👥 Member Recruitment • 📊 Analytics • 💬 Communication • ⏰ Volunteer Shifts • 🚨 EAP Assignments • 📞 Orientation Calls • 🗺️ Mapping • 🛒 Shopping Lists'
-                : '🔍 Find Camps • 📝 Apply to Join • 🎪 Discover Events • 🌟 Connect with The Burning Man Community'
+                : '🔍 Find Camps • 📝 Apply to Join • 🎪 Discover Events • 🌟 Connect with The Burner Community'
               }
             </p>
           </div>
