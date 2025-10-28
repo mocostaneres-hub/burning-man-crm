@@ -160,40 +160,6 @@ const Home: React.FC = () => {
       {/* FAQ Section */}
       <FAQ />
 
-      {/* CTA Section */}
-      <div
-        className="py-16"
-        style={{
-          background: 'linear-gradient(135deg, #2D2D2D 0%, #3D3D3D 100%)',
-        }}
-      >
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-lato font-bold text-white mb-6">
-              {user?.accountType === 'camp' 
-                ? 'Ready to Build Your Camp Community?'
-                : 'Ready to Find Your G8Road Family?'
-              }
-            </h2>
-            <p className="text-lg text-gray-300 mb-8">
-              {user?.accountType === 'camp' 
-                ? 'Join thousands of burners who are already using our platform to create amazing camp experiences.'
-                : 'Connect with camps, discover events, and create unforgettable memories during your G8Road week.'
-              }
-            </p>
-            {!isAuthenticated && (
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => navigate('/register')}
-                className="bg-custom-primary hover:bg-custom-primary-hover"
-              >
-                Start Your Journey
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

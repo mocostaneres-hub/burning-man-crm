@@ -235,7 +235,7 @@ const FAQ: React.FC = () => {
           <p className="text-h5 text-custom-text-secondary max-w-2xl mx-auto">
             {user?.accountType === 'camp' 
               ? 'Everything you need to know about managing your G8Road camp'
-              : 'Everything you need to know about finding camps and your G8Road experience'
+              : 'Everything you need to know about how G8Road works: finding a camp or managing a camp you lead.'
             }
           </p>
         </div>
@@ -278,11 +278,8 @@ const FAQ: React.FC = () => {
         </div>
 
         <div className="text-center mt-12">
-          <p className="text-body text-custom-text-secondary mb-2">
-            Still have questions?
-          </p>
-          <p className="text-sm text-custom-text-secondary">
-            Contact our support team or join our community discussions
+          <p className="text-body text-custom-text-secondary">
+            Contact us at info@g8road.com
           </p>
         </div>
       </div>
