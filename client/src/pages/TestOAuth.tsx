@@ -11,9 +11,9 @@ const TestOAuth: React.FC = () => {
     setError('');
   };
 
-  const handleError = (error: any) => {
-    console.error('Error:', error);
-    setError(JSON.stringify(error, null, 2));
+  const handleError = () => {
+    console.error('Google OAuth error occurred');
+    setError('Google sign-in failed. Please try again.');
     setResult('');
   };
 

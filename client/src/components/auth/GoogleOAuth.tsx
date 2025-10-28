@@ -64,9 +64,9 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
     }
   };
 
-  const handleGoogleError = (error: any) => {
-    console.error('Google OAuth error:', error);
-    onError(`Google sign-in failed: ${error?.error || 'Unknown error'}`);
+  const handleGoogleError = () => {
+    console.error('Google OAuth error occurred');
+    onError('Google sign-in failed. Please try again.');
   };
 
   if (!isConfigured) {
