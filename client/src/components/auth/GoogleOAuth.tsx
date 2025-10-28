@@ -116,7 +116,6 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
           text="signin_with"
           shape="rectangular"
           logo_alignment="left"
-          ux_mode="popup"
         />
       </GoogleOAuthProvider>
     </div>
