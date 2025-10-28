@@ -51,7 +51,7 @@ Authorized redirect URIs:
 Create `client/.env.local`:
 ```bash
 # Google OAuth Configuration
-REACT_APP_GOOGLE_CLIENT_ID=your-actual-google-client-id-here
+REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id-here
 
 # API Configuration
 REACT_APP_API_URL=http://localhost:5001/api
@@ -61,12 +61,16 @@ REACT_APP_APP_NAME=G8Road CRM
 REACT_APP_VERSION=1.0.0
 ```
 
+**✅ READY:** Environment template created - add your actual Client ID!
+
 ### 2.2 Production Environment
 For production deployment, set these environment variables:
 ```bash
-REACT_APP_GOOGLE_CLIENT_ID=your-production-google-client-id
+REACT_APP_GOOGLE_CLIENT_ID=your-production-google-client-id-here
 REACT_APP_API_URL=https://api.g8road.com/api
 ```
+
+**✅ READY:** Production environment template created at `client/.env.production`
 
 ## Step 3: Test the Setup
 
