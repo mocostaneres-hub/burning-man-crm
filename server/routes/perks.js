@@ -5,8 +5,8 @@ const db = require('../database/databaseAdapter');
 
 const router = express.Router();
 
-// Public: list all global perks (logged-in users)
-router.get('/', authenticateToken, async (req, res) => {
+// Public: list all global perks (public access)
+router.get('/', async (req, res) => {
   try {
     const perks = await db.findGlobalPerks();
     res.json({ perks });

@@ -55,6 +55,7 @@ interface Camp {
   visibility?: 'public' | 'private';
   memberCount?: number;
   applicationsEnabled?: boolean;
+  showApplyNow?: boolean;
 }
 
 // Helper function to dynamically render Lucide icons
@@ -567,7 +568,7 @@ const CampDiscovery: React.FC = () => {
                         )}
 
                         {/* Apply Now Button */}
-                        {camp.applicationsEnabled && (
+                        {(camp.applicationsEnabled || camp.showApplyNow) && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
                             <Button
                               onClick={(e) => {

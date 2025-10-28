@@ -5,7 +5,7 @@ class ApiService {
   private api: AxiosInstance;
 
   constructor() {
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
     
     console.log('🚀 [DEBUG] API Service initialized with baseURL:', baseURL);
     
