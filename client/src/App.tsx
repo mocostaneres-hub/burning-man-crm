@@ -31,6 +31,7 @@ import TestOAuth from './pages/TestOAuth';
 import MemberProfileEdit from './pages/members/MemberProfileEdit';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import About from './pages/About';
 import PublicMemberProfile from './pages/members/PublicMemberProfile';
 import CallSlotManagement from './pages/camps/CallSlotManagement';
 import TaskManagement from './pages/camps/TaskManagement';
@@ -79,6 +80,7 @@ function App() {
                   <Route path="/test-oauth" element={<TestOAuth />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
+                  <Route path="/about" element={<About />} />
                   <Route path="/onboarding/select-role" element={
                     <ProtectedRoute>
                       <SelectRole />

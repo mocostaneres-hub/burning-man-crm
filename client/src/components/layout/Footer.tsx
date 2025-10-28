@@ -38,6 +38,11 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
                   Help & Support
                 </Link>
               </li>
+              <li>
+                <Link to="/about" className="text-gray-300 hover:text-white transition-colors">
+                  About G8Road
+                </Link>
+              </li>
             </ul>
           </div>
           
