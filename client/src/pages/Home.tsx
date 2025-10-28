@@ -125,7 +125,7 @@ const Home: React.FC = () => {
               className="text-3xl font-lato font-bold text-center mb-12"
               style={{ color: '#FFD700' }}
             >
-              Your Burning Man Week Awaits
+              Your Playa Week Awaits
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="text-center p-6">
@@ -133,7 +133,7 @@ const Home: React.FC = () => {
                   🏕️ Find Your Camp
                 </h3>
                 <p className="text-gray-600">
-                  Discover amazing camps that match your interests, values, and Burning Man principles. Browse profiles, read about their mission, and find your perfect fit.
+                  Discover amazing camps that match your interests, values, and principles. Browse profiles, read about their mission, and find your perfect fit.
                 </p>
               </div>
               <div className="text-center p-6">
@@ -149,7 +149,7 @@ const Home: React.FC = () => {
                   🎪 Events & Experiences
                 </h3>
                 <p className="text-gray-600">
-                  Discover events at camps, deep playa and everything else happening at Black Rock City.
+                  Discover events at camps, volunteer opportunities and everything else happening in the Playa.
                 </p>
               </div>
             </div>
