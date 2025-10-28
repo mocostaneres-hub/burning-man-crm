@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Eye, Users, Mail } from 'lucide-react';
+import Footer from '../components/layout/Footer';
 
 const PrivacyPolicy: React.FC = () => {
   return (
@@ -48,8 +49,8 @@ const PrivacyPolicy: React.FC = () => {
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Personal Information</h3>
                 <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  <li>Name and contact information (email, phone number)</li>
-                  <li>Profile information and photos</li>
+                  <li>Name and contact information (email, phone number), <strong>including verified data received from Google and Apple OAuth during sign-up and login.</strong></li>
+                  <li>Profile information and photos, <strong>including the profile photo URL provided by your OAuth provider.</strong></li>
                   <li>Account preferences and settings</li>
                   <li>Camp membership and volunteer information</li>
                 </ul>
@@ -91,6 +92,7 @@ const PrivacyPolicy: React.FC = () => {
               <li>Improve our platform and develop new features</li>
               <li>Ensure platform security and prevent fraud</li>
               <li>Comply with legal obligations</li>
+              <li><strong>Authentication and Identity:</strong> Data received from Google and Apple OAuth is used solely to <strong>verify your identity</strong>, <strong>authenticate your account</strong>, and <strong>securely link your external ID to your G8Road profile.</strong> We use your verified email to communicate with you and your name to pre-populate your profile.</li>
             </ul>
           </section>
 
@@ -146,12 +148,11 @@ const PrivacyPolicy: React.FC = () => {
             </p>
           </section>
 
-          {/* Third-Party Services */}
+          {/* Third-Party Authentication and Services */}
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Third-Party Services</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Third-Party Authentication and Services</h2>
             <p className="text-gray-700 leading-relaxed">
-              Our platform may integrate with third-party services (such as Google OAuth for authentication). 
-              These services have their own privacy policies, and we encourage you to review them.
+              Our platform integrates with third-party authentication services, specifically <strong>Google OAuth</strong> and <strong>Apple OAuth</strong>, to allow you to register and log in quickly. When you use these services, you are authorizing the provider to share a limited set of verified profile data with us (as detailed in the "Information We Collect" section). <strong>We do not store your Google or Apple login credentials/passwords.</strong> These third-party services have their own separate privacy policies, and we encourage you to review them.
             </p>
           </section>
 
@@ -193,6 +194,9 @@ const PrivacyPolicy: React.FC = () => {
           </section>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

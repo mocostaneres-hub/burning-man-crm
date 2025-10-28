@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, Shield, AlertTriangle, Mail } from 'lucide-react';
+import Footer from '../components/layout/Footer';
 
 const TermsOfService: React.FC = () => {
   return (
@@ -238,6 +239,9 @@ const TermsOfService: React.FC = () => {
           </section>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card } from '../../components/ui';
+import Footer from '../../components/layout/Footer';
 import { Users, Building, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -160,12 +161,15 @@ const SelectRole: React.FC = () => {
         )}
 
         {/* Footer Info */}
-        <div className="text-center text-sm text-gray-500">
+        <div className="text-center text-sm text-gray-500 mb-8">
           <p>
             Don't worry, you can always change your role later in your profile settings.
           </p>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };
