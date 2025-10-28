@@ -217,6 +217,23 @@ const Login: React.FC = () => {
           </div>
         </form>
       </Card>
+      
+      {/* Footer */}
+      <footer className="mt-12 text-center">
+        <div className="text-sm text-gray-500 space-x-4">
+          <a href="/privacy" className="hover:text-gray-700 transition-colors">
+            Privacy Policy
+          </a>
+          <span>•</span>
+          <a href="/terms" className="hover:text-gray-700 transition-colors">
+            Terms of Service
+          </a>
+          <span>•</span>
+          <a href="mailto:info@g8road.com" className="hover:text-gray-700 transition-colors">
+            Contact Us
+          </a>
+        </div>
+      </footer>
     </div>
   );
 };
