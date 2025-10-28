@@ -26,6 +26,7 @@ import ApplicationManagementTable from './pages/applications/ApplicationManageme
 import MyApplications from './pages/applications/MyApplications';
 import Contact360View from './pages/contacts/Contact360View';
 import RosterManagement from './pages/rosters/RosterManagement';
+import TestOAuth from './pages/TestOAuth';
 import MemberProfileEdit from './pages/members/MemberProfileEdit';
 import PublicMemberProfile from './pages/members/PublicMemberProfile';
 import CallSlotManagement from './pages/camps/CallSlotManagement';
@@ -70,6 +71,7 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/test-oauth" element={<TestOAuth />} />
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
                       <DashboardRedirect />

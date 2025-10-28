@@ -1,5 +1,5 @@
 import React from 'react';
-import { GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { Button } from '../ui';
 import { Chrome } from 'lucide-react';
 import api from '../../services/api';
@@ -19,8 +19,10 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
     console.warn('Google OAuth not properly configured');
   }
 
-  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
+      console.log('Google OAuth response:', credentialResponse);
+      
       if (!credentialResponse.credential) {
         onError('No credential received from Google');
         return;
@@ -37,6 +39,7 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
       );
 
       const googleUser = JSON.parse(jsonPayload);
+      console.log('Decoded Google user:', googleUser);
 
       // Send to backend
       const response = await api.post('/oauth/google', {
@@ -56,12 +59,14 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
       }
     } catch (error: any) {
       console.error('Google OAuth error:', error);
+      console.error('Error details:', error.response?.data);
       onError(error.response?.data?.message || 'Failed to sign in with Google');
     }
   };
 
-  const handleGoogleError = () => {
-    onError('Google sign-in was cancelled or failed');
+  const handleGoogleError = (error: any) => {
+    console.error('Google OAuth error:', error);
+    onError(`Google sign-in failed: ${error?.error || 'Unknown error'}`);
   };
 
   if (!isConfigured) {
@@ -85,19 +90,21 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
 
   return (
     <div className="w-full">
-      <GoogleLogin
-        onSuccess={handleGoogleSuccess}
-        onError={handleGoogleError}
-        useOneTap={false}
-        auto_select={false}
-        cancel_on_tap_outside={true}
-        theme="outline"
-        size="large"
-        width="100%"
-        text="signin_with"
-        shape="rectangular"
-        logo_alignment="left"
-      />
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <GoogleLogin
+          onSuccess={handleGoogleSuccess}
+          onError={handleGoogleError}
+          useOneTap={false}
+          auto_select={false}
+          cancel_on_tap_outside={true}
+          theme="outline"
+          size="large"
+          width="100%"
+          text="signin_with"
+          shape="rectangular"
+          logo_alignment="left"
+        />
+      </GoogleOAuthProvider>
     </div>
   );
 };
