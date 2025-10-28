@@ -12,6 +12,7 @@ module.exports = {
         'custom-secondary': '#F39C12',
         'custom-accent': '#3498DB',
         'custom-text': '#2D3436',
+        'custom-text-secondary': '#636E72',
         'custom-primary-hover': '#27AE60',
         'custom-secondary-hover': '#E67E22',
         'custom-accent-hover': '#2980B9',
