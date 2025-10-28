@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Scale, Users, Shield, AlertTriangle, Mail } from 'lucide-react';
+import { Users, Shield, AlertTriangle, Mail } from 'lucide-react';
 
 const TermsOfService: React.FC = () => {
   return (
@@ -8,7 +8,7 @@ const TermsOfService: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-4">
-            <FileText className="w-16 h-16 text-blue-600" />
+            <Shield className="w-16 h-16 text-blue-600" />
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Terms of Service</h1>
           <p className="text-xl text-gray-600">
@@ -26,7 +26,7 @@ const TermsOfService: React.FC = () => {
           {/* Introduction */}
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
-              <Scale className="w-6 h-6 mr-2 text-blue-600" />
+              <Shield className="w-6 h-6 mr-2 text-blue-600" />
               Agreement to Terms
             </h2>
             <p className="text-gray-700 leading-relaxed">
