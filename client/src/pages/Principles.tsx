@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card } from '../components/ui';
+import Footer from '../components/layout/Footer';
 import { Book, AlertTriangle } from 'lucide-react';
 
 const Principles: React.FC = () => {
@@ -115,6 +116,9 @@ const Principles: React.FC = () => {
           Read the official 10 Principles on Burning Man's website →
         </a>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

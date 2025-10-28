@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input } from '../../components/ui';
+import Footer from '../../components/layout/Footer';
 import { Edit, Save as SaveIcon, X, User as UserIcon, Mail, Phone, MapPin, Calendar, Loader2, Instagram, Facebook, Linkedin } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -963,6 +964,9 @@ const UserProfile: React.FC = () => {
           </Button>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

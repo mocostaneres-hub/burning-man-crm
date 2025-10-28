@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Card, Badge } from '../../components/ui';
+import Footer from '../../components/layout/Footer';
 import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2, Globe, Twitter, Home } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -570,6 +571,9 @@ const CampDiscovery: React.FC = () => {
           </p>
         </div>
       )}
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

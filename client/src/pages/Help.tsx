@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Input, Modal } from '../components/ui';
+import Footer from '../components/layout/Footer';
 import { Send, MessageCircle as MessageCircleIcon, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -372,6 +373,9 @@ const Help: React.FC = () => {
           </div>
         </div>
       </Modal>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

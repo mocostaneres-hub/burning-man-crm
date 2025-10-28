@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { Card, Button } from '../components/ui';
+import Footer from '../components/layout/Footer';
 import {
   Users as Group,
   Plus,
@@ -341,6 +342,9 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
       </Card>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };
