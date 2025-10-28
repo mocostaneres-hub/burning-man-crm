@@ -9,6 +9,26 @@ const TestOAuth: React.FC = () => {
     console.log('Success:', credentialResponse);
     setResult(JSON.stringify(credentialResponse, null, 2));
     setError('');
+    
+    // Try to decode the JWT token
+    if (credentialResponse.credential) {
+      try {
+        const base64Url = credentialResponse.credential.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const googleUser = JSON.parse(jsonPayload);
+        console.log('Decoded Google user:', googleUser);
+        setResult(prev => prev + '\n\nDecoded user data:\n' + JSON.stringify(googleUser, null, 2));
+      } catch (e) {
+        console.error('Error decoding JWT:', e);
+        setError('Error decoding JWT token: ' + e);
+      }
+    }
   };
 
   const handleError = () => {

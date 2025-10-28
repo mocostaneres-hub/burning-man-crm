@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { Button } from '../ui';
 import { Chrome } from 'lucide-react';
@@ -15,9 +15,13 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const isConfigured = !!googleClientId && googleClientId !== 'not-configured';
   
-  if (!isConfigured) {
-    console.warn('Google OAuth not properly configured');
-  }
+  useEffect(() => {
+    if (!isConfigured) {
+      console.warn('Google OAuth not properly configured');
+    } else {
+      console.log('Google OAuth configured with client ID:', googleClientId);
+    }
+  }, [isConfigured, googleClientId]);
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
@@ -41,13 +45,21 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
       const googleUser = JSON.parse(jsonPayload);
       console.log('Decoded Google user:', googleUser);
 
+      // Validate required fields
+      if (!googleUser.email || !googleUser.name || !googleUser.sub) {
+        onError('Invalid Google user data received');
+        return;
+      }
+
       // Send to backend
       const response = await api.post('/oauth/google', {
         email: googleUser.email,
         name: googleUser.name,
         googleId: googleUser.sub,
-        profilePicture: googleUser.picture
+        profilePicture: googleUser.picture || ''
       });
+
+      console.log('Backend response:', response.data);
 
       if (response.data.token && response.data.user) {
         // Store token and user data
@@ -60,6 +72,7 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
     } catch (error: any) {
       console.error('Google OAuth error:', error);
       console.error('Error details:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       onError(error.response?.data?.message || 'Failed to sign in with Google');
     }
   };
@@ -103,6 +116,7 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
           text="signin_with"
           shape="rectangular"
           logo_alignment="left"
+          ux_mode="popup"
         />
       </GoogleOAuthProvider>
     </div>
