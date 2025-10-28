@@ -20,6 +20,15 @@ class DatabaseAdapter {
     }
   }
 
+  async findUserById(id) {
+    if (this.useMongoDB) {
+      const User = require('../models/User');
+      return await User.findById(id);
+    } else {
+      return await this.mockDB.findUserById(id);
+    }
+  }
+
   async findUsers(query = {}) {
     if (this.useMongoDB) {
       const User = require('../models/User');

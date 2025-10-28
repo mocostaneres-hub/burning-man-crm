@@ -993,6 +993,53 @@
         ],
         "location": "[object Object]"
       }
+    ],
+    [
+      "test-onboarding@example.com",
+      {
+        "_id": 10000002,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test-onboarding@example.com",
+        "password": "$2a$12$pzK.F9rTWK8TxGqxmWqAsuCOAZvgelq9nHlxce6l4tkR1U7oo25B2",
+        "accountType": "personal",
+        "firstName": "Test",
+        "lastName": "User",
+        "createdAt": "2025-10-28T06:54:41.720Z",
+        "updatedAt": "2025-10-28T06:54:41.720Z"
+      }
+    ],
+    [
+      "test-onboarding2@example.com",
+      {
+        "_id": 10000003,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test-onboarding2@example.com",
+        "password": "$2a$12$IHcj5B2H9pFRvPf.OpMEPO349htv6ob3a05UftNMBR/xHAm.D6BKK",
+        "accountType": "personal",
+        "role": "member",
+        "firstName": "Test2",
+        "lastName": "User2",
+        "createdAt": "2025-10-28T06:57:21.050Z",
+        "updatedAt": "2025-10-28T06:59:03.754Z"
+      }
+    ],
+    [
+      "test-camp-lead@example.com",
+      {
+        "_id": 10000004,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test-camp-lead@example.com",
+        "password": "$2a$12$GCXZ2vYEoWMU0aTsdXz65e4nWcjw7ZjO6IoILzxR1otBHuydkVYo2",
+        "accountType": "camp",
+        "role": "camp_lead",
+        "firstName": "Camp",
+        "lastName": "Lead",
+        "createdAt": "2025-10-28T06:59:11.747Z",
+        "updatedAt": "2025-10-28T06:59:17.700Z"
+      }
     ]
   ],
   "camps": [

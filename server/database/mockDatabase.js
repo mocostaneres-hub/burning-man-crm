@@ -366,6 +366,17 @@ class MockDatabase {
     return null;
   }
 
+  async findUserById(id) {
+    await this.ensureLoaded();
+    for (let user of this.collections.users.values()) {
+      // Handle both string and numeric ID comparisons
+      if (user._id === id || user._id === parseInt(id) || user._id.toString() === id.toString()) {
+        return user;
+      }
+    }
+    return null;
+  }
+
   async findUsers(query = {}) {
     await this.ensureLoaded();
     let users = Array.from(this.collections.users.values());
