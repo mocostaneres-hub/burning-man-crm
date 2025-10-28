@@ -13,6 +13,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper function to check if user needs onboarding
+  const needsOnboarding = (userData: User | null): boolean => {
+    return userData?.role === 'unassigned' || !userData?.role;
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('token');
@@ -44,7 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ isFirstLogin?: boolean }> => {
+  const login = async (email: string, password: string): Promise<{ isFirstLogin?: boolean; needsOnboarding?: boolean }> => {
     try {
       const response = await apiService.login(email, password);
       const { token: newToken, user: userData, isFirstLogin } = response;
@@ -54,13 +59,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
       
-      return { isFirstLogin };
+      return { 
+        isFirstLogin,
+        needsOnboarding: needsOnboarding(userData)
+      };
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Login failed');
     }
   };
 
-  const register = async (userData: RegisterData): Promise<void> => {
+  const register = async (userData: RegisterData): Promise<{ needsOnboarding?: boolean }> => {
     try {
       console.log('🔍 [AuthContext] Registering user with data:', userData);
       const response = await apiService.register(userData);
@@ -69,11 +77,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('🔍 [AuthContext] Setting user:', newUser);
       console.log('🔍 [AuthContext] User account type:', newUser.accountType);
+      console.log('🔍 [AuthContext] User role:', newUser.role);
       
       setToken(newToken);
       setUser(newUser);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(newUser));
+      
+      return { 
+        needsOnboarding: needsOnboarding(newUser)
+      };
     } catch (error: any) {
       console.error('❌ [AuthContext] Registration error:', error);
       throw new Error(error.response?.data?.message || 'Registration failed');

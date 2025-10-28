@@ -95,6 +95,7 @@ app.use('/api/upload', require('./routes/profile-photos'));
 app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/role-management', require('./routes/roleManagement'));
 app.use('/api/oauth', require('./routes/oauth'));
+app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/help', require('./routes/help'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/call-slots', require('./routes/callSlots'));

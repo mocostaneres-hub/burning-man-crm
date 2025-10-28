@@ -2,6 +2,7 @@ export interface User {
   _id: number;
   email: string;
   accountType: 'personal' | 'camp' | 'admin';
+  role?: 'member' | 'camp_lead' | 'unassigned';
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
@@ -298,8 +299,8 @@ export interface Admin {
 export interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<{ isFirstLogin?: boolean }>;
-  register: (userData: RegisterData) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ isFirstLogin?: boolean; needsOnboarding?: boolean }>;
+  register: (userData: RegisterData) => Promise<{ needsOnboarding?: boolean }>;
   logout: () => void;
   loading: boolean;
   isAuthenticated: boolean;

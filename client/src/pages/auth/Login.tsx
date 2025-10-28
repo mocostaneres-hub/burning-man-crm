@@ -44,6 +44,13 @@ const Login: React.FC = () => {
     try {
       const result = await login(data.email, data.password);
       
+      // Check if user needs onboarding
+      if (result.needsOnboarding) {
+        console.log('🔍 [Login] User needs onboarding, redirecting to /onboarding/select-role');
+        navigate('/onboarding/select-role', { replace: true });
+        return;
+      }
+      
       // If this is a first-time login for a camp account, redirect to camp edit page
       if (result.isFirstLogin) {
         console.log('🔍 [Login] First-time camp admin login detected, redirecting to /camp/edit');
@@ -63,6 +70,13 @@ const Login: React.FC = () => {
   const handleOAuthSuccess = (user: any) => {
     setOauthLoading(false);
     setError('');
+    
+    // Check if user needs onboarding
+    if (user.role === 'unassigned' || !user.role) {
+      console.log('🔍 [Login] User needs onboarding (OAuth), redirecting to /onboarding/select-role');
+      navigate('/onboarding/select-role', { replace: true });
+      return;
+    }
     
     // Check if this is a new camp account (no lastLogin)
     if (user.accountType === 'camp' && !user.lastLogin) {

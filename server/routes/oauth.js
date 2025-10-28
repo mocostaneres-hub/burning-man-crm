@@ -64,7 +64,8 @@ router.post('/google', [
         lastName: lastName || '',
         googleId,
         profilePhoto: profilePicture || '',
-        lastLogin: new Date()
+        lastLogin: new Date(),
+        role: 'unassigned' // New OAuth users start with unassigned role
       });
     }
 
@@ -139,7 +140,8 @@ router.post('/apple', [
         lastName: lastName || '',
         appleId,
         profilePhoto: profilePicture || '',
-        lastLogin: new Date()
+        lastLogin: new Date(),
+        role: 'unassigned' // New OAuth users start with unassigned role
       });
     }
 

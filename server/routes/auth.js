@@ -51,7 +51,8 @@ router.post('/register', [
     const userData = {
       email,
       password,
-      accountType
+      accountType,
+      role: 'unassigned' // New users start with unassigned role
     };
 
     if (accountType === 'personal') {

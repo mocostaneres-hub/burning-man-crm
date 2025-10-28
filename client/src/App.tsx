@@ -36,6 +36,7 @@ import TaskManagement from './pages/camps/TaskManagement';
 import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
 import InviteTrackingPage from './pages/invites/InviteTrackingPage';
+import SelectRole from './pages/onboarding/SelectRole';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Dashboard redirect component for personal accounts
@@ -76,6 +77,11 @@ function App() {
                   <Route path="/test-oauth" element={<TestOAuth />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
+                  <Route path="/onboarding/select-role" element={
+                    <ProtectedRoute>
+                      <SelectRole />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
                       <DashboardRedirect />

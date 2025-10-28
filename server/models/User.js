@@ -41,6 +41,11 @@ const userSchema = new mongoose.Schema({
     enum: ['personal', 'camp', 'admin'],
     required: true
   },
+  role: {
+    type: String,
+    enum: ['member', 'camp_lead', 'unassigned'],
+    default: 'unassigned'
+  },
   
   // Personal account fields
   firstName: {
