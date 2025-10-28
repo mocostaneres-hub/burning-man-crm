@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import Footer from '../../components/layout/Footer';
-import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2, Globe, Twitter, Home } from 'lucide-react';
+import { Search as SearchIcon, MapPin, Users, Calendar, Facebook, Instagram, Filter as FilterIcon, Loader2, Globe, Twitter, Home, UserPlus } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 interface CampCategory {
@@ -53,6 +54,7 @@ interface Camp {
   primaryPhotoIndex?: number;
   visibility?: 'public' | 'private';
   memberCount?: number;
+  applicationsEnabled?: boolean;
 }
 
 // Helper function to dynamically render Lucide icons
@@ -66,6 +68,7 @@ const renderIcon = (iconName: string) => {
 
 const CampDiscovery: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [camps, setCamps] = useState<Camp[]>([]);
   const [filteredCamps, setFilteredCamps] = useState<Camp[]>([]);
   const [campCategories, setCampCategories] = useState<CampCategory[]>([]);
@@ -79,6 +82,17 @@ const CampDiscovery: React.FC = () => {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'members' | 'burningSince'>('name');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Handle Apply Now button click
+  const handleApplyNow = (camp: Camp) => {
+    if (!user) {
+      // Redirect to registration page for unauthenticated users
+      window.location.href = 'https://www.g8road.com/register';
+    } else {
+      // For authenticated users, navigate to camp profile or application page
+      navigate(`/camps/${camp.slug}`);
+    }
+  };
 
   useEffect(() => {
     fetchCamps();
@@ -549,6 +563,22 @@ const CampDiscovery: React.FC = () => {
                                 </span>
                               )}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Apply Now Button */}
+                        {camp.applicationsEnabled && (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApplyNow(camp);
+                              }}
+                              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                              Apply Now
+                            </Button>
                           </div>
                         )}
                       </div>
