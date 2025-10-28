@@ -19,7 +19,7 @@ router.post('/google', [
   body('email').isEmail().normalizeEmail(),
   body('name').trim().notEmpty(),
   body('googleId').notEmpty(),
-  body('profilePicture').optional().isURL()
+  body('profilePicture').optional()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -83,8 +83,14 @@ router.post('/google', [
     });
 
   } catch (error) {
-    console.error('Google OAuth error:', error);
-    res.status(500).json({ message: 'Server error during Google OAuth' });
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Google OAuth error:', error);
+      console.error('Error stack:', error.stack);
+    }
+    res.status(500).json({ 
+      message: 'Server error during Google OAuth',
+      ...(process.env.NODE_ENV === 'development' && { error: error.message })
+    });
   }
 });
 

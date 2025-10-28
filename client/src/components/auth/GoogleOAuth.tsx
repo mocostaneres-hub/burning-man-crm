@@ -16,16 +16,16 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
   const isConfigured = !!googleClientId && googleClientId !== 'not-configured';
   
   useEffect(() => {
-    if (!isConfigured) {
+    if (!isConfigured && process.env.NODE_ENV === 'development') {
       console.warn('Google OAuth not properly configured');
-    } else {
-      console.log('Google OAuth configured with client ID:', googleClientId);
     }
-  }, [isConfigured, googleClientId]);
+  }, [isConfigured]);
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
-      console.log('Google OAuth response:', credentialResponse);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Google OAuth credential received');
+      }
       
       if (!credentialResponse.credential) {
         onError('No credential received from Google');
@@ -43,7 +43,6 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
       );
 
       const googleUser = JSON.parse(jsonPayload);
-      console.log('Decoded Google user:', googleUser);
 
       // Validate required fields
       if (!googleUser.email || !googleUser.name || !googleUser.sub) {
@@ -59,8 +58,6 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
         profilePicture: googleUser.picture || ''
       });
 
-      console.log('Backend response:', response.data);
-
       if (response.data.token && response.data.user) {
         // Store token and user data
         localStorage.setItem('token', response.data.token);
@@ -70,16 +67,25 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
         onError('Failed to authenticate with Google');
       }
     } catch (error: any) {
-      console.error('Google OAuth error:', error);
-      console.error('Error details:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      onError(error.response?.data?.message || 'Failed to sign in with Google');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Google OAuth error:', error);
+        console.error('Error details:', error.response?.data);
+      }
+      
+      // Provide user-friendly error messages
+      const errorMessage = error.response?.data?.message 
+        || error.response?.data?.errors?.[0]?.msg
+        || 'Failed to sign in with Google. Please try again.';
+      
+      onError(errorMessage);
     }
   };
 
   const handleGoogleError = () => {
-    console.error('Google OAuth error occurred');
-    onError('Google sign-in failed. Please try again.');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Google OAuth error occurred');
+    }
+    onError('Google sign-in was cancelled or failed. Please try again.');
   };
 
   if (!isConfigured) {
