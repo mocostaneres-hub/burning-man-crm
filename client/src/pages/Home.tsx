@@ -41,7 +41,7 @@ const Home: React.FC = () => {
             >
               {user?.accountType === 'camp' 
                 ? 'Manage your roster, recruit members, and build your community with our comprehensive CRM platform.'
-                : 'Find amazing camps to join, discover events and experiences, and connect with the burner community.'
+                : 'Burners: find amazing camps to join, discover events and experiences, and connect with the burner community.\nCamps: manage your roster, orientation calls, projects and volunteer shifts - all in one place. No more copy and paste and endless forms and Google Docs!'
               }
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
