@@ -68,34 +68,78 @@ const About: React.FC = () => {
               <div className="bg-gray-100 rounded-lg p-6 mb-6">
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">Camp Roster Management</h4>
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                  {/* Header with Summary Stats */}
                   <div className="bg-gray-50 px-4 py-3 border-b">
-                    <h5 className="font-medium text-gray-700">Mudskippers Camp - Member Roster (25 Members)</h5>
+                    <div className="flex justify-between items-center">
+                      <h5 className="font-medium text-gray-700">Mudskippers Camp - Member Roster</h5>
+                      <div className="flex space-x-4 text-sm text-gray-600">
+                        <span>25 Total</span>
+                        <span className="text-green-600">18 Confirmed</span>
+                        <span className="text-yellow-600">4 Pending</span>
+                        <span className="text-gray-600">3 Waitlist</span>
+                      </div>
+                    </div>
                   </div>
+                  
+                  {/* Filters */}
+                  <div className="bg-white px-4 py-3 border-b flex space-x-4">
+                    <select className="text-sm border border-gray-300 rounded px-2 py-1">
+                      <option>All Status</option>
+                      <option>Confirmed</option>
+                      <option>Pending</option>
+                      <option>Waitlist</option>
+                    </select>
+                    <select className="text-sm border border-gray-300 rounded px-2 py-1">
+                      <option>All Roles</option>
+                      <option>Lead</option>
+                      <option>Member</option>
+                      <option>Volunteer</option>
+                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="Search members..." 
+                      className="text-sm border border-gray-300 rounded px-2 py-1 flex-1 max-w-xs"
+                    />
+                  </div>
+                  
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dues Paid</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {[
-                          { name: "Alex Johnson", status: "Confirmed", dues: "✓", role: "Lead" },
-                          { name: "Sarah Chen", status: "Confirmed", dues: "✓", role: "Co-Lead" },
-                          { name: "Mike Rodriguez", status: "Pending", dues: "⏳", role: "Member" },
-                          { name: "Emma Wilson", status: "Confirmed", dues: "✓", role: "Volunteer" },
-                          { name: "David Kim", status: "Waitlist", dues: "❌", role: "Member" },
-                          { name: "Lisa Brown", status: "Confirmed", dues: "✓", role: "Member" },
-                          { name: "Tom Anderson", status: "Pending", dues: "⏳", role: "Member" },
-                          { name: "Maria Garcia", status: "Confirmed", dues: "✓", role: "Volunteer" },
-                          { name: "James Taylor", status: "Confirmed", dues: "✓", role: "Member" },
-                          { name: "Anna Lee", status: "Pending", dues: "⏳", role: "Member" }
+                          { name: "Alex Johnson", status: "Confirmed", dues: "✓", role: "Lead", email: "alex@example.com" },
+                          { name: "Sarah Chen", status: "Confirmed", dues: "✓", role: "Co-Lead", email: "sarah@example.com" },
+                          { name: "Mike Rodriguez", status: "Pending", dues: "⏳", role: "Member", email: "mike@example.com" },
+                          { name: "Emma Wilson", status: "Confirmed", dues: "✓", role: "Volunteer", email: "emma@example.com" },
+                          { name: "David Kim", status: "Waitlist", dues: "❌", role: "Member", email: "david@example.com" },
+                          { name: "Lisa Brown", status: "Confirmed", dues: "✓", role: "Member", email: "lisa@example.com" },
+                          { name: "Tom Anderson", status: "Pending", dues: "⏳", role: "Member", email: "tom@example.com" },
+                          { name: "Maria Garcia", status: "Confirmed", dues: "✓", role: "Volunteer", email: "maria@example.com" },
+                          { name: "James Taylor", status: "Confirmed", dues: "✓", role: "Member", email: "james@example.com" },
+                          { name: "Anna Lee", status: "Pending", dues: "⏳", role: "Member", email: "anna@example.com" }
                         ].map((member, index) => (
                           <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{member.name}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-8 w-8">
+                                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white text-sm font-medium">
+                                    {member.name.split(' ').map(n => n[0]).join('')}
+                                  </div>
+                                </div>
+                                <div className="ml-3">
+                                  <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                                  <div className="text-sm text-gray-500">{member.email}</div>
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                 member.status === 'Confirmed' ? 'bg-green-100 text-green-800' :
@@ -107,13 +151,17 @@ const About: React.FC = () => {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">{member.dues}</td>
                             <td className="px-4 py-3 text-sm text-gray-900">{member.role}</td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <button className="text-blue-600 hover:text-blue-800">Edit</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="bg-gray-50 px-4 py-2 text-xs text-gray-500">
-                    Showing 10 of 25 members • All data synced in real-time
+                  <div className="bg-gray-50 px-4 py-2 text-xs text-gray-500 flex justify-between">
+                    <span>Showing 10 of 25 members • All data synced in real-time</span>
+                    <span>Last updated: 2 minutes ago</span>
                   </div>
                 </div>
               </div>
@@ -132,36 +180,115 @@ const About: React.FC = () => {
               
               {/* AI VISUAL REFERENCE B: Camp Discovery Mockup */}
               <div className="bg-gray-100 rounded-lg p-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Camp Discovery</h4>
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800">Camp Discovery</h4>
+                  <div className="flex space-x-2">
+                    <select className="text-sm border border-gray-300 rounded px-2 py-1">
+                      <option>All Categories</option>
+                      <option>Art & Music</option>
+                      <option>Food & Beverage</option>
+                      <option>Performance</option>
+                      <option>Spiritual</option>
+                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="Search camps..." 
+                      className="text-sm border border-gray-300 rounded px-2 py-1 w-48"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
-                    { name: "Mudskippers", description: "Interactive art and music", members: "25", status: "Open" },
-                    { name: "Sunrise Kitchen", description: "Morning coffee and community", members: "15", status: "Open" },
-                    { name: "Fire Spinners", description: "Performance and workshops", members: "30", status: "Waitlist" },
-                    { name: "Temple Guardians", description: "Sacred space and meditation", members: "20", status: "Open" },
-                    { name: "Dusty Rhythms", description: "Live music and dancing", members: "40", status: "Open" },
-                    { name: "Playa Provisions", description: "Food and beverage service", members: "35", status: "Open" }
+                    { 
+                      name: "Mudskippers", 
+                      description: "Interactive art and music", 
+                      members: "25", 
+                      status: "Open",
+                      category: "Art & Music",
+                      location: "3:00 & Esplanade",
+                      photo: "🎨"
+                    },
+                    { 
+                      name: "Sunrise Kitchen", 
+                      description: "Morning coffee and community", 
+                      members: "15", 
+                      status: "Open",
+                      category: "Food & Beverage",
+                      location: "4:30 & A",
+                      photo: "☕"
+                    },
+                    { 
+                      name: "Fire Spinners", 
+                      description: "Performance and workshops", 
+                      members: "30", 
+                      status: "Waitlist",
+                      category: "Performance",
+                      location: "2:00 & Esplanade",
+                      photo: "🔥"
+                    },
+                    { 
+                      name: "Temple Guardians", 
+                      description: "Sacred space and meditation", 
+                      members: "20", 
+                      status: "Open",
+                      category: "Spiritual",
+                      location: "6:00 & Esplanade",
+                      photo: "🕯️"
+                    },
+                    { 
+                      name: "Dusty Rhythms", 
+                      description: "Live music and dancing", 
+                      members: "40", 
+                      status: "Open",
+                      category: "Art & Music",
+                      location: "5:30 & B",
+                      photo: "🎵"
+                    },
+                    { 
+                      name: "Playa Provisions", 
+                      description: "Food and beverage service", 
+                      members: "35", 
+                      status: "Open",
+                      category: "Food & Beverage",
+                      location: "4:00 & C",
+                      photo: "🍕"
+                    }
                   ].map((camp, index) => (
-                    <div key={index} className="bg-white rounded-lg shadow-sm p-4 border">
-                      <div className="h-32 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg mb-3 flex items-center justify-center">
-                        <Building className="w-8 h-8 text-white" />
+                    <div key={index} className="bg-white rounded-lg shadow-sm p-4 border hover:shadow-md transition-shadow">
+                      <div className="h-32 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
+                        <div className="text-4xl">{camp.photo}</div>
+                        <div className="absolute top-2 right-2">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            camp.status === 'Open' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {camp.status}
+                          </span>
+                        </div>
                       </div>
                       <h5 className="font-semibold text-gray-900 mb-1">{camp.name}</h5>
                       <p className="text-sm text-gray-600 mb-2">{camp.description}</p>
+                      <div className="text-xs text-gray-500 mb-2">
+                        <div className="flex items-center mb-1">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+                          {camp.location}
+                        </div>
+                        <div className="flex items-center">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                          {camp.category}
+                        </div>
+                      </div>
                       <div className="flex justify-between items-center text-xs text-gray-500">
                         <span>{camp.members} members</span>
-                        <span className={`px-2 py-1 rounded-full ${
-                          camp.status === 'Open' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {camp.status}
-                        </span>
+                        <button className="text-orange-600 hover:text-orange-800 font-medium">
+                          Learn More →
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 text-center">
-                  <button className="inline-flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
-                    View All Camps
+                <div className="mt-6 text-center">
+                  <button className="inline-flex items-center px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium">
+                    View All 50+ Camps
                     →
                   </button>
                 </div>
