@@ -217,14 +217,7 @@ const ApplicationManagementTable: React.FC = () => {
     setShowApplicationModal(true);
   };
 
-  console.log('🎨 [DEBUG] Rendering component...');
-  console.log('⏳ [DEBUG] Loading state:', loading);
-  console.log('📊 [DEBUG] Applications count:', applications.length);
-  console.log('🔍 [DEBUG] Filtered applications count:', filteredApplications.length);
-  console.log('❌ [DEBUG] Error state:', error);
-
   if (loading) {
-    console.log('⏳ [DEBUG] Showing loading state');
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[50vh]">

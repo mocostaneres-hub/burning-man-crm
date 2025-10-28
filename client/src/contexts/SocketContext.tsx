@@ -30,16 +30,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
       newSocket.on('connect', () => {
         setIsConnected(true);
-        console.log('Connected to server');
       });
 
       newSocket.on('disconnect', () => {
         setIsConnected(false);
-        console.log('Disconnected from server');
       });
 
       newSocket.on('error', (error) => {
-        console.error('Socket error:', error);
+        // Log error in development only
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Socket error:', error);
+        }
       });
 
       setSocket(newSocket);

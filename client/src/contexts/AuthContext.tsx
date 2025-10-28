@@ -30,10 +30,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           // Verify token is still valid
           const response = await apiService.getCurrentUser();
-          console.log('🔍 [AuthContext] GET /api/auth/me response:', response);
-          console.log('🔍 [AuthContext] User skills:', response.user?.skills);
-          console.log('🔍 [AuthContext] User socialMedia:', response.user?.socialMedia);
-          console.log('🔍 [AuthContext] User playaName:', response.user?.playaName);
           setUser(response.user);
         } catch (error) {
           // Token is invalid, clear storage

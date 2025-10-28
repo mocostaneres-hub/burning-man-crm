@@ -1,5 +1,5 @@
 export interface User {
-  _id: number;
+  _id: string;
   email: string;
   accountType: 'personal' | 'camp' | 'admin';
   role?: 'member' | 'camp_lead' | 'unassigned';
@@ -70,8 +70,8 @@ export interface SocialMediaLink {
 }
 
 export interface Camp {
-  _id: number;
-  owner: number | User;
+  _id: string;
+  owner: string | User;
   name: string;
   slug: string;
   description: string;
@@ -149,9 +149,9 @@ export interface CampVideo {
 
 
 export interface Member {
-  _id: number;
-  camp: number | Camp;
-  user: number | User;
+  _id: string;
+  camp: string | Camp;
+  user: string | User;
   role: 'member' | 'project-lead' | 'camp-lead';
   status: 'pending' | 'active' | 'inactive' | 'suspended' | 'rejected';
   applicationData: Record<string, any>;
@@ -278,8 +278,8 @@ export interface MemberNote {
 }
 
 export interface Admin {
-  _id: number;
-  user: number | User;
+  _id: string;
+  user: string | User;
   role: 'super-admin' | 'moderator' | 'support';
   permissions: {
     userManagement: boolean;
@@ -391,11 +391,11 @@ export interface PaginatedResponse<T> {
 export interface Event {
   _id: string;
   eventName: string;
-  campId: number;
+  campId: string;
   description?: string;
   createdAt: Date;
   updatedAt: Date;
-  createdBy: number; // User ID who created the event
+  createdBy: string; // User ID who created the event
   shifts: Shift[];
 }
 
@@ -408,16 +408,16 @@ export interface Shift {
   startTime: Date;
   endTime: Date;
   maxSignUps: number;
-  memberIds: number[]; // Array of user IDs who signed up
+  memberIds: string[]; // Array of user IDs who signed up
   createdAt: Date;
   updatedAt: Date;
-  createdBy: number; // User ID who created the shift
+  createdBy: string; // User ID who created the shift
 }
 
 export interface ShiftSignUp {
   _id: string;
   shiftId: string;
-  memberId: number;
+  memberId: string;
   signedUpAt: Date;
   status: 'confirmed' | 'cancelled';
 }

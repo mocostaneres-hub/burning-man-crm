@@ -85,22 +85,18 @@ const Register: React.FC = () => {
         accountType: 'personal' as const
       };
       
-      console.log('🔍 [Register] Calling registerUser with data:', userData);
       const result = await registerUser(userData);
-      console.log('🔍 [Register] Registration successful, redirecting...');
       
       // Small delay to ensure auth context is fully updated
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Check if user needs onboarding
       if (result.needsOnboarding) {
-        console.log('🔍 [Register] User needs onboarding, redirecting to /onboarding/select-role');
         navigate('/onboarding/select-role', { replace: true });
         return;
       }
       
       // Fallback redirect (should not happen with new users)
-      console.log('🔍 [Register] Redirecting to user profile');
       navigate('/user/profile');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -115,17 +111,14 @@ const Register: React.FC = () => {
     
     // Check if user needs onboarding
     if (user.role === 'unassigned' || !user.role) {
-      console.log('🔍 [Register] User needs onboarding (OAuth), redirecting to /onboarding/select-role');
       navigate('/onboarding/select-role', { replace: true });
       return;
     }
     
     // Redirect based on account type
     if (user.accountType === 'camp') {
-      console.log('🔍 [Register] Redirecting new camp account (OAuth) to /camp/edit');
       navigate('/camp/edit');
     } else {
-      console.log('🔍 [Register] Redirecting personal account (OAuth) to /user/profile');
       navigate('/user/profile');
     }
   };

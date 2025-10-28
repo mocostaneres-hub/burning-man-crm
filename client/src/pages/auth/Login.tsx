@@ -46,14 +46,12 @@ const Login: React.FC = () => {
       
       // Check if user needs onboarding
       if (result.needsOnboarding) {
-        console.log('🔍 [Login] User needs onboarding, redirecting to /onboarding/select-role');
         navigate('/onboarding/select-role', { replace: true });
         return;
       }
       
       // If this is a first-time login for a camp account, redirect to camp edit page
       if (result.isFirstLogin) {
-        console.log('🔍 [Login] First-time camp admin login detected, redirecting to /camp/edit');
         navigate('/camp/edit', { replace: true });
       } else {
         // Otherwise, redirect based on the from path or default to /dashboard
@@ -73,14 +71,12 @@ const Login: React.FC = () => {
     
     // Check if user needs onboarding
     if (user.role === 'unassigned' || !user.role) {
-      console.log('🔍 [Login] User needs onboarding (OAuth), redirecting to /onboarding/select-role');
       navigate('/onboarding/select-role', { replace: true });
       return;
     }
     
     // Check if this is a new camp account (no lastLogin)
     if (user.accountType === 'camp' && !user.lastLogin) {
-      console.log('🔍 [Login] First-time camp admin login (OAuth) detected, redirecting to /camp/edit');
       navigate('/camp/edit', { replace: true });
     } else {
       const from = location.state?.from?.pathname || '/dashboard';

@@ -6,8 +6,8 @@ import { formatDate } from '../../utils/dateFormatters';
 
 interface HistoryEntry {
   _id: string;
-  userId: number;
-  editorId: number;
+  userId: string;
+  editorId: string;
   editorName: string;
   changes: Record<string, { from: any; to: any }>;
   timestamp: string;
@@ -15,7 +15,7 @@ interface HistoryEntry {
 }
 
 interface UserProfileHistoryProps {
-  userId: number;
+  userId: string;
   isOpen: boolean;
   onClose: () => void;
 }

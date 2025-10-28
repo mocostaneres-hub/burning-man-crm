@@ -174,11 +174,9 @@ class MockDatabase {
   }
 
   async reloadData() {
-    console.log('🔄 Reloading mock database data...');
     this.loaded = false;
     await this.loadData();
     this.loaded = true;
-    console.log('✅ Mock database data reloaded successfully');
   }
 
   async loadData() {
@@ -295,11 +293,9 @@ class MockDatabase {
         }
       }
       
-      console.log('Mock database data loaded from file');
       // Initialize ID counters based on existing data
       initializeIdCounters(this);
     } catch (error) {
-      console.log('No existing mock database file found, starting fresh');
       // File doesn't exist or is invalid, start with empty collections
     }
   }
@@ -345,7 +341,6 @@ class MockDatabase {
       
       await fs.writeFile(this.dataFile, JSON.stringify(cleanData, null, 2));
     } catch (error) {
-      console.error('Error saving mock database:', error);
     }
   }
 

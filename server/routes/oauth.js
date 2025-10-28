@@ -170,12 +170,12 @@ router.post('/apple', [
 router.get('/config', (req, res) => {
   res.json({
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || 'your-google-client-id',
-      enabled: true
+      clientId: process.env.GOOGLE_CLIENT_ID || null,
+      enabled: !!process.env.GOOGLE_CLIENT_ID
     },
     apple: {
-      clientId: process.env.APPLE_CLIENT_ID || 'your-apple-client-id',
-      enabled: true
+      clientId: process.env.APPLE_CLIENT_ID || null,
+      enabled: !!process.env.APPLE_CLIENT_ID
     }
   });
 });

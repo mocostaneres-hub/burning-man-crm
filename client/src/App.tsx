@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import Navbar from './components/layout/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
@@ -63,10 +64,11 @@ function App() {
   }
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId || 'not-configured'}>
-      <AuthProvider>
-        <SocketProvider>
-          <Router>
+    <ErrorBoundary>
+      <GoogleOAuthProvider clientId={googleClientId || 'not-configured'}>
+        <AuthProvider>
+          <SocketProvider>
+            <Router>
             <div className="min-h-screen bg-custom-bg">
               <Navbar />
               <main className="pt-16">
@@ -212,6 +214,7 @@ function App() {
         </SocketProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
+    </ErrorBoundary>
   );
 }
 

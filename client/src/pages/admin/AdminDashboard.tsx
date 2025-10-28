@@ -66,7 +66,7 @@ const AdminDashboard: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
   const [showCampModal, setShowCampModal] = useState(false);
   const [showDeleteCampModal, setShowDeleteCampModal] = useState(false);
@@ -143,7 +143,7 @@ const AdminDashboard: React.FC = () => {
     setShowUserModal(true);
   };
 
-  const handleViewHistory = (userId: number) => {
+  const handleViewHistory = (userId: string) => {
     setSelectedUserId(userId);
     setShowHistoryModal(true);
   };
@@ -165,7 +165,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleUserToggleActive = async (userId: number) => {
+  const handleUserToggleActive = async (userId: string) => {
     try {
       const user = users.find(u => u._id === userId);
       if (user) {

@@ -24,7 +24,6 @@ const SelectRole: React.FC = () => {
         setError('Failed to select role. Please try again.');
       }
     } catch (error: any) {
-      console.error('Role selection error:', error);
       setError(error.response?.data?.message || 'Failed to select role. Please try again.');
     } finally {
       setLoading(false);

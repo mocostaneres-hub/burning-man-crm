@@ -70,12 +70,12 @@ const VolunteerShifts: React.FC = () => {
       maxSignUps: number;
     }>,
     assignmentType: 'none' as 'none' | 'all' | 'specific',
-    selectedMembers: [] as number[]
+    selectedMembers: [] as string[]
   });
 
   // State for roster members
   const [rosterMembers, setRosterMembers] = useState<Array<{
-    _id: number;
+    _id: string;
     firstName: string;
     lastName: string;
     email: string;
