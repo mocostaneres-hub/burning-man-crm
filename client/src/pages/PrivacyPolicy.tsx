@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Eye, Lock, Database, Users, Mail } from 'lucide-react';
+import { Shield, Eye, Database, Users, Mail } from 'lucide-react';
 
 const PrivacyPolicy: React.FC = () => {
   return (
@@ -97,7 +97,7 @@ const PrivacyPolicy: React.FC = () => {
           {/* Information Sharing */}
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
-              <Lock className="w-6 h-6 mr-2 text-blue-600" />
+              <Shield className="w-6 h-6 mr-2 text-blue-600" />
               Information Sharing
             </h2>
             <p className="text-gray-700 leading-relaxed mb-4">
