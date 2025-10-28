@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -10,22 +10,18 @@ import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 type FormData = {
-  firstName?: string;
-  lastName?: string;
-  campName?: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  accountType: 'personal' | 'camp';
   password: string;
   confirmPassword: string;
 };
 
 const schema: yup.ObjectSchema<FormData> = yup
   .object({
-    firstName: yup.string().optional(),
-    lastName: yup.string().optional(),
-    campName: yup.string().optional(),
+    firstName: yup.string().required('First name is required'),
+    lastName: yup.string().required('Last name is required'),
     email: yup.string().email('Invalid email').required('Email is required'),
-    accountType: yup.mixed<'personal' | 'camp'>().oneOf(['personal', 'camp']).required('Account type is required'),
     password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
     confirmPassword: yup
       .string()
@@ -48,17 +44,13 @@ const Register: React.FC = () => {
   const {
     register,
     handleSubmit,
-    control,
     watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
-    defaultValues: {
-      accountType: 'personal',
-    },
+    defaultValues: {},
   });
 
-  const accountType = watch('accountType');
   const password = watch('password');
   const confirmPassword = watch('confirmPassword');
 
@@ -87,23 +79,14 @@ const Register: React.FC = () => {
 
       const { confirmPassword, ...registerData } = data;
       
-      // Validate required fields based on account type
-      if (data.accountType === 'personal') {
-        if (!data.firstName || !data.lastName) {
-          setError('First name and last name are required for personal accounts');
-          setLoading(false);
-          return;
-        }
-      } else if (data.accountType === 'camp') {
-        if (!data.campName) {
-          setError('Camp name is required for camp accounts');
-          setLoading(false);
-          return;
-        }
-      }
+      // Always create personal account - role will be selected during onboarding
+      const userData = {
+        ...registerData,
+        accountType: 'personal' as const
+      };
       
-      console.log('🔍 [Register] Calling registerUser with data:', registerData);
-      const result = await registerUser(registerData);
+      console.log('🔍 [Register] Calling registerUser with data:', userData);
+      const result = await registerUser(userData);
       console.log('🔍 [Register] Registration successful, redirecting...');
       
       // Small delay to ensure auth context is fully updated
@@ -116,16 +99,9 @@ const Register: React.FC = () => {
         return;
       }
       
-      // Redirect based on account type (for existing users or if onboarding is not needed)
-      if (data.accountType === 'camp') {
-        // New camp accounts go directly to camp profile edit page
-        console.log('🔍 [Register] Redirecting new camp account to /camp/edit');
-        navigate('/camp/edit');
-      } else {
-        // Personal accounts go to user profile (with auto-edit mode)
-        console.log('🔍 [Register] Redirecting personal account to /user/profile');
-        navigate('/user/profile');
-      }
+      // Fallback redirect (should not happen with new users)
+      console.log('🔍 [Register] Redirecting to user profile');
+      navigate('/user/profile');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -214,72 +190,21 @@ const Register: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Account Type Selection */}
-          <div className="mb-6">
-            <label className="block text-label font-medium text-custom-text mb-3">
-              Choose Your Account Type
-            </label>
-            <Controller
-              name="accountType"
-              control={control}
-              render={({ field }) => (
-                <div className="grid grid-cols-1 gap-4">
-                  <label className="flex items-start space-x-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      value="personal"
-                      checked={field.value === 'personal'}
-                      onChange={field.onChange}
-                      className="mt-1 text-custom-primary focus:ring-custom-primary"
-                    />
-                    <div>
-                      <div className="font-medium text-custom-text">Personal Account</div>
-                      <div className="text-sm text-custom-text-secondary">Join camps as a member</div>
-                    </div>
-                  </label>
-                  <label className="flex items-start space-x-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      value="camp"
-                      checked={field.value === 'camp'}
-                      onChange={field.onChange}
-                      className="mt-1 text-custom-primary focus:ring-custom-primary"
-                    />
-                    <div>
-                      <div className="font-medium text-custom-text">Camp Account</div>
-                      <div className="text-sm text-custom-text-secondary">Manage your camp</div>
-                    </div>
-                  </label>
-                </div>
-              )}
-            />
-          </div>
-
-          {accountType === 'personal' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                {...register('firstName')}
-                label="First Name"
-                error={errors.firstName?.message}
-                className="w-full"
-              />
-              <Input
-                {...register('lastName')}
-                label="Last Name"
-                error={errors.lastName?.message}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          {accountType === 'camp' && (
+          {/* Personal Information */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              {...register('campName')}
-              label="Camp Name"
-              error={errors.campName?.message}
+              {...register('firstName')}
+              label="First Name"
+              error={errors.firstName?.message}
               className="w-full"
             />
-          )}
+            <Input
+              {...register('lastName')}
+              label="Last Name"
+              error={errors.lastName?.message}
+              className="w-full"
+            />
+          </div>
 
           <Input
             {...register('email')}

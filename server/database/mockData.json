@@ -1040,6 +1040,22 @@
         "createdAt": "2025-10-28T06:59:11.747Z",
         "updatedAt": "2025-10-28T06:59:17.700Z"
       }
+    ],
+    [
+      "test-simplified-reg@example.com",
+      {
+        "_id": 10000005,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test-simplified-reg@example.com",
+        "password": "$2a$12$eU03QPeXHiu98zF.yf8RXeK7gks56wtVmrAN3hunoV27hBrI/a8XC",
+        "accountType": "personal",
+        "role": "unassigned",
+        "firstName": "Test",
+        "lastName": "User",
+        "createdAt": "2025-10-28T07:12:56.907Z",
+        "updatedAt": "2025-10-28T07:12:56.907Z"
+      }
     ]
   ],
   "camps": [

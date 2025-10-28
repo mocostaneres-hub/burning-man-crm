@@ -312,9 +312,8 @@ export interface RegisterData {
   email: string;
   password: string;
   accountType: 'personal' | 'camp';
-  firstName?: string;
-  lastName?: string;
-  campName?: string;
+  firstName: string;
+  lastName: string;
 }
 
 export interface CallSlot {
