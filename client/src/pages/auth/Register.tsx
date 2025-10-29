@@ -136,8 +136,8 @@ const Register: React.FC = () => {
     setOauthLoading(false);
     setError('');
     
-    // Check if user needs onboarding
-    if (user.role === 'unassigned' || !user.role) {
+    // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
+    if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
       navigate('/onboarding/select-role', { replace: true });
       return;
     }

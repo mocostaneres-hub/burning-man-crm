@@ -15,7 +15,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Helper function to check if user needs onboarding
   const needsOnboarding = (userData: User | null): boolean => {
-    return userData?.role === 'unassigned' || !userData?.role;
+    // User needs onboarding only if they have unassigned role AND no lastLogin (truly new user)
+    return (userData?.role === 'unassigned' || !userData?.role) && !userData?.lastLogin;
   };
 
   useEffect(() => {

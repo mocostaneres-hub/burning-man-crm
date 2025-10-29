@@ -54,8 +54,8 @@ const Login: React.FC = () => {
       console.log('🔍 [Login] User role:', user.role);
       console.log('🔍 [Login] User accountType:', user.accountType);
       
-      // Check if user needs onboarding
-      if (user.role === 'unassigned' || !user.role) {
+      // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
+      if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
         console.log('✅ [Login] Redirecting to onboarding...');
         navigate('/onboarding/select-role', { replace: true });
         return;
@@ -113,8 +113,8 @@ const Login: React.FC = () => {
     setOauthLoading(false);
     setError('');
     
-    // Check if user needs onboarding
-    if (user.role === 'unassigned' || !user.role) {
+    // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
+    if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
       console.log('✅ [Login] Redirecting to onboarding...');
       navigate('/onboarding/select-role', { replace: true });
       return;
