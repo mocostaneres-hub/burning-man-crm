@@ -21,16 +21,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
 
-      if (storedToken && storedUser) {
+      if (storedToken) {
         try {
           setToken(storedToken);
-          setUser(JSON.parse(storedUser));
           
-          // Verify token is still valid
+          // Always fetch fresh user data from API (don't use stale localStorage)
           const response = await apiService.getCurrentUser();
           setUser(response.user);
+          
+          // Update localStorage with fresh data
+          localStorage.setItem('user', JSON.stringify(response.user));
         } catch (error) {
           // Token is invalid, clear storage
           localStorage.removeItem('token');

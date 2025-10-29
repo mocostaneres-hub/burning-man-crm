@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -21,7 +21,7 @@ type FormData = {
 };
 
 const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -37,6 +37,40 @@ const Login: React.FC = () => {
   } = useForm<FormData>({
     resolver: yupResolver(schema),
   });
+
+  // Redirect authenticated users away from login page
+  useEffect(() => {
+    console.log('🔍 [Login useEffect] authLoading:', authLoading, 'user:', user);
+    
+    // Wait for auth to finish loading before checking user status
+    if (authLoading) {
+      console.log('🔍 [Login] Auth still loading, waiting...');
+      return;
+    }
+    
+    if (user) {
+      console.log('🔍 [Login] User already authenticated, redirecting...');
+      console.log('🔍 [Login] User data:', user);
+      console.log('🔍 [Login] User role:', user.role);
+      console.log('🔍 [Login] User accountType:', user.accountType);
+      
+      // Check if user needs onboarding
+      if (user.role === 'unassigned' || !user.role) {
+        console.log('✅ [Login] Redirecting to onboarding...');
+        navigate('/onboarding/select-role', { replace: true });
+        return;
+      }
+      
+      // Redirect based on account type
+      if (user.accountType === 'camp') {
+        console.log('✅ [Login] Redirecting to camp dashboard...');
+        navigate('/dashboard', { replace: true });
+      } else {
+        console.log('✅ [Login] Redirecting to member dashboard...');
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, authLoading, navigate]);
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -66,21 +100,33 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleOAuthSuccess = (user: any) => {
+  const handleOAuthSuccess = (userData: any) => {
+    console.log('🔍 [Login] OAuth success callback triggered with userData:', userData);
+    
+    // Extract user object from the response (GoogleOAuth passes the full API response)
+    const user = userData.user || userData;
+    
+    console.log('🔍 [Login] Extracted user:', user);
+    console.log('🔍 [Login] User role:', user.role);
+    console.log('🔍 [Login] Needs onboarding?', user.role === 'unassigned' || !user.role);
+    
     setOauthLoading(false);
     setError('');
     
     // Check if user needs onboarding
     if (user.role === 'unassigned' || !user.role) {
+      console.log('✅ [Login] Redirecting to onboarding...');
       navigate('/onboarding/select-role', { replace: true });
       return;
     }
     
     // Check if this is a new camp account (no lastLogin)
     if (user.accountType === 'camp' && !user.lastLogin) {
+      console.log('✅ [Login] Redirecting to camp edit...');
       navigate('/camp/edit', { replace: true });
     } else {
       const from = location.state?.from?.pathname || '/dashboard';
+      console.log('✅ [Login] Redirecting to:', from);
       navigate(from, { replace: true });
     }
   };
@@ -91,8 +137,9 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-custom-bg flex items-center justify-center py-8 px-4">
-      <Card className="w-full max-w-md p-6 sm:p-8">
+    <div className="min-h-screen bg-custom-bg flex flex-col">
+      <div className="flex-1 flex items-center justify-center py-8 px-4">
+        <Card className="w-full max-w-md p-6 sm:p-8">
         <div className="text-center mb-8">
           {/* Logo */}
           <div className="mb-4">
@@ -228,6 +275,7 @@ const Login: React.FC = () => {
           </div>
         </form>
       </Card>
+      </div>
       
       {/* Footer */}
       <Footer />

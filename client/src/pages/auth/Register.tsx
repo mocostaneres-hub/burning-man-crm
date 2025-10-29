@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -32,7 +32,7 @@ const schema: yup.ObjectSchema<FormData> = yup
   .required();
 
 const Register: React.FC = () => {
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -51,6 +51,32 @@ const Register: React.FC = () => {
     resolver: yupResolver(schema),
     defaultValues: {},
   });
+
+  // Redirect authenticated users away from register page
+  useEffect(() => {
+    console.log('🔍 [Register useEffect] authLoading:', authLoading, 'user:', user);
+    
+    // Wait for auth to finish loading before checking user status
+    if (authLoading) {
+      console.log('🔍 [Register] Auth still loading, waiting...');
+      return;
+    }
+    
+    if (user) {
+      console.log('🔍 [Register] User already authenticated, redirecting...');
+      
+      // Check if user needs onboarding
+      if (user.role === 'unassigned' || !user.role) {
+        console.log('✅ [Register] Redirecting to onboarding...');
+        navigate('/onboarding/select-role', { replace: true });
+        return;
+      }
+      
+      // Redirect to dashboard
+      console.log('✅ [Register] Redirecting to dashboard...');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
 
   const password = watch('password');
   const confirmPassword = watch('confirmPassword');

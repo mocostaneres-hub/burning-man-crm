@@ -63,15 +63,33 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
 
       console.log('🔍 [GoogleOAuth] Backend response:', response);
       console.log('🔍 [GoogleOAuth] Response data:', response?.data);
+      console.log('🔍 [GoogleOAuth] Response itself:', response);
 
-      if (response && response.data && response.data.token && response.data.user) {
+      // The API service might return data directly or wrapped in .data
+      const responseData = response?.data || response;
+      console.log('🔍 [GoogleOAuth] Extracted response data:', responseData);
+      console.log('🔍 [GoogleOAuth] Checking conditions...');
+      console.log('🔍 [GoogleOAuth] responseData exists?', !!responseData);
+      console.log('🔍 [GoogleOAuth] responseData.token exists?', !!responseData?.token);
+      console.log('🔍 [GoogleOAuth] responseData.user exists?', !!responseData?.user);
+
+      if (responseData && responseData.token && responseData.user) {
         console.log('✅ [GoogleOAuth] Authentication successful');
+        console.log('🔍 [GoogleOAuth] About to store token and call onSuccess...');
+        
         // Store token and user data
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        onSuccess(response.data.user);
+        localStorage.setItem('token', responseData.token);
+        localStorage.setItem('user', JSON.stringify(responseData.user));
+        
+        console.log('🔍 [GoogleOAuth] Token stored, now calling onSuccess with:', responseData.user);
+        console.log('🔍 [GoogleOAuth] onSuccess function:', onSuccess);
+        
+        onSuccess(responseData.user);
+        
+        console.log('🔍 [GoogleOAuth] onSuccess called successfully');
       } else {
         console.error('❌ [GoogleOAuth] Invalid response structure:', response);
+        console.error('❌ [GoogleOAuth] Response data was:', responseData);
         onError('Failed to authenticate with Google - invalid response');
       }
     } catch (error: any) {

@@ -1056,6 +1056,57 @@
         "createdAt": "2025-10-28T07:12:56.907Z",
         "updatedAt": "2025-10-28T07:12:56.907Z"
       }
+    ],
+    [
+      "mauricioo@gmail.com",
+      {
+        "_id": 10000006,
+        "isActive": true,
+        "isVerified": false,
+        "email": "mauricioo@gmail.com",
+        "password": "$2a$12$Is9BIHnsK4xfwiON/U1cDOwFEWTm0jSLXlq0jDzR8ZHzpAPBS83s2",
+        "accountType": "personal",
+        "firstName": "Mo",
+        "lastName": "Costa-Neres",
+        "googleId": "118375711173511783404",
+        "profilePhoto": "https://lh3.googleusercontent.com/a/ACg8ocK3c6ruvitTr82Vt9spp0_wNpkpsUDI6mWsScaQGzRM1QIi0Ro_-w=s96-c",
+        "lastLogin": "2025-10-29T03:27:02.885Z",
+        "role": "member",
+        "createdAt": "2025-10-29T03:27:03.354Z",
+        "updatedAt": "2025-10-29T21:57:09.351Z",
+        "phoneNumber": "3233335566",
+        "city": "Brea, CA",
+        "yearsBurned": 12,
+        "bio": "i am a burner bitch",
+        "playaName": "Mo Mo The Mo",
+        "hasTicket": true,
+        "hasVehiclePass": true,
+        "interestedInEAP": true,
+        "interestedInStrike": true,
+        "arrivalDate": "2025-11-13",
+        "departureDate": "2025-12-25",
+        "skills": [
+          "Electrical Work"
+        ],
+        "socialMedia": {}
+      }
+    ],
+    [
+      "test@g8road.com",
+      {
+        "_id": 10000007,
+        "isActive": true,
+        "isVerified": false,
+        "email": "test@g8road.com",
+        "password": "$2a$12$RNGU5EAnYzDpDFjmm6vS9eGbL2vDZ5HDWMJSzoftkj/Tyk1Ji5fP6",
+        "accountType": "camp",
+        "role": "camp_lead",
+        "firstName": "Test",
+        "lastName": "test",
+        "createdAt": "2025-10-29T22:28:57.396Z",
+        "updatedAt": "2025-10-29T22:32:53.979Z",
+        "lastLogin": "2025-10-29T22:32:53.979Z"
+      }
     ]
   ],
   "camps": [
