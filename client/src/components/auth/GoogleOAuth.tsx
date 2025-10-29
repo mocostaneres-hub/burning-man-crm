@@ -23,11 +23,10 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Google OAuth credential received');
-      }
+      console.log('🔍 [GoogleOAuth] Credential response received:', credentialResponse);
       
       if (!credentialResponse.credential) {
+        console.error('❌ [GoogleOAuth] No credential in response');
         onError('No credential received from Google');
         return;
       }
@@ -43,13 +42,17 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
       );
 
       const googleUser = JSON.parse(jsonPayload);
+      console.log('🔍 [GoogleOAuth] Decoded Google user:', googleUser);
 
       // Validate required fields
       if (!googleUser.email || !googleUser.name || !googleUser.sub) {
+        console.error('❌ [GoogleOAuth] Invalid Google user data:', googleUser);
         onError('Invalid Google user data received');
         return;
       }
 
+      console.log('🔍 [GoogleOAuth] Sending request to backend...');
+      
       // Send to backend
       const response = await api.post('/oauth/google', {
         email: googleUser.email,
@@ -58,25 +61,36 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
         profilePicture: googleUser.picture || ''
       });
 
-      if (response.data.token && response.data.user) {
+      console.log('🔍 [GoogleOAuth] Backend response:', response);
+      console.log('🔍 [GoogleOAuth] Response data:', response?.data);
+
+      if (response && response.data && response.data.token && response.data.user) {
+        console.log('✅ [GoogleOAuth] Authentication successful');
         // Store token and user data
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         onSuccess(response.data.user);
       } else {
-        onError('Failed to authenticate with Google');
+        console.error('❌ [GoogleOAuth] Invalid response structure:', response);
+        onError('Failed to authenticate with Google - invalid response');
       }
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Google OAuth error:', error);
-        console.error('Error details:', error.response?.data);
-      }
+      console.error('❌ [GoogleOAuth] Error occurred:', error);
+      console.error('❌ [GoogleOAuth] Error response:', error.response);
+      console.error('❌ [GoogleOAuth] Error data:', error.response?.data);
       
       // Provide user-friendly error messages
-      const errorMessage = error.response?.data?.message 
-        || error.response?.data?.errors?.[0]?.msg
-        || 'Failed to sign in with Google. Please try again.';
+      let errorMessage = 'Failed to sign in with Google. Please try again.';
       
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors?.[0]?.msg) {
+        errorMessage = error.response.data.errors[0].msg;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      console.error('❌ [GoogleOAuth] Final error message:', errorMessage);
       onError(errorMessage);
     }
   };
