@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import Footer from '../components/layout/Footer';
 
 const TestOAuth: React.FC = () => {
   const [result, setResult] = useState<string>('');
@@ -101,6 +102,9 @@ const TestOAuth: React.FC = () => {
           </ol>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

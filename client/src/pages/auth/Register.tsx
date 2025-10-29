@@ -8,6 +8,7 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import AppleOAuth from '../../components/auth/AppleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import Footer from '../../components/layout/Footer';
 
 type FormData = {
   firstName: string;
@@ -296,21 +297,7 @@ const Register: React.FC = () => {
       </Card>
       
       {/* Footer */}
-      <footer className="mt-12 text-center">
-        <div className="text-sm text-gray-500 space-x-4">
-          <a href="/privacy" className="hover:text-gray-700 transition-colors">
-            Privacy Policy
-          </a>
-          <span>•</span>
-          <a href="/terms" className="hover:text-gray-700 transition-colors">
-            Terms of Service
-          </a>
-          <span>•</span>
-          <a href="mailto:info@g8road.com" className="hover:text-gray-700 transition-colors">
-            Contact Us
-          </a>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };

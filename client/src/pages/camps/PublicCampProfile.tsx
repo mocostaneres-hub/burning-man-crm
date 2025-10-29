@@ -9,6 +9,7 @@ import {
 import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import Footer from '../../components/layout/Footer';
 
 interface CampCategory {
   _id: string;
@@ -653,6 +654,9 @@ const PublicCampProfile: React.FC = () => {
           </div>
         )}
       </Modal>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

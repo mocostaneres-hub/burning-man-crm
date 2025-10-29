@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Badge } from '../../components/ui';
 import { MapPin, Calendar, Instagram, Facebook, Linkedin as LinkedinIcon, Ticket as TicketIcon, Car as CarIcon, Clock, User, Share as ShareIcon, ArrowLeft as ArrowLeftIcon, Loader2 } from 'lucide-react';
 import apiService from '../../services/api';
+import Footer from '../../components/layout/Footer';
 
 interface MemberProfileData {
   _id: string;
@@ -317,6 +318,9 @@ const PublicMemberProfile: React.FC = () => {
           </Card>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };
