@@ -71,12 +71,27 @@ class DatabaseAdapter {
   }
 
   // Camp operations
-  async findCamp(query) {
+  async findCamp(query, options = {}) {
     if (this.useMongoDB) {
       const Camp = require('../models/Camp');
-      return await Camp.findOne(query);
+      let campQuery = Camp.findOne(query);
+      
+      // Support populate option
+      if (options.populate) {
+        campQuery = campQuery.populate(options.populate);
+      }
+      
+      return await campQuery;
     } else {
-      return await this.mockDB.findCamp(query);
+      // For mock DB, manually populate owner if requested
+      const camp = await this.mockDB.findCamp(query);
+      if (camp && options.populate === 'owner' && camp.owner) {
+        const owner = await this.mockDB.findUser({ _id: camp.owner });
+        if (owner) {
+          camp.owner = owner;
+        }
+      }
+      return camp;
     }
   }
 

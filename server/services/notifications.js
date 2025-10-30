@@ -17,15 +17,30 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_T
 
 /**
  * Send notification when a new application is submitted
- * @param {Object} camp - Camp object
+ * @param {Object} camp - Camp object (should have owner populated)
  * @param {Object} applicant - Applicant user object
  * @param {Object} application - Application object
  */
 async function sendApplicationNotification(camp, applicant, application) {
   try {
-    // Send email notification
-    if (camp.contactEmail) {
-      await sendEmailNotification(camp, applicant, application);
+    // Determine recipient email: use contactEmail or fall back to owner email
+    let recipientEmail = camp.contactEmail;
+    
+    if (!recipientEmail && camp.owner) {
+      // If owner is populated, use owner's email
+      recipientEmail = camp.owner.email || camp.owner.campEmail;
+      console.log(`⚠️  Camp ${camp.name || camp.campName} has no contactEmail, using owner email: ${recipientEmail}`);
+    }
+
+    // Send email notification if we have a recipient
+    if (recipientEmail) {
+      // Ensure camp has contactEmail for the email function
+      const campWithEmail = { ...camp, contactEmail: recipientEmail };
+      await sendEmailNotification(campWithEmail, applicant, application);
+      console.log(`✅ Email notification sent to ${recipientEmail}`);
+    } else {
+      console.warn(`⚠️  Cannot send email notification for camp ${camp.name || camp.campName} - no email found`);
+      console.warn(`⚠️  Camp contactEmail: ${camp.contactEmail}, Owner populated: ${!!camp.owner}`);
     }
 
     // Send SMS notification if phone number is provided
@@ -33,9 +48,14 @@ async function sendApplicationNotification(camp, applicant, application) {
       await sendSMSNotification(camp, applicant, application);
     }
 
-    console.log(`Notifications sent for new application to ${camp.campName}`);
   } catch (error) {
-    console.error('Error sending application notifications:', error);
+    console.error('❌ Error sending application notifications:', error);
+    console.error('Camp data:', {
+      id: camp._id,
+      name: camp.name || camp.campName,
+      contactEmail: camp.contactEmail,
+      hasOwner: !!camp.owner
+    });
   }
 }
 

@@ -121,7 +121,8 @@ router.post('/apply', authenticateToken, [
     const { campId, applicationData } = req.body;
 
     // Check if camp exists and is accepting applications
-    const camp = await db.findCamp({ _id: campId });
+    // Populate owner to get their email for notifications
+    const camp = await db.findCamp({ _id: campId }, { populate: 'owner' });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
