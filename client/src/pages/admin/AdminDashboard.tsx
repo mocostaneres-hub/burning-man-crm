@@ -775,7 +775,7 @@ const AdminDashboard: React.FC = () => {
                             {user.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                           {user.campName && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="info" className="text-xs">
                               {user.campName}
                             </Badge>
                           )}
@@ -1170,7 +1170,7 @@ const AdminDashboard: React.FC = () => {
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
                       <td className="py-2">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="info" className="text-xs">
                           {log.action}
                         </Badge>
                       </td>
@@ -1279,7 +1279,7 @@ const AdminDashboard: React.FC = () => {
                         {new Date(activity.timestamp).toLocaleString()}
                       </td>
                       <td className="py-2">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="info" className="text-xs">
                           {activity.action}
                         </Badge>
                       </td>
