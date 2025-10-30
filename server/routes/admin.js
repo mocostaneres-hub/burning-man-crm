@@ -42,62 +42,116 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
       db.findMembers()
     ]);
 
-    // Calculate stats
-    const totalUsers = allUsers.filter(user => user.isActive).length;
-    const totalCamps = allCamps.filter(camp => camp.status === 'active').length;
+    // Calculate comprehensive stats
+    const totalUsers = allUsers.length;
+    const activeUsers = allUsers.filter(user => user.isActive).length;
+    const inactiveUsers = totalUsers - activeUsers;
+    const totalCamps = allCamps.length;
+    const activeCamps = allCamps.filter(camp => camp.status === 'active').length;
     const totalMembers = allMembers.filter(member => member.status === 'active').length;
-    const activeCamps = allCamps.filter(camp => camp.status === 'active' && camp.isRecruiting).length;
+    const recruitingCamps = allCamps.filter(camp => camp.status === 'active' && camp.isRecruiting).length;
     
-    // Get recent users (simplified)
+    // Account type breakdown
+    const accountTypeStats = {
+      personal: allUsers.filter(user => user.accountType === 'personal').length,
+      camp: allUsers.filter(user => user.accountType === 'camp').length,
+      admin: allUsers.filter(user => user.accountType === 'admin').length,
+      unassigned: allUsers.filter(user => user.accountType === 'unassigned' || !user.accountType).length
+    };
+    
+    // Recent activity (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentUsers = allUsers
-      .filter(user => user.isActive)
+      .filter(user => new Date(user.createdAt) > thirtyDaysAgo)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 5)
+      .slice(0, 10)
       .map(user => ({
+        _id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
+        email: user.email,
         campName: user.campName,
         accountType: user.accountType,
-        createdAt: user.createdAt
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin
       }));
     
-    // Get recent camps (simplified)
     const recentCamps = allCamps
-      .filter(camp => camp.status === 'active')
+      .filter(camp => new Date(camp.createdAt) > thirtyDaysAgo)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 5)
+      .slice(0, 10)
       .map(camp => ({
+        _id: camp._id,
         name: camp.name,
-        theme: camp.theme,
+        status: camp.status,
+        isRecruiting: camp.isRecruiting,
+        memberCount: camp.memberCount || 0,
         createdAt: camp.createdAt,
-        owner: { campName: camp.owner || 'Unknown' }
+        contactEmail: camp.contactEmail
       }));
 
-    // Simple user growth (mock data)
-    const userGrowth = [
-      { _id: { year: 2025, month: 9 }, count: totalUsers }
+    // User growth over time (last 12 months)
+    const userGrowth = [];
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      
+      const monthUsers = allUsers.filter(user => {
+        const userDate = new Date(user.createdAt);
+        return userDate >= monthStart && userDate <= monthEnd;
+      }).length;
+      
+      userGrowth.push({
+        _id: { year: date.getFullYear(), month: date.getMonth() + 1 },
+        count: monthUsers
+      });
+    }
+
+    // Camp statistics by size
+    const campStats = [
+      { _id: 'small', count: allCamps.filter(camp => camp.campSize === 'small').length },
+      { _id: 'medium', count: allCamps.filter(camp => camp.campSize === 'medium').length },
+      { _id: 'large', count: allCamps.filter(camp => camp.campSize === 'large').length },
+      { _id: 'mega', count: allCamps.filter(camp => camp.campSize === 'mega').length }
     ];
 
-    // Simple camp statistics (mock data)
-    const campStats = [
-      { _id: 'small', count: Math.floor(totalCamps * 0.4) },
-      { _id: 'medium', count: Math.floor(totalCamps * 0.4) },
-      { _id: 'large', count: Math.floor(totalCamps * 0.2) }
-    ];
+    // System health metrics
+    const systemHealth = {
+      totalAccounts: totalUsers,
+      activeAccounts: activeUsers,
+      inactiveAccounts: inactiveUsers,
+      totalCamps: totalCamps,
+      activeCamps: activeCamps,
+      recruitingCamps: recruitingCamps,
+      totalMembers: totalMembers,
+      accountTypeBreakdown: accountTypeStats,
+      recentActivity: {
+        newUsers: recentUsers.length,
+        newCamps: recentCamps.length
+      }
+    };
 
     res.json({
       stats: {
         totalUsers,
+        activeUsers,
+        inactiveUsers,
         totalCamps,
-        totalMembers,
         activeCamps,
+        recruitingCamps,
+        totalMembers,
+        accountTypeStats,
         userGrowth,
         campStats
       },
       recent: {
         users: recentUsers,
         camps: recentCamps
-      }
+      },
+      systemHealth
     });
 
   } catch (error) {
@@ -843,6 +897,475 @@ router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) =>
     });
   } catch (error) {
     console.error('Delete camp error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/users/:id/history
+// @desc    Get user action history and audit logs
+// @access  Private (Admin only)
+router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await db.findUser({ _id: id });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Get user's action history
+    const actionHistory = user.actionHistory || [];
+    
+    // Get related activities (camp changes, member applications, etc.)
+    const relatedActivities = [];
+    
+    // If user is a camp account, get camp-related activities
+    if (user.accountType === 'camp' && user.campId) {
+      const camp = await db.findCamp({ _id: user.campId });
+      if (camp && camp.actionHistory) {
+        relatedActivities.push(...camp.actionHistory.map(activity => ({
+          ...activity,
+          type: 'camp_activity'
+        })));
+      }
+    }
+    
+    // Get member applications
+    const memberApplications = await db.findMemberApplications({ applicant: id });
+    relatedActivities.push(...memberApplications.map(app => ({
+      action: 'member_application',
+      targetId: app.camp,
+      targetName: 'Camp Application',
+      changes: { status: app.status },
+      timestamp: app.appliedAt,
+      type: 'application'
+    })));
+    
+    // Combine and sort all activities
+    const allActivities = [...actionHistory, ...relatedActivities]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json({
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        accountType: user.accountType,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin
+      },
+      activities: allActivities,
+      totalActivities: allActivities.length
+    });
+
+  } catch (error) {
+    console.error('Get user history error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/camps/:id/history
+// @desc    Get camp action history and audit logs
+// @access  Private (Admin only)
+router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Get camp's action history
+    const actionHistory = camp.actionHistory || [];
+    
+    // Get related activities (member changes, applications, etc.)
+    const relatedActivities = [];
+    
+    // Get member roster changes
+    const rosters = await db.findRosters({ camp: id });
+    rosters.forEach(roster => {
+      if (roster.actionHistory) {
+        relatedActivities.push(...roster.actionHistory.map(activity => ({
+          ...activity,
+          type: 'roster_activity'
+        })));
+      }
+    });
+    
+    // Get member applications for this camp
+    const memberApplications = await db.findMemberApplications({ camp: id });
+    relatedActivities.push(...memberApplications.map(app => ({
+      action: 'member_application',
+      targetId: app.applicant,
+      targetName: 'Member Application',
+      changes: { status: app.status },
+      timestamp: app.appliedAt,
+      type: 'application'
+    })));
+    
+    // Combine and sort all activities
+    const allActivities = [...actionHistory, ...relatedActivities]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json({
+      camp: {
+        _id: camp._id,
+        name: camp.name,
+        status: camp.status,
+        isRecruiting: camp.isRecruiting,
+        memberCount: camp.memberCount || 0,
+        createdAt: camp.createdAt,
+        contactEmail: camp.contactEmail
+      },
+      activities: allActivities,
+      totalActivities: allActivities.length
+    });
+
+  } catch (error) {
+    console.error('Get camp history error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/analytics
+// @desc    Get comprehensive system analytics
+// @access  Private (Admin only)
+router.get('/analytics', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { period = '30d' } = req.query;
+    
+    const [
+      allUsers,
+      allCamps,
+      allMembers,
+      allApplications
+    ] = await Promise.all([
+      db.findUsers(),
+      db.findCamps(),
+      db.findMembers(),
+      db.findMemberApplications()
+    ]);
+
+    // Calculate date range
+    const now = new Date();
+    let startDate;
+    switch (period) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '1y':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // User analytics
+    const newUsers = allUsers.filter(user => new Date(user.createdAt) > startDate);
+    const activeUsers = allUsers.filter(user => user.isActive);
+    const userRetention = {
+      total: allUsers.length,
+      active: activeUsers.length,
+      retentionRate: allUsers.length > 0 ? (activeUsers.length / allUsers.length * 100).toFixed(2) : 0
+    };
+
+    // Camp analytics
+    const newCamps = allCamps.filter(camp => new Date(camp.createdAt) > startDate);
+    const recruitingCamps = allCamps.filter(camp => camp.isRecruiting);
+    const campAnalytics = {
+      total: allCamps.length,
+      active: allCamps.filter(camp => camp.status === 'active').length,
+      recruiting: recruitingCamps.length,
+      new: newCamps.length
+    };
+
+    // Application analytics
+    const newApplications = allApplications.filter(app => new Date(app.appliedAt) > startDate);
+    const applicationStats = {
+      total: allApplications.length,
+      new: newApplications.length,
+      pending: allApplications.filter(app => app.status === 'pending').length,
+      approved: allApplications.filter(app => app.status === 'approved').length,
+      rejected: allApplications.filter(app => app.status === 'rejected').length,
+      approvalRate: allApplications.length > 0 ? 
+        (allApplications.filter(app => app.status === 'approved').length / allApplications.length * 100).toFixed(2) : 0
+    };
+
+    // Account type distribution
+    const accountTypeDistribution = {
+      personal: allUsers.filter(user => user.accountType === 'personal').length,
+      camp: allUsers.filter(user => user.accountType === 'camp').length,
+      admin: allUsers.filter(user => user.accountType === 'admin').length,
+      unassigned: allUsers.filter(user => user.accountType === 'unassigned' || !user.accountType).length
+    };
+
+    // Growth trends (daily for last 30 days)
+    const growthTrends = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      
+      const dayUsers = allUsers.filter(user => {
+        const userDate = new Date(user.createdAt);
+        return userDate >= dayStart && userDate < dayEnd;
+      }).length;
+      
+      const dayCamps = allCamps.filter(camp => {
+        const campDate = new Date(camp.createdAt);
+        return campDate >= dayStart && campDate < dayEnd;
+      }).length;
+      
+      const dayApplications = allApplications.filter(app => {
+        const appDate = new Date(app.appliedAt);
+        return appDate >= dayStart && appDate < dayEnd;
+      }).length;
+      
+      growthTrends.push({
+        date: dayStart.toISOString().split('T')[0],
+        users: dayUsers,
+        camps: dayCamps,
+        applications: dayApplications
+      });
+    }
+
+    res.json({
+      period,
+      userAnalytics: userRetention,
+      campAnalytics,
+      applicationStats,
+      accountTypeDistribution,
+      growthTrends,
+      summary: {
+        totalAccounts: allUsers.length,
+        totalCamps: allCamps.length,
+        totalApplications: allApplications.length,
+        newInPeriod: {
+          users: newUsers.length,
+          camps: newCamps.length,
+          applications: newApplications.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get analytics error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/admin/users/bulk-action
+// @desc    Perform bulk actions on users
+// @access  Private (Admin only)
+router.post('/users/bulk-action', authenticateToken, requireAdmin, [
+  body('action').isIn(['activate', 'deactivate', 'delete', 'changeAccountType']),
+  body('userIds').isArray().withMessage('User IDs must be an array'),
+  body('accountType').optional().isIn(['personal', 'camp', 'admin']).withMessage('Invalid account type')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { action, userIds, accountType } = req.body;
+    const adminUser = await db.findUser({ _id: req.user._id });
+    
+    if (!adminUser) {
+      return res.status(404).json({ message: 'Admin user not found' });
+    }
+
+    const results = [];
+    const errors = [];
+
+    for (const userId of userIds) {
+      try {
+        const user = await db.findUser({ _id: userId });
+        if (!user) {
+          errors.push({ userId, error: 'User not found' });
+          continue;
+        }
+
+        let updateData = {};
+        let actionDescription = '';
+
+        switch (action) {
+          case 'activate':
+            updateData = { isActive: true };
+            actionDescription = 'activated';
+            break;
+          case 'deactivate':
+            updateData = { isActive: false };
+            actionDescription = 'deactivated';
+            break;
+          case 'changeAccountType':
+            if (!accountType) {
+              errors.push({ userId, error: 'Account type required' });
+              continue;
+            }
+            updateData = { accountType };
+            actionDescription = `account type changed to ${accountType}`;
+            break;
+          case 'delete':
+            // Soft delete by deactivating
+            updateData = { isActive: false, deletedAt: new Date() };
+            actionDescription = 'deleted (soft)';
+            break;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await db.updateUserById(userId, updateData);
+          
+          // Log the action
+          const actionLog = {
+            action: `bulk_${action}`,
+            adminId: req.user._id,
+            adminName: `${adminUser.firstName} ${adminUser.lastName}`,
+            targetId: userId,
+            targetName: `${user.firstName} ${user.lastName}`,
+            changes: updateData,
+            timestamp: new Date().toISOString()
+          };
+
+          // Add to user's action history
+          const updatedUser = await db.findUser({ _id: userId });
+          if (updatedUser) {
+            if (!updatedUser.actionHistory) {
+              updatedUser.actionHistory = [];
+            }
+            updatedUser.actionHistory.push(actionLog);
+            await db.updateUserById(userId, { actionHistory: updatedUser.actionHistory });
+          }
+
+          results.push({
+            userId,
+            success: true,
+            action: actionDescription
+          });
+        }
+      } catch (error) {
+        errors.push({ userId, error: error.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk action completed`,
+      results,
+      errors,
+      summary: {
+        total: userIds.length,
+        successful: results.length,
+        failed: errors.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Bulk action error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/audit-logs
+// @desc    Get system audit logs
+// @access  Private (Admin only)
+router.get('/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 50, 
+      action, 
+      adminId, 
+      targetType,
+      startDate,
+      endDate 
+    } = req.query;
+
+    // Get all users and camps to collect action histories
+    const [allUsers, allCamps] = await Promise.all([
+      db.findUsers(),
+      db.findCamps()
+    ]);
+
+    // Collect all action histories
+    let allAuditLogs = [];
+    
+    // From users
+    allUsers.forEach(user => {
+      if (user.actionHistory) {
+        allAuditLogs.push(...user.actionHistory.map(log => ({
+          ...log,
+          targetType: 'user',
+          targetId: user._id
+        })));
+      }
+    });
+    
+    // From camps
+    allCamps.forEach(camp => {
+      if (camp.actionHistory) {
+        allAuditLogs.push(...camp.actionHistory.map(log => ({
+          ...log,
+          targetType: 'camp',
+          targetId: camp._id
+        })));
+      }
+    });
+
+    // Apply filters
+    let filteredLogs = allAuditLogs;
+
+    if (action) {
+      filteredLogs = filteredLogs.filter(log => log.action === action);
+    }
+
+    if (adminId) {
+      filteredLogs = filteredLogs.filter(log => log.adminId === adminId);
+    }
+
+    if (targetType) {
+      filteredLogs = filteredLogs.filter(log => log.targetType === targetType);
+    }
+
+    if (startDate) {
+      const start = new Date(startDate);
+      filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= start);
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) <= end);
+    }
+
+    // Sort by timestamp (newest first)
+    filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
+
+    res.json({
+      logs: paginatedLogs,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(filteredLogs.length / limit),
+        totalLogs: filteredLogs.length,
+        hasNext: endIndex < filteredLogs.length,
+        hasPrev: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Get audit logs error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

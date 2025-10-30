@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, BarChart3, History, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -17,9 +17,92 @@ interface ExtendedUser extends UserType {
 
 interface DashboardStats {
   totalUsers: number;
+  activeUsers: number;
+  inactiveUsers: number;
   totalCamps: number;
-  totalMembers: number;
   activeCamps: number;
+  recruitingCamps: number;
+  totalMembers: number;
+  accountTypeStats: {
+    personal: number;
+    camp: number;
+    admin: number;
+    unassigned: number;
+  };
+  userGrowth: Array<{
+    _id: { year: number; month: number };
+    count: number;
+  }>;
+  campStats: Array<{
+    _id: string;
+    count: number;
+  }>;
+}
+
+interface SystemHealth {
+  totalAccounts: number;
+  activeAccounts: number;
+  inactiveAccounts: number;
+  totalCamps: number;
+  activeCamps: number;
+  recruitingCamps: number;
+  totalMembers: number;
+  accountTypeBreakdown: {
+    personal: number;
+    camp: number;
+    admin: number;
+    unassigned: number;
+  };
+  recentActivity: {
+    newUsers: number;
+    newCamps: number;
+  };
+}
+
+interface ActivityLog {
+  action: string;
+  adminId: string;
+  adminName: string;
+  targetId: string;
+  targetName: string;
+  changes: any;
+  timestamp: string;
+  type?: string;
+}
+
+interface AnalyticsData {
+  period: string;
+  userAnalytics: {
+    total: number;
+    active: number;
+    retentionRate: string;
+  };
+  campAnalytics: {
+    total: number;
+    active: number;
+    recruiting: number;
+    new: number;
+  };
+  applicationStats: {
+    total: number;
+    new: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    approvalRate: string;
+  };
+  accountTypeDistribution: {
+    personal: number;
+    camp: number;
+    admin: number;
+    unassigned: number;
+  };
+  growthTrends: Array<{
+    date: string;
+    users: number;
+    camps: number;
+    applications: number;
+  }>;
 }
 
 interface Camp {
@@ -54,10 +137,22 @@ interface Camp {
 const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
+    activeUsers: 0,
+    inactiveUsers: 0,
     totalCamps: 0,
+    activeCamps: 0,
+    recruitingCamps: 0,
     totalMembers: 0,
-    activeCamps: 0
+    accountTypeStats: {
+      personal: 0,
+      camp: 0,
+      admin: 0,
+      unassigned: 0
+    },
+    userGrowth: [],
+    campStats: []
   });
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<UserType[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +165,21 @@ const AdminDashboard: React.FC = () => {
   const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
   const [showCampModal, setShowCampModal] = useState(false);
   const [showDeleteCampModal, setShowDeleteCampModal] = useState(false);
+  
+  // Enhanced state for new features
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [auditLogs, setAuditLogs] = useState<ActivityLog[]>([]);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showAuditLogs, setShowAuditLogs] = useState(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkAction, setBulkAction] = useState<string>('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<string>('30d');
+  const [activityHistory, setActivityHistory] = useState<ActivityLog[]>([]);
+  const [showActivityHistory, setShowActivityHistory] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -81,13 +191,91 @@ const AdminDashboard: React.FC = () => {
       await Promise.all([
         loadStats(),
         loadUsers(),
-        loadCamps()
+        loadCamps(),
+        loadAnalytics(),
+        loadAuditLogs()
       ]);
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const response = await apiService.get(`/admin/analytics?period=${dateRange}`);
+      setAnalytics(response);
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+    }
+  };
+
+  const loadAuditLogs = async () => {
+    try {
+      const response = await apiService.get('/admin/audit-logs?limit=100');
+      setAuditLogs(response.logs || []);
+    } catch (error) {
+      console.error('Error loading audit logs:', error);
+    }
+  };
+
+  const loadUserHistory = async (userId: string) => {
+    try {
+      const response = await apiService.get(`/admin/users/${userId}/history`);
+      setActivityHistory(response.activities || []);
+      setShowActivityHistory(true);
+    } catch (error) {
+      console.error('Error loading user history:', error);
+    }
+  };
+
+  const loadCampHistory = async (campId: string) => {
+    try {
+      const response = await apiService.get(`/admin/camps/${campId}/history`);
+      setActivityHistory(response.activities || []);
+      setShowActivityHistory(true);
+    } catch (error) {
+      console.error('Error loading camp history:', error);
+    }
+  };
+
+  const handleBulkAction = async () => {
+    if (!bulkAction || selectedUsers.length === 0) return;
+
+    try {
+      const response = await apiService.post('/admin/users/bulk-action', {
+        action: bulkAction,
+        userIds: selectedUsers,
+        accountType: bulkAction === 'changeAccountType' ? selectedAccountType : undefined
+      });
+
+      console.log('Bulk action completed:', response);
+      
+      // Refresh data
+      await loadUsers();
+      setSelectedUsers([]);
+      setShowBulkActions(false);
+      setBulkAction('');
+    } catch (error) {
+      console.error('Error performing bulk action:', error);
+    }
+  };
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const selectAllUsers = () => {
+    setSelectedUsers(users.map(user => user._id));
+  };
+
+  const clearSelection = () => {
+    setSelectedUsers([]);
   };
 
   const loadStats = async () => {
@@ -99,12 +287,27 @@ const AdminDashboard: React.FC = () => {
         console.log('✅ [AdminDashboard] Setting stats:', response.stats);
         setStats({
           totalUsers: response.stats.totalUsers || 0,
+          activeUsers: response.stats.activeUsers || 0,
+          inactiveUsers: response.stats.inactiveUsers || 0,
           totalCamps: response.stats.totalCamps || 0,
+          activeCamps: response.stats.activeCamps || 0,
+          recruitingCamps: response.stats.recruitingCamps || 0,
           totalMembers: response.stats.totalMembers || 0,
-          activeCamps: response.stats.activeCamps || 0
+          accountTypeStats: response.stats.accountTypeStats || {
+            personal: 0,
+            camp: 0,
+            admin: 0,
+            unassigned: 0
+          },
+          userGrowth: response.stats.userGrowth || [],
+          campStats: response.stats.campStats || []
         });
       } else {
         console.log('❌ [AdminDashboard] Invalid stats response structure:', response);
+      }
+
+      if (response && response.systemHealth) {
+        setSystemHealth(response.systemHealth);
       }
     } catch (err) {
       console.error('Error loading stats:', err);
@@ -276,6 +479,10 @@ const AdminDashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-custom-text-secondary">Total Users</p>
               <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalUsers || 0}</p>
+              <div className="flex items-center gap-4 mt-2 text-xs">
+                <span className="text-green-600">Active: {stats?.activeUsers || 0}</span>
+                <span className="text-red-600">Inactive: {stats?.inactiveUsers || 0}</span>
+              </div>
             </div>
             <Users className="w-8 h-8 text-custom-primary" />
           </div>
@@ -286,6 +493,10 @@ const AdminDashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-custom-text-secondary">Total Camps</p>
               <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalCamps || 0}</p>
+              <div className="flex items-center gap-4 mt-2 text-xs">
+                <span className="text-green-600">Active: {stats?.activeCamps || 0}</span>
+                <span className="text-blue-600">Recruiting: {stats?.recruitingCamps || 0}</span>
+              </div>
             </div>
             <BuildingIcon className="w-8 h-8 text-custom-primary" />
           </div>
@@ -296,42 +507,94 @@ const AdminDashboard: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-custom-text-secondary">Total Members</p>
               <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalMembers || 0}</p>
+              <div className="mt-2 text-xs text-custom-text-secondary">
+                Active roster members
+              </div>
             </div>
-            <Users className="w-8 h-8 text-custom-secondary" />
+            <Shield className="w-8 h-8 text-custom-primary" />
           </div>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Active Camps</p>
-              <p className="text-2xl font-lato-bold text-custom-text">{stats?.activeCamps || 0}</p>
+              <p className="text-sm font-medium text-custom-text-secondary">Account Types</p>
+              <div className="mt-2 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span>Personal:</span>
+                  <span className="font-medium">{stats?.accountTypeStats?.personal || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Camp:</span>
+                  <span className="font-medium">{stats?.accountTypeStats?.camp || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Admin:</span>
+                  <span className="font-medium">{stats?.accountTypeStats?.admin || 0}</span>
+                </div>
+              </div>
             </div>
-            <Shield className="w-8 h-8 text-custom-accent" />
+            <Database className="w-8 h-8 text-custom-primary" />
           </div>
         </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {['Users', 'Camps', 'Configuration', 'FAQ Management'].map((tab, index) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(index)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === index
-                    ? 'border-custom-primary text-custom-primary'
-                    : 'border-transparent text-custom-text-secondary hover:text-custom-text hover:border-gray-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div>
+      {/* System Health Overview */}
+      {systemHealth && (
+        <Card className="p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-custom-text">System Health</h3>
+            <div className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-green-600" />
+              <span className="text-sm text-green-600 font-medium">Healthy</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-custom-text">{systemHealth.totalAccounts}</p>
+              <p className="text-sm text-custom-text-secondary">Total Accounts</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600">{systemHealth.activeAccounts}</p>
+              <p className="text-sm text-custom-text-secondary">Active Accounts</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-blue-600">{systemHealth.recruitingCamps}</p>
+              <p className="text-sm text-custom-text-secondary">Recruiting Camps</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-purple-600">{systemHealth.recentActivity.newUsers + systemHealth.recentActivity.newCamps}</p>
+              <p className="text-sm text-custom-text-secondary">New This Month</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Navigation Tabs */}
+      <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+        {[
+          { id: 0, name: 'Overview', icon: BarChart3 },
+          { id: 1, name: 'Users', icon: Users },
+          { id: 2, name: 'Camps', icon: BuildingIcon },
+          { id: 3, name: 'Analytics', icon: TrendingUp },
+          { id: 4, name: 'Audit Logs', icon: History },
+          { id: 5, name: 'System', icon: Settings }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-white text-custom-primary shadow-sm'
+                : 'text-custom-text-secondary hover:text-custom-text hover:bg-gray-200'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.name}
+          </button>
+        ))}
       </div>
+
 
       {/* Search - only show for Users and Camps tabs */}
       {activeTab !== 2 && activeTab !== 3 && (
@@ -348,20 +611,118 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Users Tab */}
+      {/* Overview Tab */}
       {activeTab === 0 && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
+              System Overview
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Recent Activity</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="w-4 h-4 text-green-600" />
+                      <span className="text-sm">New users this month</span>
+                    </div>
+                    <span className="font-medium">{systemHealth?.recentActivity.newUsers || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-2">
+                      <BuildingIcon className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm">New camps this month</span>
+                    </div>
+                    <span className="font-medium">{systemHealth?.recentActivity.newCamps || 0}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => setShowAnalytics(true)}
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    View Analytics
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => setShowAuditLogs(true)}
+                  >
+                    <History className="w-4 h-4 mr-2" />
+                    View Audit Logs
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => setActiveTab(1)}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Manage Users
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Users Tab */}
+      {activeTab === 1 && (
         <Card>
           <div className="p-6">
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              Users Management
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-h2 font-lato-bold text-custom-text">
+                Users Management
+              </h2>
+              <div className="flex items-center gap-2">
+                {selectedUsers.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-custom-text-secondary">
+                      {selectedUsers.length} selected
+                    </span>
+                    <Button 
+                      onClick={() => setShowBulkActions(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Bulk Actions
+                    </Button>
+                    <Button 
+                      onClick={clearSelection}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+                <Button 
+                  onClick={selectAllUsers}
+                  variant="outline"
+                  size="sm"
+                >
+                  Select All
+                </Button>
+              </div>
+            </div>
             
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      UID
+                      <input 
+                        type="checkbox" 
+                        checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                        onChange={(e) => e.target.checked ? selectAllUsers() : clearSelection()}
+                        className="rounded"
+                      />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       User
@@ -370,10 +731,13 @@ const AdminDashboard: React.FC = () => {
                       Account Type
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Current Camp
+                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Last Login
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -384,9 +748,12 @@ const AdminDashboard: React.FC = () => {
                   {filteredUsers.map((user) => (
                     <tr key={user._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-mono text-gray-900 font-medium">
-                          {user._id}
-                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUsers.includes(user._id)}
+                          onChange={() => toggleUserSelection(user._id)}
+                          className="rounded"
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -394,6 +761,7 @@ const AdminDashboard: React.FC = () => {
                             {user.firstName} {user.lastName}
                           </div>
                           <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="text-xs text-gray-400 font-mono">ID: {user._id}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -401,20 +769,37 @@ const AdminDashboard: React.FC = () => {
                           {user.accountType}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {user.campName ? (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={user.isActive ? 'success' : 'error'}>
+                            {user.isActive ? 'Active' : 'Inactive'}
+                          </Badge>
+                          {user.campName && (
+                            <Badge variant="outline" className="text-xs">
+                              {user.campName}
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.lastLogin ? (
                           <div>
-                            <div className="font-medium">{user.campName}</div>
-                            <div className="text-xs text-gray-500">Active Member</div>
+                            <div>{new Date(user.lastLogin).toLocaleDateString()}</div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(user.lastLogin).toLocaleTimeString()}
+                            </div>
                           </div>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400">Never</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={user.isActive ? 'success' : 'error'}>
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div>
+                          <div>{new Date(user.createdAt).toLocaleDateString()}</div>
+                          <div className="text-xs text-gray-400">
+                            {new Date(user.createdAt).toLocaleTimeString()}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
@@ -430,10 +815,10 @@ const AdminDashboard: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleViewHistory(user._id)}
+                            onClick={() => loadUserHistory(user._id)}
                             className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
                           >
-                            <Clock className="w-3 h-3" />
+                            <History className="w-3 h-3" />
                             History
                           </Button>
                           <Button
@@ -615,6 +1000,302 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Analytics Tab */}
+      {activeTab === 3 && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-h2 font-lato-bold text-custom-text">
+                System Analytics
+              </h2>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={dateRange} 
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="px-3 py-1 border rounded-md text-sm"
+                >
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="90d">Last 90 days</option>
+                  <option value="1y">Last year</option>
+                </select>
+                <Button onClick={loadAnalytics} variant="outline" size="sm">
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            
+            {analytics ? (
+              <div className="space-y-6">
+                {/* User Analytics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h3 className="font-semibold text-blue-900 mb-2">User Retention</h3>
+                    <p className="text-2xl font-bold text-blue-600">{analytics.userAnalytics.retentionRate}%</p>
+                    <p className="text-sm text-blue-700">
+                      {analytics.userAnalytics.active} of {analytics.userAnalytics.total} users active
+                    </p>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <h3 className="font-semibold text-green-900 mb-2">Camp Activity</h3>
+                    <p className="text-2xl font-bold text-green-600">{analytics.campAnalytics.recruiting}</p>
+                    <p className="text-sm text-green-700">Currently recruiting</p>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <h3 className="font-semibold text-purple-900 mb-2">Application Rate</h3>
+                    <p className="text-2xl font-bold text-purple-600">{analytics.applicationStats.approvalRate}%</p>
+                    <p className="text-sm text-purple-700">Approval rate</p>
+                  </div>
+                </div>
+
+                {/* Account Type Distribution */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Account Type Distribution</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {Object.entries(analytics.accountTypeDistribution).map(([type, count]) => (
+                      <div key={type} className="text-center p-3 bg-gray-50 rounded">
+                        <p className="text-2xl font-bold text-custom-text">{count}</p>
+                        <p className="text-sm text-custom-text-secondary capitalize">{type}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Growth Trends */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Growth Trends (Last 30 Days)</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Date</th>
+                          <th className="text-right py-2">Users</th>
+                          <th className="text-right py-2">Camps</th>
+                          <th className="text-right py-2">Applications</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.growthTrends.slice(-10).map((trend, index) => (
+                          <tr key={index} className="border-b">
+                            <td className="py-2">{trend.date}</td>
+                            <td className="text-right py-2">{trend.users}</td>
+                            <td className="text-right py-2">{trend.camps}</td>
+                            <td className="text-right py-2">{trend.applications}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-custom-primary" />
+                <p className="text-custom-text-secondary">Loading analytics...</p>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Audit Logs Tab */}
+      {activeTab === 4 && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-h2 font-lato-bold text-custom-text">
+                Audit Logs
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button onClick={loadAuditLogs} variant="outline" size="sm">
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+                <Button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} variant="outline" size="sm">
+                  <Filter className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {showAdvancedFilters && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 className="font-semibold mb-3">Advanced Filters</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Action</label>
+                    <select className="w-full px-3 py-1 border rounded-md text-sm">
+                      <option value="">All Actions</option>
+                      <option value="user_updated">User Updated</option>
+                      <option value="camp_updated">Camp Updated</option>
+                      <option value="bulk_activate">Bulk Activate</option>
+                      <option value="bulk_deactivate">Bulk Deactivate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Target Type</label>
+                    <select className="w-full px-3 py-1 border rounded-md text-sm">
+                      <option value="">All Types</option>
+                      <option value="user">User</option>
+                      <option value="camp">Camp</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Start Date</label>
+                    <input type="date" className="w-full px-3 py-1 border rounded-md text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">End Date</label>
+                    <input type="date" className="w-full px-3 py-1 border rounded-md text-sm" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Timestamp</th>
+                    <th className="text-left py-2">Action</th>
+                    <th className="text-left py-2">Admin</th>
+                    <th className="text-left py-2">Target</th>
+                    <th className="text-left py-2">Changes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-2">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td className="py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {log.action}
+                        </Badge>
+                      </td>
+                      <td className="py-2">{log.adminName}</td>
+                      <td className="py-2">{log.targetName}</td>
+                      <td className="py-2">
+                        <code className="text-xs bg-gray-100 px-1 rounded">
+                          {JSON.stringify(log.changes).slice(0, 50)}...
+                        </code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* System Tab */}
+      {activeTab === 5 && (
+        <SystemConfig />
+      )}
+
+      {/* Bulk Actions Modal */}
+      {showBulkActions && (
+        <Modal isOpen={showBulkActions} onClose={() => setShowBulkActions(false)}>
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Bulk Actions</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Action</label>
+                <select 
+                  value={bulkAction} 
+                  onChange={(e) => setBulkAction(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="">Select an action</option>
+                  <option value="activate">Activate Users</option>
+                  <option value="deactivate">Deactivate Users</option>
+                  <option value="changeAccountType">Change Account Type</option>
+                  <option value="delete">Delete Users (Soft)</option>
+                </select>
+              </div>
+              
+              {bulkAction === 'changeAccountType' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">New Account Type</label>
+                  <select 
+                    value={selectedAccountType} 
+                    onChange={(e) => setSelectedAccountType(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="camp">Camp</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              )}
+              
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  This action will affect <strong>{selectedUsers.length}</strong> selected users.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowBulkActions(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleBulkAction}
+                  disabled={!bulkAction || selectedUsers.length === 0}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Execute Action
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Activity History Modal */}
+      {showActivityHistory && (
+        <Modal isOpen={showActivityHistory} onClose={() => setShowActivityHistory(false)}>
+          <div className="p-6 max-w-4xl">
+            <h2 className="text-xl font-semibold mb-4">Activity History</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Timestamp</th>
+                    <th className="text-left py-2">Action</th>
+                    <th className="text-left py-2">Admin</th>
+                    <th className="text-left py-2">Changes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityHistory.map((activity, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-2">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </td>
+                      <td className="py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {activity.action}
+                        </Badge>
+                      </td>
+                      <td className="py-2">{activity.adminName}</td>
+                      <td className="py-2">
+                        <code className="text-xs bg-gray-100 px-1 rounded">
+                          {JSON.stringify(activity.changes).slice(0, 100)}...
+                        </code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* User Edit Modal */}
