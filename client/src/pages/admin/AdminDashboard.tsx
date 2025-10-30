@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, PieChart, History, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, Home, History, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -573,7 +573,7 @@ const AdminDashboard: React.FC = () => {
       {/* Navigation Tabs */}
       <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
         {[
-          { id: 0, name: 'Overview', icon: PieChart },
+          { id: 0, name: 'Overview', icon: Home },
           { id: 1, name: 'Users', icon: Users },
           { id: 2, name: 'Camps', icon: BuildingIcon },
           { id: 3, name: 'Analytics', icon: TrendingUp },
@@ -646,7 +646,7 @@ const AdminDashboard: React.FC = () => {
                     className="w-full justify-start"
                     onClick={() => setShowAnalytics(true)}
                   >
-                    <PieChart className="w-4 h-4 mr-2" />
+                    <Home className="w-4 h-4 mr-2" />
                     View Analytics
                   </Button>
                   <Button 
