@@ -153,6 +153,28 @@ const Navbar: React.FC = () => {
               </button>
             ))}
 
+            {/* Auth Links for Non-Authenticated Users */}
+            {!isAuthenticated && (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/login')}
+                  className="flex items-center space-x-1"
+                >
+                  <span>Log In</span>
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate('/register')}
+                  className="flex items-center space-x-1"
+                >
+                  <span>Sign Up</span>
+                </Button>
+              </div>
+            )}
+
             {/* User Menu */}
             {isAuthenticated && (
               <div className="flex items-center space-x-2">
@@ -205,6 +227,36 @@ const Navbar: React.FC = () => {
                 <span>{item.label}</span>
               </button>
             ))}
+
+            {/* Mobile Auth Links for Non-Authenticated Users */}
+            {!isAuthenticated && (
+              <div className="border-t border-gray-200 pt-4">
+                <div className="px-3 space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigate('/login');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-2 w-full"
+                  >
+                    <span>Log In</span>
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      navigate('/register');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-2 w-full"
+                  >
+                    <span>Sign Up</span>
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Mobile User Menu */}
             {isAuthenticated && (
