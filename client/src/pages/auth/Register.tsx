@@ -4,7 +4,6 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import AppleOAuth from '../../components/auth/AppleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -189,11 +188,6 @@ const Register: React.FC = () => {
               Or sign up with
             </p>
             <div className="flex flex-col gap-3">
-              <GoogleOAuth
-                onSuccess={handleOAuthSuccess}
-                onError={handleOAuthError}
-                disabled={oauthLoading || loading}
-              />
               <AppleOAuth
                 onSuccess={handleOAuthSuccess}
                 onError={handleOAuthError}

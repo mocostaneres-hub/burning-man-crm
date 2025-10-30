@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import Navbar from './components/layout/Navbar';
@@ -27,8 +26,6 @@ import ApplicationManagementTable from './pages/applications/ApplicationManageme
 import MyApplications from './pages/applications/MyApplications';
 import Contact360View from './pages/contacts/Contact360View';
 import RosterManagement from './pages/rosters/RosterManagement';
-import TestOAuth from './pages/TestOAuth';
-import TestGoogleOAuth from './pages/TestGoogleOAuth';
 import MemberProfileEdit from './pages/members/MemberProfileEdit';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -60,14 +57,8 @@ const DashboardRedirect: React.FC = () => {
 };
 
 function App() {
-  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-  if (!googleClientId) {
-    console.warn('Google OAuth not configured - REACT_APP_GOOGLE_CLIENT_ID missing');
-  }
-
   return (
     <ErrorBoundary>
-      <GoogleOAuthProvider clientId={googleClientId || 'not-configured'}>
         <AuthProvider>
           <SocketProvider>
             <Router>
@@ -78,8 +69,6 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
-                  <Route path="/test-oauth" element={<TestOAuth />} />
-                  <Route path="/test-google-oauth" element={<TestGoogleOAuth />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/about" element={<About />} />
@@ -217,7 +206,6 @@ function App() {
           </Router>
         </SocketProvider>
       </AuthProvider>
-    </GoogleOAuthProvider>
     </ErrorBoundary>
   );
 }

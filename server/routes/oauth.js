@@ -15,6 +15,8 @@ const generateToken = (userId) => {
 // @route   POST /api/oauth/google
 // @desc    Handle Google OAuth for personal accounts only
 // @access  Public
+// DISABLED: Google OAuth has been disabled for this CRM
+/*
 router.post('/google', [
   body('email').isEmail().normalizeEmail(),
   body('name').trim().notEmpty(),
@@ -93,6 +95,7 @@ router.post('/google', [
     });
   }
 });
+*/
 
 // @route   POST /api/oauth/apple
 // @desc    Handle Apple OAuth for personal accounts only
@@ -176,8 +179,8 @@ router.post('/apple', [
 router.get('/config', (req, res) => {
   res.json({
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || null,
-      enabled: !!process.env.GOOGLE_CLIENT_ID
+      clientId: null,
+      enabled: false
     },
     apple: {
       clientId: process.env.APPLE_CLIENT_ID || null,
