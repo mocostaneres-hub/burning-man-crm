@@ -120,23 +120,9 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({ onSuccess, onError, disabled 
     onError('Google sign-in was cancelled or failed. Please try again.');
   };
 
+  // If not configured, don't render anything (hide Google OAuth completely)
   if (!isConfigured) {
-    return (
-      <div className="w-full">
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={true}
-          className="w-full"
-        >
-          <Chrome className="w-5 h-5 mr-2" />
-          Google Sign-in (Setup Required)
-        </Button>
-        <p className="text-sm text-custom-text-secondary mt-2 text-center">
-          Google OAuth needs to be configured
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (
