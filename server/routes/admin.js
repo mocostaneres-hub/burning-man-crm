@@ -471,6 +471,31 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     
     console.log('🔍 [PUT /api/admin/users/:id] Target user found:', { _id: targetUser._id, email: targetUser.email });
 
+    // Handle password reset if provided
+    if (updateData.newPassword) {
+      console.log('🔐 [Admin] Resetting password for user:', targetUser.email);
+      
+      try {
+        // Use the User model directly to trigger password hashing
+        const User = require('../models/User');
+        const userDoc = await User.findById(targetUser._id);
+        if (userDoc) {
+          userDoc.password = updateData.newPassword; // Let the pre-save hook hash it
+          await userDoc.save();
+          console.log('✅ [Admin] User password updated successfully');
+        } else {
+          console.log('❌ [Admin] User document not found');
+          return res.status(404).json({ message: 'User document not found' });
+        }
+      } catch (error) {
+        console.error('❌ [Admin] Error updating user password:', error.message);
+        return res.status(500).json({ message: 'Failed to update password', error: error.message });
+      }
+      
+      // Remove password from update data to avoid storing it in user record
+      delete updateData.newPassword;
+    }
+
     // Create action log entry (avoid circular references)
     const { actionHistory, ...safeUpdateData } = updateData;
     const actionLog = {
@@ -531,6 +556,37 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
     
     if (!targetCamp) {
       return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Handle password reset if provided
+    if (updateData.newPassword) {
+      console.log('🔐 [Admin] Resetting camp account password for camp:', targetCamp.campName);
+      
+      // Find the camp admin user
+      const campUser = await db.findUser({ campId: id, accountType: 'camp' });
+      if (campUser) {
+        try {
+          // Use the User model directly to trigger password hashing
+          const User = require('../models/User');
+          const userDoc = await User.findById(campUser._id);
+          if (userDoc) {
+            userDoc.password = updateData.newPassword; // Let the pre-save hook hash it
+            await userDoc.save();
+            console.log('✅ [Admin] Camp account password updated successfully');
+          } else {
+            console.log('❌ [Admin] Camp user document not found');
+          }
+        } catch (error) {
+          console.error('❌ [Admin] Error updating camp password:', error.message);
+          return res.status(500).json({ message: 'Failed to update password', error: error.message });
+        }
+      } else {
+        console.log('❌ [Admin] No camp user found for this camp');
+        return res.status(404).json({ message: 'Camp user not found' });
+      }
+      
+      // Remove password from update data to avoid storing it in camp record
+      delete updateData.newPassword;
     }
 
     // Handle photo uploads if present
