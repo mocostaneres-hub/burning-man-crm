@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
-const { sendApplicationNotification } = require('../services/notifications');
+const { sendApplicationNotification, sendApplicationStatusNotification } = require('../services/notifications');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // Helper function to validate if personal profile is complete
@@ -577,6 +577,24 @@ router.put('/:applicationId/status', authenticateToken, [
         camp.stats = { totalMembers: 1 };
       }
       await db.updateCamp(camp._id, { stats: camp.stats });
+    }
+
+    // Send status change notification to applicant (approval or rejection)
+    if (status === 'approved' || status === 'rejected') {
+      try {
+        // Get applicant details
+        const applicant = await db.findUser({ _id: application.applicant });
+        
+        if (applicant && applicant.email) {
+          await sendApplicationStatusNotification(application, applicant, camp, status);
+          console.log(`✅ [Application ${status}] Notification sent to ${applicant.email}`);
+        } else {
+          console.warn(`⚠️  Cannot send ${status} notification - applicant email not found`);
+        }
+      } catch (notificationError) {
+        console.error(`⚠️  Failed to send ${status} notification (application status was still updated):`, notificationError);
+        // Don't fail the status update if notification fails
+      }
     }
 
     res.json({
