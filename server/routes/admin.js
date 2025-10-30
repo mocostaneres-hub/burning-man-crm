@@ -1185,13 +1185,13 @@ router.post('/users/bulk-action', authenticateToken, requireAdmin, [
     }
 
     const results = [];
-    const errors = [];
+    const actionErrors = [];
 
     for (const userId of userIds) {
       try {
         const user = await db.findUser({ _id: userId });
         if (!user) {
-          errors.push({ userId, error: 'User not found' });
+          actionErrors.push({ userId, error: 'User not found' });
           continue;
         }
 
@@ -1209,7 +1209,7 @@ router.post('/users/bulk-action', authenticateToken, requireAdmin, [
             break;
           case 'changeAccountType':
             if (!accountType) {
-              errors.push({ userId, error: 'Account type required' });
+              actionErrors.push({ userId, error: 'Account type required' });
               continue;
             }
             updateData = { accountType };
@@ -1253,18 +1253,18 @@ router.post('/users/bulk-action', authenticateToken, requireAdmin, [
           });
         }
       } catch (error) {
-        errors.push({ userId, error: error.message });
+        actionErrors.push({ userId, error: error.message });
       }
     }
 
     res.json({
       message: `Bulk action completed`,
       results,
-      errors,
+      errors: actionErrors,
       summary: {
         total: userIds.length,
         successful: results.length,
-        failed: errors.length
+        failed: actionErrors.length
       }
     });
 
