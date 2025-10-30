@@ -1,21 +1,19 @@
 // Notification service for sending email and SMS notifications
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const twilio = require('twilio');
 
-// Email configuration (using Gmail for development)
-const emailTransporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'your-app-password'
-  }
-});
+// SendGrid configuration
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ Notifications service using SendGrid');
+} else {
+  console.warn('⚠️  SENDGRID_API_KEY not found - email notifications will not work');
+}
 
 // Twilio configuration for SMS
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
 
 /**
  * Send notification when a new application is submitted
@@ -46,9 +44,12 @@ async function sendApplicationNotification(camp, applicant, application) {
  */
 async function sendEmailNotification(camp, applicant, application) {
   const mailOptions = {
-    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
+      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
+    },
     to: camp.contactEmail,
-    subject: `New Application to ${camp.campName} - G8Road CRM`,
+    subject: `New Application to ${camp.campName || camp.name} - G8Road CRM`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -97,14 +98,22 @@ async function sendEmailNotification(camp, applicant, application) {
           </div>
         </div>
       </div>
-    `
+    `,
+    text: `New Application to ${camp.campName || camp.name}\n\nApplicant: ${applicant.firstName} ${applicant.lastName}\nEmail: ${applicant.email}\n\nPlease log in to your camp dashboard to review this application.\n\n${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`
   };
 
   try {
-    await emailTransporter.sendMail(mailOptions);
-    console.log(`Email notification sent to ${camp.contactEmail}`);
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+      return;
+    }
+    await sgMail.send(mailOptions);
+    console.log(`✅ Email notification sent to ${camp.contactEmail} via SendGrid`);
   } catch (error) {
-    console.error('Error sending email notification:', error);
+    console.error('❌ Error sending email notification:', error);
+    if (error.response) {
+      console.error('SendGrid error details:', error.response.body);
+    }
   }
 }
 
@@ -112,7 +121,12 @@ async function sendEmailNotification(camp, applicant, application) {
  * Send SMS notification to camp administrators
  */
 async function sendSMSNotification(camp, applicant, application) {
-  const message = `🏕️ New application to ${camp.campName}!\n\n` +
+  if (!twilioClient) {
+    console.warn('⚠️  Twilio not configured - SMS notifications disabled');
+    return;
+  }
+
+  const message = `🏕️ New application to ${camp.campName || camp.name}!\n\n` +
     `Applicant: ${applicant.firstName} ${applicant.lastName}\n` +
     `Applied: ${new Date(application.appliedAt).toLocaleDateString()}\n\n` +
     `Review at: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camp/applications/${application._id}`;
@@ -123,9 +137,9 @@ async function sendSMSNotification(camp, applicant, application) {
       from: process.env.TWILIO_PHONE_NUMBER,
       to: camp.contactPhone
     });
-    console.log(`SMS notification sent to ${camp.contactPhone}`);
+    console.log(`✅ SMS notification sent to ${camp.contactPhone} via Twilio`);
   } catch (error) {
-    console.error('Error sending SMS notification:', error);
+    console.error('❌ Error sending SMS notification:', error);
   }
 }
 
@@ -149,9 +163,12 @@ async function sendApplicationStatusNotification(application, applicant, camp, n
  */
 async function sendApprovalNotification(applicant, camp) {
   const mailOptions = {
-    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
+      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
+    },
     to: applicant.email,
-    subject: `🎉 Welcome to ${camp.campName}! - G8Road CRM`,
+    subject: `🎉 Welcome to ${camp.campName || camp.name}! - G8Road CRM`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; text-align: center;">
@@ -185,14 +202,22 @@ async function sendApprovalNotification(applicant, camp) {
           </div>
         </div>
       </div>
-    `
+    `,
+    text: `Congratulations ${applicant.firstName}! You've been accepted to ${camp.campName || camp.name}. Go to your dashboard to learn more: ${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`
   };
 
   try {
-    await emailTransporter.sendMail(mailOptions);
-    console.log(`Approval notification sent to ${applicant.email}`);
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+      return;
+    }
+    await sgMail.send(mailOptions);
+    console.log(`✅ Approval notification sent to ${applicant.email} via SendGrid`);
   } catch (error) {
-    console.error('Error sending approval notification:', error);
+    console.error('❌ Error sending approval notification:', error);
+    if (error.response) {
+      console.error('SendGrid error details:', error.response.body);
+    }
   }
 }
 
@@ -201,9 +226,12 @@ async function sendApprovalNotification(applicant, camp) {
  */
 async function sendRejectionNotification(applicant, camp) {
   const mailOptions = {
-    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
+      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
+    },
     to: applicant.email,
-    subject: `Application Update - ${camp.campName} - G8Road CRM`,
+    subject: `Application Update - ${camp.campName || camp.name} - G8Road CRM`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -232,17 +260,25 @@ async function sendRejectionNotification(applicant, camp) {
           <p>Thank you again for your interest, and we wish you the best in finding your perfect camp!</p>
           
           <p>Best regards,<br>
-          The ${camp.campName} Team</p>
+          The ${camp.campName || camp.name} Team</p>
         </div>
       </div>
-    `
+    `,
+    text: `Thank you for your application to ${camp.campName || camp.name}. After careful consideration, we have decided not to move forward at this time. We encourage you to explore other camps: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camps`
   };
 
   try {
-    await emailTransporter.sendMail(mailOptions);
-    console.log(`Rejection notification sent to ${applicant.email}`);
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+      return;
+    }
+    await sgMail.send(mailOptions);
+    console.log(`✅ Rejection notification sent to ${applicant.email} via SendGrid`);
   } catch (error) {
-    console.error('Error sending rejection notification:', error);
+    console.error('❌ Error sending rejection notification:', error);
+    if (error.response) {
+      console.error('SendGrid error details:', error.response.body);
+    }
   }
 }
 
