@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, Home, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -534,7 +534,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
-            <Database className="w-8 h-8 text-custom-primary" />
+            <Shield className="w-8 h-8 text-custom-primary" />
           </div>
         </Card>
       </div>
@@ -545,7 +545,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-custom-text">System Health</h3>
             <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-green-600" />
+              <CheckCircleIcon className="w-5 h-5 text-green-600" />
               <span className="text-sm text-green-600 font-medium">Healthy</span>
             </div>
           </div>
@@ -573,12 +573,12 @@ const AdminDashboard: React.FC = () => {
       {/* Navigation Tabs */}
       <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
         {[
-          { id: 0, name: 'Overview', icon: Home },
+          { id: 0, name: 'Overview', icon: Shield },
           { id: 1, name: 'Users', icon: Users },
           { id: 2, name: 'Camps', icon: BuildingIcon },
-          { id: 3, name: 'Analytics', icon: TrendingUp },
+          { id: 3, name: 'Analytics', icon: Shield },
           { id: 4, name: 'Audit Logs', icon: Clock },
-          { id: 5, name: 'System', icon: Settings }
+          { id: 5, name: 'System', icon: Shield }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -624,7 +624,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
                     <div className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-green-600" />
+                      <UserIcon className="w-4 h-4 text-green-600" />
                       <span className="text-sm">New users this month</span>
                     </div>
                     <span className="font-medium">{systemHealth?.recentActivity.newUsers || 0}</span>
@@ -646,7 +646,7 @@ const AdminDashboard: React.FC = () => {
                     className="w-full justify-start"
                     onClick={() => setShowAnalytics(true)}
                   >
-                    <Home className="w-4 h-4 mr-2" />
+                    <Eye className="w-4 h-4 mr-2" />
                     View Analytics
                   </Button>
                   <Button 
@@ -1113,7 +1113,7 @@ const AdminDashboard: React.FC = () => {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
                 <Button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} variant="outline" size="sm">
-                  <Filter className="w-4 h-4" />
+                  <SearchIcon className="w-4 h-4" />
                 </Button>
               </div>
             </div>
