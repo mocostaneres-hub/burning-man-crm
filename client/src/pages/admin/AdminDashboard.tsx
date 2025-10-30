@@ -477,8 +477,8 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Total Users</p>
-              <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalUsers || 0}</p>
+              <p className="text-sm font-medium text-custom-text-secondary">Total Members</p>
+              <p className="text-2xl font-lato-bold text-custom-text">{stats?.accountTypeStats?.personal || 0}</p>
               <div className="flex items-center gap-4 mt-2 text-xs">
                 <span className="text-green-600">Active: {stats?.activeUsers || 0}</span>
                 <span className="text-red-600">Inactive: {stats?.inactiveUsers || 0}</span>
@@ -505,7 +505,7 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Total Members</p>
+              <p className="text-sm font-medium text-custom-text-secondary">Roster Members</p>
               <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalMembers || 0}</p>
               <div className="mt-2 text-xs text-custom-text-secondary">
                 Active roster members
@@ -571,14 +571,15 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+      <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg overflow-x-auto">
         {[
           { id: 0, name: 'Overview', icon: Shield },
           { id: 1, name: 'Users', icon: Users },
           { id: 2, name: 'Camps', icon: BuildingIcon },
           { id: 3, name: 'Analytics', icon: Shield },
           { id: 4, name: 'Audit Logs', icon: Clock },
-          { id: 5, name: 'System', icon: Shield }
+          { id: 5, name: 'Email Templates', icon: Edit },
+          { id: 6, name: 'System', icon: Shield }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1190,8 +1191,153 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* System Tab */}
+      {/* Email Templates Tab */}
       {activeTab === 5 && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="text-2xl font-lato-bold mb-6">Email Template Editor</h2>
+            <p className="text-custom-text-secondary mb-6">
+              Edit all email templates used throughout the system. Changes will take effect immediately.
+            </p>
+            
+            <div className="space-y-6">
+              {/* New Application Notification */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <Edit className="w-5 h-5 text-custom-primary" />
+                  New Application Notification
+                </h3>
+                <p className="text-sm text-custom-text-secondary mb-4">
+                  Sent to camp admins when someone applies to their camp
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium mb-2">File: <code className="bg-gray-200 px-2 py-1 rounded">server/services/notifications.js</code></p>
+                  <p className="text-sm mb-2">Function: <code className="bg-gray-200 px-2 py-1 rounded">sendEmailNotification()</code></p>
+                  <p className="text-sm mb-2">Lines: <span className="font-medium">47-109</span></p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open('vscode://file' + window.location.pathname.replace('/admin', '') + '../server/services/notifications.js:47', '_blank')}
+                    className="mt-2"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Template
+                  </Button>
+                </div>
+              </div>
+
+              {/* Application Approval */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <Edit className="w-5 h-5 text-green-600" />
+                  Application Approval Email
+                </h3>
+                <p className="text-sm text-custom-text-secondary mb-4">
+                  Sent to applicants when their application is approved
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium mb-2">File: <code className="bg-gray-200 px-2 py-1 rounded">server/services/notifications.js</code></p>
+                  <p className="text-sm mb-2">Function: <code className="bg-gray-200 px-2 py-1 rounded">sendApprovalNotification()</code></p>
+                  <p className="text-sm mb-2">Lines: <span className="font-medium">150-197</span></p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open('vscode://file' + window.location.pathname.replace('/admin', '') + '../server/services/notifications.js:150', '_blank')}
+                    className="mt-2"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Template
+                  </Button>
+                </div>
+              </div>
+
+              {/* Application Rejection */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <Edit className="w-5 h-5 text-red-600" />
+                  Application Rejection Email
+                </h3>
+                <p className="text-sm text-custom-text-secondary mb-4">
+                  Sent to applicants when their application is not accepted
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium mb-2">File: <code className="bg-gray-200 px-2 py-1 rounded">server/services/notifications.js</code></p>
+                  <p className="text-sm mb-2">Function: <code className="bg-gray-200 px-2 py-1 rounded">sendRejectionNotification()</code></p>
+                  <p className="text-sm mb-2">Lines: <span className="font-medium">202-247</span></p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => window.open('vscode://file' + window.location.pathname.replace('/admin', '') + '../server/services/notifications.js:202', '_blank')}
+                    className="mt-2"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Template
+                  </Button>
+                </div>
+              </div>
+
+              {/* SendGrid Templates Section */}
+              <div className="bg-blue-50 p-6 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-blue-600" />
+                  SendGrid Templates (Recommended)
+                </h3>
+                <p className="text-sm text-custom-text-secondary mb-4">
+                  Modern email templates with better deliverability and analytics.
+                  File: <code className="bg-white px-2 py-1 rounded">server/services/emailService.js</code>
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded">
+                    <h4 className="font-semibold mb-2">Welcome Email</h4>
+                    <p className="text-xs text-custom-text-secondary mb-2">Lines: 145-165</p>
+                    <p className="text-xs mb-2">Function: <code className="bg-gray-100 px-1">sendWelcomeEmail()</code></p>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded">
+                    <h4 className="font-semibold mb-2">Application Status</h4>
+                    <p className="text-xs text-custom-text-secondary mb-2">Lines: 69-114</p>
+                    <p className="text-xs mb-2">Function: <code className="bg-gray-100 px-1">sendApplicationStatusEmail()</code></p>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded">
+                    <h4 className="font-semibold mb-2">Password Reset</h4>
+                    <p className="text-xs text-custom-text-secondary mb-2">Lines: 125-143</p>
+                    <p className="text-xs mb-2">Function: <code className="bg-gray-100 px-1">sendPasswordResetEmail()</code></p>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded">
+                    <h4 className="font-semibold mb-2">Roster Invitation</h4>
+                    <p className="text-xs text-custom-text-secondary mb-2">Lines: 167-187</p>
+                    <p className="text-xs mb-2">Function: <code className="bg-gray-100 px-1">sendRosterInviteEmail()</code></p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Documentation Link */}
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">📚 Complete Documentation</h3>
+                <p className="text-sm text-custom-text-secondary mb-4">
+                  For detailed instructions on editing email templates, styling guidelines, and testing methods, see:
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono bg-white px-3 py-1 rounded">EMAIL_NOTIFICATION_GUIDE.md</span>
+                    <span className="text-xs text-custom-text-secondary">- Complete editing guide</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono bg-white px-3 py-1 rounded">SENDGRID_SETUP.md</span>
+                    <span className="text-xs text-custom-text-secondary">- SendGrid documentation</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* System Tab */}
+      {activeTab === 6 && (
         <SystemConfig />
       )}
 
