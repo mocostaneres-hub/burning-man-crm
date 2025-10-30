@@ -93,6 +93,7 @@ app.use('/api/members', require('./routes/members'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/rosters', require('./routes/rosters'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/email', require('./routes/email'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/upload', require('./routes/profile-photos'));
