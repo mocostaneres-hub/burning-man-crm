@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, Home, History, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, Home, FileText, Filter, Download, Settings, AlertTriangle, TrendingUp, Activity, Database, UserCheck, UserX, UserPlus, Calendar, MapPin, Mail, Phone, Globe, ExternalLink } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -577,7 +577,7 @@ const AdminDashboard: React.FC = () => {
           { id: 1, name: 'Users', icon: Users },
           { id: 2, name: 'Camps', icon: BuildingIcon },
           { id: 3, name: 'Analytics', icon: TrendingUp },
-          { id: 4, name: 'Audit Logs', icon: History },
+          { id: 4, name: 'Audit Logs', icon: FileText },
           { id: 5, name: 'System', icon: Settings }
         ].map((tab) => (
           <button
@@ -654,7 +654,7 @@ const AdminDashboard: React.FC = () => {
                     className="w-full justify-start"
                     onClick={() => setShowAuditLogs(true)}
                   >
-                    <History className="w-4 h-4 mr-2" />
+                    <FileText className="w-4 h-4 mr-2" />
                     View Audit Logs
                   </Button>
                   <Button 
@@ -818,7 +818,7 @@ const AdminDashboard: React.FC = () => {
                             onClick={() => loadUserHistory(user._id)}
                             className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
                           >
-                            <History className="w-3 h-3" />
+                            <FileText className="w-3 h-3" />
                             History
                           </Button>
                           <Button
