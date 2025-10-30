@@ -544,13 +544,22 @@ const PublicCampProfile: React.FC = () => {
       >
         {applicationSuccess ? (
           <div className="text-center py-8">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-h3 font-lato-bold text-custom-text mb-2">
-              Application Submitted Successfully!
+            <div className="mb-4 animate-bounce">
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
+            </div>
+            <h3 className="text-2xl font-lato-bold text-custom-text mb-3">
+              🎉 Application Submitted Successfully!
             </h3>
-            <p className="text-custom-text-secondary">
-              You've successfully submitted your application to join {camp.campName}. 
-              Their leads will review your info and get in touch for next steps.
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 max-w-md mx-auto">
+              <p className="text-custom-text mb-2">
+                <strong>Great news!</strong> Your application to join <strong>{camp.campName}</strong> has been received.
+              </p>
+              <p className="text-sm text-custom-text-secondary">
+                The camp leads will review your application and get back to you soon. You'll receive an email notification when there's an update.
+              </p>
+            </div>
+            <p className="text-xs text-custom-text-secondary mt-4">
+              This modal will close automatically in a few seconds...
             </p>
           </div>
         ) : (

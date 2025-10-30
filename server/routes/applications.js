@@ -241,8 +241,14 @@ router.post('/apply', authenticateToken, [
     }
     await db.updateCamp(camp._id, { stats: camp.stats });
 
-    // Send notification to camp
-    await sendApplicationNotification(camp, req.user, application);
+    // Send notification to camp (don't fail the request if notification fails)
+    try {
+      await sendApplicationNotification(camp, req.user, application);
+      console.log('✅ Application notification sent successfully');
+    } catch (notificationError) {
+      console.error('⚠️  Failed to send application notification (application was still created):', notificationError);
+      // Don't throw - we don't want to fail the application submission if email fails
+    }
 
     res.status(201).json({
       message: 'Application submitted successfully',
