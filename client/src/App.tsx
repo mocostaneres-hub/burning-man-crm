@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import Navbar from './components/layout/Navbar';
@@ -232,6 +233,7 @@ function App() {
                 </Routes>
               </ConditionalMain>
             </div>
+            <Analytics />
           </Router>
         </SocketProvider>
       </AuthProvider>
