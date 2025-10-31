@@ -38,6 +38,31 @@ import MyTasks from './pages/tasks/MyTasks';
 import InviteTrackingPage from './pages/invites/InviteTrackingPage';
 import SelectRole from './pages/onboarding/SelectRole';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { useLocation } from 'react-router-dom';
+
+// Conditional Navbar component that hides on onboarding pages
+const ConditionalNavbar: React.FC = () => {
+  const location = useLocation();
+  
+  // Hide navbar on onboarding/select-role page
+  if (location.pathname === '/onboarding/select-role') {
+    return null;
+  }
+  
+  return <Navbar />;
+};
+
+// Conditional Main component that adjusts padding based on navbar visibility
+const ConditionalMain: React.FC = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  
+  // No padding top if navbar is hidden
+  if (location.pathname === '/onboarding/select-role') {
+    return <main>{children}</main>;
+  }
+  
+  return <main className="pt-16">{children}</main>;
+};
 
 // Dashboard redirect component for personal accounts
 const DashboardRedirect: React.FC = () => {
@@ -63,8 +88,8 @@ function App() {
           <SocketProvider>
             <Router>
             <div className="min-h-screen bg-custom-bg">
-              <Navbar />
-              <main className="pt-16">
+              <ConditionalNavbar />
+              <ConditionalMain>
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
@@ -201,7 +226,7 @@ function App() {
                   } />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
-              </main>
+              </ConditionalMain>
             </div>
           </Router>
         </SocketProvider>

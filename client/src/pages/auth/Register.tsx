@@ -207,12 +207,15 @@ const Register: React.FC = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Personal Information */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                {...register('firstName')}
-                label="First Name"
-                error={errors.firstName?.message}
-                className="w-full"
-              />
+              <div>
+                <Input
+                  {...register('firstName')}
+                  label="First Name"
+                  error={errors.firstName?.message}
+                  className="w-full"
+                />
+                <p className="text-gray-500 text-xs mt-1 ml-1">or your camp's name</p>
+              </div>
               <Input
                 {...register('lastName')}
                 label="Last Name"

@@ -58,8 +58,8 @@ router.post('/select-role', [
       // Create camp if user doesn't have one
       if (!user.campId) {
         try {
-          // Generate camp name from user's name
-          const campName = user.campName || `${user.firstName} ${user.lastName}'s Camp`;
+          // Generate camp name from user's name (without "Camp" suffix)
+          const campName = user.campName || `${user.firstName} ${user.lastName}`;
           
           // Generate slug
           const slug = campName

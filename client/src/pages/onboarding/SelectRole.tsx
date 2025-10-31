@@ -38,20 +38,21 @@ const SelectRole: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome to G8Road!
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            Let's get you set up. How would you like to use G8Road?
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl w-full space-y-8">
+          {/* Header */}
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+              Welcome to G8Road!
+            </h1>
+            <p className="text-xl text-gray-600 mb-8">
+              Let's get you set up. How would you like to use G8Road?
+            </p>
+          </div>
 
-        {/* Role Selection Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Role Selection Cards - Centered */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
           {/* Member Role */}
           <Card 
             hover 
@@ -166,15 +167,16 @@ const SelectRole: React.FC = () => {
           </div>
         )}
 
-        {/* Footer Info */}
-        <div className="text-center text-sm text-gray-500 mb-8">
-          <p>
-            Don't worry, you can always change your role later in your profile settings.
-          </p>
+          {/* Footer Info */}
+          <div className="text-center text-sm text-gray-500 mb-8">
+            <p>
+              Don't worry, you can always change your role later in your profile settings.
+            </p>
+          </div>
         </div>
       </div>
       
-      {/* Footer */}
+      {/* Footer - At bottom */}
       <Footer />
     </div>
   );
