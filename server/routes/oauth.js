@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
+const { sendWelcomeEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -116,6 +117,7 @@ router.post('/apple', [
 
     // Check if user already exists
     let user = await db.findUser({ email });
+    let isNewUser = false;
     
     if (user) {
       // User exists, check if it's a personal account
@@ -138,6 +140,7 @@ router.post('/apple', [
       }
     } else {
       // Create new personal account
+      isNewUser = true;
       const [firstName, ...lastNameParts] = (name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
@@ -160,6 +163,18 @@ router.post('/apple', [
     // Return user data (without sensitive info)
     const userResponse = { ...user };
     delete userResponse.password;
+
+    // Send welcome email for new users (non-blocking)
+    if (isNewUser) {
+      sendWelcomeEmail(userResponse)
+        .then(() => {
+          console.log('✅ [OAuth] Welcome email sent to:', userResponse.email);
+        })
+        .catch((emailError) => {
+          // Log but don't fail OAuth if email fails
+          console.error('⚠️ [OAuth] Failed to send welcome email:', emailError);
+        });
+    }
 
     res.json({
       message: 'Apple OAuth successful',

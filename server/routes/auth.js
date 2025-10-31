@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
+const { sendWelcomeEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -121,6 +122,16 @@ router.post('/register', [
     console.log('🔍 [Auth] User accountType:', userResponse.accountType);
     console.log('🔍 [Auth] User campId:', userResponse.campId);
     console.log('🔍 [Auth] Full user response:', JSON.stringify(userResponse, null, 2));
+
+    // Send welcome email (non-blocking, don't await)
+    sendWelcomeEmail(userResponse)
+      .then(() => {
+        console.log('✅ [Auth] Welcome email sent to:', userResponse.email);
+      })
+      .catch((emailError) => {
+        // Log but don't fail registration if email fails
+        console.error('⚠️ [Auth] Failed to send welcome email:', emailError);
+      });
 
     res.status(201).json({
       message: 'User registered successfully',
