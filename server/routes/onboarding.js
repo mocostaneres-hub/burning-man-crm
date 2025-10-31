@@ -76,7 +76,7 @@ router.post('/select-role', [
             contactEmail: user.email,
             status: 'active',
             isRecruiting: true,
-            isPublic: false, // Start as private until they complete their profile
+            isPublic: true, // Make camps public by default so they appear in discovery
             acceptingNewMembers: true,
             showApplyNow: true,
             showMemberCount: true
