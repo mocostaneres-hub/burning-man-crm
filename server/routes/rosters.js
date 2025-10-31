@@ -297,16 +297,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    const roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
+    // Find roster - try as ObjectId first, then as integer (for legacy numeric IDs)
+    let roster;
+    roster = await db.findRoster({ _id: id, camp: camp._id });
+    
+    if (!roster) {
+      // Fallback: try parsing as integer for legacy numeric IDs
+      roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
+    }
+    
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
     }
 
-    const updatedRoster = await db.updateRoster(parseInt(id), { name: name.trim() });
+    // Use the roster's actual ID for the update (could be ObjectId string or integer)
+    const rosterId = roster._id;
+    const updatedRoster = await db.updateRoster(rosterId, { name: name.trim() });
     res.json(updatedRoster);
   } catch (error) {
     console.error('Update roster error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
