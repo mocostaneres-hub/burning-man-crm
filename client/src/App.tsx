@@ -53,7 +53,11 @@ const ConditionalNavbar: React.FC = () => {
 };
 
 // Conditional Main component that adjusts padding based on navbar visibility
-const ConditionalMain: React.FC = ({ children }: { children: React.ReactNode }) => {
+interface ConditionalMainProps {
+  children: React.ReactNode;
+}
+
+const ConditionalMain: React.FC<ConditionalMainProps> = ({ children }) => {
   const location = useLocation();
   
   // No padding top if navbar is hidden
