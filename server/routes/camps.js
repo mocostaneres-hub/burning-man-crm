@@ -618,7 +618,7 @@ router.put('/my-camp', authenticateToken, [
   body('burningSince').optional().isInt({ min: 1985, max: new Date().getFullYear() }).withMessage('Invalid burning since year'),
   body('approximateSize').optional().isInt({ min: 1, max: 1000 }).withMessage('Approximate size must be between 1 and 1000'),
   body('hometown').optional().trim(),
-  body('website').optional().isURL().withMessage('Invalid website URL'),
+  body('website').optional().trim(), // Accept raw website string without validation to preserve user input exactly
   body('theme').optional().trim().isLength({ max: 100 }).withMessage('Theme must be less than 100 characters'),
   body('socialMedia.facebook').optional().isURL(),
   body('socialMedia.instagram').optional().isURL()

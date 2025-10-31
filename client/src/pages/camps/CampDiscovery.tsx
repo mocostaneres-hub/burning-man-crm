@@ -464,7 +464,7 @@ const CampDiscovery: React.FC = () => {
                         <div className="flex items-center gap-3 text-sm">
                           {camp.website && (
                             <a
-                              href={camp.website}
+                              href={camp.website.startsWith('http://') || camp.website.startsWith('https://') ? camp.website : `https://${camp.website}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}

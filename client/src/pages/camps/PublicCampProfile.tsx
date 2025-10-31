@@ -365,7 +365,7 @@ const PublicCampProfile: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-3">
                     {camp.website && (
                       <a
-                        href={camp.website}
+                        href={camp.website.startsWith('http://') || camp.website.startsWith('https://') ? camp.website : `https://${camp.website}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center w-10 h-10 rounded-full bg-custom-primary/10 hover:bg-custom-primary/20 text-custom-primary transition-colors"

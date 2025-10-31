@@ -117,7 +117,7 @@ const CampProfileDisplay: React.FC<CampProfileDisplayProps> = ({ camp, onEdit })
                   </div>
                   <p className="text-body text-custom-text">
                     <a 
-                      href={camp.website} 
+                      href={camp.website.startsWith('http://') || camp.website.startsWith('https://') ? camp.website : `https://${camp.website}`}
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="text-custom-primary hover:underline"

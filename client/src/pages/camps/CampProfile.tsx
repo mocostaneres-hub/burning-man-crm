@@ -627,9 +627,16 @@ const CampProfile: React.FC = () => {
               ) : (
                 <p className="text-body text-custom-text">
                   {campData.website ? (
-                    <a href={campData.website} target="_blank" rel="noopener noreferrer" className="text-custom-primary hover:underline">
-                      {campData.website}
-                    </a>
+                    (() => {
+                      // Display raw value, but ensure href has protocol for clickability
+                      const isAbsolute = campData.website.startsWith('http://') || campData.website.startsWith('https://');
+                      const hrefLink = isAbsolute ? campData.website : `https://${campData.website}`;
+                      return (
+                        <a href={hrefLink} target="_blank" rel="noopener noreferrer" className="text-custom-primary hover:underline">
+                          {campData.website}
+                        </a>
+                      );
+                    })()
                   ) : (
                     'No website provided'
                   )}
