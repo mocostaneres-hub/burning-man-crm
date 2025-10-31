@@ -53,58 +53,6 @@ const SelectRole: React.FC = () => {
 
           {/* Role Selection Cards - Centered */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-          {/* Member Role */}
-          <Card 
-            hover 
-            padding="lg" 
-            className="text-center cursor-pointer transition-all duration-300 hover:shadow-xl hover:border-custom-primary group"
-            onClick={() => !loading && handleRoleSelection('member')}
-          >
-            <div className="flex flex-col items-center space-y-6">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                <Users className="w-10 h-10 text-blue-600" />
-              </div>
-              
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                  Join as a Member
-                </h3>
-                <p className="text-gray-600 mb-6 leading-relaxed">
-                  Discover amazing camps, apply to join communities, and connect with fellow burners. 
-                  Perfect for individuals looking to find their Burning Man family.
-                </p>
-              </div>
-
-              <div className="space-y-3 text-sm text-gray-500">
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  <span>Find and apply to camps</span>
-                </div>
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  <span>Connect with other members</span>
-                </div>
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  <span>Manage your profile</span>
-                </div>
-              </div>
-
-              <Button
-                variant="primary"
-                size="lg"
-                disabled={loading}
-                className="w-full"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Sign up as Member'
-                )}
-              </Button>
-            </div>
-          </Card>
-
           {/* Camp Lead Role */}
           <Card 
             hover 
@@ -152,6 +100,58 @@ const SelectRole: React.FC = () => {
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   'Sign up as Camp Lead'
+                )}
+              </Button>
+            </div>
+          </Card>
+
+          {/* Member Role */}
+          <Card 
+            hover 
+            padding="lg" 
+            className="text-center cursor-pointer transition-all duration-300 hover:shadow-xl hover:border-custom-primary group"
+            onClick={() => !loading && handleRoleSelection('member')}
+          >
+            <div className="flex flex-col items-center space-y-6">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                <Users className="w-10 h-10 text-blue-600" />
+              </div>
+              
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  Join as a Member
+                </h3>
+                <p className="text-gray-600 mb-6 leading-relaxed">
+                  Discover amazing camps, apply to join communities, and connect with fellow burners. 
+                  Perfect for individuals looking to find their Burning Man family.
+                </p>
+              </div>
+
+              <div className="space-y-3 text-sm text-gray-500">
+                <div className="flex items-center justify-center space-x-2">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  <span>Find and apply to camps</span>
+                </div>
+                <div className="flex items-center justify-center space-x-2">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  <span>Connect with other members</span>
+                </div>
+                <div className="flex items-center justify-center space-x-2">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  <span>Manage your profile</span>
+                </div>
+              </div>
+
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Sign up as Member'
                 )}
               </Button>
             </div>
