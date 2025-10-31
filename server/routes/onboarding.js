@@ -44,13 +44,63 @@ router.post('/select-role', [
       return res.status(500).json({ message: 'Failed to update user role' });
     }
 
-    // For camp_lead role, also update accountType to 'camp' if it's not already
-    if (role === 'camp_lead' && user.accountType === 'personal') {
-      await db.updateUserById(userId, { 
-        accountType: 'camp',
-        updatedAt: new Date()
-      });
-      updatedUser.accountType = 'camp';
+    // For camp_lead role, also update accountType to 'camp' and create camp if needed
+    if (role === 'camp_lead') {
+      // Update accountType to 'camp'
+      if (user.accountType !== 'camp') {
+        await db.updateUserById(userId, { 
+          accountType: 'camp',
+          updatedAt: new Date()
+        });
+        updatedUser.accountType = 'camp';
+      }
+
+      // Create camp if user doesn't have one
+      if (!user.campId) {
+        try {
+          // Generate camp name from user's name
+          const campName = user.campName || `${user.firstName} ${user.lastName}'s Camp`;
+          
+          // Generate slug
+          const slug = campName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, '');
+
+          // Create camp data
+          const campData = {
+            owner: user._id,
+            name: campName,
+            slug: slug,
+            description: `Welcome to ${campName}! We're excited to share our camp experience with you.`,
+            contactEmail: user.email,
+            status: 'active',
+            isRecruiting: true,
+            isPublic: false, // Start as private until they complete their profile
+            acceptingNewMembers: true,
+            showApplyNow: true,
+            showMemberCount: true
+          };
+
+          // Create camp record
+          const camp = await db.createCamp(campData);
+
+          // Update user with campId and urlSlug
+          await db.updateUserById(user._id, {
+            campId: camp._id,
+            urlSlug: slug
+          });
+          
+          updatedUser.campId = camp._id;
+          updatedUser.urlSlug = slug;
+
+          console.log('✅ [Onboarding] Camp created for user:', user.email, 'Camp ID:', camp._id);
+        } catch (campError) {
+          console.error('❌ [Onboarding] Error creating camp:', campError);
+          // Don't fail the onboarding if camp creation fails
+          // They can create it later from their profile
+        }
+      }
     }
 
     // For member role, ensure accountType is 'personal'
@@ -62,8 +112,11 @@ router.post('/select-role', [
       updatedUser.accountType = 'personal';
     }
 
+    // Fetch the fully updated user to ensure we have all the latest data
+    const finalUser = await db.findUserById(userId);
+    
     // Return success response with user data
-    const userResponse = { ...updatedUser };
+    const userResponse = finalUser.toObject ? finalUser.toObject() : { ...finalUser };
     delete userResponse.password;
 
     res.json({

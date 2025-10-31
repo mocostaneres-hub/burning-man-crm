@@ -4,9 +4,11 @@ import { Button, Card } from '../../components/ui';
 import Footer from '../../components/layout/Footer';
 import { Users, Building, Loader2 } from 'lucide-react';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SelectRole: React.FC = () => {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,6 +20,10 @@ const SelectRole: React.FC = () => {
       const response = await api.post('/onboarding/select-role', { role });
       
       if (response.message === 'Role selected successfully') {
+        // Update the user in AuthContext with the new data from backend
+        console.log('🔍 [SelectRole] Updating user with response:', response.user);
+        updateUser(response.user);
+        
         // Redirect based on the role selected
         const redirectTo = response.redirectTo;
         navigate(redirectTo, { replace: true });
