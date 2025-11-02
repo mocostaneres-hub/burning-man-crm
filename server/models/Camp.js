@@ -317,14 +317,24 @@ campSchema.virtual('primaryPhoto').get(function() {
   return primary ? primary.url : (this.photos.length > 0 ? this.photos[0].url : null);
 });
 
-// Pre-save middleware to generate slug
-campSchema.pre('save', function(next) {
-  if (this.isModified('name') || !this.slug) {
-    // Always regenerate slug when name changes OR if slug doesn't exist
-    this.slug = this.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+// Note: Slug generation is now handled in the route handlers
+// to ensure uniqueness checking is performed properly
+// The pre-save hook is kept for backward compatibility but may be removed
+// if all routes properly handle slug generation
+campSchema.pre('save', async function(next) {
+  // Only generate slug if name is modified and slug doesn't exist or is being cleared
+  if ((this.isModified('name') || !this.slug) && this.name) {
+    try {
+      const { generateUniqueCampSlug } = require('../utils/slugGenerator');
+      this.slug = await generateUniqueCampSlug(this.name, this._id);
+    } catch (error) {
+      // Fallback to simple slug generation if async operation fails
+      console.error('Error generating slug in pre-save hook:', error);
+      this.slug = this.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
   }
   next();
 });

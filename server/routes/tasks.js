@@ -11,7 +11,8 @@ const {
   sendTaskWatcherEmail,
   sendTaskStatusChangeEmail,
   sendTaskClosedEmail,
-  sendTaskCommentEmail
+  sendTaskCommentEmail,
+  sendTaskPriorityChangeEmail
 } = require('../services/taskNotifications');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
@@ -448,13 +449,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
       watchersArray: task.watchers ? task.watchers.map(id => id.toString()) : []
     });
 
+    // Store original task state BEFORE any updates (deep copy for comparison)
+    const originalTask = {
+      status: task.status,
+      priority: task.priority,
+      assignedTo: [...(task.assignedTo || [])].map(id => id.toString()),
+      watchers: [...(task.watchers || [])].map(id => id.toString())
+    };
+
     // Track changes before updating
     const historyEntries = trackTaskChanges(task, updates, req.user._id);
-
-    // Store old values for comparison
-    const oldStatus = task.status;
-    const oldAssignedTo = [...(task.assignedTo || [])].map(id => id.toString());
-    const oldWatchers = [...(task.watchers || [])].map(id => id.toString());
 
     // If updating status to closed, set completedBy
     if (updates.status === 'closed' && !task.completedBy) {
@@ -482,14 +486,31 @@ router.put('/:id', authenticateToken, async (req, res) => {
       .populate('comments.user', 'firstName lastName email playaName profilePhoto')
       .populate('history.user', 'firstName lastName email playaName profilePhoto');
 
+    // Build recipient list: all assignees + all watchers (unique)
+    const allRecipientIds = [
+      ...(populatedTask.assignedTo || []).map(u => u._id.toString()),
+      ...(populatedTask.watchers || []).map(u => u._id.toString())
+    ];
+    const uniqueRecipientIds = [...new Set(allRecipientIds)];
+    const recipientUsers = [
+      ...(populatedTask.assignedTo || []),
+      ...(populatedTask.watchers || []).filter(w => 
+        !(populatedTask.assignedTo || []).some(a => a._id.toString() === w._id.toString())
+      )
+    ];
+
+    // Updated task state for comparison
+    const updatedStatus = populatedTask.status || task.status;
+    const updatedPriority = populatedTask.priority || task.priority;
+    const updatedAssignedTo = (populatedTask.assignedTo || []).map(u => u._id.toString());
+    const updatedWatchers = (populatedTask.watchers || []).map(u => u._id.toString());
+
     // Send email notifications based on changes
     try {
-      // Check for new assignments
-      if (updates.assignedTo) {
-        const newAssignedTo = updates.assignedTo.map(id => id.toString());
-        const newAssignees = newAssignedTo.filter(id => !oldAssignedTo.includes(id));
+      // 1. Check for new assignments (only notify new assignees)
+      if (updates.assignedTo !== undefined) {
+        const newAssignees = updatedAssignedTo.filter(id => !originalTask.assignedTo.includes(id));
         if (newAssignees.length > 0) {
-          // Get populated assignee users (they have email info)
           const newAssigneeUsers = populatedTask.assignedTo.filter(user => 
             newAssignees.includes(user._id.toString())
           );
@@ -497,12 +518,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
       }
 
-      // Check for new watchers
-      if (updates.watchers) {
-        const newWatchers = updates.watchers.map(id => id.toString());
-        const addedWatchers = newWatchers.filter(id => !oldWatchers.includes(id));
+      // 2. Check for new watchers (only notify new watchers)
+      if (updates.watchers !== undefined) {
+        const addedWatchers = updatedWatchers.filter(id => !originalTask.watchers.includes(id));
         if (addedWatchers.length > 0) {
-          // Get populated watcher users (they have email info)
           const newWatcherUsers = populatedTask.watchers.filter(user => 
             addedWatchers.includes(user._id.toString())
           );
@@ -510,14 +529,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
       }
 
-      // Check for status change
-      if (updates.status && updates.status !== oldStatus) {
-        if (updates.status === 'closed' || updates.status === 'completed') {
+      // 3. Check for status change (notify all recipients)
+      if (updates.status !== undefined && originalTask.status !== updatedStatus) {
+        if (updatedStatus === 'closed' || updatedStatus === 'completed') {
           await sendTaskClosedEmail(populatedTask);
         } else {
-          await sendTaskStatusChangeEmail(populatedTask, oldStatus, updates.status);
+          await sendTaskStatusChangeEmail(populatedTask, originalTask.status, updatedStatus);
         }
       }
+
+      // 4. Check for priority change (notify all recipients)
+      if (updates.priority !== undefined && originalTask.priority !== updatedPriority) {
+        await sendTaskPriorityChangeEmail(populatedTask, originalTask.priority, updatedPriority);
+      }
+
+      // 5. Check for new comment (handle separately in comments endpoint)
+      // This is handled in POST /api/tasks/:id/comments
     } catch (emailError) {
       console.error('⚠️  Failed to send task update email notifications:', emailError);
       // Don't fail the request if email fails
@@ -864,7 +891,8 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     // Return the newly added comment
     const newComment = task.comments[task.comments.length - 1];
 
-    // Send email notification for new comment
+    // Send email notification for new comment to ALL recipients (assignees + watchers)
+    // Exclude the comment author to avoid self-notification
     try {
       await sendTaskCommentEmail(task, text.trim(), req.user);
     } catch (emailError) {

@@ -240,17 +240,81 @@ const sendTaskClosedEmail = async (task) => {
 };
 
 /**
+ * Send email notification when task priority changes
+ */
+const sendTaskPriorityChangeEmail = async (task, oldPriority, newPriority) => {
+  try {
+    // Get all recipients: assignees and watchers
+    const recipientIds = [
+      ...(task.assignedTo || []),
+      ...(task.watchers || [])
+    ];
+    
+    const emails = await fetchUserEmails(recipientIds);
+    if (emails.length === 0) {
+      console.log('⚠️  No valid emails found for priority change notification');
+      return;
+    }
+
+    const taskUrl = getTaskUrl(task.taskIdCode);
+    
+    for (const email of emails) {
+      await sendEmail({
+        to: email,
+        subject: `Priority updated for ${task.taskIdCode}: ${task.title}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0;">⚡ Priority Update</h1>
+            </div>
+            
+            <div style="padding: 20px; background: #f9f9f9;">
+              <div style="background: white; padding: 20px; border-radius: 8px;">
+                <h2 style="color: #333; margin-top: 0;">Task Priority Changed</h2>
+                <p>The priority for task <strong>${task.taskIdCode}</strong>: "${task.title}" has been updated.</p>
+                
+                <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                  <p style="margin: 5px 0;"><strong>Previous Priority:</strong> ${oldPriority || 'N/A'}</p>
+                  <p style="margin: 5px 0;"><strong>New Priority:</strong> ${newPriority}</p>
+                </div>
+                
+                <div style="margin: 20px 0; text-align: center;">
+                  <a href="${taskUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">View Task</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        text: `The priority for task ${task.taskIdCode}: "${task.title}" has been updated from "${oldPriority || 'N/A'}" to "${newPriority}". Click here to view: ${taskUrl}`
+      });
+      console.log(`✅ Task priority change email sent to ${email}`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending task priority change email:', error);
+  }
+};
+
+/**
  * Send email notification when new comment is added
  */
 const sendTaskCommentEmail = async (task, commentText, commentAuthor) => {
   try {
     // Get all recipients: assignees and watchers, but exclude the comment author
-    const recipientIds = [
+    const allRecipients = [
       ...(task.assignedTo || []),
       ...(task.watchers || [])
-    ].filter(id => id.toString() !== commentAuthor._id.toString());
+    ];
     
-    const emails = await fetchUserEmails(recipientIds);
+    // Filter out the comment author (handle both user objects and IDs)
+    const filteredRecipients = allRecipients.filter(recipient => {
+      const recipientId = recipient && typeof recipient === 'object' && recipient._id 
+        ? recipient._id.toString() 
+        : recipient.toString();
+      const authorId = commentAuthor._id.toString();
+      return recipientId !== authorId;
+    });
+    
+    const emails = await fetchUserEmails(filteredRecipients);
     if (emails.length === 0) {
       console.log('⚠️  No valid emails found for comment notification');
       return;
@@ -302,6 +366,7 @@ module.exports = {
   sendTaskWatcherEmail,
   sendTaskStatusChangeEmail,
   sendTaskClosedEmail,
-  sendTaskCommentEmail
+  sendTaskCommentEmail,
+  sendTaskPriorityChangeEmail
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -98,6 +98,7 @@ const renderIcon = (iconName: string) => {
 const CampProfile: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [campCategories, setCampCategories] = useState<CampCategory[]>([]);
   const [globalPerks, setGlobalPerks] = useState<GlobalPerk[]>([]);
   const [campData, setCampData] = useState<CampProfileData>({
@@ -437,10 +438,25 @@ const CampProfile: React.FC = () => {
       
       console.log('🔍 [CampProfile] Save data:', saveData);
       console.log('✅ [CampProfile] Save response:', response);
+      
+      // Extract slug from response (could be in response.camp.slug or response.slug)
+      const updatedCamp = response.camp || response;
+      const newSlug = updatedCamp?.slug;
+      
       setSuccess('Camp profile updated successfully!');
       setIsEditing(false);
+      
       // Reload the profile to get updated data
       fetchCampProfile();
+      
+      // If slug is available and camp name was changed, navigate to public URL
+      // This allows users to see their public profile immediately after updating
+      if (newSlug && saveData.name) {
+        // Small delay to ensure state is updated before navigation
+        setTimeout(() => {
+          navigate(`/camps/${newSlug}`, { replace: false });
+        }, 500);
+      }
     } catch (err: any) {
       console.error('❌ [CampProfile] Error saving camp profile:', err);
       console.error('❌ [CampProfile] Error response:', err.response?.data);

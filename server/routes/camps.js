@@ -3,6 +3,7 @@ const multer = require('multer');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireCampLead, optionalAuth } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 // (moved below after router initialization)
@@ -499,9 +500,21 @@ router.post('/', authenticateToken, [
       return res.status(400).json({ message: 'Camp name is required' });
     }
 
+    // Generate unique slug from camp name
+    let uniqueSlug;
+    try {
+      uniqueSlug = await generateUniqueCampSlug(campName);
+      console.log('✅ [POST /camps] Generated unique slug:', uniqueSlug);
+    } catch (error) {
+      console.error('❌ [POST /camps] Error generating slug:', error);
+      // Fallback to simple slug generation
+      uniqueSlug = campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    }
+
     const campData = {
       ...req.body,
       name: campName, // Ensure 'name' field is set
+      slug: uniqueSlug, // Set the generated slug
       contactEmail: req.user.email,
       owner: req.user._id,
       description: req.body.description || `Welcome to ${campName}! We're excited to share our camp experience with you.` // Provide default description if none given
@@ -642,10 +655,22 @@ router.put('/my-camp', authenticateToken, [
       const newCampData = {
         ...updateData,
         contactEmail: req.user.email,
-        slug: req.body.campName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         status: 'active',
         isPublic: true // Default to public so profiles are viewable
       };
+
+      // Generate slug if campName is provided
+      if (newCampData.campName) {
+        try {
+          newCampData.slug = await generateUniqueCampSlug(newCampData.campName);
+          newCampData.name = newCampData.campName; // Ensure name is set
+          console.log('✅ [PUT /api/camps/my-camp] Generated slug for new camp:', newCampData.slug);
+        } catch (error) {
+          console.error('❌ [PUT /api/camps/my-camp] Error generating slug:', error);
+          // Fallback to simple slug
+          newCampData.slug = (newCampData.campName || 'camp').toLowerCase().replace(/[^a-z0-9]/g, '-');
+        }
+      }
       
       camp = await db.createCamp(newCampData);
       return res.json(camp);
@@ -655,6 +680,22 @@ router.put('/my-camp', authenticateToken, [
       if (!campId) {
         return res.status(404).json({ message: 'Camp not found' });
       }
+
+      // Generate slug if campName is being updated
+      const campNameToUse = updateData.campName;
+      if (campNameToUse && campNameToUse !== camp.name) {
+        console.log('🔍 [PUT /api/camps/my-camp] Camp name changed, generating new slug');
+        try {
+          const newSlug = await generateUniqueCampSlug(campNameToUse, campId);
+          updateData.slug = newSlug;
+          updateData.name = campNameToUse; // Ensure name is set
+          console.log('✅ [PUT /api/camps/my-camp] Generated unique slug:', newSlug);
+        } catch (error) {
+          console.error('❌ [PUT /api/camps/my-camp] Error generating slug:', error);
+          // Continue without slug update if generation fails
+        }
+      }
+
       camp = await db.updateCamp({ _id: campId }, updateData);
       return res.json(camp);
     }
@@ -710,11 +751,31 @@ router.put('/:id', authenticateToken, [
       return res.status(403).json({ message: 'Not authorized to update this camp' });
     }
 
+    // Generate slug if campName or name is being updated
+    const updateData = { ...req.body };
+    
+    // Check if campName or name field is being updated
+    const campNameToUse = updateData.campName || updateData.name;
+    if (campNameToUse && campNameToUse !== camp.name) {
+      console.log('🔍 [PUT /api/camps/:id] Camp name changed, generating new slug');
+      try {
+        // Generate unique slug based on the new camp name
+        const newSlug = await generateUniqueCampSlug(campNameToUse, camp._id);
+        updateData.slug = newSlug;
+        updateData.name = campNameToUse; // Ensure name is set
+        console.log('✅ [PUT /api/camps/:id] Generated unique slug:', newSlug);
+      } catch (error) {
+        console.error('❌ [PUT /api/camps/:id] Error generating slug:', error);
+        // Continue without slug update if generation fails
+      }
+    }
+
     // Update camp (allow selectedPerks passthrough)
-    console.log('🔍 [PUT /api/camps/:id] Update data location field:', req.body.location);
-    const updatedCamp = await db.updateCamp({ _id: camp._id }, req.body);
+    console.log('🔍 [PUT /api/camps/:id] Update data location field:', updateData.location);
+    const updatedCamp = await db.updateCamp({ _id: camp._id }, updateData);
     console.log('✅ [PUT /api/camps/:id] Camp updated successfully');
     console.log('🔍 [PUT /api/camps/:id] Updated camp location:', updatedCamp?.location);
+    console.log('🔍 [PUT /api/camps/:id] Updated camp slug:', updatedCamp?.slug);
 
     // Get owner info
     const owner = await db.findUser({ _id: camp.owner });
