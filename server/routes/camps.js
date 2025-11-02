@@ -1166,16 +1166,26 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
 });
 
 // @route   PUT /api/camps/:id/slug
-// @desc    Update camp slug (Admin only)
-// @access  Private (Admin only)
+// @desc    Update camp slug (Admin or camp owner)
+// @access  Private (Admin or camp owner)
 router.put('/:id/slug', authenticateToken, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.accountType !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
+    const { id } = req.params;
+    
+    // Find the camp
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    
+    // Check permissions: admin OR camp owner
+    const isAdmin = req.user.accountType === 'admin';
+    const isOwner = await canAccessCamp(req, id);
+    
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ message: 'Admin access or camp ownership required' });
     }
 
-    const { id } = req.params;
     const { slug } = req.body;
 
     if (!slug || typeof slug !== 'string' || slug.trim() === '') {
@@ -1184,12 +1194,6 @@ router.put('/:id/slug', authenticateToken, async (req, res) => {
 
     // Sanitize slug
     const sanitizedSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
-
-    // Find the camp
-    const camp = await db.findCamp({ _id: id });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
 
     // Check if slug already exists for another camp
     const existingCamp = await db.findCamp({ slug: sanitizedSlug });
