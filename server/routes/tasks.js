@@ -24,7 +24,25 @@ router.get('/', authenticateToken, async (req, res) => {
     if (!campId) return res.status(404).json({ message: 'Camp not found' });
 
     const tasks = await db.findTasks({ campId });
-    return res.json(tasks);
+    
+    // Filter out orphaned tasks (tasks from deleted events)
+    const validTasks = await Promise.all(tasks.map(async (task) => {
+      // If task is a volunteer_shift and has an eventId, verify the event still exists
+      if (task.type === 'volunteer_shift' && task.metadata?.eventId) {
+        const event = await db.findEvent({ _id: task.metadata.eventId });
+        if (!event) {
+          // Event was deleted, skip this orphaned task
+          console.log(`🗑️ [CAMP-TASKS] Filtering orphaned task ${task._id} from deleted event ${task.metadata.eventId}`);
+          return null;
+        }
+      }
+      return task;
+    }));
+
+    // Remove null values (orphaned tasks)
+    const filteredTasks = validTasks.filter(task => task !== null);
+    
+    return res.json(filteredTasks);
   } catch (error) {
     console.error('Get tasks error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -96,7 +114,24 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       .populate('history.user', 'firstName lastName email playaName profilePhoto')
       .sort({ createdAt: -1 });
     
-    res.json(tasks);
+    // Filter out orphaned tasks (tasks from deleted events)
+    const validTasks = await Promise.all(tasks.map(async (task) => {
+      // If task is a volunteer_shift and has an eventId, verify the event still exists
+      if (task.type === 'volunteer_shift' && task.metadata?.eventId) {
+        const event = await db.findEvent({ _id: task.metadata.eventId });
+        if (!event) {
+          // Event was deleted, skip this orphaned task
+          console.log(`🗑️ [CAMP-TASKS-BY-ID] Filtering orphaned task ${task._id} from deleted event ${task.metadata.eventId}`);
+          return null;
+        }
+      }
+      return task;
+    }));
+
+    // Remove null values (orphaned tasks)
+    const filteredTasks = validTasks.filter(task => task !== null);
+    
+    res.json(filteredTasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);
     res.status(500).json({ message: 'Server error' });
@@ -115,8 +150,25 @@ router.get('/my-tasks', authenticateToken, async (req, res) => {
 
     const tasks = await db.findTasks({ assignedTo: req.user._id });
 
+    // Filter out orphaned tasks (tasks from deleted events)
+    const validTasks = await Promise.all(tasks.map(async (task) => {
+      // If task is a volunteer_shift and has an eventId, verify the event still exists
+      if (task.type === 'volunteer_shift' && task.metadata?.eventId) {
+        const event = await db.findEvent({ _id: task.metadata.eventId });
+        if (!event) {
+          // Event was deleted, skip this orphaned task
+          console.log(`🗑️ [MY-TASKS] Filtering orphaned task ${task._id} from deleted event ${task.metadata.eventId}`);
+          return null;
+        }
+      }
+      return task;
+    }));
+
+    // Remove null values (orphaned tasks)
+    const filteredTasks = validTasks.filter(task => task !== null);
+
     // Populate camp information for each task (always fetch fresh data)
-    const tasksWithCampInfo = await Promise.all(tasks.map(async (task) => {
+    const tasksWithCampInfo = await Promise.all(filteredTasks.map(async (task) => {
       try {
         // Normalize task in case it's a Mongoose document
         const plainTask = typeof task.toObject === 'function' ? task.toObject() : task;
@@ -179,7 +231,24 @@ router.get('/assigned/:userId', authenticateToken, async (req, res) => {
       .populate('history.user', 'firstName lastName email playaName profilePhoto')
       .sort({ createdAt: -1 });
     
-    res.json(tasks);
+    // Filter out orphaned tasks (tasks from deleted events)
+    const validTasks = await Promise.all(tasks.map(async (task) => {
+      // If task is a volunteer_shift and has an eventId, verify the event still exists
+      if (task.type === 'volunteer_shift' && task.metadata?.eventId) {
+        const event = await db.findEvent({ _id: task.metadata.eventId });
+        if (!event) {
+          // Event was deleted, skip this orphaned task
+          console.log(`🗑️ [ASSIGNED-TASKS] Filtering orphaned task ${task._id} from deleted event ${task.metadata.eventId}`);
+          return null;
+        }
+      }
+      return task;
+    }));
+
+    // Remove null values (orphaned tasks)
+    const filteredTasks = validTasks.filter(task => task !== null);
+    
+    res.json(filteredTasks);
   } catch (error) {
     console.error('Error fetching assigned tasks:', error);
     res.status(500).json({ message: 'Server error' });
