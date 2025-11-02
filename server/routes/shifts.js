@@ -735,14 +735,36 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     }
     console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
-    // PERMISSION CHECK: Camp accounts have FULL power
-    if (req.user.accountType !== 'camp') {
-      console.log('❌ [EVENT DELETION] Permission denied - only camp accounts can delete events');
+    // PERMISSION CHECK: Allow camp accounts, admins with campId, or users who created the event
+    const isCampAccount = req.user.accountType === 'camp';
+    const isAdminWithCamp = req.user.accountType === 'admin' && req.user.campId;
+    
+    // Check if user created the event (handle both populated and non-populated createdBy)
+    let createdById = null;
+    if (event.createdBy) {
+      if (event.createdBy._id) {
+        // Populated object
+        createdById = event.createdBy._id.toString();
+      } else if (typeof event.createdBy === 'object' && event.createdBy.toString) {
+        // Mongoose ObjectId
+        createdById = event.createdBy.toString();
+      } else if (typeof event.createdBy === 'string') {
+        // String ID
+        createdById = event.createdBy;
+      }
+    }
+    const userId = req.user._id ? req.user._id.toString() : req.user.toString();
+    const isEventCreator = createdById && createdById === userId;
+    
+    if (!isCampAccount && !isAdminWithCamp && !isEventCreator) {
+      console.log('❌ [EVENT DELETION] Permission denied');
       console.log('📝 [EVENT DELETION] User accountType:', req.user.accountType);
+      console.log('📝 [EVENT DELETION] User campId:', req.user.campId);
+      console.log('📝 [EVENT DELETION] Event creator:', event.createdBy);
       return res.status(403).json({ message: 'Camp account required to delete events' });
     }
 
-    console.log('✅ [EVENT DELETION] Camp account detected');
+    console.log('✅ [EVENT DELETION] Permission check passed');
     
     // Get camp ID using helper (immutable campId)
     const campId = await getUserCampId(req);
@@ -750,21 +772,25 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     console.log('🏕️ [EVENT DELETION] User camp ID:', campId);
     console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
 
-    if (!campId) {
-      console.log('❌ [EVENT DELETION] Could not determine camp ID for user');
-      return res.status(403).json({ message: 'Camp association not found' });
+    // Verify event belongs to this camp (unless user created it)
+    if (!isEventCreator) {
+      if (!campId) {
+        console.log('❌ [EVENT DELETION] Could not determine camp ID for user');
+        return res.status(403).json({ message: 'Camp association not found' });
+      }
+
+      const eventCampId = event.campId._id ? event.campId._id.toString() : event.campId.toString();
+      if (eventCampId !== campId) {
+        console.log('❌ [EVENT DELETION] Access denied - event belongs to different camp');
+        console.log('📝 [EVENT DELETION] User camp:', campId);
+        console.log('📝 [EVENT DELETION] Event camp:', eventCampId);
+        return res.status(403).json({ message: 'You can only delete events from your own camp' });
+      }
+    } else {
+      console.log('✅ [EVENT DELETION] User created this event - deletion allowed');
     }
 
-    // Verify event belongs to this camp
-    const eventCampId = event.campId._id ? event.campId._id.toString() : event.campId.toString();
-    if (eventCampId !== campId) {
-      console.log('❌ [EVENT DELETION] Access denied - event belongs to different camp');
-      console.log('📝 [EVENT DELETION] User camp:', campId);
-      console.log('📝 [EVENT DELETION] Event camp:', eventCampId);
-      return res.status(403).json({ message: 'You can only delete events from your own camp' });
-    }
-
-    console.log('✅ [EVENT DELETION] Permission granted - camp owns this event');
+    console.log('✅ [EVENT DELETION] Permission granted');
 
     // Step 1: Delete all tasks related to this event
     console.log('🔍 [EVENT DELETION] Searching for tasks to delete');
