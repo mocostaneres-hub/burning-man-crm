@@ -1165,4 +1165,61 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
   }
 });
 
+// @route   PUT /api/camps/:id/slug
+// @desc    Update camp slug (Admin only)
+// @access  Private (Admin only)
+router.put('/:id/slug', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.accountType !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    const { slug } = req.body;
+
+    if (!slug || typeof slug !== 'string' || slug.trim() === '') {
+      return res.status(400).json({ message: 'Valid slug is required' });
+    }
+
+    // Sanitize slug
+    const sanitizedSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+
+    // Find the camp
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Check if slug already exists for another camp
+    const existingCamp = await db.findCamp({ slug: sanitizedSlug });
+    if (existingCamp && existingCamp._id.toString() !== id) {
+      return res.status(400).json({ 
+        message: `Slug "${sanitizedSlug}" already exists for camp: ${existingCamp.name || existingCamp.campName}` 
+      });
+    }
+
+    // Update the slug
+    const updatedCamp = await db.updateCamp({ _id: id }, { slug: sanitizedSlug });
+
+    if (!updatedCamp) {
+      return res.status(500).json({ message: 'Failed to update camp slug' });
+    }
+
+    res.json({
+      message: 'Camp slug updated successfully',
+      camp: {
+        _id: updatedCamp._id,
+        name: updatedCamp.name || updatedCamp.campName,
+        slug: updatedCamp.slug,
+        url: `${process.env.CLIENT_URL || 'https://www.g8road.com'}/camps/${updatedCamp.slug}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Update camp slug error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
