@@ -6,6 +6,13 @@ const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
 const { getUserCampId, canAccessCamp, canAccessCampResources } = require('../utils/permissionHelpers');
 const { generateUniqueTaskIdCode } = require('../utils/taskIdGenerator');
+const {
+  sendTaskAssignmentEmail,
+  sendTaskWatcherEmail,
+  sendTaskStatusChangeEmail,
+  sendTaskClosedEmail,
+  sendTaskCommentEmail
+} = require('../services/taskNotifications');
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
 // @access  Private (Camp accounts and admins)
@@ -248,6 +255,18 @@ router.post('/', authenticateToken, async (req, res) => {
       .populate('watchers', 'firstName lastName email playaName profilePhoto')
       .populate('history.user', 'firstName lastName email playaName profilePhoto');
     
+    // Send email notification if task was created with assignees
+    if (assignedTo && assignedTo.length > 0) {
+      try {
+        // Use populated assignees from the task (they have email info)
+        const assigneeUsers = populatedTask.assignedTo || [];
+        await sendTaskAssignmentEmail(populatedTask, assigneeUsers);
+      } catch (emailError) {
+        console.error('⚠️  Failed to send task assignment email (task was still created):', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+    
     res.status(201).json(populatedTask);
   } catch (error) {
     console.error('Error creating task:', error);
@@ -432,6 +451,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Track changes before updating
     const historyEntries = trackTaskChanges(task, updates, req.user._id);
 
+    // Store old values for comparison
+    const oldStatus = task.status;
+    const oldAssignedTo = [...(task.assignedTo || [])].map(id => id.toString());
+    const oldWatchers = [...(task.watchers || [])].map(id => id.toString());
+
     // If updating status to closed, set completedBy
     if (updates.status === 'closed' && !task.completedBy) {
       updates.completedBy = req.user._id;
@@ -457,6 +481,47 @@ router.put('/:id', authenticateToken, async (req, res) => {
       .populate('watchers', 'firstName lastName email playaName profilePhoto')
       .populate('comments.user', 'firstName lastName email playaName profilePhoto')
       .populate('history.user', 'firstName lastName email playaName profilePhoto');
+
+    // Send email notifications based on changes
+    try {
+      // Check for new assignments
+      if (updates.assignedTo) {
+        const newAssignedTo = updates.assignedTo.map(id => id.toString());
+        const newAssignees = newAssignedTo.filter(id => !oldAssignedTo.includes(id));
+        if (newAssignees.length > 0) {
+          // Get populated assignee users (they have email info)
+          const newAssigneeUsers = populatedTask.assignedTo.filter(user => 
+            newAssignees.includes(user._id.toString())
+          );
+          await sendTaskAssignmentEmail(populatedTask, newAssigneeUsers);
+        }
+      }
+
+      // Check for new watchers
+      if (updates.watchers) {
+        const newWatchers = updates.watchers.map(id => id.toString());
+        const addedWatchers = newWatchers.filter(id => !oldWatchers.includes(id));
+        if (addedWatchers.length > 0) {
+          // Get populated watcher users (they have email info)
+          const newWatcherUsers = populatedTask.watchers.filter(user => 
+            addedWatchers.includes(user._id.toString())
+          );
+          await sendTaskWatcherEmail(populatedTask, newWatcherUsers);
+        }
+      }
+
+      // Check for status change
+      if (updates.status && updates.status !== oldStatus) {
+        if (updates.status === 'closed' || updates.status === 'completed') {
+          await sendTaskClosedEmail(populatedTask);
+        } else {
+          await sendTaskStatusChangeEmail(populatedTask, oldStatus, updates.status);
+        }
+      }
+    } catch (emailError) {
+      console.error('⚠️  Failed to send task update email notifications:', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.json(populatedTask);
   } catch (error) {
@@ -792,8 +857,20 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
       select: 'firstName lastName email playaName profilePhoto'
     });
 
+    // Populate assignedTo and watchers for email notification
+    await task.populate('assignedTo', 'firstName lastName email playaName profilePhoto');
+    await task.populate('watchers', 'firstName lastName email playaName profilePhoto');
+
     // Return the newly added comment
     const newComment = task.comments[task.comments.length - 1];
+
+    // Send email notification for new comment
+    try {
+      await sendTaskCommentEmail(task, text.trim(), req.user);
+    } catch (emailError) {
+      console.error('⚠️  Failed to send task comment email (comment was still added):', emailError);
+      // Don't fail the request if email fails
+    }
 
     res.json(newComment);
   } catch (error) {
