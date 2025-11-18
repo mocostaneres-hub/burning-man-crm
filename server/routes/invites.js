@@ -178,9 +178,10 @@ router.post('/invites',
           // For mock database, we'll create a simplified invite record
           const invite = await db.createInvite(inviteData);
           
-          // Generate invite link using CLIENT_URL environment variable
+          // Generate invite link using CLIENT_URL environment variable - points to camp profile
           const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
-          const inviteLink = `${clientUrl}/apply?token=${token}`;
+          const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const inviteLink = `${clientUrl}/camps/${campSlug}?invite=${token}`;
           
           // Get template and replace placeholders
           const defaultEmailTemplate = "Hello! You've been personally invited to apply to join our camp, {{campName}}, for Burning Man. Click here to start your application: {{link}}";

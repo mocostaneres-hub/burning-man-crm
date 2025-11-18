@@ -26,7 +26,7 @@ const InviteTrackingPage: React.FC = () => {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Get camp ID from user context
@@ -46,8 +46,8 @@ const InviteTrackingPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const filterParam = statusFilter === 'all' ? undefined : statusFilter;
-      const response = await api.getCampInvites(campId!, filterParam);
+      // Don't send filter to backend, we'll filter on frontend
+      const response = await api.getCampInvites(campId!, undefined);
       
       setInvites(response.invites || []);
     } catch (err: any) {
@@ -92,19 +92,18 @@ const InviteTrackingPage: React.FC = () => {
   };
 
   const getFilteredInvites = () => {
-    if (statusFilter === 'all') {
-      return invites;
+    if (statusFilter === 'pending') {
+      // Show both pending and sent invites in the Pending tab
+      return invites.filter(invite => invite.status === 'pending' || invite.status === 'sent');
     }
     return invites.filter(invite => invite.status === statusFilter);
   };
 
   const filteredInvites = getFilteredInvites();
 
-  // Status counts for filter badges
+  // Status counts for filter badges - Only show Pending, Applied, and Expired
   const statusCounts = {
-    all: invites.length,
-    pending: invites.filter(i => i.status === 'pending').length,
-    sent: invites.filter(i => i.status === 'sent').length,
+    pending: invites.filter(i => i.status === 'pending' || i.status === 'sent').length, // Combine pending and sent
     applied: invites.filter(i => i.status === 'applied').length,
     expired: invites.filter(i => i.status === 'expired').length,
   };
@@ -195,23 +194,13 @@ const InviteTrackingPage: React.FC = () => {
           <div className="p-8 text-center">
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {statusFilter === 'all' ? 'No Invites Yet' : `No ${statusFilter} Invites`}
+              No {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Invites
             </h3>
-            <p className="text-gray-600 mb-4">
-              {statusFilter === 'all' 
+            <p className="text-gray-600">
+              {statusFilter === 'pending' 
                 ? 'Start inviting members to your camp by sending your first invite.'
                 : `There are no invites with ${statusFilter} status.`}
             </p>
-            {statusFilter === 'all' && (
-              <Button
-                variant="primary"
-                onClick={() => setShowInviteModal(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Send First Invite
-              </Button>
-            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
