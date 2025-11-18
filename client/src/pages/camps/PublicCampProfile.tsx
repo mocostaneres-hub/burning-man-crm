@@ -158,9 +158,8 @@ const PublicCampProfile: React.FC = () => {
 
   const handleApplyNow = async () => {
     if (!user) {
-      navigate('/auth/login', { 
-        state: { returnTo: `/camps/${slug}` } 
-      });
+      // Redirect non-authenticated users to registration page
+      window.location.href = 'https://www.g8road.com/register';
       return;
     }
     
