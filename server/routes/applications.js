@@ -275,15 +275,24 @@ router.post('/apply', authenticateToken, [
           
           console.log(`✅ [Applications] Invite ${invite._id} marked as 'applied'`);
         } else {
-          // Try fallback match by email address
-          const inviteByEmail = await db.findInvite({ 
+          console.log(`⚠️  [Applications] No invite found for token: ${inviteToken}, trying email fallback...`);
+          
+          // Try fallback match by email address (find all pending/sent invites for this email)
+          const allInvites = await db.findInvites({ 
             recipient: freshUser.email, 
-            campId,
-            status: { $in: ['pending', 'sent'] } // Only update pending/sent invites
+            campId
           });
           
-          if (inviteByEmail) {
-            console.log(`🎟️ [Applications] Found matching invite by email: ${freshUser.email}`);
+          // Filter for pending or sent status
+          const pendingInvites = allInvites.filter(inv => inv.status === 'pending' || inv.status === 'sent');
+          
+          if (pendingInvites.length > 0) {
+            // Use the most recent invite
+            const inviteByEmail = pendingInvites.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )[0];
+            
+            console.log(`🎟️ [Applications] Found matching invite by email: ${freshUser.email}, invite ID: ${inviteByEmail._id}`);
             
             await db.updateInviteById(inviteByEmail._id, { 
               status: 'applied',
@@ -293,12 +302,45 @@ router.post('/apply', authenticateToken, [
             
             console.log(`✅ [Applications] Invite ${inviteByEmail._id} marked as 'applied' (matched by email)`);
           } else {
-            console.log(`⚠️  [Applications] No matching invite found for token: ${inviteToken} or email: ${freshUser.email}`);
+            console.log(`⚠️  [Applications] No pending/sent invites found for email: ${freshUser.email}`);
           }
         }
       } catch (inviteError) {
         console.error('⚠️  Failed to update invite status (application was still created):', inviteError);
         // Don't throw - we don't want to fail the application if invite update fails
+      }
+    } else {
+      // No invite token provided, try to match by email anyway
+      try {
+        console.log(`🔍 [Applications] No invite token provided, checking for pending invites by email: ${freshUser.email}`);
+        
+        const allInvites = await db.findInvites({ 
+          recipient: freshUser.email, 
+          campId
+        });
+        
+        // Filter for pending or sent status
+        const pendingInvites = allInvites.filter(inv => inv.status === 'pending' || inv.status === 'sent');
+        
+        if (pendingInvites.length > 0) {
+          // Use the most recent invite
+          const inviteByEmail = pendingInvites.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )[0];
+          
+          console.log(`🎟️ [Applications] Found matching invite by email (no token): ${freshUser.email}, invite ID: ${inviteByEmail._id}`);
+          
+          await db.updateInviteById(inviteByEmail._id, { 
+            status: 'applied',
+            appliedBy: req.user._id,
+            appliedAt: new Date()
+          });
+          
+          console.log(`✅ [Applications] Invite ${inviteByEmail._id} marked as 'applied' (matched by email, no token)`);
+        }
+      } catch (inviteError) {
+        console.error('⚠️  Failed to check/update invite by email:', inviteError);
+        // Don't throw - application was already created successfully
       }
     }
 
