@@ -285,7 +285,7 @@ const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customM
   
   return sendEmail({
     to: recipientEmail,
-    subject: `🏕️ You're Invited to Join ${campName} - G8Road`,
+    subject: `🏕️ You're Invited to Join ${campName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
         <!-- Header -->

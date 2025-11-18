@@ -78,7 +78,7 @@ async function sendEmailNotification(camp, applicant, application) {
       name: process.env.SENDGRID_FROM_NAME || 'G8Road'
     },
     to: camp.contactEmail,
-    subject: `New Application to ${camp.campName || camp.name} - G8Road CRM`,
+    subject: `New Application to ${camp.name || camp.campName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -90,7 +90,7 @@ async function sendEmailNotification(camp, applicant, application) {
           <h2 style="color: #333; margin-top: 0;">New Application Received!</h2>
           
           <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h3 style="color: #FF6B35; margin-top: 0;">Camp: ${camp.campName}</h3>
+            <h3 style="color: #FF6B35; margin-top: 0;">Camp: ${camp.name || camp.campName}</h3>
             
             <div style="margin-bottom: 15px;">
               <strong>Applicant:</strong> ${applicant.firstName} ${applicant.lastName}<br>
@@ -155,7 +155,7 @@ async function sendSMSNotification(camp, applicant, application) {
     return;
   }
 
-  const message = `🏕️ New application to ${camp.campName || camp.name}!\n\n` +
+  const message = `🏕️ New application to ${camp.name || camp.campName}!\n\n` +
     `Applicant: ${applicant.firstName} ${applicant.lastName}\n` +
     `Applied: ${new Date(application.appliedAt).toLocaleDateString()}\n\n` +
     `Review at: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camp/applications/${application._id}`;
@@ -197,7 +197,7 @@ async function sendApprovalNotification(applicant, camp) {
       name: process.env.SENDGRID_FROM_NAME || 'G8Road'
     },
     to: applicant.email,
-    subject: `🎉 Welcome to ${camp.campName || camp.name}! - G8Road CRM`,
+    subject: `🎉 Welcome to ${camp.name || camp.campName}!`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; text-align: center;">
@@ -206,11 +206,11 @@ async function sendApprovalNotification(applicant, camp) {
         </div>
         
         <div style="padding: 20px; background: #f9f9f9;">
-          <h2 style="color: #333; margin-top: 0;">Welcome to ${camp.campName}!</h2>
+          <h2 style="color: #333; margin-top: 0;">Welcome to ${camp.name || camp.campName}!</h2>
           
           <p>Dear ${applicant.firstName},</p>
           
-          <p>Great news! Your application to join <strong>${camp.campName}</strong> has been approved! 
+          <p>Great news! Your application to join <strong>${camp.name || camp.campName}</strong> has been approved! 
           We're excited to have you as part of our camp community.</p>
           
           <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -260,7 +260,7 @@ async function sendRejectionNotification(applicant, camp) {
       name: process.env.SENDGRID_FROM_NAME || 'G8Road'
     },
     to: applicant.email,
-    subject: `Application Update - ${camp.campName || camp.name} - G8Road CRM`,
+    subject: `Application Update - ${camp.name || camp.campName}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -273,7 +273,7 @@ async function sendRejectionNotification(applicant, camp) {
           
           <p>Dear ${applicant.firstName},</p>
           
-          <p>Thank you for your interest in joining <strong>${camp.campName}</strong>. 
+          <p>Thank you for your interest in joining <strong>${camp.name || camp.campName}</strong>. 
           After careful consideration, we have decided not to move forward with your application at this time.</p>
           
           <p>This decision was not easy, as we received many qualified applications. 
