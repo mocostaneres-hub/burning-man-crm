@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, Badge, Modal } from '../../components/ui';
 import { 
   MapPin, Globe, Facebook, Instagram, Twitter, Calendar, 
@@ -110,6 +110,7 @@ const PublicCampProfile: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   
   const [camp, setCamp] = useState<Camp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +119,9 @@ const PublicCampProfile: React.FC = () => {
   const [applicationLoading, setApplicationLoading] = useState(false);
   const [applicationSuccess, setApplicationSuccess] = useState(false);
   const [availableCallSlots, setAvailableCallSlots] = useState<any[]>([]);
+  
+  // Capture invite token from URL if present
+  const inviteToken = searchParams.get('invite');
   
   // Application form state
   const [applicationData, setApplicationData] = useState({
@@ -132,6 +136,13 @@ const PublicCampProfile: React.FC = () => {
       fetchCamp();
     }
   }, [slug]);
+  
+  // Log invite token detection for debugging
+  useEffect(() => {
+    if (inviteToken) {
+      console.log('🎟️ [PublicCampProfile] Invite token detected:', inviteToken);
+    }
+  }, [inviteToken]);
 
   const fetchCamp = async () => {
     try {
@@ -189,6 +200,9 @@ const PublicCampProfile: React.FC = () => {
     try {
       setApplicationLoading(true);
       console.log('🔄 [PublicCampProfile] Submitting application to camp:', camp?._id);
+      if (inviteToken) {
+        console.log('🎟️ [PublicCampProfile] Application includes invite token:', inviteToken);
+      }
       
       const response = await api.post('/applications/apply', {
         campId: camp?._id,
@@ -197,7 +211,8 @@ const PublicCampProfile: React.FC = () => {
           experience: applicationData.experience,
           skills: applicationData.skills,
           selectedCallSlotId: applicationData.selectedCallSlotId || undefined
-        }
+        },
+        inviteToken: inviteToken || undefined // Pass invite token if present
       });
       
       console.log('✅ [PublicCampProfile] Application submitted successfully:', response);

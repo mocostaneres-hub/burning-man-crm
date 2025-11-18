@@ -51,6 +51,19 @@ const inviteSchema = new mongoose.Schema({
     default: function() {
       return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     }
+  },
+  
+  // Track who applied using this invite
+  appliedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
+  
+  // When the invite was used to apply
+  appliedAt: {
+    type: Date,
+    required: false
   }
 }, {
   timestamps: true

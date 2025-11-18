@@ -42,6 +42,13 @@ const memberApplicationSchema = new mongoose.Schema({
     }
   },
   
+  // Invite tracking - stores the token if user came via an invitation link
+  inviteToken: {
+    type: String,
+    required: false,
+    index: true
+  },
+  
   // Application status
   status: {
     type: String,

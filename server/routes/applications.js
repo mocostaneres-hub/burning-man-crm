@@ -118,7 +118,12 @@ router.post('/apply', authenticateToken, [
       });
     }
 
-    const { campId, applicationData } = req.body;
+    const { campId, applicationData, inviteToken } = req.body;
+    
+    // Log invite token if present
+    if (inviteToken) {
+      console.log(`🎟️ [Applications] Application includes invite token: ${inviteToken}`);
+    }
 
     // Check if camp exists and is accepting applications
     // Populate owner to get their email for notifications
@@ -186,12 +191,13 @@ router.post('/apply', authenticateToken, [
           ...applicationData,
           skills: applicationData.skills || []
         },
+        inviteToken: inviteToken || undefined, // Store invite token if present
         status: initialStatus,
         actionHistory: [{
           action: 'submitted',
           toStatus: initialStatus,
           performedBy: req.user._id,
-          notes: 'Application submitted',
+          notes: inviteToken ? 'Application submitted via invitation link' : 'Application submitted',
           timestamp: new Date()
         }]
       });
@@ -249,6 +255,51 @@ router.post('/apply', authenticateToken, [
     } catch (notificationError) {
       console.error('⚠️  Failed to send application notification (application was still created):', notificationError);
       // Don't throw - we don't want to fail the application submission if email fails
+    }
+    
+    // Update invite status to 'applied' if this application came from an invitation
+    if (inviteToken) {
+      try {
+        // Find the invite by token
+        const invite = await db.findInvite({ token: inviteToken, campId });
+        
+        if (invite) {
+          console.log(`🎟️ [Applications] Found matching invite for token: ${inviteToken}`);
+          
+          // Update invite status to 'applied'
+          await db.updateInviteById(invite._id, { 
+            status: 'applied',
+            appliedBy: req.user._id,
+            appliedAt: new Date()
+          });
+          
+          console.log(`✅ [Applications] Invite ${invite._id} marked as 'applied'`);
+        } else {
+          // Try fallback match by email address
+          const inviteByEmail = await db.findInvite({ 
+            recipient: freshUser.email, 
+            campId,
+            status: { $in: ['pending', 'sent'] } // Only update pending/sent invites
+          });
+          
+          if (inviteByEmail) {
+            console.log(`🎟️ [Applications] Found matching invite by email: ${freshUser.email}`);
+            
+            await db.updateInviteById(inviteByEmail._id, { 
+              status: 'applied',
+              appliedBy: req.user._id,
+              appliedAt: new Date()
+            });
+            
+            console.log(`✅ [Applications] Invite ${inviteByEmail._id} marked as 'applied' (matched by email)`);
+          } else {
+            console.log(`⚠️  [Applications] No matching invite found for token: ${inviteToken} or email: ${freshUser.email}`);
+          }
+        }
+      } catch (inviteError) {
+        console.error('⚠️  Failed to update invite status (application was still created):', inviteError);
+        // Don't throw - we don't want to fail the application if invite update fails
+      }
     }
 
     res.status(201).json({
