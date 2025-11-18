@@ -268,6 +268,90 @@ const sendRosterInviteEmail = async (user, camp, invitedBy) => {
 };
 
 /**
+ * Send camp invitation email
+ * @param {string} recipientEmail - Email address of the recipient
+ * @param {Object} camp - Camp object with name/campName
+ * @param {Object} sender - User object who sent the invite (optional)
+ * @param {string} inviteLink - The invitation link with token
+ * @param {string} customMessage - Custom message from template (already has placeholders replaced)
+ */
+const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customMessage = null) => {
+  const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+  const campName = camp.name || camp.campName || 'a camp';
+  const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() : 'Camp Lead';
+  
+  // Use custom message if provided (placeholders already replaced), otherwise use default
+  const messageText = customMessage || `Hello! You've been personally invited to apply to join our camp, ${campName}, for Burning Man. Click here to start your application: ${inviteLink}`;
+  
+  return sendEmail({
+    to: recipientEmail,
+    subject: `🏕️ You're Invited to Join ${campName} - G8Road`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 30px 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 32px;">🏕️ Camp Invitation</h1>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">You've been personally invited!</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div style="padding: 30px 20px; background: #f9f9f9;">
+          <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #333; margin-top: 0; font-size: 24px;">Hello!</h2>
+            
+            <p style="color: #555; font-size: 16px; line-height: 1.6;">
+              ${sender ? `<strong>${senderName}</strong> has personally invited you to join <strong>${campName}</strong> for Burning Man!` : `You've been personally invited to join <strong>${campName}</strong> for Burning Man!`}
+            </p>
+            
+            <div style="background: #FFF3E0; padding: 20px; border-radius: 8px; border-left: 4px solid #FF6B35; margin: 20px 0;">
+              <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0;">
+                ${messageText.includes(inviteLink) ? messageText : `${messageText}<br><br><a href="${inviteLink}" style="color: #FF6B35; font-weight: bold;">${inviteLink}</a>`}
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${inviteLink}" 
+                 style="background: #FF6B35; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Start Your Application
+              </a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; line-height: 1.6; margin-top: 20px;">
+              This invitation link is unique to you and will allow you to apply directly to ${campName}. The link will expire in 7 days.
+            </p>
+          </div>
+          
+          <!-- Footer -->
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center;">
+            <p style="color: #666; font-size: 14px; margin: 5px 0;">
+              See you on the playa! 🔥
+            </p>
+            <p style="color: #666; font-size: 14px; margin: 5px 0;">
+              The G8Road Team
+            </p>
+          </div>
+        </div>
+      </div>
+    `,
+    text: `Camp Invitation - ${campName}
+
+Hello!
+
+${sender ? `${senderName} has personally invited you to join ${campName} for Burning Man!` : `You've been personally invited to join ${campName} for Burning Man!`}
+
+${messageText}
+
+Start your application here: ${inviteLink}
+
+This invitation link is unique to you and will allow you to apply directly to ${campName}. The link will expire in 7 days.
+
+See you on the playa! 🔥
+
+The G8Road Team`
+  });
+};
+
+/**
  * Send test email (for SendGrid verification)
  */
 const sendTestEmail = async (to) => {
@@ -290,6 +374,7 @@ module.exports = {
   sendPasswordResetEmail,
   sendWelcomeEmail,
   sendRosterInviteEmail,
+  sendInviteEmail,
   sendTestEmail
 };
 

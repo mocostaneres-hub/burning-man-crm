@@ -5,6 +5,7 @@ const Camp = require('../models/Camp');
 const Invite = require('../models/Invite');
 const { authenticateToken, requireCampLead } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { sendInviteEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -177,8 +178,9 @@ router.post('/invites',
           // For mock database, we'll create a simplified invite record
           const invite = await db.createInvite(inviteData);
           
-          // Generate invite link
-          const inviteLink = `http://localhost:3000/apply?token=${token}`;
+          // Generate invite link using CLIENT_URL environment variable
+          const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+          const inviteLink = `${clientUrl}/apply?token=${token}`;
           
           // Get template and replace placeholders
           const defaultEmailTemplate = "Hello! You've been personally invited to apply to join our camp, {{campName}}, for Burning Man. Click here to start your application: {{link}}";
@@ -192,23 +194,59 @@ router.post('/invites',
             .replace(/\{\{campName\}\}/g, camp.name || camp.campName)
             .replace(/\{\{link\}\}/g, inviteLink);
           
-          // Mock sending process - log to console
-          console.log(`📧 ${method.toUpperCase()} INVITE SENT:`);
-          console.log(`To: ${recipient}`);
-          console.log(`From: ${req.user.firstName} ${req.user.lastName} (${camp.name || camp.campName})`);
-          console.log(`Message: ${message}`);
-          console.log(`Invite Link: ${inviteLink}`);
-          console.log('---');
-          
-          // Update invite status to sent
-          await db.updateInviteById(invite._id, { status: 'sent' });
-          
-          invitesSent.push({
-            recipient,
-            token,
-            inviteLink,
-            status: 'sent'
-          });
+          // Send email invitation if method is email
+          if (method === 'email') {
+            try {
+              // Get sender information for email
+              const sender = await db.findUser({ _id: req.user._id });
+              
+              // Send email using the email service
+              await sendInviteEmail(
+                recipient.trim(),
+                camp,
+                sender,
+                inviteLink,
+                message // Pass the custom message from template (placeholders already replaced)
+              );
+              
+              console.log(`✅ Email invitation sent to ${recipient.trim()}`);
+              
+              // Update invite status to sent
+              await db.updateInviteById(invite._id, { status: 'sent' });
+              
+              // Add to successful invites list
+              invitesSent.push({
+                recipient,
+                token,
+                inviteLink,
+                status: 'sent'
+              });
+            } catch (emailError) {
+              console.error(`❌ Error sending email invitation to ${recipient}:`, emailError);
+              // Don't fail the entire request, but mark this invite as failed
+              await db.updateInviteById(invite._id, { status: 'pending' });
+              throw emailError; // Re-throw to be caught by outer catch block
+            }
+          } else {
+            // SMS method - log for now (SMS integration can be added later)
+            console.log(`📱 SMS INVITE (not implemented yet):`);
+            console.log(`To: ${recipient}`);
+            console.log(`From: ${req.user.firstName} ${req.user.lastName} (${camp.name || camp.campName})`);
+            console.log(`Message: ${message}`);
+            console.log(`Invite Link: ${inviteLink}`);
+            console.log('---');
+            
+            // Update invite status to sent (even though SMS isn't implemented)
+            await db.updateInviteById(invite._id, { status: 'sent' });
+            
+            // Add to successful invites list (SMS is considered "sent" even though not actually sent)
+            invitesSent.push({
+              recipient,
+              token,
+              inviteLink,
+              status: 'sent'
+            });
+          }
           
         } catch (error) {
           console.error(`Error sending invite to ${recipient}:`, error);
