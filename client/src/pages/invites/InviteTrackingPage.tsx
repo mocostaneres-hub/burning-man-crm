@@ -30,7 +30,11 @@ const InviteTrackingPage: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Get camp ID from user context
-  const campId = user?._id?.toString(); // For camp accounts, the user ID is the camp ID
+  // For camp accounts, user._id is the camp ID
+  // For admin accounts, use user.campId
+  const campId = user?.accountType === 'admin' && user?.campId 
+    ? user.campId.toString() 
+    : user?._id?.toString();
 
   // Check if user is camp lead
   const isCampLead = user?.accountType === 'admin' || user?.accountType === 'camp';
@@ -46,12 +50,17 @@ const InviteTrackingPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 [InviteTracking] Loading invites for campId:', campId);
+      
       // Don't send filter to backend, we'll filter on frontend
       const response = await api.getCampInvites(campId!, undefined);
       
+      console.log('✅ [InviteTracking] Invites response:', response);
+      console.log('📊 [InviteTracking] Number of invites:', response.invites?.length || 0);
+      
       setInvites(response.invites || []);
     } catch (err: any) {
-      console.error('Error loading invites:', err);
+      console.error('❌ [InviteTracking] Error loading invites:', err);
       setError('Failed to load invites');
     } finally {
       setLoading(false);

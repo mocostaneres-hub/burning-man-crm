@@ -211,6 +211,7 @@ router.post('/invites',
               );
               
               console.log(`✅ Email invitation sent to ${recipient.trim()}`);
+              console.log(`📧 [INVITE] Created invite with ID: ${invite._id}, campId: ${campId}, recipient: ${recipient.trim()}`);
               
               // Update invite status to sent
               await db.updateInviteById(invite._id, { status: 'sent' });
@@ -298,8 +299,12 @@ router.get('/camps/:campId/invites', authenticateToken, async (req, res) => {
       query.status = status;
     }
     
+    console.log(`🔍 [GET INVITES] Fetching invites for campId: ${campId}, query:`, query);
+    
     // Get invites with sender information
     const invites = await db.findInvites(query);
+    
+    console.log(`📊 [GET INVITES] Found ${invites.length} invites for camp ${campId}`);
     
     // Populate sender information
     const populatedInvites = await Promise.all(invites.map(async (invite) => {
