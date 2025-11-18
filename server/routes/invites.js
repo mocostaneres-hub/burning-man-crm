@@ -301,28 +301,23 @@ router.get('/camps/:campId/invites', authenticateToken, async (req, res) => {
     
     console.log(`🔍 [GET INVITES] Fetching invites for campId: ${campId}, query:`, query);
     
-    // Get invites with sender information
+    // Get invites with sender information (already populated and converted to plain objects with .lean())
     const invites = await db.findInvites(query);
     
     console.log(`📊 [GET INVITES] Found ${invites.length} invites for camp ${campId}`);
+    if (invites.length > 0) {
+      console.log(`📝 [GET INVITES] Sample invite structure:`, JSON.stringify(invites[0], null, 2));
+    }
     
-    // Populate sender information
-    const populatedInvites = await Promise.all(invites.map(async (invite) => {
-      const sender = await db.findUser({ _id: invite.senderId });
-      return {
-        ...invite,
-        sender: sender ? {
-          _id: sender._id,
-          firstName: sender.firstName,
-          lastName: sender.lastName,
-          email: sender.email
-        } : null
-      };
+    // Map invites to correct format (senderId is already populated)
+    const formattedInvites = invites.map(invite => ({
+      ...invite,
+      sender: invite.senderId // senderId is already populated with user info
     }));
     
     res.json({
-      invites: populatedInvites,
-      total: populatedInvites.length
+      invites: formattedInvites,
+      total: formattedInvites.length
     });
     
   } catch (error) {

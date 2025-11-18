@@ -615,7 +615,7 @@ class DatabaseAdapter {
   async findInvites(query = {}) {
     if (this.useMongoDB) {
       const Invite = require('../models/Invite');
-      return await Invite.find(query).populate('senderId', 'firstName lastName email');
+      return await Invite.find(query).populate('senderId', 'firstName lastName email').lean();
     } else {
       return await this.mockDB.findInvites(query);
     }
