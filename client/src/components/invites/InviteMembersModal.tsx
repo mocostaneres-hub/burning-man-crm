@@ -104,7 +104,7 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
         campId
       });
 
-      const { invitesSent, errors, summary } = response.data;
+      const { invitesSent, errors, summary } = response;
       
       if (summary.failed > 0) {
         setError(`${summary.sent} invites sent successfully, ${summary.failed} failed`);
