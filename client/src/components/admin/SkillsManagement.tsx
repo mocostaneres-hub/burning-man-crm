@@ -19,8 +19,7 @@ const SkillsManagement: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    description: ''
+    name: ''
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -57,7 +56,7 @@ const SkillsManagement: React.FC = () => {
     try {
       await api.post('/skills', formData);
       setSuccess('Skill created successfully');
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '' });
       setShowCreateForm(false);
       await fetchSkills();
     } catch (err: any) {
@@ -81,7 +80,7 @@ const SkillsManagement: React.FC = () => {
       await api.put(`/skills/${editingSkill._id}`, formData);
       setSuccess('Skill updated successfully');
       setEditingSkill(null);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '' });
       await fetchSkills();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update skill');
@@ -115,8 +114,7 @@ const SkillsManagement: React.FC = () => {
   const startEdit = (skill: Skill) => {
     setEditingSkill(skill);
     setFormData({
-      name: skill.name,
-      description: skill.description
+      name: skill.name
     });
     setShowCreateForm(false);
     setError('');
@@ -125,21 +123,21 @@ const SkillsManagement: React.FC = () => {
 
   const cancelEdit = () => {
     setEditingSkill(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '' });
     setError('');
   };
 
   const startCreate = () => {
     setShowCreateForm(true);
     setEditingSkill(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '' });
     setError('');
     setSuccess('');
   };
 
   const cancelCreate = () => {
     setShowCreateForm(false);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '' });
     setError('');
   };
 
@@ -185,22 +183,9 @@ const SkillsManagement: React.FC = () => {
             label="Skill Name *"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="e.g., Welding, First Aid"
+            placeholder="e.g., Welding, First Aid, Burning Man Ranger"
             required
           />
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description (Optional)
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Brief description of the skill..."
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
 
           <div className="flex gap-3">
             <Button type="submit" className="flex items-center gap-2">
@@ -226,18 +211,6 @@ const SkillsManagement: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description (Optional)
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
 
           <div className="flex gap-3">
             <Button type="submit" className="flex items-center gap-2">
@@ -261,9 +234,6 @@ const SkillsManagement: React.FC = () => {
                 Skill Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -274,7 +244,7 @@ const SkillsManagement: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {skills.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
                   No skills found
                 </td>
               </tr>
@@ -283,11 +253,6 @@ const SkillsManagement: React.FC = () => {
                 <tr key={skill._id} className={!skill.isActive ? 'bg-gray-50' : ''}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{skill.name}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">
-                      {skill.description || <span className="italic text-gray-400">No description</span>}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {skill.isActive ? (

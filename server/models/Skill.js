@@ -16,9 +16,9 @@ const skillSchema = new mongoose.Schema({
     default: true
   },
   createdBy: {
-    type: Number,
+    type: mongoose.Schema.Types.Mixed, // Support both Number (legacy) and ObjectId (current)
     ref: 'User',
-    required: true
+    required: false // Make optional to avoid validation errors
   },
   createdAt: {
     type: Date,
