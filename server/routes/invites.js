@@ -16,13 +16,16 @@ router.get('/camps/:campId/invites/template', authenticateToken, async (req, res
   try {
     const { campId } = req.params;
     
-    // Check if user is camp account (user ID matches camp ID) or admin
+    // Check if user is camp account (user ID matches camp ID) or admin with matching campId
     const isOwnCamp = req.user._id.toString() === campId.toString();
-    const isAdmin = req.user.accountType === 'admin';
+    const isAdmin = req.user.accountType === 'admin' && req.user.campId && req.user.campId.toString() === campId.toString();
     
     if (!isOwnCamp && !isAdmin) {
+      console.log(`❌ [Templates] Access denied for user ${req.user._id}, accountType: ${req.user.accountType}, requested campId: ${campId}`);
       return res.status(403).json({ message: 'Access denied. Camp Lead role required.' });
     }
+    
+    console.log(`✅ [Templates] Access granted for campId: ${campId}, accountType: ${req.user.accountType}`);
     
     // Get camp with invite templates
     const camp = await db.findCamp({ _id: campId });
@@ -76,13 +79,16 @@ router.put('/camps/:campId/invites/template',
       const { campId } = req.params;
       const { inviteTemplateEmail, inviteTemplateSMS } = req.body;
       
-      // Check if user is camp account (user ID matches camp ID) or admin
+      // Check if user is camp account (user ID matches camp ID) or admin with matching campId
       const isOwnCamp = req.user._id.toString() === campId.toString();
-      const isAdmin = req.user.accountType === 'admin';
+      const isAdmin = req.user.accountType === 'admin' && req.user.campId && req.user.campId.toString() === campId.toString();
       
       if (!isOwnCamp && !isAdmin) {
+        console.log(`❌ [Template Update] Access denied for user ${req.user._id}, accountType: ${req.user.accountType}, requested campId: ${campId}`);
         return res.status(403).json({ message: 'Access denied. Camp Lead role required.' });
       }
+      
+      console.log(`✅ [Template Update] Access granted for campId: ${campId}, accountType: ${req.user.accountType}`);
       
       // Update camp templates
       const updatedCamp = await db.updateCampById(campId, {

@@ -48,6 +48,9 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
   const loadTemplates = async () => {
     try {
       setTemplatesLoading(true);
+      setError(null); // Clear any previous errors
+      
+      console.log('🔄 [InviteModal] Loading templates for campId:', campId);
       
       // Load templates and camp data in parallel
       const [templatesResponse, campResponse] = await Promise.all([
@@ -55,15 +58,30 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
         api.getCamp(campId)
       ]);
       
-      setTemplates(templatesResponse.data);
+      console.log('✅ [InviteModal] Templates loaded:', templatesResponse);
+      console.log('✅ [InviteModal] Camp data loaded:', campResponse);
+      
+      // api.get() already returns response.data, so use it directly
+      setTemplates(templatesResponse);
+      
       // Handle both 'campName' and 'name' fields from API response
       const camp: any = campResponse.camp || campResponse;
-      setCampName(camp?.campName || camp?.name || user?.campName || 'Your Camp');
+      setCampName(camp?.name || camp?.campName || user?.campName || 'Your Camp');
     } catch (err: any) {
-      console.error('Error loading templates:', err);
-      setError('Failed to load invite templates');
+      console.error('❌ [InviteModal] Error loading templates:', err);
+      console.error('❌ [InviteModal] Error response:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || 'Failed to load invite templates. Please try again.';
+      setError(errorMessage);
+      
+      // Set default templates so users can still send invites
+      setTemplates({
+        inviteTemplateEmail: "Hello! You've been personally invited to apply to join our camp, {{campName}}, for Burning Man. Click here to start your application: {{link}}",
+        inviteTemplateSMS: "You're invited to {{campName}}! Apply here: {{link}}"
+      });
+      
       // Fallback camp name
-      setCampName(user?.campName || 'Your Camp'); // Keep campName for display, but we'll get it from camp data
+      setCampName(user?.campName || 'Your Camp');
     } finally {
       setTemplatesLoading(false);
     }
