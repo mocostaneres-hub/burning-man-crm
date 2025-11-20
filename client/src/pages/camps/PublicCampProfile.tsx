@@ -10,6 +10,7 @@ import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import Footer from '../../components/layout/Footer';
+import ProfileCompletionModal from '../../components/user/ProfileCompletionModal';
 
 interface CampCategory {
   _id: string;
@@ -119,6 +120,7 @@ const PublicCampProfile: React.FC = () => {
   const [applicationLoading, setApplicationLoading] = useState(false);
   const [applicationSuccess, setApplicationSuccess] = useState(false);
   const [availableCallSlots, setAvailableCallSlots] = useState<any[]>([]);
+  const [showProfileCompletionModal, setShowProfileCompletionModal] = useState(false);
   
   // Capture invite token from URL if present
   const inviteToken = searchParams.get('invite');
@@ -143,6 +145,23 @@ const PublicCampProfile: React.FC = () => {
       console.log('🎟️ [PublicCampProfile] Invite token detected:', inviteToken);
     }
   }, [inviteToken]);
+  
+  // Check if profile completion modal should be shown
+  useEffect(() => {
+    if (!user || !inviteToken) return;
+    
+    // Check if user has a pending invite in localStorage
+    const pendingInvite = localStorage.getItem('pendingInvite');
+    if (!pendingInvite) return;
+    
+    // Check if profile is incomplete
+    const isProfileIncomplete = !user.playaName || !user.city || !user.bio || !user.phoneNumber;
+    
+    if (isProfileIncomplete) {
+      console.log('🎟️ [PublicCampProfile] Showing profile completion modal');
+      setShowProfileCompletionModal(true);
+    }
+  }, [user, inviteToken]);
 
   const fetchCamp = async () => {
     try {
@@ -167,15 +186,34 @@ const PublicCampProfile: React.FC = () => {
     }
   };
 
+  const handleProfileComplete = () => {
+    console.log('✅ [PublicCampProfile] Profile completed');
+    setShowProfileCompletionModal(false);
+    // Clear the pending invite from localStorage
+    localStorage.removeItem('pendingInvite');
+    // Optionally show a success message
+    alert('Profile completed! You can now apply to this camp.');
+  };
+  
   const handleApplyNow = async () => {
     if (!user) {
-      // Redirect non-authenticated users to registration page
-      window.location.href = 'https://www.g8road.com/register';
+      // Redirect non-authenticated users to registration page with camp context
+      const currentUrl = new URL(window.location.href);
+      const campSlug = currentUrl.pathname.split('/').pop();
+      const inviteParam = inviteToken ? `&invite=${inviteToken}` : '';
+      window.location.href = `https://www.g8road.com/register?camp=${campSlug}${inviteParam}`;
       return;
     }
     
     if (user.accountType !== 'personal') {
       alert('Only personal accounts can apply to camps');
+      return;
+    }
+    
+    // Check if profile is incomplete
+    const isProfileIncomplete = !user.playaName || !user.city || !user.bio || !user.phoneNumber;
+    if (isProfileIncomplete) {
+      setShowProfileCompletionModal(true);
       return;
     }
     
@@ -677,6 +715,13 @@ const PublicCampProfile: React.FC = () => {
           </div>
         )}
       </Modal>
+      
+      {/* Profile Completion Modal */}
+      <ProfileCompletionModal
+        isOpen={showProfileCompletionModal}
+        onClose={() => setShowProfileCompletionModal(false)}
+        onComplete={handleProfileComplete}
+      />
       
       {/* Footer */}
       <Footer />

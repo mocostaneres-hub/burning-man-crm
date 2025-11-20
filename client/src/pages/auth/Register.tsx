@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AppleOAuth from '../../components/auth/AppleOAuth';
 import { Button, Input, Card } from '../../components/ui';
@@ -33,6 +33,7 @@ const schema: yup.ObjectSchema<FormData> = yup
 const Register: React.FC = () => {
   const { register: registerUser, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,6 +41,10 @@ const Register: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordMatch, setPasswordMatch] = useState(true);
   const [oauthLoading, setOauthLoading] = useState(false);
+  
+  // Capture invitation context from URL
+  const inviteToken = searchParams.get('invite');
+  const campSlug = searchParams.get('camp');
 
   const {
     register,
@@ -50,6 +55,14 @@ const Register: React.FC = () => {
     resolver: yupResolver(schema),
     defaultValues: {},
   });
+
+  // Store invite context on component mount
+  useEffect(() => {
+    if (inviteToken && campSlug) {
+      console.log('🎟️ [Register] Storing invitation context:', { inviteToken, campSlug });
+      localStorage.setItem('pendingInvite', JSON.stringify({ token: inviteToken, campSlug }));
+    }
+  }, [inviteToken, campSlug]);
 
   // Redirect authenticated users away from register page
   useEffect(() => {
@@ -115,6 +128,21 @@ const Register: React.FC = () => {
       
       // Small delay to ensure auth context is fully updated
       await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check for pending invitation
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        try {
+          const { campSlug, token } = JSON.parse(pendingInvite);
+          console.log('🎟️ [Register] Redirecting to camp profile with invite:', { campSlug, token });
+          // Don't clear the invite yet - we'll need it for the profile completion modal
+          navigate(`/camps/${campSlug}?invite=${token}`, { replace: true });
+          return;
+        } catch (err) {
+          console.error('❌ [Register] Error parsing pending invite:', err);
+          localStorage.removeItem('pendingInvite');
+        }
+      }
       
       // Check if user needs onboarding
       if (result.needsOnboarding) {
