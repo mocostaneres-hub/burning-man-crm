@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Input } from '../ui';
-import { X, CheckCircle, Loader2, Info } from 'lucide-react';
+import { X, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -294,7 +294,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
           {/* OPTIONAL INFORMATION SECTION */}
           <div className="bg-blue-50 rounded-lg p-4 space-y-4">
             <div className="flex items-start gap-2">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Optional Information</h3>
                 <p className="text-sm text-gray-600 mt-1">
