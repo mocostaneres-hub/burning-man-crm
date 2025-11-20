@@ -154,9 +154,9 @@ const PublicCampProfile: React.FC = () => {
     const pendingInvite = localStorage.getItem('pendingInvite');
     if (!pendingInvite) return;
     
-    // Check if profile is incomplete (required fields)
-    const isProfileIncomplete = !user.playaName || !user.city || !user.bio || !user.phoneNumber || 
-                                !user.skills || user.skills.length === 0;
+    // Check if profile is incomplete (required fields: playaName, city, phoneNumber, skills, yearsBurned)
+    const isProfileIncomplete = !user.playaName || !user.city || !user.phoneNumber || 
+                                !user.skills || user.skills.length === 0 || user.yearsBurned === undefined;
     
     if (isProfileIncomplete) {
       console.log('🎟️ [PublicCampProfile] Showing profile completion modal');
@@ -211,9 +211,9 @@ const PublicCampProfile: React.FC = () => {
       return;
     }
     
-    // Check if profile is incomplete (required fields)
-    const isProfileIncomplete = !user.playaName || !user.city || !user.bio || !user.phoneNumber || 
-                                !user.skills || user.skills.length === 0;
+    // Check if profile is incomplete (required fields: playaName, city, phoneNumber, skills, yearsBurned)
+    const isProfileIncomplete = !user.playaName || !user.city || !user.phoneNumber || 
+                                !user.skills || user.skills.length === 0 || user.yearsBurned === undefined;
     if (isProfileIncomplete) {
       setShowProfileCompletionModal(true);
       return;

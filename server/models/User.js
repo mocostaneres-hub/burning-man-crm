@@ -141,6 +141,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  burningPlans: {
+    type: String,
+    enum: ['confirmed', 'undecided'],
+    default: 'confirmed'
+  },
   
   // Camp account fields
   campName: {

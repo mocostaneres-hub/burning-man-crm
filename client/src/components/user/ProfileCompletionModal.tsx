@@ -28,6 +28,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     bio: user?.bio || '',
     phoneNumber: user?.phoneNumber || '',
     skills: user?.skills || [] as string[],
+    burningPlans: 'confirmed' as 'confirmed' | 'undecided', // New field
     hasTicket: user?.hasTicket || false,
     hasVehiclePass: user?.hasVehiclePass || false,
     arrivalDate: user?.arrivalDate ? new Date(user.arrivalDate).toISOString().split('T')[0] : '',
@@ -99,16 +100,12 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       setLoading(false);
       return;
     }
-    if (!formData.bio.trim()) {
-      setError('Bio is required');
-      setLoading(false);
-      return;
-    }
     if (formData.skills.length === 0) {
       setError('Please select at least one skill');
       setLoading(false);
       return;
     }
+    // Years burned validation (0 is valid for first-timers)
 
     try {
       // Prepare data for submission
@@ -197,17 +194,63 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bio (Tell us about yourself) *
+                Years Burned (How many Burning Mans have you attended?) *
               </label>
-              <textarea
-                name="bio"
-                value={formData.bio}
+              <select
+                name="yearsBurned"
+                value={formData.yearsBurned}
                 onChange={handleChange}
-                rows={4}
-                placeholder="Share a bit about yourself, your interests, and what you bring to the playa..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
-              />
+              >
+                <option value="0">0 (Virgin / First-timer)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6+</option>
+              </select>
+            </div>
+
+            {/* Burning Plans */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                What are your Burning Man plans? *
+              </label>
+              <div className="space-y-3">
+                <label className="flex items-start space-x-3 cursor-pointer p-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 transition-colors">
+                  <input
+                    type="radio"
+                    name="burningPlans"
+                    value="confirmed"
+                    checked={formData.burningPlans === 'confirmed'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, burningPlans: 'confirmed' }))}
+                    className="mt-1 w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <span className="block text-sm font-medium text-gray-900">
+                      I am going to Burning Man and would like to join the camp
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start space-x-3 cursor-pointer p-3 border-2 border-gray-300 rounded-lg hover:border-blue-500 transition-colors">
+                  <input
+                    type="radio"
+                    name="burningPlans"
+                    value="undecided"
+                    checked={formData.burningPlans === 'undecided'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, burningPlans: 'undecided' }))}
+                    className="mt-1 w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <span className="block text-sm font-medium text-gray-900">
+                      I'm not sure if I'll make it to BM but I'd like to be on the list
+                    </span>
+                  </div>
+                </label>
+              </div>
             </div>
 
             {/* Skills Selection */}
@@ -262,22 +305,16 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Years Burned (How many Burning Mans have you attended?)
+                Bio (Tell us about yourself)
               </label>
-              <select
-                name="yearsBurned"
-                value={formData.yearsBurned}
+              <textarea
+                name="bio"
+                value={formData.bio}
                 onChange={handleChange}
+                rows={4}
+                placeholder="Share a bit about yourself, your interests, and what you bring to the playa..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="0">0 (Virgin / First-timer)</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6+</option>
-              </select>
+              />
             </div>
 
             {/* Ticket & Vehicle */}

@@ -27,6 +27,11 @@ const memberApplicationSchema = new mongoose.Schema({
       maxlength: 1000
     },
     skills: [String],
+    burningPlans: {
+      type: String,
+      enum: ['confirmed', 'undecided'],
+      default: 'confirmed'
+    },
     availability: {
       arriveDate: Date,
       departDate: Date,
@@ -52,7 +57,7 @@ const memberApplicationSchema = new mongoose.Schema({
   // Application status
   status: {
     type: String,
-    enum: ['pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'withdrawn', 'deleted'],
+    enum: ['pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'withdrawn', 'deleted', 'undecided'],
     default: 'pending'
   },
   

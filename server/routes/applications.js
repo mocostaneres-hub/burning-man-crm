@@ -175,10 +175,17 @@ router.post('/apply', authenticateToken, [
       return res.status(400).json({ message: 'Invalid camp ID provided' });
     }
 
-    // Determine initial status based on call slot selection
-    let initialStatus = 'pending-orientation'; // Default when no call slot available
-    if (applicationData.selectedCallSlotId) {
+    // Get burning plans from user profile (if exists in freshUser or from applicationData)
+    const burningPlans = applicationData.burningPlans || freshUser.burningPlans || 'confirmed';
+    
+    // Determine initial status based on burning plans and call slot selection
+    let initialStatus;
+    if (burningPlans === 'undecided') {
+      initialStatus = 'undecided'; // User is not sure if they'll attend
+    } else if (applicationData.selectedCallSlotId) {
       initialStatus = 'call-scheduled'; // When call time is selected
+    } else {
+      initialStatus = 'pending-orientation'; // Default when no call slot available
     }
 
     // Create new application (with additional race condition protection)
@@ -189,6 +196,7 @@ router.post('/apply', authenticateToken, [
         camp: campId,
         applicationData: {
           ...applicationData,
+          burningPlans: burningPlans, // Store burning plans
           skills: applicationData.skills || []
         },
         inviteToken: inviteToken || undefined, // Store invite token if present
@@ -197,7 +205,9 @@ router.post('/apply', authenticateToken, [
           action: 'submitted',
           toStatus: initialStatus,
           performedBy: req.user._id,
-          notes: inviteToken ? 'Application submitted via invitation link' : 'Application submitted',
+          notes: inviteToken 
+            ? `Application submitted via invitation link${burningPlans === 'undecided' ? ' (Maybe attending)' : ''}` 
+            : `Application submitted${burningPlans === 'undecided' ? ' (Maybe attending)' : ''}`,
           timestamp: new Date()
         }]
       });

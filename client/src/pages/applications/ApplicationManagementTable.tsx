@@ -30,7 +30,7 @@ interface Application {
       facebook?: string;
     };
   };
-  status: 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive';
+  status: 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive' | 'undecided';
   appliedAt: string;
   reviewedAt?: string;
   reviewNotes?: string;
@@ -58,7 +58,7 @@ const ApplicationManagementTable: React.FC = () => {
   const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive' | 'undecided'>('all');
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -171,6 +171,8 @@ const ApplicationManagementTable: React.FC = () => {
         return <Badge variant="neutral">Under Review</Badge>;
       case 'unresponsive':
         return <Badge variant="error">Unresponsive</Badge>;
+      case 'undecided':
+        return <Badge variant="neutral">Undecided</Badge>;
       case 'pending':
       default:
         return <Badge variant="warning">Pending</Badge>;
@@ -263,7 +265,7 @@ const ApplicationManagementTable: React.FC = () => {
             <span className="text-label font-medium text-custom-text">Filter:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(['all', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive'] as const).map((status) => (
+            {(['all', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'undecided'] as const).map((status) => (
               <Button
                 key={status}
                 variant={statusFilter === status ? 'primary' : 'outline'}
@@ -275,6 +277,7 @@ const ApplicationManagementTable: React.FC = () => {
                  status === 'pending-orientation' ? 'Pending Orientation' :
                  status === 'under-review' ? 'Under Review' :
                  status === 'unresponsive' ? 'Unresponsive' :
+                 status === 'undecided' ? 'Undecided' :
                  status.charAt(0).toUpperCase() + status.slice(1)}
               </Button>
             ))}
@@ -838,6 +841,7 @@ const ApplicationManagementTable: React.FC = () => {
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
                       <option value="unresponsive">Unresponsive</option>
+                      <option value="undecided">Undecided</option>
                     </select>
                   </div>
 

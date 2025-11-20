@@ -72,13 +72,17 @@ async function sendApplicationNotification(camp, applicant, application) {
  * Send email notification to camp administrators
  */
 async function sendEmailNotification(camp, applicant, application) {
+  // Check if this is an "undecided" application
+  const isUndecided = application.status === 'undecided' || application.applicationData?.burningPlans === 'undecided';
+  const statusNote = isUndecided ? ' as "Maybe" joining' : '';
+  
   const mailOptions = {
     from: {
       email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
       name: process.env.SENDGRID_FROM_NAME || 'G8Road'
     },
     to: camp.contactEmail,
-    subject: `New Application to ${camp.name || camp.campName}`,
+    subject: `New Application to ${camp.name || camp.campName}${statusNote}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -89,13 +93,23 @@ async function sendEmailNotification(camp, applicant, application) {
         <div style="padding: 20px; background: #f9f9f9;">
           <h2 style="color: #333; margin-top: 0;">New Application Received!</h2>
           
+          ${isUndecided ? `
+          <div style="background: #FFF3E0; border-left: 4px solid #FF9800; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+            <p style="margin: 0; color: #F57C00;">
+              <strong>Note:</strong> ${applicant.firstName} submitted their info as "Maybe" joining ${camp.name || camp.campName}. 
+              They're not sure if they'll make it to Burning Man yet.
+            </p>
+          </div>
+          ` : ''}
+          
           <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h3 style="color: #FF6B35; margin-top: 0;">Camp: ${camp.name || camp.campName}</h3>
             
             <div style="margin-bottom: 15px;">
               <strong>Applicant:</strong> ${applicant.firstName} ${applicant.lastName}<br>
               <strong>Email:</strong> ${applicant.email}<br>
-              <strong>Applied:</strong> ${new Date(application.appliedAt).toLocaleDateString()}
+              <strong>Applied:</strong> ${new Date(application.appliedAt).toLocaleDateString()}<br>
+              ${isUndecided ? '<strong>Status:</strong> <span style="color: #F57C00;">Maybe Attending</span><br>' : ''}
             </div>
             
             <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 15px 0;">
