@@ -7,6 +7,7 @@ const Member = require('../models/Member');
 const Admin = require('../models/Admin');
 const { authenticateToken, requireAdmin, requirePermission } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
 
 // Configure multer for photo uploads
 const storage = multer.memoryStorage();
@@ -628,34 +629,33 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
       delete updateData.newPassword;
     }
 
-    // Create action log entry (avoid circular references)
-    const { actionHistory, ...safeUpdateData } = updateData;
-    const actionLog = {
-      action: 'user_updated',
-      adminId: req.user._id,
-      adminName: `${adminUser.firstName} ${adminUser.lastName}`,
-      targetId: id,
-      targetName: `${targetUser.firstName} ${targetUser.lastName}`,
-      changes: safeUpdateData,
-      timestamp: new Date().toISOString()
-    };
+    // Track field changes for audit log
+    const fieldChanges = [];
+    for (const [field, newValue] of Object.entries(updateData)) {
+      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory') continue;
+      const oldValue = targetUser[field];
+      if (oldValue !== newValue) {
+        fieldChanges.push({ field, oldValue, newValue });
+      }
+    }
 
     // Update user
     console.log('🔍 [PUT /api/admin/users/:id] Updating user...');
     const updatedUser = await db.updateUserById(id, updateData);
     console.log('✅ [PUT /api/admin/users/:id] User updated successfully');
     
-    // Add action log to user's history (non-critical, wrapped in try-catch)
-    try {
-      if (!updatedUser.actionHistory) {
-        updatedUser.actionHistory = [];
-      }
-      updatedUser.actionHistory.push(actionLog);
-      await db.updateUserById(id, { actionHistory: updatedUser.actionHistory });
-      console.log('✅ [PUT /api/admin/users/:id] Action history updated');
-    } catch (historyError) {
-      console.error('⚠️ [PUT /api/admin/users/:id] Failed to update action history (non-critical):', historyError);
-      // Don't fail the whole request if action history update fails
+    // Record each field change in ActivityLog
+    for (const change of fieldChanges) {
+      await recordFieldChange('MEMBER', id, req.user._id, change.field, change.oldValue, change.newValue, 'PROFILE_UPDATE');
+    }
+    
+    // Record status change if applicable
+    if (updateData.isActive !== undefined && updateData.isActive !== targetUser.isActive) {
+      await recordActivity('MEMBER', id, req.user._id, updateData.isActive ? 'ACCOUNT_ACTIVATED' : 'ACCOUNT_DEACTIVATED', {
+        field: 'isActive',
+        oldValue: targetUser.isActive,
+        newValue: updateData.isActive
+      });
     }
 
     res.json({ user: updatedUser });
@@ -748,27 +748,32 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
       console.log('Processing photo updates for camp:', id);
     }
 
-    // Create action log entry (avoid circular references)
-    const { actionHistory, ...safeUpdateData } = updateData;
-    const actionLog = {
-      action: 'camp_updated',
-      adminId: req.user._id,
-      adminName: `${adminUser.firstName} ${adminUser.lastName}`,
-      targetId: id,
-      targetName: targetCamp.campName,
-      changes: safeUpdateData,
-      timestamp: new Date().toISOString()
-    };
+    // Track field changes for audit log
+    const fieldChanges = [];
+    for (const [field, newValue] of Object.entries(updateData)) {
+      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory' || field === 'photos') continue;
+      const oldValue = targetCamp[field];
+      if (oldValue !== newValue) {
+        fieldChanges.push({ field, oldValue, newValue });
+      }
+    }
 
     // Update camp
     const updatedCamp = await db.updateCampById(id, updateData);
     
-    // Add action log to camp's history
-    if (!updatedCamp.actionHistory) {
-      updatedCamp.actionHistory = [];
+    // Record each field change in ActivityLog
+    for (const change of fieldChanges) {
+      await recordFieldChange('CAMP', id, req.user._id, change.field, change.oldValue, change.newValue, 'PROFILE_UPDATE');
     }
-    updatedCamp.actionHistory.push(actionLog);
-    await db.updateCampById(id, { actionHistory: updatedCamp.actionHistory });
+    
+    // Record status change if applicable
+    if (updateData.isActive !== undefined && updateData.isActive !== targetCamp.isActive) {
+      await recordActivity('CAMP', id, req.user._id, updateData.isActive ? 'CAMP_ACTIVATED' : 'CAMP_DEACTIVATED', {
+        field: 'isActive',
+        oldValue: targetCamp.isActive,
+        newValue: updateData.isActive
+      });
+    }
 
     res.json({ camp: updatedCamp });
   } catch (error) {
@@ -980,7 +985,7 @@ router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) =>
 });
 
 // @route   GET /api/admin/users/:id/history
-// @desc    Get user action history and audit logs
+// @desc    Get user action history and audit logs from ActivityLog
 // @access  Private (Admin only)
 router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -991,37 +996,17 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get user's action history
-    const actionHistory = user.actionHistory || [];
+    // Get activity log from ActivityLog collection
+    const activityLogs = await getActivityLog('MEMBER', id, { limit: 500 });
     
-    // Get related activities (camp changes, member applications, etc.)
-    const relatedActivities = [];
-    
-    // If user is a camp account, get camp-related activities
-    if (user.accountType === 'camp' && user.campId) {
-      const camp = await db.findCamp({ _id: user.campId });
-      if (camp && camp.actionHistory) {
-        relatedActivities.push(...camp.actionHistory.map(activity => ({
-          ...activity,
-          type: 'camp_activity'
-        })));
-      }
-    }
-    
-    // Get member applications
-    const memberApplications = await db.findMemberApplications({ applicant: id });
-    relatedActivities.push(...memberApplications.map(app => ({
-      action: 'member_application',
-      targetId: app.camp,
-      targetName: 'Camp Application',
-      changes: { status: app.status },
-      timestamp: app.appliedAt,
-      type: 'application'
-    })));
-    
-    // Combine and sort all activities
-    const allActivities = [...actionHistory, ...relatedActivities]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Format activities for frontend
+    const activities = activityLogs.map(log => ({
+      action: log.activityType,
+      actingUserId: log.actingUserId,
+      timestamp: log.timestamp,
+      details: log.details,
+      type: 'activity_log'
+    }));
 
     res.json({
       user: {
@@ -1034,8 +1019,8 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
         createdAt: user.createdAt,
         lastLogin: user.lastLogin
       },
-      activities: allActivities,
-      totalActivities: allActivities.length
+      activities: activities,
+      totalActivities: activities.length
     });
 
   } catch (error) {
@@ -1045,7 +1030,7 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
 });
 
 // @route   GET /api/admin/camps/:id/history
-// @desc    Get camp action history and audit logs
+// @desc    Get camp action history and audit logs from ActivityLog
 // @access  Private (Admin only)
 router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -1056,37 +1041,17 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Get camp's action history
-    const actionHistory = camp.actionHistory || [];
+    // Get activity log from ActivityLog collection
+    const activityLogs = await getActivityLog('CAMP', id, { limit: 500 });
     
-    // Get related activities (member changes, applications, etc.)
-    const relatedActivities = [];
-    
-    // Get member roster changes
-    const rosters = await db.findRosters({ camp: id });
-    rosters.forEach(roster => {
-      if (roster.actionHistory) {
-        relatedActivities.push(...roster.actionHistory.map(activity => ({
-          ...activity,
-          type: 'roster_activity'
-        })));
-      }
-    });
-    
-    // Get member applications for this camp
-    const memberApplications = await db.findMemberApplications({ camp: id });
-    relatedActivities.push(...memberApplications.map(app => ({
-      action: 'member_application',
-      targetId: app.applicant,
-      targetName: 'Member Application',
-      changes: { status: app.status },
-      timestamp: app.appliedAt,
-      type: 'application'
-    })));
-    
-    // Combine and sort all activities
-    const allActivities = [...actionHistory, ...relatedActivities]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Format activities for frontend
+    const activities = activityLogs.map(log => ({
+      action: log.activityType,
+      actingUserId: log.actingUserId,
+      timestamp: log.timestamp,
+      details: log.details,
+      type: 'activity_log'
+    }));
 
     res.json({
       camp: {
@@ -1098,8 +1063,8 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
         createdAt: camp.createdAt,
         contactEmail: camp.contactEmail
       },
-      activities: allActivities,
-      totalActivities: allActivities.length
+      activities: activities,
+      totalActivities: activities.length
     });
 
   } catch (error) {

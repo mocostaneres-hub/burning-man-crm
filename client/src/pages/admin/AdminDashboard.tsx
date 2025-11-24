@@ -342,6 +342,20 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleUserView = (user: UserType) => {
+    // For personal accounts, open public profile if available
+    if (user.accountType === 'personal') {
+      // Try to open public member profile
+      window.open(`/members/${user._id}`, '_blank');
+    } else {
+      // For camp/admin accounts, open their camp profile if available
+      if (user.campId || user.urlSlug) {
+        const slug = user.urlSlug || user.campId;
+        window.open(`/camps/${slug}`, '_blank');
+      }
+    }
+  };
+
   const handleUserEdit = (user: UserType) => {
     setSelectedUser(user);
     setShowUserModal(true);
@@ -627,7 +641,7 @@ const AdminDashboard: React.FC = () => {
       <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg overflow-x-auto">
         {[
           { id: 0, name: 'Overview', icon: Shield },
-          { id: 1, name: 'Users', icon: Users },
+          { id: 1, name: 'Members', icon: Users },
           { id: 2, name: 'Camps', icon: BuildingIcon },
           { id: 3, name: 'Analytics', icon: Shield },
           { id: 4, name: 'Audit Logs', icon: Clock },
@@ -717,7 +731,7 @@ const AdminDashboard: React.FC = () => {
                     onClick={() => setActiveTab(1)}
                   >
                     <Users className="w-4 h-4 mr-2" />
-                    Manage Users
+                    Manage Members
                   </Button>
                 </div>
               </div>
@@ -732,7 +746,7 @@ const AdminDashboard: React.FC = () => {
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-h2 font-lato-bold text-custom-text">
-                Users Management
+                Members Management
               </h2>
               <div className="flex items-center gap-2">
                 {selectedUsers.length > 0 && (
@@ -860,42 +874,20 @@ const AdminDashboard: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handleUserView(user)}
+                            className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleUserEdit(user)}
                             className="flex items-center gap-1"
                           >
                             <Edit className="w-3 h-3" />
                             Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => loadUserHistory(user._id)}
-                            className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
-                          >
-                            <Clock className="w-3 h-3" />
-                            History
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUserToggleActive(user._id)}
-                            className={`flex items-center gap-1 ${
-                              user.isActive 
-                                ? 'text-red-600 border-red-600 hover:bg-red-50' 
-                                : 'text-green-600 border-green-600 hover:bg-green-50'
-                            }`}
-                          >
-                            {user.isActive ? (
-                              <>
-                                <BanIcon className="w-3 h-3" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircleIcon className="w-3 h-3" />
-                                Activate
-                              </>
-                            )}
                           </Button>
                         </div>
                       </td>
@@ -1017,15 +1009,6 @@ const AdminDashboard: React.FC = () => {
                           >
                             <Edit className="w-3 h-3" />
                             Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCampDelete(camp)}
-                            className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
                           </Button>
                         </div>
                       </td>
@@ -1477,7 +1460,27 @@ const UserEditModal: React.FC<{
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [auditLogLoading, setAuditLogLoading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Load audit log when modal opens
+  useEffect(() => {
+    loadAuditLog();
+  }, [user._id]);
+
+  const loadAuditLog = async () => {
+    try {
+      setAuditLogLoading(true);
+      const response = await apiService.get(`/admin/users/${user._id}/history`);
+      setAuditLog(response.activities || []);
+    } catch (error) {
+      console.error('Error loading audit log:', error);
+      setAuditLog([]);
+    } finally {
+      setAuditLogLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -2021,6 +2024,80 @@ const UserEditModal: React.FC<{
           </div>
         </div>
 
+        {/* Account Deactivation Control */}
+        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-red-900 mb-1">
+                Account Status
+              </h3>
+              <p className="text-sm text-red-800">
+                {formData.isActive ? 'Account is currently active' : 'Account is currently deactivated'}
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+            </label>
+          </div>
+        </div>
+
+        {/* Audit Log Section */}
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-custom-text mb-4">
+            Activity History (Audit Log)
+          </h3>
+          {auditLogLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+              <span className="ml-2 text-sm text-custom-text-secondary">Loading activity history...</span>
+            </div>
+          ) : auditLog.length === 0 ? (
+            <div className="text-center py-8 text-custom-text-secondary">
+              <p>No activity history found for this member.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {auditLog.map((activity, index) => (
+                <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="font-medium text-custom-text">
+                        {activity.action || activity.activityType || 'Activity'}
+                      </div>
+                      {activity.details?.field && (
+                        <div className="text-sm text-custom-text-secondary mt-1">
+                          <span className="font-medium">Field:</span> {activity.details.field}
+                          {activity.details.oldValue !== undefined && activity.details.newValue !== undefined && (
+                            <span className="ml-2">
+                              <span className="text-red-600 line-through">{String(activity.details.oldValue)}</span>
+                              {' → '}
+                              <span className="text-green-600">{String(activity.details.newValue)}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-custom-text-secondary">
+                      {new Date(activity.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                  {activity.actingUserId && typeof activity.actingUserId === 'object' && (
+                    <div className="text-xs text-custom-text-secondary">
+                      By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t">
           <Button
@@ -2036,18 +2113,6 @@ const UserEditModal: React.FC<{
             className="flex-1"
           >
             Save All Changes
-          </Button>
-          <Button
-            variant="outline"
-            className="text-red-600 border-red-600 hover:bg-red-50"
-            onClick={() => {
-              if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-                // TODO: Implement user deletion
-                alert('User deletion functionality coming soon...');
-              }
-            }}
-          >
-            Delete User
           </Button>
         </div>
       </div>
@@ -2066,10 +2131,26 @@ const CampEditModal: React.FC<{
   const [confirmPassword, setConfirmPassword] = useState('');
   const [campCategories, setCampCategories] = useState<{_id: string, name: string}[]>([]);
   const [globalPerks, setGlobalPerks] = useState<{_id: string, name: string, icon: string, color: string}[]>([]);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [auditLogLoading, setAuditLogLoading] = useState(false);
 
   useEffect(() => {
     loadCategoriesAndPerks();
-  }, []);
+    loadAuditLog();
+  }, [camp._id]);
+
+  const loadAuditLog = async () => {
+    try {
+      setAuditLogLoading(true);
+      const response = await apiService.get(`/admin/camps/${camp._id}/history`);
+      setAuditLog(response.activities || []);
+    } catch (error) {
+      console.error('Error loading audit log:', error);
+      setAuditLog([]);
+    } finally {
+      setAuditLogLoading(false);
+    }
+  };
 
   const loadCategoriesAndPerks = async () => {
     try {
@@ -2350,13 +2431,87 @@ const CampEditModal: React.FC<{
               </div>
             </div>
 
+            {/* Account Deactivation Control */}
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-red-900 mb-1">
+                    Camp Status
+                  </h3>
+                  <p className="text-sm text-red-800">
+                    {formData.isActive !== false ? 'Camp is currently active' : 'Camp is currently deactivated'}
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive !== false}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* Audit Log Section */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold text-custom-text mb-4">
+                Activity History (Audit Log)
+              </h3>
+              {auditLogLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+                  <span className="ml-2 text-sm text-custom-text-secondary">Loading activity history...</span>
+                </div>
+              ) : auditLog.length === 0 ? (
+                <div className="text-center py-8 text-custom-text-secondary">
+                  <p>No activity history found for this camp.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {auditLog.map((activity, index) => (
+                    <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="font-medium text-custom-text">
+                            {activity.action || activity.activityType || 'Activity'}
+                          </div>
+                          {activity.details?.field && (
+                            <div className="text-sm text-custom-text-secondary mt-1">
+                              <span className="font-medium">Field:</span> {activity.details.field}
+                              {activity.details.oldValue !== undefined && activity.details.newValue !== undefined && (
+                                <span className="ml-2">
+                                  <span className="text-red-600 line-through">{String(activity.details.oldValue)}</span>
+                                  {' → '}
+                                  <span className="text-green-600">{String(activity.details.newValue)}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-custom-text-secondary">
+                          {new Date(activity.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                      {activity.actingUserId && typeof activity.actingUserId === 'object' && (
+                        <div className="text-xs text-custom-text-secondary">
+                          By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
-              <Button onClick={handleSave} className="flex-1">
-                Save Changes
-              </Button>
               <Button variant="outline" onClick={onClose} className="flex-1">
                 Cancel
+              </Button>
+              <Button onClick={handleSave} className="flex-1">
+                Save Changes
               </Button>
             </div>
           </div>
