@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, Search, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui';
 
 const CampNotFound: React.FC = () => {
@@ -10,7 +9,7 @@ const CampNotFound: React.FC = () => {
         {/* Icon */}
         <div className="flex justify-center mb-6">
           <div className="bg-orange-100 rounded-full p-6">
-            <AlertCircle className="w-16 h-16 text-orange-600" />
+            <div className="text-6xl">⚠️</div>
           </div>
         </div>
 
@@ -27,7 +26,7 @@ const CampNotFound: React.FC = () => {
         {/* Discovery Link */}
         <div className="bg-white border-2 border-orange-200 rounded-lg p-8 mb-6 shadow-sm">
           <div className="flex justify-center mb-4">
-            <Search className="w-12 h-12 text-orange-600" />
+            <div className="text-5xl">🔍</div>
           </div>
           <p className="text-gray-700 mb-6 text-lg">
             Meanwhile, you can browse for more camps here
@@ -35,7 +34,7 @@ const CampNotFound: React.FC = () => {
           <Link to="/camps">
             <Button size="lg" className="text-lg px-8 py-3 flex items-center gap-2 mx-auto">
               Explore Camps
-              <ArrowRight className="w-5 h-5" />
+              <span className="text-xl">→</span>
             </Button>
           </Link>
         </div>
