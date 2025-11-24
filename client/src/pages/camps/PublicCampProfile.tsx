@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import Footer from '../../components/layout/Footer';
 import ProfileCompletionModal from '../../components/user/ProfileCompletionModal';
+import CampNotFound from '../CampNotFound';
 
 interface CampCategory {
   _id: string;
@@ -115,6 +116,7 @@ const PublicCampProfile: React.FC = () => {
   const [camp, setCamp] = useState<Camp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isNotFound, setIsNotFound] = useState(false);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applicationLoading, setApplicationLoading] = useState(false);
   const [applicationSuccess, setApplicationSuccess] = useState(false);
@@ -167,6 +169,7 @@ const PublicCampProfile: React.FC = () => {
     try {
       setLoading(true);
       setError('');
+      setIsNotFound(false);
       
       console.log('🔍 [PublicCampProfile] Fetching camp with slug:', slug);
       const response = await api.get(`/camps/public/${slug}`);
@@ -179,6 +182,12 @@ const PublicCampProfile: React.FC = () => {
       setCamp(response);
     } catch (err: any) {
       console.error('❌ [PublicCampProfile] Error fetching camp:', err);
+      
+      // Check if it's a 404 error (camp not found or not publicly visible)
+      if (err.response?.status === 404) {
+        setIsNotFound(true);
+      }
+      
       setError(err.response?.data?.message || 'Failed to load camp profile');
     } finally {
       setLoading(false);
@@ -305,6 +314,12 @@ const PublicCampProfile: React.FC = () => {
     );
   }
 
+  // Show custom 404 page for not found or private camps
+  if (isNotFound) {
+    return <CampNotFound />;
+  }
+
+  // Show generic error for other errors
   if (error || !camp) {
     return (
       <div className="container mx-auto px-4 py-8">

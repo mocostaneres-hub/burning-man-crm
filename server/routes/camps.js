@@ -42,7 +42,8 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const query = {
       status: 'active',
-      isPublic: true
+      isPublic: true,
+      isPubliclyVisible: true // Only show camps with public profiles
     };
 
     // Add search filters
@@ -301,6 +302,12 @@ router.get('/public/:slug', async (req, res) => {
     if (!camp) {
       console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);
       return res.status(404).json({ message: 'Camp not found or not public' });
+    }
+    
+    // Check if camp is publicly visible
+    if (camp.isPubliclyVisible === false) {
+      console.log('❌ [GET /api/camps/public/:slug] Camp profile is not publicly visible:', camp.name);
+      return res.status(404).json({ message: 'Camp profile not found or not public' });
     }
     
     // Check if camp is public (or make it public if it's the owner's camp)

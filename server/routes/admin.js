@@ -425,6 +425,45 @@ router.put('/camps/:id/accepting-applications', requireAdmin, [
   }
 });
 
+// @route   PUT /api/admin/camps/:id/publicly-visible
+// @desc    Toggle publicly visible status for a camp
+// @access  Private (Admin only)
+router.put('/camps/:id/publicly-visible', requireAdmin, [
+  body('isPubliclyVisible').isBoolean()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { isPubliclyVisible } = req.body;
+
+    const camp = await Camp.findById(req.params.id);
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    camp.isPubliclyVisible = isPubliclyVisible;
+    await camp.save();
+
+    console.log(`✅ [Admin] Updated isPubliclyVisible for camp ${camp.name || camp.campName} to ${isPubliclyVisible}`);
+
+    res.json({
+      message: 'Camp publicly visible status updated successfully',
+      camp: {
+        _id: camp._id,
+        name: camp.name || camp.campName,
+        isPubliclyVisible: camp.isPubliclyVisible
+      }
+    });
+
+  } catch (error) {
+    console.error('Update camp publicly visible error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   POST /api/admin/admins
 // @desc    Create new admin user
 // @access  Private (Super Admin only)

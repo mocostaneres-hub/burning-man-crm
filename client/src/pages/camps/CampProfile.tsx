@@ -34,6 +34,7 @@ interface CampProfileData {
   description: string;
   categories: string[]; // Array of category IDs
   selectedPerks: SelectedPerk[]; // Array of selected perks
+  isPubliclyVisible: boolean;
   acceptingApplications: boolean;
   // Legacy offerings object for backward compatibility
   offerings: {
@@ -109,6 +110,7 @@ const CampProfile: React.FC = () => {
     description: '',
     categories: [],
     selectedPerks: [],
+    isPubliclyVisible: false, // New camps default to private
     acceptingApplications: true,
     offerings: {
       // Infrastructure
@@ -206,6 +208,7 @@ const CampProfile: React.FC = () => {
         description: campResponse.description || '',
         categories: campResponse.categories || [],
         selectedPerks: campResponse.selectedPerks || [],
+        isPubliclyVisible: campResponse.isPubliclyVisible ?? false,
         acceptingApplications: campResponse.acceptingApplications ?? true,
         offerings: campResponse.offerings || {
           // Infrastructure
@@ -273,6 +276,7 @@ const CampProfile: React.FC = () => {
           description: '',
           categories: [],
           selectedPerks: [],
+          isPubliclyVisible: false, // New camps default to private
           acceptingApplications: true,
           offerings: {
             // Infrastructure
@@ -830,6 +834,34 @@ const CampProfile: React.FC = () => {
           </h2>
           
           <div className="space-y-4">
+            {/* Make Profile Public Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-label font-medium text-custom-text mb-1">
+                  Make Profile Public
+                </label>
+                <p className="text-sm text-gray-600">
+                  Display your camp profile on the public discovery page
+                </p>
+              </div>
+              {isEditing ? (
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={campData.isPubliclyVisible}
+                    onChange={(e) => handleInputChange('isPubliclyVisible', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              ) : (
+                <Badge variant={campData.isPubliclyVisible ? "success" : "neutral"}>
+                  {campData.isPubliclyVisible ? "Public" : "Private"}
+                </Badge>
+              )}
+            </div>
+
+            {/* Accepting Applications Toggle */}
             <div className="flex items-center justify-between">
               <div>
                 <label className="block text-label font-medium text-custom-text mb-1">

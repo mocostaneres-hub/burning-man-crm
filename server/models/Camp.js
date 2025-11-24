@@ -228,6 +228,11 @@ const campSchema = new mongoose.Schema({
   // Public profile features
   hometown: String,
   burningSince: Number, // Year they started burning
+  // Public visibility control
+  isPubliclyVisible: {
+    type: Boolean,
+    default: false // New camps default to private
+  },
   // NEW CONSOLIDATED FIELD
   acceptingApplications: {
     type: Boolean,

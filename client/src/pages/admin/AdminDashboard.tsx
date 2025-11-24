@@ -125,6 +125,7 @@ interface Camp {
   burningSince?: number;
   categories?: string[];
   selectedPerks?: any[];
+  isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
   socialMedia?: {
     facebook?: string;
@@ -434,6 +435,29 @@ const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('❌ [Admin] Error toggling acceptingApplications:', err);
       alert('Failed to update application status. Please try again.');
+    }
+  };
+
+  const handleTogglePubliclyVisible = async (campId: string, currentStatus: boolean) => {
+    try {
+      const newStatus = !currentStatus;
+      console.log(`🔄 [Admin] Toggling isPubliclyVisible for camp ${campId} from ${currentStatus} to ${newStatus}`);
+      
+      const response = await apiService.put(`/admin/camps/${campId}/publicly-visible`, {
+        isPubliclyVisible: newStatus
+      });
+
+      // Update local state
+      setCamps(camps.map(c => 
+        c._id === campId 
+          ? { ...c, isPubliclyVisible: newStatus }
+          : c
+      ));
+
+      console.log(`✅ [Admin] Successfully toggled isPubliclyVisible for camp ${campId}`);
+    } catch (err) {
+      console.error('❌ [Admin] Error toggling isPubliclyVisible:', err);
+      alert('Failed to update profile visibility. Please try again.');
     }
   };
 
@@ -915,6 +939,9 @@ const AdminDashboard: React.FC = () => {
                       Members
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Profile Visibility
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Applications
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -942,6 +969,16 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.memberCount || camp.members?.length || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => handleTogglePubliclyVisible(camp._id, camp.isPubliclyVisible !== false)}
+                          className="flex items-center gap-2"
+                        >
+                          <Badge variant={camp.isPubliclyVisible !== false ? 'success' : 'neutral'}>
+                            {camp.isPubliclyVisible !== false ? 'Public' : 'Private'}
+                          </Badge>
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
@@ -2286,6 +2323,18 @@ const CampEditModal: React.FC<{
             <div className="bg-gray-50 border rounded-lg p-4">
               <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-custom-text">Make Profile Public</label>
+                    <p className="text-xs text-gray-500">Display camp on public discovery page</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.isPubliclyVisible !== false}
+                    onChange={(e) => setFormData({ ...formData, isPubliclyVisible: e.target.checked })}
+                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                  />
+                </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-custom-text">Accepting Applications</label>
