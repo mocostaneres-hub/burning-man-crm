@@ -228,6 +228,12 @@ const campSchema = new mongoose.Schema({
   // Public profile features
   hometown: String,
   burningSince: Number, // Year they started burning
+  // NEW CONSOLIDATED FIELD
+  acceptingApplications: {
+    type: Boolean,
+    default: true
+  },
+  // DEPRECATED - kept temporarily for migration
   acceptingNewMembers: {
     type: Boolean,
     default: true

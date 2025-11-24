@@ -386,6 +386,45 @@ router.put('/camps/:id/status', requireAdmin, [
   }
 });
 
+// @route   PUT /api/admin/camps/:id/accepting-applications
+// @desc    Toggle accepting applications status for a camp
+// @access  Private (Admin only)
+router.put('/camps/:id/accepting-applications', requireAdmin, [
+  body('acceptingApplications').isBoolean()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { acceptingApplications } = req.body;
+
+    const camp = await Camp.findById(req.params.id);
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    camp.acceptingApplications = acceptingApplications;
+    await camp.save();
+
+    console.log(`✅ [Admin] Updated acceptingApplications for camp ${camp.name || camp.campName} to ${acceptingApplications}`);
+
+    res.json({
+      message: 'Camp accepting applications status updated successfully',
+      camp: {
+        _id: camp._id,
+        name: camp.name || camp.campName,
+        acceptingApplications: camp.acceptingApplications
+      }
+    });
+
+  } catch (error) {
+    console.error('Update camp accepting applications error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   POST /api/admin/admins
 // @desc    Create new admin user
 // @access  Private (Super Admin only)

@@ -132,7 +132,7 @@ router.post('/apply', authenticateToken, [
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    if (!camp.acceptingNewMembers) {
+    if (!camp.acceptingApplications) {
       return res.status(400).json({ message: 'This camp is not currently accepting new members' });
     }
 

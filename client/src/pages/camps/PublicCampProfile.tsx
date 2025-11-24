@@ -41,8 +41,7 @@ interface Camp {
   burningSince?: number;
   contactEmail?: string;
   website?: string;
-  acceptingNewMembers?: boolean;
-  showApplyNow?: boolean;
+  acceptingApplications?: boolean;
   categories?: CampCategory[]; // Updated to include full category objects
   selectedPerks?: SelectedPerk[]; // Array of selected perks with populated data
   // Legacy offerings object for backward compatibility
@@ -176,8 +175,7 @@ const PublicCampProfile: React.FC = () => {
       console.log('🔍 [PublicCampProfile] Camp photos:', response.photos);
       console.log('🔍 [PublicCampProfile] Primary photo index:', response.primaryPhotoIndex);
       console.log('🔍 [PublicCampProfile] Photo at index:', response.photos?.[response.primaryPhotoIndex || 0]);
-      console.log('🔍 [PublicCampProfile] Accepting new members:', response.acceptingNewMembers);
-      console.log('🔍 [PublicCampProfile] Show apply now:', response.showApplyNow);
+      console.log('🔍 [PublicCampProfile] Accepting applications:', response.acceptingApplications);
       setCamp(response);
     } catch (err: any) {
       console.error('❌ [PublicCampProfile] Error fetching camp:', err);
@@ -562,7 +560,7 @@ const PublicCampProfile: React.FC = () => {
                     Edit Camp
                   </Button>
                 </div>
-              ) : camp.acceptingNewMembers && camp.showApplyNow ? (
+              ) : camp.acceptingApplications ? (
                 // Show Apply Now button only for personal accounts or non-logged in users
                 (user?.accountType === 'personal' || !user) ? (
                   <Button 

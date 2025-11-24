@@ -296,8 +296,7 @@ router.get('/public/:slug', async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Camp heroPhoto field:', camp?.heroPhoto);
     console.log('🔍 [GET /api/camps/public/:slug] Camp isPublic field:', camp?.isPublic);
     console.log('🔍 [GET /api/camps/public/:slug] Camp slug:', camp?.slug);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp acceptingNewMembers field:', camp?.acceptingNewMembers);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp showApplyNow field:', camp?.showApplyNow);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp acceptingApplications field:', camp?.acceptingApplications);
     
     if (!camp) {
       console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);
@@ -358,8 +357,7 @@ router.get('/public/:slug', async (req, res) => {
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
       categories: populatedCategories, // Use manually populated categories
-      acceptingNewMembers: campData.acceptingNewMembers || false, // Explicitly include these fields
-      showApplyNow: campData.showApplyNow || false,
+      acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
@@ -375,8 +373,7 @@ router.get('/public/:slug', async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Camp categories in response:', publicCamp.categories);
     console.log('🔍 [GET /api/camps/public/:slug] Camp photos:', publicCamp.photos);
     console.log('🔍 [GET /api/camps/public/:slug] Primary photo index:', publicCamp.primaryPhotoIndex);
-    console.log('🔍 [GET /api/camps/public/:slug] Accepting new members:', publicCamp.acceptingNewMembers);
-    console.log('🔍 [GET /api/camps/public/:slug] Show apply now:', publicCamp.showApplyNow);
+    console.log('🔍 [GET /api/camps/public/:slug] Accepting applications:', publicCamp.acceptingApplications);
 
     res.json(publicCamp);
   } catch (error) {

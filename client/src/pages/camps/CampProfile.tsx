@@ -34,8 +34,7 @@ interface CampProfileData {
   description: string;
   categories: string[]; // Array of category IDs
   selectedPerks: SelectedPerk[]; // Array of selected perks
-  acceptingNewMembers: boolean;
-  showApplyNow: boolean;
+  acceptingApplications: boolean;
   // Legacy offerings object for backward compatibility
   offerings: {
     water: boolean;
@@ -110,8 +109,7 @@ const CampProfile: React.FC = () => {
     description: '',
     categories: [],
     selectedPerks: [],
-    acceptingNewMembers: true,
-    showApplyNow: true,
+    acceptingApplications: true,
     offerings: {
       // Infrastructure
       water: false,
@@ -208,8 +206,7 @@ const CampProfile: React.FC = () => {
         description: campResponse.description || '',
         categories: campResponse.categories || [],
         selectedPerks: campResponse.selectedPerks || [],
-        acceptingNewMembers: campResponse.acceptingNewMembers ?? true,
-        showApplyNow: campResponse.showApplyNow ?? true,
+        acceptingApplications: campResponse.acceptingApplications ?? true,
         offerings: campResponse.offerings || {
           // Infrastructure
           water: false,
@@ -276,8 +273,7 @@ const CampProfile: React.FC = () => {
           description: '',
           categories: [],
           selectedPerks: [],
-          acceptingNewMembers: true,
-          showApplyNow: true,
+          acceptingApplications: true,
           offerings: {
             // Infrastructure
             water: false,
@@ -837,51 +833,25 @@ const CampProfile: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <label className="block text-label font-medium text-custom-text mb-1">
-                  Accepting New Members
+                  Accepting Applications
                 </label>
                 <p className="text-sm text-gray-600">
-                  Allow new people to apply to join your camp
+                  Allow new people to apply to join your camp and display the "Apply Now" button on your public page
                 </p>
               </div>
               {isEditing ? (
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={campData.acceptingNewMembers}
-                    onChange={(e) => handleInputChange('acceptingNewMembers', e.target.checked)}
+                    checked={campData.acceptingApplications}
+                    onChange={(e) => handleInputChange('acceptingApplications', e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
               ) : (
-                <Badge variant={campData.acceptingNewMembers ? "success" : "neutral"}>
-                  {campData.acceptingNewMembers ? "Yes" : "No"}
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-1">
-                  Show "Apply Now" Button
-                </label>
-                <p className="text-sm text-gray-600">
-                  Display the apply button on your public camp page
-                </p>
-              </div>
-              {isEditing ? (
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={campData.showApplyNow}
-                    onChange={(e) => handleInputChange('showApplyNow', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              ) : (
-                <Badge variant={campData.showApplyNow ? "success" : "neutral"}>
-                  {campData.showApplyNow ? "Yes" : "No"}
+                <Badge variant={campData.acceptingApplications ? "success" : "neutral"}>
+                  {campData.acceptingApplications ? "Open" : "Closed"}
                 </Badge>
               )}
             </div>

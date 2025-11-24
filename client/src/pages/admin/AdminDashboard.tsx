@@ -125,8 +125,7 @@ interface Camp {
   burningSince?: number;
   categories?: string[];
   selectedPerks?: any[];
-  acceptingNewMembers?: boolean;
-  showApplyNow?: boolean;
+  acceptingApplications?: boolean;
   socialMedia?: {
     facebook?: string;
     instagram?: string;
@@ -412,6 +411,29 @@ const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Error deleting camp:', err);
       alert('Failed to delete camp. Please try again.');
+    }
+  };
+
+  const handleToggleAcceptingApplications = async (campId: string, currentStatus: boolean) => {
+    try {
+      const newStatus = !currentStatus;
+      console.log(`🔄 [Admin] Toggling acceptingApplications for camp ${campId} from ${currentStatus} to ${newStatus}`);
+      
+      const response = await apiService.put(`/admin/camps/${campId}/accepting-applications`, {
+        acceptingApplications: newStatus
+      });
+
+      // Update local state
+      setCamps(camps.map(c => 
+        c._id === campId 
+          ? { ...c, acceptingApplications: newStatus }
+          : c
+      ));
+
+      console.log(`✅ [Admin] Successfully toggled acceptingApplications for camp ${campId}`);
+    } catch (err) {
+      console.error('❌ [Admin] Error toggling acceptingApplications:', err);
+      alert('Failed to update application status. Please try again.');
     }
   };
 
@@ -893,6 +915,9 @@ const AdminDashboard: React.FC = () => {
                       Members
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Applications
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -917,6 +942,16 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.memberCount || camp.members?.length || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => handleToggleAcceptingApplications(camp._id, camp.acceptingApplications !== false)}
+                          className="flex items-center gap-2"
+                        >
+                          <Badge variant={camp.acceptingApplications !== false ? 'success' : 'neutral'}>
+                            {camp.acceptingApplications !== false ? 'Open' : 'Closed'}
+                          </Badge>
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant={camp.isActive !== false ? 'success' : 'error'}>
