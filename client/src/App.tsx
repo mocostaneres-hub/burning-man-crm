@@ -69,17 +69,26 @@ const ConditionalMain: React.FC<ConditionalMainProps> = ({ children }) => {
   return <main className="pt-16">{children}</main>;
 };
 
-// Dashboard redirect component for personal accounts
+// Dashboard redirect component for personal accounts and camp accounts
 const DashboardRedirect: React.FC = () => {
   const { user } = useAuth();
   
   console.log('🔍 [DashboardRedirect] User account type:', user?.accountType);
   console.log('🔍 [DashboardRedirect] User data:', user);
   
-  // Personal accounts go to profile, others see the dashboard
+  // Personal accounts go to profile
   if (user?.accountType === 'personal') {
     console.log('🔍 [DashboardRedirect] Redirecting personal account to /user/profile');
     return <Navigate to="/user/profile" replace />;
+  }
+  
+  // Camp accounts redirect to identifier-based dashboard URL
+  if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+    const campId = user?.campId?.toString() || user?._id?.toString() || '';
+    if (campId) {
+      console.log('🔍 [DashboardRedirect] Redirecting camp account to identifier-based dashboard');
+      return <Navigate to={`/camp/${campId}/dashboard`} replace />;
+    }
   }
   
   console.log('🔍 [DashboardRedirect] Showing dashboard for account type:', user?.accountType);
@@ -93,6 +102,17 @@ const CampProfileRedirect: React.FC = () => {
   // Get camp identifier and redirect to new URL format
   const campId = user?.campId?.toString() || user?._id?.toString() || '';
   const newPath = campId ? `/camp/${campId}/profile` : '/dashboard';
+  
+  return <Navigate to={newPath} replace />;
+};
+
+// Generic redirect component for camp routes
+const CampRouteRedirect: React.FC<{ route: string }> = ({ route }) => {
+  const { user } = useAuth();
+  
+  // Get camp identifier and redirect to new URL format
+  const campId = user?.campId?.toString() || user?._id?.toString() || '';
+  const newPath = campId ? `/camp/${campId}${route}` : '/dashboard';
   
   return <Navigate to={newPath} replace />;
 };
@@ -118,22 +138,85 @@ function App() {
                       <SelectRole />
                     </ProtectedRoute>
                   } />
+                  {/* Legacy dashboard route - redirects based on account type */}
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
                       <DashboardRedirect />
                     </ProtectedRoute>
                   } />
-                  {/* Legacy route redirect for backward compatibility */}
+                  
+                  {/* New identifier-based dashboard route for camp accounts */}
+                  <Route path="/camp/:campIdentifier/dashboard" element={
+                    <ProtectedRoute requireCampAccount>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Legacy route redirects for backward compatibility */}
                   <Route path="/camp/profile" element={
                     <ProtectedRoute requireCampAccount>
                       <CampProfileRedirect />
                     </ProtectedRoute>
                   } />
+                  <Route path="/camp/rosters" element={
+                    <ProtectedRoute requireCampAccount>
+                      <CampRouteRedirect route="/roster" />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/applications" element={
+                    <ProtectedRoute requireCampAccount>
+                      <CampRouteRedirect route="/applications" />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/tasks" element={
+                    <ProtectedRoute>
+                      <CampRouteRedirect route="/tasks" />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/shifts" element={
+                    <ProtectedRoute requireCampAccount>
+                      <CampRouteRedirect route="/events" />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* New identifier-based routes */}
                   <Route path="/camp/:campIdentifier/profile" element={
                     <ProtectedRoute requireCampAccount>
                       <CampProfile />
                     </ProtectedRoute>
                   } />
+                  <Route path="/camp/:campIdentifier/roster" element={
+                    <ProtectedRoute requireCampAccount>
+                      <MemberRoster />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/applications" element={
+                    <ProtectedRoute requireCampAccount>
+                      <ApplicationManagementTable />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/tasks" element={
+                    <ProtectedRoute>
+                      <TaskManagement />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/events" element={
+                    <ProtectedRoute requireCampAccount>
+                      <VolunteerShifts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/events/:eventId" element={
+                    <ProtectedRoute requireCampAccount>
+                      <VolunteerShifts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/shifts/:shiftId" element={
+                    <ProtectedRoute requireCampAccount>
+                      <VolunteerShifts />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Other camp routes */}
                   <Route path="/camp/create" element={
                     <ProtectedRoute requirePersonalAccount>
                       <CampCreate />
@@ -144,34 +227,14 @@ function App() {
                       <CampEdit />
                     </ProtectedRoute>
                   } />
-                  <Route path="/camp/rosters" element={
-                    <ProtectedRoute requireCampAccount>
-                      <MemberRoster />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/applications" element={
-                    <ProtectedRoute requireCampAccount>
-                      <ApplicationManagementTable />
-                    </ProtectedRoute>
-                  } />
                   <Route path="/camp/call-slots" element={
                     <ProtectedRoute requireCampAccount>
                       <CallSlotManagement />
                     </ProtectedRoute>
                   } />
-                  <Route path="/camp/tasks" element={
-                    <ProtectedRoute>
-                      <TaskManagement />
-                    </ProtectedRoute>
-                  } />
                   <Route path="/tasks/:taskIdCode" element={
                     <ProtectedRoute>
                       <TaskDetailsPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/shifts" element={
-                    <ProtectedRoute requireCampAccount>
-                      <VolunteerShifts />
                     </ProtectedRoute>
                   } />
                   <Route path="/camp/:campId/contacts/:userId" element={

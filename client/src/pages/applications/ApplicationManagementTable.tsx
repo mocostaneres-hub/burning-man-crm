@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Badge } from '../../components/ui';
 import { CheckCircle as CheckCircleIcon, X, Eye, Filter as FilterIcon, Loader2, RefreshCw, Linkedin, Instagram, Facebook, MapPin, Calendar, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -54,7 +54,25 @@ interface Application {
 
 const ApplicationManagementTable: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [applications, setApplications] = useState<Application[]>([]);
+  
+  // Security check: Verify camp identifier matches authenticated user's camp
+  useEffect(() => {
+    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [ApplicationManagementTable] Camp identifier mismatch. Redirecting...');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [campIdentifier, user, navigate]);
   const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

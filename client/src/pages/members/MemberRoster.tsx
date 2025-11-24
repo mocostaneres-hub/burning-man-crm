@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal } from '../../components/ui';
 import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Member } from '../../types';
@@ -19,8 +19,26 @@ interface RosterMember extends Member {
 
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const authUser = user;
   const { skills: systemSkills } = useSkills();
+  
+  // Security check: Verify camp identifier matches authenticated user's camp
+  useEffect(() => {
+    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [MemberRoster] Camp identifier mismatch. Redirecting...');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [campIdentifier, user, navigate]);
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

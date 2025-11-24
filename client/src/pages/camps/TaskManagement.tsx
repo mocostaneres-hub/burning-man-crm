@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Button, Card, Badge, Modal, Input, Textarea } from '../../components/ui';
 import { Plus, Edit, Trash2, Loader2, RefreshCw, CheckCircle, Clock, X, Send } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -69,7 +69,24 @@ const TaskManagement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [tasks, setTasks] = useState<GlobalTask[]>([]);
+  
+  // Security check: Verify camp identifier matches authenticated user's camp
+  useEffect(() => {
+    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [TaskManagement] Camp identifier mismatch. Redirecting...');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [campIdentifier, user, navigate]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [campId, setCampId] = useState<string | null>(null);

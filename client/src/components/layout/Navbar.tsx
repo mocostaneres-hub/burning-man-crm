@@ -90,11 +90,11 @@ const Navbar: React.FC = () => {
       
       return [
         { label: 'My Camp', path: campPublicProfilePath, icon: <AccountCircle size={18} /> },
-        { label: 'Roster', path: '/camp/rosters', icon: <People size={18} /> },
-        { label: 'Applications', path: '/camp/applications', icon: <Assignment size={18} /> },
-        { label: 'Tasks', path: '/camp/tasks', icon: <Task size={18} /> },
-        { label: 'Events', path: '/camp/shifts', icon: <Calendar size={18} /> },
-        { label: 'Dashboard', path: '/dashboard', icon: <Dashboard size={18} /> },
+        { label: 'Roster', path: campIdentifier ? `/camp/${campIdentifier}/roster` : '/camp/rosters', icon: <People size={18} /> },
+        { label: 'Applications', path: campIdentifier ? `/camp/${campIdentifier}/applications` : '/camp/applications', icon: <Assignment size={18} /> },
+        { label: 'Tasks', path: campIdentifier ? `/camp/${campIdentifier}/tasks` : '/camp/tasks', icon: <Task size={18} /> },
+        { label: 'Events', path: campIdentifier ? `/camp/${campIdentifier}/events` : '/camp/shifts', icon: <Calendar size={18} /> },
+        { label: 'Dashboard', path: campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard', icon: <Dashboard size={18} /> },
         { label: 'Help', path: '/camp/help', icon: <Help size={18} /> },
         ...(user?.accountType === 'admin' ? [
           { label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> }

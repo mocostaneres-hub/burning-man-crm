@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
@@ -43,7 +44,25 @@ const retryApiCall = async (
 
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { campIdentifier, eventId, shiftId } = useParams<{ campIdentifier?: string; eventId?: string; shiftId?: string }>();
   const [events, setEvents] = useState<Event[]>([]);
+  
+  // Security check: Verify camp identifier matches authenticated user's camp
+  useEffect(() => {
+    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [VolunteerShifts] Camp identifier mismatch. Redirecting...');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [campIdentifier, user, navigate]);
   const [activeTab, setActiveTab] = useState<'main' | 'reports'>('main');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { Card, Button } from '../components/ui';
@@ -30,8 +30,25 @@ interface DashboardStats {
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [stats, setStats] = useState<DashboardStats>({});
   const [loading, setLoading] = useState(true);
+
+  // Security check: Verify camp identifier matches authenticated user's camp
+  useEffect(() => {
+    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [Dashboard] Camp identifier mismatch. Redirecting...');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [campIdentifier, user, navigate]);
 
   useEffect(() => {
     const fetchStats = async () => {
