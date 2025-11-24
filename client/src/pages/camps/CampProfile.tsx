@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button, Input, Card, Badge } from '../../components/ui';
 import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -99,6 +99,7 @@ const CampProfile: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { campIdentifier } = useParams<{ campIdentifier: string }>();
   const [campCategories, setCampCategories] = useState<CampCategory[]>([]);
   const [globalPerks, setGlobalPerks] = useState<GlobalPerk[]>([]);
   const [campData, setCampData] = useState<CampProfileData>({
@@ -168,12 +169,25 @@ const CampProfile: React.FC = () => {
   const [campId, setCampId] = useState<string>('');
 
   useEffect(() => {
-    if (user) {
+    if (user && campIdentifier) {
+      // Security check: Verify the campIdentifier matches the user's camp
+      const userCampId = user.campId?.toString() || user._id?.toString();
+      const identifierMatches = campIdentifier === userCampId || 
+                                campIdentifier === user.urlSlug ||
+                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      
+      if (!identifierMatches) {
+        console.error('❌ [CampProfile] Camp identifier mismatch. Redirecting...');
+        // Redirect to dashboard if identifier doesn't match
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      
       fetchCampProfile();
       loadCampCategories();
       loadGlobalPerks();
     }
-  }, [user]);
+  }, [user, campIdentifier, navigate]);
 
   // Auto-enable edit mode for new camps with minimal data or when coming from public profile
   useEffect(() => {

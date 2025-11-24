@@ -65,25 +65,31 @@ const Navbar: React.FC = () => {
 
     // Camp/Admin accounts navigation (ordered as requested)
     if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
-      // Generate slug from campName if urlSlug not available
-      let campProfilePath = '/camp/profile'; // fallback
+      // Get camp identifier for profile edit URL
+      const campIdentifier = user?.campId?.toString() || user?._id?.toString() || '';
+      
+      // Generate slug from campName if urlSlug not available (for public profile)
+      let campPublicProfilePath = '/camps';
       
       if (user?.urlSlug) {
-        campProfilePath = `/camps/${user.urlSlug}`;
+        campPublicProfilePath = `/camps/${user.urlSlug}`;
       } else if (user?.campName) {
         // Generate slug from campName on the fly
         const slug = user.campName
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '');
-        campProfilePath = `/camps/${slug}`;
+        campPublicProfilePath = `/camps/${slug}`;
       } else if (campSlug) {
         // Use fetched camp slug for admin accounts
-        campProfilePath = `/camps/${campSlug}`;
+        campPublicProfilePath = `/camps/${campSlug}`;
       }
       
+      // Profile edit path with identifier
+      const campProfileEditPath = campIdentifier ? `/camp/${campIdentifier}/profile` : '/camp/profile';
+      
       return [
-        { label: 'My Camp', path: campProfilePath, icon: <AccountCircle size={18} /> },
+        { label: 'My Camp', path: campPublicProfilePath, icon: <AccountCircle size={18} /> },
         { label: 'Roster', path: '/camp/rosters', icon: <People size={18} /> },
         { label: 'Applications', path: '/camp/applications', icon: <Assignment size={18} /> },
         { label: 'Tasks', path: '/camp/tasks', icon: <Task size={18} /> },

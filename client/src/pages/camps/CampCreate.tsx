@@ -1,14 +1,20 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const CampCreate: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Redirect to camp profile page since that's where camp creation/editing happens
-    navigate('/camp/profile', { replace: true });
-  }, [navigate]);
+    // Get camp identifier for the profile edit URL
+    const campId = user?.campId?.toString() || user?._id?.toString() || '';
+    const profilePath = campId ? `/camp/${campId}/profile` : '/camp/profile';
+    
+    // Redirect to camp profile page with identifier since that's where camp creation/editing happens
+    navigate(profilePath, { replace: true });
+  }, [navigate, user]);
 
   return (
     <div className="container mx-auto px-4 py-8">

@@ -98,7 +98,14 @@ const Dashboard: React.FC = () => {
         title: 'My Profile',
         description: user?.accountType === 'camp' ? 'Manage camp information' : 'Manage your profile',
         icon: <User size={24} />,
-        onClick: () => navigate(user?.accountType === 'camp' ? '/camp/profile' : '/profile/edit'),
+        onClick: () => {
+          if (user?.accountType === 'camp') {
+            const campId = user?.campId?.toString() || user?._id?.toString() || '';
+            navigate(campId ? `/camp/${campId}/profile` : '/camp/profile');
+          } else {
+            navigate('/profile/edit');
+          }
+        },
         color: 'bg-blue-500'
       },
       {

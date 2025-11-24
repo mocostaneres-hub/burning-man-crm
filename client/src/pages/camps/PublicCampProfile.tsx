@@ -370,7 +370,10 @@ const PublicCampProfile: React.FC = () => {
                 Your camp profile is not visible to the public yet. To make it discoverable on the camps page and start accepting applications, you need to set it to public.
               </p>
               <Button 
-                onClick={() => navigate('/camp/profile')}
+                onClick={() => {
+                  const campId = camp?._id?.toString() || user?.campId?.toString() || user?._id?.toString() || '';
+                  navigate(campId ? `/camp/${campId}/profile` : '/camp/profile');
+                }}
                 className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700"
               >
                 <Edit className="w-4 h-4" />
@@ -394,7 +397,10 @@ const PublicCampProfile: React.FC = () => {
         
         {isCampOwner && (
           <Button 
-            onClick={() => navigate('/camp/profile', { state: { editMode: true } })} 
+            onClick={() => {
+              const campId = camp?._id?.toString() || user?.campId?.toString() || user?._id?.toString() || '';
+              navigate(campId ? `/camp/${campId}/profile` : '/camp/profile', { state: { editMode: true } });
+            }}
             className="flex items-center gap-2"
           >
             <Edit className="w-4 h-4" />
@@ -593,7 +599,10 @@ const PublicCampProfile: React.FC = () => {
                     This is your camp's public facing profile
                   </p>
                   <Button 
-                    onClick={() => navigate('/camp/profile', { state: { editMode: true } })} 
+                    onClick={() => {
+                      const campId = camp?._id?.toString() || user?.campId?.toString() || user?._id?.toString() || '';
+                      navigate(campId ? `/camp/${campId}/profile` : '/camp/profile', { state: { editMode: true } });
+                    }}
                     size="lg"
                     className="w-full lg:w-auto"
                   >

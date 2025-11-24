@@ -86,6 +86,17 @@ const DashboardRedirect: React.FC = () => {
   return <Dashboard />;
 };
 
+// Camp Profile redirect component for backward compatibility
+const CampProfileRedirect: React.FC = () => {
+  const { user } = useAuth();
+  
+  // Get camp identifier and redirect to new URL format
+  const campId = user?.campId?.toString() || user?._id?.toString() || '';
+  const newPath = campId ? `/camp/${campId}/profile` : '/dashboard';
+  
+  return <Navigate to={newPath} replace />;
+};
+
 function App() {
   return (
     <ErrorBoundary>
@@ -112,7 +123,13 @@ function App() {
                       <DashboardRedirect />
                     </ProtectedRoute>
                   } />
+                  {/* Legacy route redirect for backward compatibility */}
                   <Route path="/camp/profile" element={
+                    <ProtectedRoute requireCampAccount>
+                      <CampProfileRedirect />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/camp/:campIdentifier/profile" element={
                     <ProtectedRoute requireCampAccount>
                       <CampProfile />
                     </ProtectedRoute>
