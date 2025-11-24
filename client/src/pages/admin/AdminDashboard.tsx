@@ -2287,20 +2287,14 @@ const CampEditModal: React.FC<{
               <h3 className="text-lg font-medium text-custom-text mb-4">Camp Settings</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-custom-text">Accepting New Members</label>
+                  <div>
+                    <label className="text-sm font-medium text-custom-text">Accepting Applications</label>
+                    <p className="text-xs text-gray-500">Allow applications and show Apply Now button</p>
+                  </div>
                   <input
                     type="checkbox"
-                    checked={formData.acceptingNewMembers !== false}
-                    onChange={(e) => setFormData({ ...formData, acceptingNewMembers: e.target.checked })}
-                    className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-custom-text">Show "Apply Now" Button</label>
-                  <input
-                    type="checkbox"
-                    checked={formData.showApplyNow !== false}
-                    onChange={(e) => setFormData({ ...formData, showApplyNow: e.target.checked })}
+                    checked={formData.acceptingApplications !== false}
+                    onChange={(e) => setFormData({ ...formData, acceptingApplications: e.target.checked })}
                     className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
                   />
                 </div>
