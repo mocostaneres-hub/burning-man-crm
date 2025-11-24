@@ -42,7 +42,9 @@ interface Camp {
   burningSince?: number;
   contactEmail?: string;
   website?: string;
+  isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
+  isCampAdmin?: boolean; // Flag from backend indicating user is camp admin
   categories?: CampCategory[]; // Updated to include full category objects
   selectedPerks?: SelectedPerk[]; // Array of selected perks with populated data
   // Legacy offerings object for backward compatibility
@@ -355,6 +357,30 @@ const PublicCampProfile: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Private Profile Banner - Only shown to camp admin when profile is not public */}
+      {camp.isCampAdmin && camp.isPubliclyVisible === false && (
+        <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-6">
+          <div className="flex items-start gap-3">
+            <div className="text-3xl">⚠️</div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-orange-900 mb-2">
+                Your Camp Profile is Currently Private
+              </h3>
+              <p className="text-orange-800 mb-4">
+                Your camp profile is not visible to the public yet. To make it discoverable on the camps page and start accepting applications, you need to set it to public.
+              </p>
+              <Button 
+                onClick={() => navigate('/camp/profile')}
+                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Camp to Make Public
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Back Button and Edit Button */}
       <div className="mb-6 flex justify-between items-center">
         <Button 

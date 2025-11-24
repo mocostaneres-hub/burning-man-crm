@@ -279,8 +279,8 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
 
 // @route   GET /api/camps/public/:slug
 // @desc    Get public camp profile by slug or ID
-// @access  Public
-router.get('/public/:slug', async (req, res) => {
+// @access  Public (but camp admins can always view their own camp)
+router.get('/public/:slug', optionalAuth, async (req, res) => {
   try {
     const { slug } = req.params;
     
@@ -304,14 +304,23 @@ router.get('/public/:slug', async (req, res) => {
       return res.status(404).json({ message: 'Camp not found or not public' });
     }
     
-    // Check if camp is publicly visible
-    if (camp.isPubliclyVisible === false) {
+    // Check if the authenticated user is the camp admin
+    const isCampAdmin = req.user && (
+      (req.user.accountType === 'admin' && req.user.campId && req.user.campId.toString() === camp._id.toString()) ||
+      (req.user._id && req.user._id.toString() === camp.userId?.toString())
+    );
+    
+    console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin);
+    console.log('🔍 [GET /api/camps/public/:slug] User:', req.user?._id, 'Camp userId:', camp.userId);
+    
+    // Check if camp is publicly visible (allow camp admin to view even if private)
+    if (camp.isPubliclyVisible === false && !isCampAdmin) {
       console.log('❌ [GET /api/camps/public/:slug] Camp profile is not publicly visible:', camp.name);
       return res.status(404).json({ message: 'Camp profile not found or not public' });
     }
     
     // Check if camp is public (or make it public if it's the owner's camp)
-    if (!camp.isPublic) {
+    if (!camp.isPublic && !isCampAdmin) {
       console.log('❌ [GET /api/camps/public/:slug] Camp is not public:', camp.name, 'isPublic:', camp.isPublic);
       return res.status(404).json({ message: 'Camp not found or not public' });
     }
@@ -364,7 +373,9 @@ router.get('/public/:slug', async (req, res) => {
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
       categories: populatedCategories, // Use manually populated categories
+      isPubliclyVisible: campData.isPubliclyVisible !== undefined ? campData.isPubliclyVisible : false,
       acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
+      isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
