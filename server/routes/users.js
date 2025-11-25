@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -101,10 +102,57 @@ router.put('/profile', authenticateToken, [
     console.log('🔍 [PUT /api/users/profile] Updates object:', updates);
     console.log('🔍 [PUT /api/users/profile] playaName in updates:', updates.playaName);
 
+    // Track field changes for audit log (before update)
+    const fieldChanges = [];
+    for (const [field, newValue] of Object.entries(updates)) {
+      // Skip internal fields
+      if (field === 'updatedAt' || field === '__v' || field === 'photos' || field === 'profilePhoto') continue;
+      
+      const oldValue = user[field];
+      
+      // Deep comparison for objects and arrays
+      let hasChanged = false;
+      if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else if (typeof oldValue === 'object' && typeof newValue === 'object' && oldValue !== null && newValue !== null) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else {
+        hasChanged = oldValue !== newValue;
+      }
+      
+      if (hasChanged && (oldValue !== undefined || newValue !== undefined)) {
+        fieldChanges.push({ field, oldValue, newValue });
+      }
+    }
+
     // Update user using database adapter
     let updatedUser;
     try {
       updatedUser = await db.updateUser(user.email, updates);
+      
+      // Record each field change in ActivityLog (user updating their own profile)
+      for (const change of fieldChanges) {
+        // Format values for better display
+        let formattedOldValue = change.oldValue;
+        let formattedNewValue = change.newValue;
+        
+        // Handle arrays and objects
+        if (Array.isArray(change.oldValue)) {
+          formattedOldValue = JSON.stringify(change.oldValue);
+        }
+        if (Array.isArray(change.newValue)) {
+          formattedNewValue = JSON.stringify(change.newValue);
+        }
+        if (typeof change.oldValue === 'object' && change.oldValue !== null) {
+          formattedOldValue = JSON.stringify(change.oldValue);
+        }
+        if (typeof change.newValue === 'object' && change.newValue !== null) {
+          formattedNewValue = JSON.stringify(change.newValue);
+        }
+        
+        // Use req.user._id as the acting user (the person making the change)
+        await recordFieldChange('MEMBER', user._id, req.user._id, change.field, formattedOldValue, formattedNewValue, 'PROFILE_UPDATE');
+      }
       
       // Debug: Log the updated user
       console.log('🔍 [PUT /api/users/profile] Updated user playaName:', updatedUser?.playaName);
@@ -270,6 +318,12 @@ router.put('/password', authenticateToken, [
 
     // Update password using database adapter
     await db.updateUser(user.email, { password: newPassword });
+    
+    // Log password change (without logging the actual password)
+    await recordActivity('MEMBER', user._id, req.user._id, 'PASSWORD_CHANGED', {
+      field: 'password',
+      note: 'Password was changed by user'
+    });
 
     res.json({ message: 'Password updated successfully' });
 

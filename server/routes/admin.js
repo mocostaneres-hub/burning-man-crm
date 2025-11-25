@@ -630,12 +630,25 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
       delete updateData.newPassword;
     }
 
-    // Track field changes for audit log
+    // Track field changes for audit log (before update)
     const fieldChanges = [];
     for (const [field, newValue] of Object.entries(updateData)) {
-      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory') continue;
+      // Skip internal fields
+      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory' || field === '__v') continue;
+      
       const oldValue = targetUser[field];
-      if (oldValue !== newValue) {
+      
+      // Deep comparison for objects and arrays
+      let hasChanged = false;
+      if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else if (typeof oldValue === 'object' && typeof newValue === 'object' && oldValue !== null && newValue !== null) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else {
+        hasChanged = oldValue !== newValue;
+      }
+      
+      if (hasChanged && (oldValue !== undefined || newValue !== undefined)) {
         fieldChanges.push({ field, oldValue, newValue });
       }
     }
@@ -647,7 +660,34 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     
     // Record each field change in ActivityLog
     for (const change of fieldChanges) {
-      await recordFieldChange('MEMBER', id, req.user._id, change.field, change.oldValue, change.newValue, 'PROFILE_UPDATE');
+      // Format values for better display
+      let formattedOldValue = change.oldValue;
+      let formattedNewValue = change.newValue;
+      
+      // Handle arrays and objects
+      if (Array.isArray(change.oldValue)) {
+        formattedOldValue = JSON.stringify(change.oldValue);
+      }
+      if (Array.isArray(change.newValue)) {
+        formattedNewValue = JSON.stringify(change.newValue);
+      }
+      if (typeof change.oldValue === 'object' && change.oldValue !== null) {
+        formattedOldValue = JSON.stringify(change.oldValue);
+      }
+      if (typeof change.newValue === 'object' && change.newValue !== null) {
+        formattedNewValue = JSON.stringify(change.newValue);
+      }
+      
+      // Use req.user._id as the acting user (the admin making the change)
+      await recordFieldChange('MEMBER', id, req.user._id, change.field, formattedOldValue, formattedNewValue, 'PROFILE_UPDATE');
+    }
+    
+    // Log password change if provided (without logging the actual password)
+    if (updateData.newPassword) {
+      await recordActivity('MEMBER', id, req.user._id, 'PASSWORD_CHANGED', {
+        field: 'password',
+        note: 'Password was changed by system admin'
+      });
     }
     
     // Record status change if applicable
