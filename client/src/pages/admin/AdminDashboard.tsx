@@ -2564,11 +2564,29 @@ const CampEditModal: React.FC<{
                       if (activity.activityType === 'APPLICATION_STATUS_CHANGED') {
                         return 'Application Status Changed';
                       }
-                      if (activity.activityType === 'ADDED_TO_ROSTER' || activity.activityType === 'MEMBER_ADDED_TO_ROSTER') {
-                        return 'Member Added to Roster';
+                      if (activity.activityType === 'ADDED_TO_ROSTER' || activity.activityType === 'MEMBER_ADDED_TO_ROSTER' || activity.activityType === 'RESOURCE_ASSIGNED') {
+                        return activity.details?.field === 'roster' ? 'Member Added to Roster' : 'Resource Assigned';
                       }
-                      if (activity.activityType === 'ROSTER_CREATED') {
-                        return 'Roster Created';
+                      if (activity.activityType === 'ROSTER_CREATED' || activity.activityType === 'ENTITY_CREATED') {
+                        return activity.details?.field === 'roster' ? 'Roster Created' : 'Entity Created';
+                      }
+                      if (activity.activityType === 'ENTITY_REMOVED') {
+                        return activity.details?.field === 'roster' ? 'Member Removed from Roster' : 'Entity Removed';
+                      }
+                      if (activity.activityType === 'DATA_ACTION') {
+                        if (activity.details?.action === 'archived') {
+                          return 'Roster Archived';
+                        }
+                        if (activity.details?.action === 'exported') {
+                          return 'Roster Exported';
+                        }
+                        return 'Data Action';
+                      }
+                      if (activity.activityType === 'SETTING_TOGGLED') {
+                        return activity.details?.field === 'duesStatus' ? 'Dues Status Changed' : 'Setting Changed';
+                      }
+                      if (activity.activityType === 'COMMUNICATION_SENT') {
+                        return 'Invitation Sent';
                       }
                       if (activity.activityType === 'PASSWORD_CHANGED') {
                         return 'Password Changed';
@@ -2589,6 +2607,11 @@ const CampEditModal: React.FC<{
                             {activity.details?.context && (
                               <div className="text-xs text-blue-600 mt-1">
                                 {activity.details.context}
+                              </div>
+                            )}
+                            {activity.details?.emailList && (
+                              <div className="text-xs text-gray-600 mt-1 font-mono">
+                                {activity.details.emailList}
                               </div>
                             )}
                             {hasChanges && (
