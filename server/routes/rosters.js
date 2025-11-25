@@ -1091,97 +1091,114 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     console.log('✅ [Roster Override] Member found at index:', memberIndex);
 
+    // Get member info for logging BEFORE making changes
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    
+    // CRITICAL: Capture old overrides BEFORE making any updates
+    const oldOverrides = JSON.parse(JSON.stringify(roster.members[memberIndex].overrides || {}));
+    
     // Create or update the overrides object
     if (!roster.members[memberIndex].overrides) {
       roster.members[memberIndex].overrides = {};
     }
 
-    // Update all provided fields
+    // Track which fields changed BEFORE updating
+    const changedFields = [];
+    
+    // Update all provided fields and track changes
     if (playaName !== undefined) {
+      const oldValue = oldOverrides.playaName;
+      if (playaName !== oldValue) {
+        changedFields.push({ field: 'playaName', oldValue: oldValue, newValue: playaName });
+      }
       roster.members[memberIndex].overrides.playaName = playaName;
       console.log('📝 [Roster Override] Updated playaName:', playaName);
     }
     if (yearsBurned !== undefined) {
+      const oldValue = oldOverrides.yearsBurned;
+      if (yearsBurned !== oldValue) {
+        changedFields.push({ field: 'yearsBurned', oldValue: oldValue, newValue: yearsBurned });
+      }
       roster.members[memberIndex].overrides.yearsBurned = yearsBurned;
       console.log('📝 [Roster Override] Updated yearsBurned:', yearsBurned);
     }
     if (skills !== undefined) {
+      const oldValue = oldOverrides.skills;
+      const oldValueStr = JSON.stringify(oldValue || []);
+      const newValueStr = JSON.stringify(skills || []);
+      if (oldValueStr !== newValueStr) {
+        changedFields.push({ field: 'skills', oldValue: oldValue, newValue: skills });
+      }
       roster.members[memberIndex].overrides.skills = skills;
       console.log('📝 [Roster Override] Updated skills:', skills);
     }
     if (hasTicket !== undefined) {
+      const oldValue = oldOverrides.hasTicket;
+      if (hasTicket !== oldValue) {
+        changedFields.push({ field: 'hasTicket', oldValue: oldValue, newValue: hasTicket });
+      }
       roster.members[memberIndex].overrides.hasTicket = hasTicket;
       console.log('📝 [Roster Override] Updated hasTicket:', hasTicket);
     }
     if (hasVehiclePass !== undefined) {
+      const oldValue = oldOverrides.hasVehiclePass;
+      if (hasVehiclePass !== oldValue) {
+        changedFields.push({ field: 'hasVehiclePass', oldValue: oldValue, newValue: hasVehiclePass });
+      }
       roster.members[memberIndex].overrides.hasVehiclePass = hasVehiclePass;
       console.log('📝 [Roster Override] Updated hasVehiclePass:', hasVehiclePass);
     }
     if (interestedInEAP !== undefined) {
+      const oldValue = oldOverrides.interestedInEAP;
+      if (interestedInEAP !== oldValue) {
+        changedFields.push({ field: 'interestedInEAP', oldValue: oldValue, newValue: interestedInEAP });
+      }
       roster.members[memberIndex].overrides.interestedInEAP = interestedInEAP;
       console.log('📝 [Roster Override] Updated interestedInEAP:', interestedInEAP);
     }
     if (interestedInStrike !== undefined) {
+      const oldValue = oldOverrides.interestedInStrike;
+      if (interestedInStrike !== oldValue) {
+        changedFields.push({ field: 'interestedInStrike', oldValue: oldValue, newValue: interestedInStrike });
+      }
       roster.members[memberIndex].overrides.interestedInStrike = interestedInStrike;
       console.log('📝 [Roster Override] Updated interestedInStrike:', interestedInStrike);
     }
     if (arrivalDate !== undefined) {
+      const oldValue = oldOverrides.arrivalDate;
+      if (arrivalDate !== oldValue) {
+        changedFields.push({ field: 'arrivalDate', oldValue: oldValue, newValue: arrivalDate });
+      }
       roster.members[memberIndex].overrides.arrivalDate = arrivalDate;
       console.log('📝 [Roster Override] Updated arrivalDate:', arrivalDate);
     }
     if (departureDate !== undefined) {
+      const oldValue = oldOverrides.departureDate;
+      if (departureDate !== oldValue) {
+        changedFields.push({ field: 'departureDate', oldValue: oldValue, newValue: departureDate });
+      }
       roster.members[memberIndex].overrides.departureDate = departureDate;
       console.log('📝 [Roster Override] Updated departureDate:', departureDate);
     }
     if (city !== undefined) {
+      const oldValue = oldOverrides.city;
+      if (city !== oldValue) {
+        changedFields.push({ field: 'city', oldValue: oldValue, newValue: city });
+      }
       roster.members[memberIndex].overrides.city = city;
       console.log('📝 [Roster Override] Updated city:', city);
     }
     if (state !== undefined) {
+      const oldValue = oldOverrides.state;
+      if (state !== oldValue) {
+        changedFields.push({ field: 'state', oldValue: oldValue, newValue: state });
+      }
       roster.members[memberIndex].overrides.state = state;
       console.log('📝 [Roster Override] Updated state:', state);
     }
-
-    // Get member info for logging
-    const member = await db.findMember({ _id: memberId });
-    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
-    const oldOverrides = roster.members[memberIndex].overrides || {};
     
-    // Track which fields changed
-    const changedFields = [];
-    if (playaName !== undefined && playaName !== oldOverrides.playaName) {
-      changedFields.push({ field: 'playaName', oldValue: oldOverrides.playaName, newValue: playaName });
-    }
-    if (yearsBurned !== undefined && yearsBurned !== oldOverrides.yearsBurned) {
-      changedFields.push({ field: 'yearsBurned', oldValue: oldOverrides.yearsBurned, newValue: yearsBurned });
-    }
-    if (skills !== undefined && JSON.stringify(skills) !== JSON.stringify(oldOverrides.skills)) {
-      changedFields.push({ field: 'skills', oldValue: oldOverrides.skills, newValue: skills });
-    }
-    if (hasTicket !== undefined && hasTicket !== oldOverrides.hasTicket) {
-      changedFields.push({ field: 'hasTicket', oldValue: oldOverrides.hasTicket, newValue: hasTicket });
-    }
-    if (hasVehiclePass !== undefined && hasVehiclePass !== oldOverrides.hasVehiclePass) {
-      changedFields.push({ field: 'hasVehiclePass', oldValue: oldOverrides.hasVehiclePass, newValue: hasVehiclePass });
-    }
-    if (interestedInEAP !== undefined && interestedInEAP !== oldOverrides.interestedInEAP) {
-      changedFields.push({ field: 'interestedInEAP', oldValue: oldOverrides.interestedInEAP, newValue: interestedInEAP });
-    }
-    if (interestedInStrike !== undefined && interestedInStrike !== oldOverrides.interestedInStrike) {
-      changedFields.push({ field: 'interestedInStrike', oldValue: oldOverrides.interestedInStrike, newValue: interestedInStrike });
-    }
-    if (arrivalDate !== undefined && arrivalDate !== oldOverrides.arrivalDate) {
-      changedFields.push({ field: 'arrivalDate', oldValue: oldOverrides.arrivalDate, newValue: arrivalDate });
-    }
-    if (departureDate !== undefined && departureDate !== oldOverrides.departureDate) {
-      changedFields.push({ field: 'departureDate', oldValue: oldOverrides.departureDate, newValue: departureDate });
-    }
-    if (city !== undefined && city !== oldOverrides.city) {
-      changedFields.push({ field: 'city', oldValue: oldOverrides.city, newValue: city });
-    }
-    if (state !== undefined && state !== oldOverrides.state) {
-      changedFields.push({ field: 'state', oldValue: oldOverrides.state, newValue: state });
-    }
+    console.log(`🔍 [Roster Override] Detected ${changedFields.length} field changes:`, changedFields.map(f => f.field).join(', '));
     
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     roster.markModified('members');
