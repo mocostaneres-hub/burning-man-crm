@@ -1212,11 +1212,49 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     
     // Log profile updates for each changed field (for both MEMBER and CAMP)
     if (member && memberUser && changedFields.length > 0) {
+      console.log(`✅ [Roster Override] Logging ${changedFields.length} field changes for member ${memberUser.email}`);
+      
       for (const change of changedFields) {
+        // Format values for display
+        let formattedOldValue = change.oldValue;
+        let formattedNewValue = change.newValue;
+        
+        // Handle boolean values
+        if (typeof change.oldValue === 'boolean') {
+          formattedOldValue = change.oldValue ? 'Yes' : 'No';
+        }
+        if (typeof change.newValue === 'boolean') {
+          formattedNewValue = change.newValue ? 'Yes' : 'No';
+        }
+        
+        // Handle array values (skills)
+        if (Array.isArray(change.oldValue)) {
+          formattedOldValue = change.oldValue.length > 0 ? change.oldValue.join(', ') : '(none)';
+        }
+        if (Array.isArray(change.newValue)) {
+          formattedNewValue = change.newValue.length > 0 ? change.newValue.join(', ') : '(none)';
+        }
+        
+        // Handle date values
+        if (change.field === 'arrivalDate' || change.field === 'departureDate') {
+          if (change.oldValue) {
+            formattedOldValue = new Date(change.oldValue).toLocaleDateString();
+          } else {
+            formattedOldValue = '(not set)';
+          }
+          if (change.newValue) {
+            formattedNewValue = new Date(change.newValue).toLocaleDateString();
+          } else {
+            formattedNewValue = '(not set)';
+          }
+        }
+        
         await recordActivity('MEMBER', member.user, req.user._id, 'PROFILE_UPDATE', {
           field: change.field,
           oldValue: change.oldValue,
           newValue: change.newValue,
+          oldValueDisplay: formattedOldValue,
+          newValueDisplay: formattedNewValue,
           rosterId: roster._id,
           rosterName: roster.name,
           campId: camp._id,
@@ -1228,6 +1266,8 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
           field: change.field,
           oldValue: change.oldValue,
           newValue: change.newValue,
+          oldValueDisplay: formattedOldValue,
+          newValueDisplay: formattedNewValue,
           rosterId: roster._id,
           rosterName: roster.name,
           memberId: memberId,
@@ -1236,6 +1276,12 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
           source: 'roster_override'
         });
       }
+      
+      console.log(`✅ [Roster Override] Successfully logged ${changedFields.length} field changes`);
+    } else if (changedFields.length === 0) {
+      console.log('⚠️ [Roster Override] No field changes detected - skipping audit log');
+    } else {
+      console.log('⚠️ [Roster Override] Member or memberUser not found - skipping audit log');
     }
 
     res.json({ 
