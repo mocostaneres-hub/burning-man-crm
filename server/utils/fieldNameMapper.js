@@ -49,7 +49,23 @@ const fieldNameMap = {
   // Application fields
   'applicationStatus': 'Application Status',
   'application': 'Application',
-  'roster': 'Roster'
+  'roster': 'Roster',
+  'rosterName': 'Roster Name',
+  'duesStatus': 'Dues Status',
+  'emails': 'Email Addresses',
+  
+  // Roster override fields
+  'playaName': 'Playa Name',
+  'yearsBurned': 'Years Burned',
+  'skills': 'Skills',
+  'hasTicket': 'Has Ticket',
+  'hasVehiclePass': 'Has Vehicle Pass',
+  'interestedInEAP': 'Interested in EAP',
+  'interestedInStrike': 'Interested in Strike',
+  'arrivalDate': 'Arrival Date',
+  'departureDate': 'Departure Date',
+  'city': 'City',
+  'state': 'State'
 };
 
 /**

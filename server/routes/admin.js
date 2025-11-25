@@ -1236,6 +1236,36 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
             : `Camp: ${details.campName}`;
         }
       }
+      // Special handling for roster activities
+      else if (log.activityType === 'ENTITY_CREATED' && details.field === 'roster') {
+        formattedDetails.context = `Roster: ${details.rosterName || details.rosterId}`;
+      }
+      else if (log.activityType === 'DATA_ACTION' && details.field === 'roster') {
+        if (details.action === 'archived') {
+          formattedDetails.context = `Roster: ${details.rosterName || details.rosterId} - Archived`;
+        } else if (details.action === 'exported') {
+          formattedDetails.context = `Roster: ${details.rosterName || details.rosterId} - Exported (${details.memberCount || 0} members)`;
+        }
+      }
+      else if (log.activityType === 'ENTITY_REMOVED' && details.field === 'roster') {
+        formattedDetails.context = details.memberName 
+          ? `Member: ${details.memberName} removed from ${details.rosterName || 'roster'}`
+          : `Member removed from ${details.rosterName || 'roster'}`;
+      }
+      else if (log.activityType === 'RESOURCE_ASSIGNED' && details.field === 'roster') {
+        formattedDetails.context = details.memberName 
+          ? `Member: ${details.memberName} added to ${details.rosterName || 'roster'}`
+          : `Member added to ${details.rosterName || 'roster'}`;
+      }
+      else if (log.activityType === 'SETTING_TOGGLED' && details.field === 'duesStatus') {
+        formattedDetails.context = details.memberName 
+          ? `Member: ${details.memberName} - ${details.rosterName || 'Roster'}`
+          : details.rosterName || '';
+      }
+      else if (log.activityType === 'COMMUNICATION_SENT' && details.field === 'emails') {
+        formattedDetails.context = `Sent ${details.count || 0} ${details.method || 'email'} invitation(s)`;
+        formattedDetails.emailList = details.emails || '';
+      }
       // Format other values for display
       else {
         if (details.oldValue !== undefined) {
