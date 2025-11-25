@@ -13,6 +13,12 @@ const ActivityLog = require('../models/ActivityLog');
  */
 async function recordActivity(entityType, entityId, actingUserId, activityType, details = {}) {
   try {
+    // Check if MongoDB is available (ActivityLog requires MongoDB)
+    if (!process.env.MONGODB_URI && !process.env.MONGO_URI) {
+      console.warn(`⚠️ [ActivityLog] MongoDB not configured - skipping activity log for ${activityType}`);
+      return null;
+    }
+    
     // Ensure entityId and actingUserId are properly formatted (ObjectId if valid)
     const mongoose = require('mongoose');
     
@@ -27,6 +33,9 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
       formattedActingUserId = new mongoose.Types.ObjectId(actingUserId);
     }
     
+    console.log(`🔍 [ActivityLog] Recording ${activityType} for ${entityType} ${entityId} by user ${actingUserId}`);
+    console.log(`🔍 [ActivityLog] Formatted entityId: ${formattedEntityId}, actingUserId: ${formattedActingUserId}`);
+    
     const activityLog = new ActivityLog({
       entityType,
       entityId: formattedEntityId,
@@ -36,12 +45,12 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
       timestamp: new Date()
     });
 
-    await activityLog.save();
+    const savedLog = await activityLog.save();
     
     console.log(`✅ [ActivityLog] Recorded ${activityType} for ${entityType} ${entityId} by user ${actingUserId}`);
-    console.log(`🔍 [ActivityLog] Saved with entityId: ${activityLog.entityId}, actingUserId: ${activityLog.actingUserId}`);
+    console.log(`✅ [ActivityLog] Saved log ID: ${savedLog._id}, entityId: ${savedLog.entityId}, actingUserId: ${savedLog.actingUserId}`);
     
-    return activityLog;
+    return savedLog;
   } catch (error) {
     console.error(`❌ [ActivityLog] Error recording activity:`, error);
     console.error(`❌ [ActivityLog] Error details:`, {
@@ -50,6 +59,7 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
       actingUserId,
       activityType,
       error: error.message,
+      errorName: error.name,
       stack: error.stack
     });
     // Don't throw - logging failures shouldn't break the main operation
@@ -67,6 +77,12 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
  */
 async function getActivityLog(entityType, entityId, options = {}) {
   try {
+    // Check if MongoDB is available
+    if (!process.env.MONGODB_URI && !process.env.MONGO_URI) {
+      console.warn(`⚠️ [ActivityLog] MongoDB not configured - returning empty log`);
+      return [];
+    }
+    
     // Default to no limit to show all activities, but allow override
     const { limit = null, skip = 0, sort = { timestamp: -1 } } = options;
     
@@ -104,6 +120,14 @@ async function getActivityLog(entityType, entityId, options = {}) {
     console.log(`✅ [ActivityLog] Found ${logs.length} logs for ${entityType} ${entityId}`);
     if (logs.length > 0) {
       console.log(`🔍 [ActivityLog] Sample log entityId: ${logs[0].entityId} (type: ${typeof logs[0].entityId})`);
+      console.log(`🔍 [ActivityLog] Sample log activityType: ${logs[0].activityType}`);
+    } else {
+      // Debug: Try to find ANY logs for this entityType to see if the issue is with the entityId
+      const allLogsForType = await ActivityLog.find({ entityType }).limit(5).lean();
+      console.log(`🔍 [ActivityLog] Found ${allLogsForType.length} total logs for entityType ${entityType}`);
+      if (allLogsForType.length > 0) {
+        console.log(`🔍 [ActivityLog] Sample entityId from other logs: ${allLogsForType[0].entityId}`);
+      }
     }
     
     return logs;
