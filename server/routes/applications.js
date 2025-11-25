@@ -5,6 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { sendApplicationNotification, sendApplicationStatusNotification } = require('../services/notifications');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 
 // Helper function to validate if personal profile is complete
 const isPersonalProfileComplete = (user) => {
@@ -211,6 +212,34 @@ router.post('/apply', authenticateToken, [
           timestamp: new Date()
         }]
       });
+      
+      // Log application submission for both MEMBER and CAMP entities
+      const applicantId = req.user._id;
+      const applicantName = `${freshUser.firstName} ${freshUser.lastName}`;
+      
+      // Log for MEMBER (applicant)
+      await recordActivity('MEMBER', applicantId, req.user._id, 'APPLICATION_SUBMITTED', {
+        field: 'application',
+        applicationId: application._id,
+        campId: campId,
+        campName: camp.name || camp.campName,
+        status: initialStatus,
+        burningPlans: burningPlans,
+        viaInvite: !!inviteToken
+      });
+      
+      // Log for CAMP
+      await recordActivity('CAMP', campId, req.user._id, 'APPLICATION_RECEIVED', {
+        field: 'application',
+        applicationId: application._id,
+        applicantId: applicantId,
+        applicantName: applicantName,
+        status: initialStatus,
+        burningPlans: burningPlans,
+        viaInvite: !!inviteToken
+      });
+      
+      console.log(`✅ [ActivityLog] Logged application submission for application ${application._id}`);
     } catch (dbError) {
       // Handle race condition where duplicate was created between checks
       if (dbError.message === 'Application already exists for this user and camp') {
@@ -617,6 +646,38 @@ router.put('/:applicationId/status', authenticateToken, [
     console.log('🔍 [PUT /api/applications/:id/status] Updating application with:', updateData);
     const updatedApplication = await db.updateMemberApplication(applicationId, updateData);
     console.log('✅ [PUT /api/applications/:id/status] Application updated successfully');
+    
+    // Log application status change for both MEMBER and CAMP entities
+    const applicantId = application.applicant;
+    const campId = application.camp;
+    
+    // Get applicant name for better logging
+    const applicant = await db.findUser({ _id: applicantId });
+    const applicantName = applicant ? `${applicant.firstName} ${applicant.lastName}` : 'Unknown';
+    
+    // Log for MEMBER (applicant)
+    await recordActivity('MEMBER', applicantId, req.user._id, 'APPLICATION_STATUS_CHANGED', {
+      field: 'applicationStatus',
+      oldValue: previousStatus,
+      newValue: status,
+      applicationId: applicationId,
+      campId: campId,
+      campName: camp.name || camp.campName,
+      reviewNotes: reviewNotes || ''
+    });
+    
+    // Log for CAMP
+    await recordActivity('CAMP', campId, req.user._id, 'APPLICATION_STATUS_CHANGED', {
+      field: 'applicationStatus',
+      oldValue: previousStatus,
+      newValue: status,
+      applicationId: applicationId,
+      applicantId: applicantId,
+      applicantName: applicantName,
+      reviewNotes: reviewNotes || ''
+    });
+    
+    console.log(`✅ [ActivityLog] Logged application status change: ${previousStatus} → ${status} for application ${applicationId}`);
 
     // If rejected, release the call slot
     if (status === 'rejected' && application.applicationData?.selectedCallSlotId) {
@@ -668,10 +729,35 @@ router.put('/:applicationId/status', authenticateToken, [
           createdBy: req.user._id
         });
         console.log('✅ [Application Approval] Auto-created roster:', activeRoster._id);
+        
+        // Log roster creation for CAMP
+        await recordActivity('CAMP', campId, req.user._id, 'ROSTER_CREATED', {
+          field: 'roster',
+          rosterId: activeRoster._id,
+          rosterName: activeRoster.name,
+          reason: 'Auto-created on first application approval'
+        });
       }
       
       await db.addMemberToRoster(activeRoster._id, newMember._id, req.user._id);
       console.log('✅ [Application Approval] Added member to roster:', newMember._id);
+      
+      // Log member added to roster for both MEMBER and CAMP
+      await recordActivity('MEMBER', applicantId, req.user._id, 'ADDED_TO_ROSTER', {
+        field: 'roster',
+        rosterId: activeRoster._id,
+        campId: campId,
+        campName: camp.name || camp.campName,
+        memberId: newMember._id
+      });
+      
+      await recordActivity('CAMP', campId, req.user._id, 'MEMBER_ADDED_TO_ROSTER', {
+        field: 'roster',
+        rosterId: activeRoster._id,
+        applicantId: applicantId,
+        applicantName: applicantName,
+        memberId: newMember._id
+      });
       
       // Update camp member count
       if (camp.stats) {

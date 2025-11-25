@@ -44,7 +44,12 @@ const fieldNameMap = {
   'socialMedia.facebook': 'Facebook',
   'socialMedia.instagram': 'Instagram',
   'socialMedia.twitter': 'Twitter',
-  'socialMedia.tiktok': 'TikTok'
+  'socialMedia.tiktok': 'TikTok',
+  
+  // Application fields
+  'applicationStatus': 'Application Status',
+  'application': 'Application',
+  'roster': 'Roster'
 };
 
 /**
