@@ -44,17 +44,23 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
  */
 async function getActivityLog(entityType, entityId, options = {}) {
   try {
-    const { limit = 100, skip = 0, sort = { timestamp: -1 } } = options;
+    // Default to no limit to show all activities, but allow override
+    const { limit = null, skip = 0, sort = { timestamp: -1 } } = options;
     
-    const logs = await ActivityLog.find({
+    let query = ActivityLog.find({
       entityType,
       entityId
     })
       .populate('actingUserId', 'firstName lastName email accountType')
       .sort(sort)
-      .limit(limit)
-      .skip(skip)
-      .lean();
+      .skip(skip);
+    
+    // Only apply limit if specified
+    if (limit !== null) {
+      query = query.limit(limit);
+    }
+    
+    const logs = await query.lean();
     
     return logs;
   } catch (error) {

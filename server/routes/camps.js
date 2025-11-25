@@ -5,6 +5,7 @@ const { authenticateToken, requireCampLead, optionalAuth } = require('../middlew
 const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 
 // (moved below after router initialization)
 
@@ -711,7 +712,54 @@ router.put('/my-camp', authenticateToken, [
         }
       }
 
+      // Track field changes for audit log (before update)
+      const fieldChanges = [];
+      for (const [field, newValue] of Object.entries(updateData)) {
+        // Skip internal fields
+        if (field === 'updatedAt' || field === '__v' || field === 'photos') continue;
+        
+        const oldValue = camp[field];
+        
+        // Deep comparison for objects and arrays
+        let hasChanged = false;
+        if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+          hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+        } else if (typeof oldValue === 'object' && typeof newValue === 'object' && oldValue !== null && newValue !== null) {
+          hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+        } else {
+          hasChanged = oldValue !== newValue;
+        }
+        
+        if (hasChanged && (oldValue !== undefined || newValue !== undefined)) {
+          fieldChanges.push({ field, oldValue, newValue });
+        }
+      }
+
       camp = await db.updateCamp({ _id: campId }, updateData);
+      
+      // Record each field change in ActivityLog
+      for (const change of fieldChanges) {
+        // Format values for better display
+        let formattedOldValue = change.oldValue;
+        let formattedNewValue = change.newValue;
+        
+        // Handle arrays and objects
+        if (Array.isArray(change.oldValue)) {
+          formattedOldValue = JSON.stringify(change.oldValue);
+        }
+        if (Array.isArray(change.newValue)) {
+          formattedNewValue = JSON.stringify(change.newValue);
+        }
+        if (typeof change.oldValue === 'object' && change.oldValue !== null) {
+          formattedOldValue = JSON.stringify(change.oldValue);
+        }
+        if (typeof change.newValue === 'object' && change.newValue !== null) {
+          formattedNewValue = JSON.stringify(change.newValue);
+        }
+        
+        await recordFieldChange('CAMP', campId, req.user._id, change.field, formattedOldValue, formattedNewValue, 'PROFILE_UPDATE');
+      }
+      
       return res.json(camp);
     }
   } catch (error) {

@@ -2063,37 +2063,49 @@ const UserEditModal: React.FC<{
             </div>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {auditLog.map((activity, index) => (
-                <div key={index} className="bg-gray-50 border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="font-medium text-custom-text">
-                        {activity.action || activity.activityType || 'Activity'}
-                      </div>
-                      {activity.details?.field && (
-                        <div className="text-sm text-custom-text-secondary mt-1">
-                          <span className="font-medium">Field:</span> {activity.details.field}
-                          {activity.details.oldValue !== undefined && activity.details.newValue !== undefined && (
-                            <span className="ml-2">
-                              <span className="text-red-600 line-through">{String(activity.details.oldValue)}</span>
-                              {' → '}
-                              <span className="text-green-600">{String(activity.details.newValue)}</span>
-                            </span>
-                          )}
+              {auditLog.map((activity, index) => {
+                // Only show activities that have actual changes
+                if (!activity.details?.field && activity.activityType === 'PROFILE_UPDATE') {
+                  return null;
+                }
+                
+                const fieldName = activity.details?.fieldDisplayName || activity.details?.field || '';
+                const oldValue = activity.details?.oldValueDisplay || activity.details?.oldValue;
+                const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
+                const hasChanges = oldValue !== undefined && newValue !== undefined && oldValue !== newValue;
+                
+                return (
+                  <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="font-medium text-custom-text">
+                          {fieldName ? `${fieldName} Updated` : (activity.action || activity.activityType || 'Activity')}
                         </div>
-                      )}
+                        {hasChanges && (
+                          <div className="text-sm text-custom-text-secondary mt-2 space-y-1">
+                            <div>
+                              <span className="font-medium text-gray-700">Changed from:</span>
+                              <span className="ml-2 text-red-600 line-through">{String(oldValue)}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Changed to:</span>
+                              <span className="ml-2 text-green-600 font-medium">{String(newValue)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-custom-text-secondary whitespace-nowrap ml-4">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-custom-text-secondary">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </div>
+                    {activity.actingUserId && typeof activity.actingUserId === 'object' && (
+                      <div className="text-xs text-custom-text-secondary mt-2 pt-2 border-t border-gray-200">
+                        By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
+                      </div>
+                    )}
                   </div>
-                  {activity.actingUserId && typeof activity.actingUserId === 'object' && (
-                    <div className="text-xs text-custom-text-secondary">
-                      By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2470,37 +2482,49 @@ const CampEditModal: React.FC<{
                 </div>
               ) : (
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {auditLog.map((activity, index) => (
-                    <div key={index} className="bg-gray-50 border rounded-lg p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="font-medium text-custom-text">
-                            {activity.action || activity.activityType || 'Activity'}
-                          </div>
-                          {activity.details?.field && (
-                            <div className="text-sm text-custom-text-secondary mt-1">
-                              <span className="font-medium">Field:</span> {activity.details.field}
-                              {activity.details.oldValue !== undefined && activity.details.newValue !== undefined && (
-                                <span className="ml-2">
-                                  <span className="text-red-600 line-through">{String(activity.details.oldValue)}</span>
-                                  {' → '}
-                                  <span className="text-green-600">{String(activity.details.newValue)}</span>
-                                </span>
-                              )}
+                  {auditLog.map((activity, index) => {
+                    // Only show activities that have actual changes
+                    if (!activity.details?.field && activity.activityType === 'PROFILE_UPDATE') {
+                      return null;
+                    }
+                    
+                    const fieldName = activity.details?.fieldDisplayName || activity.details?.field || '';
+                    const oldValue = activity.details?.oldValueDisplay || activity.details?.oldValue;
+                    const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
+                    const hasChanges = oldValue !== undefined && newValue !== undefined && oldValue !== newValue;
+                    
+                    return (
+                      <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="font-medium text-custom-text">
+                              {fieldName ? `${fieldName} Updated` : (activity.action || activity.activityType || 'Activity')}
                             </div>
-                          )}
+                            {hasChanges && (
+                              <div className="text-sm text-custom-text-secondary mt-2 space-y-1">
+                                <div>
+                                  <span className="font-medium text-gray-700">Changed from:</span>
+                                  <span className="ml-2 text-red-600 line-through">{String(oldValue)}</span>
+                                </div>
+                                <div>
+                                  <span className="font-medium text-gray-700">Changed to:</span>
+                                  <span className="ml-2 text-green-600 font-medium">{String(newValue)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-custom-text-secondary whitespace-nowrap ml-4">
+                            {new Date(activity.timestamp).toLocaleString()}
+                          </div>
                         </div>
-                        <div className="text-xs text-custom-text-secondary">
-                          {new Date(activity.timestamp).toLocaleString()}
-                        </div>
+                        {activity.actingUserId && typeof activity.actingUserId === 'object' && (
+                          <div className="text-xs text-custom-text-secondary mt-2 pt-2 border-t border-gray-200">
+                            By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
+                          </div>
+                        )}
                       </div>
-                      {activity.actingUserId && typeof activity.actingUserId === 'object' && (
-                        <div className="text-xs text-custom-text-secondary">
-                          By: {activity.actingUserId.firstName} {activity.actingUserId.lastName} ({activity.actingUserId.email})
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

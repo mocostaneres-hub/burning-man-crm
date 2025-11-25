@@ -8,6 +8,7 @@ const Admin = require('../models/Admin');
 const { authenticateToken, requireAdmin, requirePermission } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
+const { getFieldDisplayName, formatFieldValue } = require('../utils/fieldNameMapper');
 
 // Configure multer for photo uploads
 const storage = multer.memoryStorage();
@@ -748,12 +749,25 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
       console.log('Processing photo updates for camp:', id);
     }
 
-    // Track field changes for audit log
+    // Track field changes for audit log (before update)
     const fieldChanges = [];
     for (const [field, newValue] of Object.entries(updateData)) {
-      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory' || field === 'photos') continue;
+      // Skip internal fields
+      if (field === 'newPassword' || field === 'confirmPassword' || field === 'actionHistory' || field === 'photos' || field === '__v') continue;
+      
       const oldValue = targetCamp[field];
-      if (oldValue !== newValue) {
+      
+      // Deep comparison for objects and arrays
+      let hasChanged = false;
+      if (Array.isArray(oldValue) && Array.isArray(newValue)) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else if (typeof oldValue === 'object' && typeof newValue === 'object' && oldValue !== null && newValue !== null) {
+        hasChanged = JSON.stringify(oldValue) !== JSON.stringify(newValue);
+      } else {
+        hasChanged = oldValue !== newValue;
+      }
+      
+      if (hasChanged && (oldValue !== undefined || newValue !== undefined)) {
         fieldChanges.push({ field, oldValue, newValue });
       }
     }
@@ -763,7 +777,25 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
     
     // Record each field change in ActivityLog
     for (const change of fieldChanges) {
-      await recordFieldChange('CAMP', id, req.user._id, change.field, change.oldValue, change.newValue, 'PROFILE_UPDATE');
+      // Format values for better display
+      let formattedOldValue = change.oldValue;
+      let formattedNewValue = change.newValue;
+      
+      // Handle arrays and objects
+      if (Array.isArray(change.oldValue)) {
+        formattedOldValue = JSON.stringify(change.oldValue);
+      }
+      if (Array.isArray(change.newValue)) {
+        formattedNewValue = JSON.stringify(change.newValue);
+      }
+      if (typeof change.oldValue === 'object' && change.oldValue !== null) {
+        formattedOldValue = JSON.stringify(change.oldValue);
+      }
+      if (typeof change.newValue === 'object' && change.newValue !== null) {
+        formattedNewValue = JSON.stringify(change.newValue);
+      }
+      
+      await recordFieldChange('CAMP', id, req.user._id, change.field, formattedOldValue, formattedNewValue, 'PROFILE_UPDATE');
     }
     
     // Record status change if applicable
@@ -996,17 +1028,36 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get activity log from ActivityLog collection
-    const activityLogs = await getActivityLog('MEMBER', id, { limit: 500 });
+    // Get activity log from ActivityLog collection (no limit to show all)
+    const activityLogs = await getActivityLog('MEMBER', id, { limit: null });
     
-    // Format activities for frontend
-    const activities = activityLogs.map(log => ({
-      action: log.activityType,
-      actingUserId: log.actingUserId,
-      timestamp: log.timestamp,
-      details: log.details,
-      type: 'activity_log'
-    }));
+    // Format activities for frontend with human-readable names
+    const activities = activityLogs.map(log => {
+      const details = log.details || {};
+      const formattedDetails = { ...details };
+      
+      // Convert field name to display name
+      if (details.field) {
+        formattedDetails.fieldDisplayName = getFieldDisplayName(details.field);
+      }
+      
+      // Format values for display
+      if (details.oldValue !== undefined) {
+        formattedDetails.oldValueDisplay = formatFieldValue(details.oldValue, details.field);
+      }
+      if (details.newValue !== undefined) {
+        formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
+      }
+      
+      return {
+        action: log.activityType,
+        activityType: log.activityType,
+        actingUserId: log.actingUserId,
+        timestamp: log.timestamp,
+        details: formattedDetails,
+        type: 'activity_log'
+      };
+    });
 
     res.json({
       user: {
@@ -1041,17 +1092,94 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Get activity log from ActivityLog collection
-    const activityLogs = await getActivityLog('CAMP', id, { limit: 500 });
+    // Get activity log from ActivityLog collection (no limit to show all)
+    const activityLogs = await getActivityLog('CAMP', id, { limit: null });
     
-    // Format activities for frontend
-    const activities = activityLogs.map(log => ({
-      action: log.activityType,
-      actingUserId: log.actingUserId,
-      timestamp: log.timestamp,
-      details: log.details,
-      type: 'activity_log'
-    }));
+    // Get all perks for resolving IDs to names
+    const allPerks = await db.findGlobalPerks();
+    const perkMap = new Map(allPerks.map(perk => [perk._id.toString(), perk.name]));
+    
+    // Get all categories for resolving IDs to names
+    const allCategories = await db.findCampCategories();
+    const categoryMap = new Map(allCategories.map(cat => [cat._id.toString(), cat.name]));
+    
+    // Format activities for frontend with human-readable names
+    const activities = activityLogs.map(log => {
+      const details = log.details || {};
+      const formattedDetails = { ...details };
+      
+      // Convert field name to display name
+      if (details.field) {
+        formattedDetails.fieldDisplayName = getFieldDisplayName(details.field);
+      }
+      
+      // Special handling for selectedPerks (Shared Amenities)
+      if (details.field === 'selectedPerks') {
+        try {
+          const oldPerks = details.oldValue ? (typeof details.oldValue === 'string' ? JSON.parse(details.oldValue) : details.oldValue) : [];
+          const newPerks = details.newValue ? (typeof details.newValue === 'string' ? JSON.parse(details.newValue) : details.newValue) : [];
+          
+          const oldPerkNames = Array.isArray(oldPerks) 
+            ? oldPerks.map(p => {
+                const perkId = typeof p === 'object' ? p.perkId?.toString() : p?.toString();
+                return perkId ? perkMap.get(perkId) || perkId : '';
+              }).filter(Boolean).join(', ') || '(none)'
+            : '(none)';
+          
+          const newPerkNames = Array.isArray(newPerks)
+            ? newPerks.map(p => {
+                const perkId = typeof p === 'object' ? p.perkId?.toString() : p?.toString();
+                return perkId ? perkMap.get(perkId) || perkId : '';
+              }).filter(Boolean).join(', ') || '(none)'
+            : '(none)';
+          
+          formattedDetails.oldValueDisplay = oldPerkNames;
+          formattedDetails.newValueDisplay = newPerkNames;
+        } catch (e) {
+          formattedDetails.oldValueDisplay = formatFieldValue(details.oldValue, details.field);
+          formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
+        }
+      }
+      // Special handling for categories
+      else if (details.field === 'categories') {
+        try {
+          const oldCats = details.oldValue ? (typeof details.oldValue === 'string' ? JSON.parse(details.oldValue) : details.oldValue) : [];
+          const newCats = details.newValue ? (typeof details.newValue === 'string' ? JSON.parse(details.newValue) : details.newValue) : [];
+          
+          const oldCatNames = Array.isArray(oldCats)
+            ? oldCats.map(catId => categoryMap.get(catId?.toString() || catId) || catId).filter(Boolean).join(', ') || '(none)'
+            : '(none)';
+          
+          const newCatNames = Array.isArray(newCats)
+            ? newCats.map(catId => categoryMap.get(catId?.toString() || catId) || catId).filter(Boolean).join(', ') || '(none)'
+            : '(none)';
+          
+          formattedDetails.oldValueDisplay = oldCatNames;
+          formattedDetails.newValueDisplay = newCatNames;
+        } catch (e) {
+          formattedDetails.oldValueDisplay = formatFieldValue(details.oldValue, details.field);
+          formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
+        }
+      }
+      // Format other values for display
+      else {
+        if (details.oldValue !== undefined) {
+          formattedDetails.oldValueDisplay = formatFieldValue(details.oldValue, details.field);
+        }
+        if (details.newValue !== undefined) {
+          formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
+        }
+      }
+      
+      return {
+        action: log.activityType,
+        activityType: log.activityType,
+        actingUserId: log.actingUserId,
+        timestamp: log.timestamp,
+        details: formattedDetails,
+        type: 'activity_log'
+      };
+    });
 
     res.json({
       camp: {
