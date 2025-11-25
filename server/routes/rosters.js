@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -245,9 +246,26 @@ router.post('/', authenticateToken, async (req, res) => {
       createdBy: req.user._id
     });
 
+    // Log roster creation for CAMP
+    await recordActivity('CAMP', camp._id, req.user._id, 'ENTITY_CREATED', {
+      field: 'roster',
+      rosterId: roster._id,
+      rosterName: name,
+      description: description || ''
+    });
+
     // If there was an existing active roster, archive it
     if (existingActiveRoster) {
       await db.archiveRoster(existingActiveRoster._id, req.user._id);
+      
+      // Log roster archiving for CAMP
+      await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+        field: 'roster',
+        action: 'archived',
+        rosterId: existingActiveRoster._id,
+        rosterName: existingActiveRoster.name,
+        reason: 'Replaced by new active roster'
+      });
     }
 
     // Add all approved members to the new roster
@@ -352,6 +370,15 @@ router.put('/:id/archive', authenticateToken, async (req, res) => {
     }
 
     const archivedRoster = await db.archiveRoster(parseInt(id), req.user._id);
+    
+    // Log roster archiving for CAMP
+    await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+      field: 'roster',
+      action: 'archived',
+      rosterId: roster._id,
+      rosterName: roster.name
+    });
+    
     res.json(archivedRoster);
   } catch (error) {
     console.error('Archive roster error:', error);
@@ -562,6 +589,17 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
     const filename = `${roster.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_roster.csv`;
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Log roster export for CAMP
+    await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+      field: 'roster',
+      action: 'exported',
+      rosterId: roster._id,
+      rosterName: roster.name,
+      format: 'CSV',
+      memberCount: populatedMembers.length
+    });
+    
     res.send(csvContent);
 
   } catch (error) {
@@ -598,11 +636,37 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'No active roster found' });
     }
 
+    // Find member before removal for logging
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    const memberName = memberUser ? `${memberUser.firstName} ${memberUser.lastName}` : 'Unknown';
+    
     // Remove member from roster
     const updatedRoster = await db.removeMemberFromRoster(activeRoster._id, memberId);
     
+    // Log member removal for both MEMBER and CAMP
+    if (member && memberUser) {
+      await recordActivity('MEMBER', member.user, req.user._id, 'ENTITY_REMOVED', {
+        field: 'roster',
+        rosterId: activeRoster._id,
+        rosterName: activeRoster.name,
+        campId: camp._id,
+        campName: camp.name || camp.campName,
+        reason: 'Removed from active roster'
+      });
+      
+      await recordActivity('CAMP', camp._id, req.user._id, 'ENTITY_REMOVED', {
+        field: 'roster',
+        rosterId: activeRoster._id,
+        rosterName: activeRoster.name,
+        memberId: memberId,
+        memberName: memberName,
+        memberEmail: memberUser.email,
+        reason: 'Removed from active roster'
+      });
+    }
+    
     // Find and update the member's application status to withdrawn (allows re-application)
-    const member = await db.findMember({ _id: memberId });
     if (member) {
       console.log('🔄 [Roster Removal] Updating member and application status to "withdrawn"');
       
@@ -732,6 +796,25 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
 
     // Add member to roster
     await db.addMemberToRoster(rosterId, createdMember._id, req.user._id);
+    
+    // Log member addition for both MEMBER and CAMP
+    await recordActivity('MEMBER', user._id, req.user._id, 'RESOURCE_ASSIGNED', {
+      field: 'roster',
+      rosterId: rosterId,
+      rosterName: roster.name,
+      campId: camp._id,
+      campName: camp.name || camp.campName,
+      memberId: createdMember._id
+    });
+    
+    await recordActivity('CAMP', camp._id, req.user._id, 'RESOURCE_ASSIGNED', {
+      field: 'roster',
+      rosterId: rosterId,
+      rosterName: roster.name,
+      memberId: createdMember._id,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email
+    });
 
     res.status(201).json({
       message: 'Member added successfully',
@@ -881,6 +964,11 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
 
     console.log('✅ [Dues Update] Member found at index:', memberIndex);
 
+    // Get member info for logging
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    const oldDuesStatus = roster.members[memberIndex].duesStatus || 'Unpaid';
+    
     // Update the dues status
     roster.members[memberIndex].duesStatus = duesStatus;
     console.log('📝 [Dues Update] Updated duesStatus to:', duesStatus);
@@ -893,6 +981,30 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     // Save the updated roster directly (must use .save() for markModified to work)
     const savedRoster = await roster.save();
     console.log('✅ [Dues Update] Saved successfully');
+    
+    // Log dues status change for both MEMBER and CAMP
+    if (member && memberUser) {
+      await recordActivity('MEMBER', member.user, req.user._id, 'SETTING_TOGGLED', {
+        field: 'duesStatus',
+        oldValue: oldDuesStatus,
+        newValue: duesStatus,
+        rosterId: roster._id,
+        rosterName: roster.name,
+        campId: camp._id,
+        campName: camp.name || camp.campName
+      });
+      
+      await recordActivity('CAMP', camp._id, req.user._id, 'SETTING_TOGGLED', {
+        field: 'duesStatus',
+        oldValue: oldDuesStatus,
+        newValue: duesStatus,
+        rosterId: roster._id,
+        rosterName: roster.name,
+        memberId: memberId,
+        memberName: `${memberUser.firstName} ${memberUser.lastName}`,
+        memberEmail: memberUser.email
+      });
+    }
     
     // Verify the save
     const verifyRoster = await db.findRoster({ _id: roster._id });
@@ -1030,6 +1142,47 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       console.log('📝 [Roster Override] Updated state:', state);
     }
 
+    // Get member info for logging
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    const oldOverrides = roster.members[memberIndex].overrides || {};
+    
+    // Track which fields changed
+    const changedFields = [];
+    if (playaName !== undefined && playaName !== oldOverrides.playaName) {
+      changedFields.push({ field: 'playaName', oldValue: oldOverrides.playaName, newValue: playaName });
+    }
+    if (yearsBurned !== undefined && yearsBurned !== oldOverrides.yearsBurned) {
+      changedFields.push({ field: 'yearsBurned', oldValue: oldOverrides.yearsBurned, newValue: yearsBurned });
+    }
+    if (skills !== undefined && JSON.stringify(skills) !== JSON.stringify(oldOverrides.skills)) {
+      changedFields.push({ field: 'skills', oldValue: oldOverrides.skills, newValue: skills });
+    }
+    if (hasTicket !== undefined && hasTicket !== oldOverrides.hasTicket) {
+      changedFields.push({ field: 'hasTicket', oldValue: oldOverrides.hasTicket, newValue: hasTicket });
+    }
+    if (hasVehiclePass !== undefined && hasVehiclePass !== oldOverrides.hasVehiclePass) {
+      changedFields.push({ field: 'hasVehiclePass', oldValue: oldOverrides.hasVehiclePass, newValue: hasVehiclePass });
+    }
+    if (interestedInEAP !== undefined && interestedInEAP !== oldOverrides.interestedInEAP) {
+      changedFields.push({ field: 'interestedInEAP', oldValue: oldOverrides.interestedInEAP, newValue: interestedInEAP });
+    }
+    if (interestedInStrike !== undefined && interestedInStrike !== oldOverrides.interestedInStrike) {
+      changedFields.push({ field: 'interestedInStrike', oldValue: oldOverrides.interestedInStrike, newValue: interestedInStrike });
+    }
+    if (arrivalDate !== undefined && arrivalDate !== oldOverrides.arrivalDate) {
+      changedFields.push({ field: 'arrivalDate', oldValue: oldOverrides.arrivalDate, newValue: arrivalDate });
+    }
+    if (departureDate !== undefined && departureDate !== oldOverrides.departureDate) {
+      changedFields.push({ field: 'departureDate', oldValue: oldOverrides.departureDate, newValue: departureDate });
+    }
+    if (city !== undefined && city !== oldOverrides.city) {
+      changedFields.push({ field: 'city', oldValue: oldOverrides.city, newValue: city });
+    }
+    if (state !== undefined && state !== oldOverrides.state) {
+      changedFields.push({ field: 'state', oldValue: oldOverrides.state, newValue: state });
+    }
+    
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     roster.markModified('members');
     roster.updatedAt = new Date();
@@ -1039,6 +1192,34 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     await roster.save();
     console.log('✅ [Roster Override] Roster saved successfully');
     console.log('📊 [Roster Override] Saved overrides:', JSON.stringify(roster.members[memberIndex].overrides, null, 2));
+    
+    // Log profile updates for each changed field (for both MEMBER and CAMP)
+    if (member && memberUser && changedFields.length > 0) {
+      for (const change of changedFields) {
+        await recordActivity('MEMBER', member.user, req.user._id, 'PROFILE_UPDATE', {
+          field: change.field,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
+          rosterId: roster._id,
+          rosterName: roster.name,
+          campId: camp._id,
+          campName: camp.name || camp.campName,
+          source: 'roster_override'
+        });
+        
+        await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+          field: change.field,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
+          rosterId: roster._id,
+          rosterName: roster.name,
+          memberId: memberId,
+          memberName: `${memberUser.firstName} ${memberUser.lastName}`,
+          memberEmail: memberUser.email,
+          source: 'roster_override'
+        });
+      }
+    }
 
     res.json({ 
       message: 'Member overrides updated successfully',

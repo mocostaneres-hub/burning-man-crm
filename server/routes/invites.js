@@ -6,6 +6,7 @@ const Invite = require('../models/Invite');
 const { authenticateToken, requireCampLead } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { sendInviteEmail } = require('../services/emailService');
+const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -263,6 +264,20 @@ router.post('/invites',
             error: error.message
           });
         }
+      }
+      
+      // Log invitation sending for CAMP
+      // Create comma-separated list of email addresses
+      const emailList = invitesSent.map(inv => inv.recipient).join(', ');
+      
+      if (invitesSent.length > 0) {
+        await recordActivity('CAMP', campId, req.user._id, 'COMMUNICATION_SENT', {
+          field: 'emails',
+          emails: emailList,
+          method: method,
+          count: invitesSent.length,
+          campName: camp.name || camp.campName
+        });
       }
       
       res.json({
