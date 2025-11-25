@@ -1133,7 +1133,9 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
     }
 
     // Get activity log from ActivityLog collection (no limit to show all)
+    console.log(`🔍 [GET /api/admin/camps/:id/history] Fetching history for camp ID: ${id}`);
     const activityLogs = await getActivityLog('CAMP', id, { limit: null });
+    console.log(`🔍 [GET /api/admin/camps/:id/history] Found ${activityLogs.length} activity logs`);
     
     // Get all perks for resolving IDs to names
     const allPerks = await db.findGlobalPerks();

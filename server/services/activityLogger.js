@@ -13,10 +13,24 @@ const ActivityLog = require('../models/ActivityLog');
  */
 async function recordActivity(entityType, entityId, actingUserId, activityType, details = {}) {
   try {
+    // Ensure entityId and actingUserId are properly formatted (ObjectId if valid)
+    const mongoose = require('mongoose');
+    
+    let formattedEntityId = entityId;
+    let formattedActingUserId = actingUserId;
+    
+    // Convert string IDs to ObjectId if they're valid MongoDB ObjectIds
+    if (typeof entityId === 'string' && mongoose.Types.ObjectId.isValid(entityId)) {
+      formattedEntityId = new mongoose.Types.ObjectId(entityId);
+    }
+    if (typeof actingUserId === 'string' && mongoose.Types.ObjectId.isValid(actingUserId)) {
+      formattedActingUserId = new mongoose.Types.ObjectId(actingUserId);
+    }
+    
     const activityLog = new ActivityLog({
       entityType,
-      entityId,
-      actingUserId,
+      entityId: formattedEntityId,
+      actingUserId: formattedActingUserId,
       activityType,
       details,
       timestamp: new Date()
@@ -25,10 +39,19 @@ async function recordActivity(entityType, entityId, actingUserId, activityType, 
     await activityLog.save();
     
     console.log(`✅ [ActivityLog] Recorded ${activityType} for ${entityType} ${entityId} by user ${actingUserId}`);
+    console.log(`🔍 [ActivityLog] Saved with entityId: ${activityLog.entityId}, actingUserId: ${activityLog.actingUserId}`);
     
     return activityLog;
   } catch (error) {
     console.error(`❌ [ActivityLog] Error recording activity:`, error);
+    console.error(`❌ [ActivityLog] Error details:`, {
+      entityType,
+      entityId,
+      actingUserId,
+      activityType,
+      error: error.message,
+      stack: error.stack
+    });
     // Don't throw - logging failures shouldn't break the main operation
     return null;
   }
@@ -47,9 +70,20 @@ async function getActivityLog(entityType, entityId, options = {}) {
     // Default to no limit to show all activities, but allow override
     const { limit = null, skip = 0, sort = { timestamp: -1 } } = options;
     
+    // Handle both string and ObjectId formats for entityId
+    const mongoose = require('mongoose');
+    let queryEntityId = entityId;
+    
+    // If entityId is a string that looks like an ObjectId, convert it
+    if (typeof entityId === 'string' && mongoose.Types.ObjectId.isValid(entityId)) {
+      queryEntityId = new mongoose.Types.ObjectId(entityId);
+    }
+    
+    console.log(`🔍 [ActivityLog] Fetching logs for ${entityType} with entityId: ${entityId} (type: ${typeof entityId})`);
+    
     let query = ActivityLog.find({
       entityType,
-      entityId
+      entityId: queryEntityId
     })
       .populate('actingUserId', 'firstName lastName email accountType')
       .sort(sort)
@@ -61,6 +95,8 @@ async function getActivityLog(entityType, entityId, options = {}) {
     }
     
     const logs = await query.lean();
+    
+    console.log(`✅ [ActivityLog] Found ${logs.length} logs for ${entityType} ${entityId}`);
     
     return logs;
   } catch (error) {
