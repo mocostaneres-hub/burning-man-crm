@@ -80,10 +80,15 @@ async function getActivityLog(entityType, entityId, options = {}) {
     }
     
     console.log(`🔍 [ActivityLog] Fetching logs for ${entityType} with entityId: ${entityId} (type: ${typeof entityId})`);
+    console.log(`🔍 [ActivityLog] Query entityId: ${queryEntityId} (type: ${typeof queryEntityId})`);
     
+    // Try querying with both formats to handle any edge cases
     let query = ActivityLog.find({
       entityType,
-      entityId: queryEntityId
+      $or: [
+        { entityId: queryEntityId },
+        { entityId: entityId.toString() }
+      ]
     })
       .populate('actingUserId', 'firstName lastName email accountType')
       .sort(sort)
@@ -97,10 +102,14 @@ async function getActivityLog(entityType, entityId, options = {}) {
     const logs = await query.lean();
     
     console.log(`✅ [ActivityLog] Found ${logs.length} logs for ${entityType} ${entityId}`);
+    if (logs.length > 0) {
+      console.log(`🔍 [ActivityLog] Sample log entityId: ${logs[0].entityId} (type: ${typeof logs[0].entityId})`);
+    }
     
     return logs;
   } catch (error) {
     console.error(`❌ [ActivityLog] Error fetching activity log:`, error);
+    console.error(`❌ [ActivityLog] Error stack:`, error.stack);
     throw error;
   }
 }
