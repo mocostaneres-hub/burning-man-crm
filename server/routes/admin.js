@@ -1203,6 +1203,39 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
           formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
         }
       }
+      // Special handling for application status changes
+      else if (details.field === 'applicationStatus' || log.activityType === 'APPLICATION_STATUS_CHANGED' || log.activityType === 'APPLICATION_SUBMITTED' || log.activityType === 'APPLICATION_RECEIVED') {
+        // Format status values to be more readable
+        const statusMap = {
+          'pending': 'Pending',
+          'call-scheduled': 'Call Scheduled',
+          'pending-orientation': 'Pending Orientation',
+          'under-review': 'Under Review',
+          'approved': 'Approved',
+          'rejected': 'Rejected',
+          'unresponsive': 'Unresponsive',
+          'withdrawn': 'Withdrawn',
+          'deleted': 'Deleted',
+          'undecided': 'Undecided'
+        };
+        
+        if (details.oldValue) {
+          formattedDetails.oldValueDisplay = statusMap[details.oldValue] || details.oldValue;
+        }
+        if (details.newValue) {
+          formattedDetails.newValueDisplay = statusMap[details.newValue] || details.newValue;
+        }
+        
+        // Add context information if available
+        if (details.applicantName) {
+          formattedDetails.context = `Applicant: ${details.applicantName}`;
+        }
+        if (details.campName) {
+          formattedDetails.context = formattedDetails.context 
+            ? `${formattedDetails.context} | Camp: ${details.campName}`
+            : `Camp: ${details.campName}`;
+        }
+      }
       // Format other values for display
       else {
         if (details.oldValue !== undefined) {

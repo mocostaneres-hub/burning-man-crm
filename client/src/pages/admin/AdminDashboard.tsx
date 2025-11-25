@@ -2074,13 +2074,41 @@ const UserEditModal: React.FC<{
                 const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
                 const hasChanges = oldValue !== undefined && newValue !== undefined && oldValue !== newValue;
                 
+                // Format activity type for display
+                const getActivityTitle = () => {
+                  if (activity.activityType === 'APPLICATION_SUBMITTED' || activity.activityType === 'APPLICATION_RECEIVED') {
+                    return 'Application Submitted';
+                  }
+                  if (activity.activityType === 'APPLICATION_STATUS_CHANGED') {
+                    return 'Application Status Changed';
+                  }
+                  if (activity.activityType === 'ADDED_TO_ROSTER' || activity.activityType === 'MEMBER_ADDED_TO_ROSTER') {
+                    return 'Member Added to Roster';
+                  }
+                  if (activity.activityType === 'ROSTER_CREATED') {
+                    return 'Roster Created';
+                  }
+                  if (activity.activityType === 'PASSWORD_CHANGED') {
+                    return 'Password Changed';
+                  }
+                  if (fieldName) {
+                    return `${fieldName} Updated`;
+                  }
+                  return activity.action || activity.activityType || 'Activity';
+                };
+                
                 return (
                   <div key={index} className="bg-gray-50 border rounded-lg p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <div className="font-medium text-custom-text">
-                          {fieldName ? `${fieldName} Updated` : (activity.action || activity.activityType || 'Activity')}
+                          {getActivityTitle()}
                         </div>
+                        {activity.details?.context && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            {activity.details.context}
+                          </div>
+                        )}
                         {hasChanges && (
                           <div className="text-sm text-custom-text-secondary mt-2 space-y-1">
                             <div>
@@ -2091,6 +2119,11 @@ const UserEditModal: React.FC<{
                               <span className="font-medium text-gray-700">Changed to:</span>
                               <span className="ml-2 text-green-600 font-medium">{String(newValue)}</span>
                             </div>
+                          </div>
+                        )}
+                        {!hasChanges && activity.details?.note && (
+                          <div className="text-sm text-custom-text-secondary mt-2">
+                            {activity.details.note}
                           </div>
                         )}
                       </div>
@@ -2483,8 +2516,15 @@ const CampEditModal: React.FC<{
               ) : (
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {auditLog.map((activity, index) => {
-                    // Only show activities that have actual changes
-                    if (!activity.details?.field && activity.activityType === 'PROFILE_UPDATE') {
+                    // Only show activities that have actual changes (unless it's a special activity type)
+                    if (!activity.details?.field && 
+                        activity.activityType === 'PROFILE_UPDATE' && 
+                        activity.activityType !== 'APPLICATION_STATUS_CHANGED' &&
+                        activity.activityType !== 'APPLICATION_SUBMITTED' &&
+                        activity.activityType !== 'APPLICATION_RECEIVED' &&
+                        activity.activityType !== 'ADDED_TO_ROSTER' &&
+                        activity.activityType !== 'MEMBER_ADDED_TO_ROSTER' &&
+                        activity.activityType !== 'ROSTER_CREATED') {
                       return null;
                     }
                     
@@ -2493,13 +2533,41 @@ const CampEditModal: React.FC<{
                     const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
                     const hasChanges = oldValue !== undefined && newValue !== undefined && oldValue !== newValue;
                     
+                    // Format activity type for display
+                    const getActivityTitle = () => {
+                      if (activity.activityType === 'APPLICATION_SUBMITTED' || activity.activityType === 'APPLICATION_RECEIVED') {
+                        return 'Application Submitted';
+                      }
+                      if (activity.activityType === 'APPLICATION_STATUS_CHANGED') {
+                        return 'Application Status Changed';
+                      }
+                      if (activity.activityType === 'ADDED_TO_ROSTER' || activity.activityType === 'MEMBER_ADDED_TO_ROSTER') {
+                        return 'Member Added to Roster';
+                      }
+                      if (activity.activityType === 'ROSTER_CREATED') {
+                        return 'Roster Created';
+                      }
+                      if (activity.activityType === 'PASSWORD_CHANGED') {
+                        return 'Password Changed';
+                      }
+                      if (fieldName) {
+                        return `${fieldName} Updated`;
+                      }
+                      return activity.action || activity.activityType || 'Activity';
+                    };
+                    
                     return (
                       <div key={index} className="bg-gray-50 border rounded-lg p-4">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <div className="font-medium text-custom-text">
-                              {fieldName ? `${fieldName} Updated` : (activity.action || activity.activityType || 'Activity')}
+                              {getActivityTitle()}
                             </div>
+                            {activity.details?.context && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                {activity.details.context}
+                              </div>
+                            )}
                             {hasChanges && (
                               <div className="text-sm text-custom-text-secondary mt-2 space-y-1">
                                 <div>
@@ -2510,6 +2578,11 @@ const CampEditModal: React.FC<{
                                   <span className="font-medium text-gray-700">Changed to:</span>
                                   <span className="ml-2 text-green-600 font-medium">{String(newValue)}</span>
                                 </div>
+                              </div>
+                            )}
+                            {!hasChanges && activity.details?.note && (
+                              <div className="text-sm text-custom-text-secondary mt-2">
+                                {activity.details.note}
                               </div>
                             )}
                           </div>
