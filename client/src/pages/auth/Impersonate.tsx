@@ -16,7 +16,17 @@ const Impersonate: React.FC = () => {
     // Call the backend impersonation endpoint
     const handleImpersonation = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.g8road.com'}/api/auth/impersonate?token=${token}`, {
+        // Normalize API URL to prevent double /api prefix
+        let apiBaseUrl = process.env.REACT_APP_API_URL || 'https://api.g8road.com/api';
+        // Ensure baseURL ends with /api
+        if (!apiBaseUrl.endsWith('/api')) {
+          apiBaseUrl = apiBaseUrl.endsWith('/') ? `${apiBaseUrl}api` : `${apiBaseUrl}/api`;
+        }
+        // Build URL without double /api prefix
+        const impersonateUrl = `${apiBaseUrl}/auth/impersonate?token=${token}`;
+        console.log('🔐 [Impersonate] Calling:', impersonateUrl);
+        
+        const response = await fetch(impersonateUrl, {
           method: 'GET',
           credentials: 'include'
         });

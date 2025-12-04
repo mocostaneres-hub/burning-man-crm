@@ -17,9 +17,25 @@ class ApiService {
       timeout: 10000, // 10 second timeout
     });
 
-    // Request interceptor to add auth token
+    // Request interceptor to add auth token and normalize paths
     this.api.interceptors.request.use(
       (config) => {
+        // Normalize URL path to prevent double /api prefix
+        if (config.url) {
+          const baseURL = this.api.defaults.baseURL || '';
+          // If baseURL ends with /api and url starts with /api, remove the leading /api from url
+          if (baseURL.endsWith('/api') && config.url.startsWith('/api/')) {
+            config.url = config.url.replace(/^\/api/, '');
+            console.log('🔧 [API Interceptor] Normalized path to prevent double /api prefix:', config.url);
+          }
+          // Also handle case where url starts with /api/ but baseURL doesn't end with /api
+          // This shouldn't happen, but handle it gracefully
+          if (!baseURL.endsWith('/api') && config.url.startsWith('/api/')) {
+            // Keep the /api prefix if baseURL doesn't have it
+            // This is fine
+          }
+        }
+
         const token = localStorage.getItem('token');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
