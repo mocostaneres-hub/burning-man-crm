@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import Impersonate from './pages/auth/Impersonate';
 import Dashboard from './pages/Dashboard';
 import CampProfile from './pages/camps/CampProfile';
 import CampCreate from './pages/camps/CampCreate';
@@ -128,8 +129,9 @@ function App() {
               <ConditionalMain>
                 <Routes>
                   <Route path="/" element={<Home />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/auth/impersonate" element={<Impersonate />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/about" element={<About />} />

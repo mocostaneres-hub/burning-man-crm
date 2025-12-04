@@ -4,6 +4,8 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
 const { sendWelcomeEmail } = require('../services/emailService');
+const ImpersonationToken = require('../models/ImpersonationToken');
+const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -345,6 +347,116 @@ router.put('/change-password', authenticateToken, [
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/auth/impersonate
+// @desc    Impersonate a user using a one-time token
+// @access  Public (token-based)
+router.get('/impersonate', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Impersonation token required' });
+    }
+
+    // Find and validate token
+    const impersonationToken = await ImpersonationToken.findOne({ token });
+    
+    if (!impersonationToken) {
+      return res.status(400).json({ message: 'Invalid impersonation token' });
+    }
+
+    // Check if token has been used
+    if (impersonationToken.used) {
+      return res.status(400).json({ message: 'Impersonation token has already been used' });
+    }
+
+    // Check if token has expired
+    if (new Date() > impersonationToken.expiresAt) {
+      return res.status(400).json({ message: 'Impersonation token has expired' });
+    }
+
+    // Find target user
+    const targetUser = await db.findUser({ _id: impersonationToken.targetUserId });
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Target user not found' });
+    }
+
+    // Check if target user is active
+    if (!targetUser.isActive) {
+      return res.status(400).json({ message: 'Cannot impersonate deactivated user' });
+    }
+
+    // Mark token as used
+    impersonationToken.used = true;
+    impersonationToken.usedAt = new Date();
+    await impersonationToken.save();
+
+    // Generate JWT token for the target user
+    const userToken = generateToken(targetUser._id);
+
+    // Log successful impersonation for MEMBER entity
+    await recordActivity('MEMBER', targetUser._id, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
+      field: 'impersonation',
+      action: 'impersonation_completed',
+      adminId: impersonationToken.adminId,
+      timestamp: new Date()
+    });
+    
+    // If target user is a camp account, also log for CAMP entity
+    if (targetUser.accountType === 'camp' && targetUser.campId) {
+      await recordActivity('CAMP', targetUser.campId, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
+        field: 'impersonation',
+        action: 'impersonation_completed',
+        adminId: impersonationToken.adminId,
+        targetUserId: targetUser._id,
+        targetUserName: `${targetUser.firstName} ${targetUser.lastName}`,
+        targetUserEmail: targetUser.email,
+        timestamp: new Date()
+      });
+    }
+
+    console.log(`✅ [Impersonation] User ${targetUser.email} impersonated successfully`);
+
+    // Redirect to appropriate dashboard based on account type
+    const clientUrl = process.env.CLIENT_URL || 'https://www.g8road.com';
+    let redirectUrl = `${clientUrl}/dashboard`;
+
+    if (targetUser.accountType === 'camp' || (targetUser.accountType === 'admin' && targetUser.campId)) {
+      const campId = targetUser.campId?.toString() || targetUser._id?.toString() || '';
+      redirectUrl = campId ? `${clientUrl}/camp/${campId}/dashboard` : `${clientUrl}/dashboard`;
+    } else if (targetUser.accountType === 'personal') {
+      redirectUrl = `${clientUrl}/dashboard`;
+    }
+
+    // Return HTML page that sets token and redirects
+    // This allows the token to be set in localStorage and then redirect
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Logging in...</title>
+        <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+      </head>
+      <body>
+        <script>
+          // Store token in localStorage
+          localStorage.setItem('token', '${userToken}');
+          // Redirect to dashboard
+          window.location.href = '${redirectUrl}';
+        </script>
+        <p>Logging in... <a href="${redirectUrl}">Click here if you are not redirected</a></p>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+
+  } catch (error) {
+    console.error('Impersonation error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

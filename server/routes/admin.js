@@ -1,10 +1,13 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const Camp = require('../models/Camp');
 const Member = require('../models/Member');
 const Admin = require('../models/Admin');
+const ImpersonationToken = require('../models/ImpersonationToken');
 const { authenticateToken, requireAdmin, requirePermission } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
@@ -1203,6 +1206,17 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
           formattedDetails.newValueDisplay = formatFieldValue(details.newValue, details.field);
         }
       }
+      // Special handling for admin impersonation
+      else if (log.activityType === 'ADMIN_IMPERSONATION') {
+        formattedDetails.context = details.adminName 
+          ? `Admin: ${details.adminName} (${details.adminEmail})`
+          : `Admin ID: ${details.adminId}`;
+        if (details.action === 'impersonation_completed') {
+          formattedDetails.note = 'System admin successfully logged in as this user';
+        } else if (details.action === 'impersonation_token_generated') {
+          formattedDetails.note = 'System admin generated impersonation token';
+        }
+      }
       // Special handling for application status changes
       else if (details.field === 'applicationStatus' || log.activityType === 'APPLICATION_STATUS_CHANGED' || log.activityType === 'APPLICATION_SUBMITTED' || log.activityType === 'APPLICATION_RECEIVED') {
         // Format status values to be more readable
@@ -1643,6 +1657,103 @@ router.get('/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get audit logs error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/admin/impersonate
+// @desc    Generate impersonation token for a user (system admin only)
+// @access  Private (System Admin only)
+router.post('/impersonate', authenticateToken, requireAdmin, [
+  body('targetUserId').notEmpty().withMessage('Target user ID is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    // Verify requester is a system admin (not a camp admin)
+    const isSystemAdmin = req.user.accountType === 'admin' && !req.user.campId;
+    if (!isSystemAdmin) {
+      // Fallback: check Admin collection
+      const adminRecord = await Admin.findOne({ user: req.user._id, isActive: true });
+      if (!adminRecord) {
+        return res.status(403).json({ message: 'System admin access required' });
+      }
+    }
+
+    const { targetUserId } = req.body;
+
+    // Find target user
+    const targetUser = await db.findUser({ _id: targetUserId });
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Target user not found' });
+    }
+
+    // Check if target user is active
+    if (!targetUser.isActive) {
+      return res.status(400).json({ message: 'Cannot impersonate deactivated user' });
+    }
+
+    // Generate secure one-time token
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    // Token expires in 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Store token in database
+    const impersonationToken = new ImpersonationToken({
+      token,
+      adminId: req.user._id,
+      targetUserId: targetUser._id,
+      expiresAt
+    });
+    await impersonationToken.save();
+
+    // Log impersonation attempt for MEMBER entity
+    await recordActivity('MEMBER', targetUser._id, req.user._id, 'ADMIN_IMPERSONATION', {
+      field: 'impersonation',
+      adminId: req.user._id,
+      adminName: `${req.user.firstName} ${req.user.lastName}`,
+      adminEmail: req.user.email,
+      action: 'impersonation_token_generated'
+    });
+    
+    // If target user is a camp account, also log for CAMP entity
+    if (targetUser.accountType === 'camp' && targetUser.campId) {
+      await recordActivity('CAMP', targetUser.campId, req.user._id, 'ADMIN_IMPERSONATION', {
+        field: 'impersonation',
+        adminId: req.user._id,
+        adminName: `${req.user.firstName} ${req.user.lastName}`,
+        adminEmail: req.user.email,
+        targetUserId: targetUser._id,
+        targetUserName: `${targetUser.firstName} ${targetUser.lastName}`,
+        targetUserEmail: targetUser.email,
+        action: 'impersonation_token_generated'
+      });
+    }
+
+    // Generate impersonation URL
+    const clientUrl = process.env.CLIENT_URL || 'https://www.g8road.com';
+    const impersonationUrl = `${clientUrl}/auth/impersonate?token=${token}`;
+
+    console.log(`✅ [Impersonation] Token generated for user ${targetUser.email} by admin ${req.user.email}`);
+
+    res.json({
+      url: impersonationUrl,
+      expiresAt: expiresAt.toISOString(),
+      targetUser: {
+        _id: targetUser._id,
+        email: targetUser.email,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        accountType: targetUser.accountType
+      }
+    });
+
+  } catch (error) {
+    console.error('Impersonation token generation error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

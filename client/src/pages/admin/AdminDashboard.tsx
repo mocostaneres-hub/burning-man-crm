@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, LogIn } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -127,6 +127,7 @@ interface Camp {
   selectedPerks?: any[];
   isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
+  owner?: string | { _id: string; firstName?: string; lastName?: string; email?: string }; // Camp owner user ID
   socialMedia?: {
     facebook?: string;
     instagram?: string;
@@ -1443,6 +1444,94 @@ const AdminDashboard: React.FC = () => {
 };
 
 // Enhanced User Edit Modal Component with Full SystemAdmin Controls
+// Impersonate Button Component
+const ImpersonateButton: React.FC<{
+  userId: string;
+  userEmail: string;
+  userName: string;
+}> = ({ userId, userEmail, userName }) => {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleImpersonate = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.post('/admin/impersonate', {
+        targetUserId: userId
+      });
+
+      if (response.url) {
+        // Open in new window (incognito-compatible)
+        window.open(response.url, '_blank', 'noopener,noreferrer');
+        setShowConfirm(false);
+        alert(`Opening login session for ${userName} in a new window. The link will expire in 5 minutes.`);
+      }
+    } catch (error: any) {
+      console.error('Impersonation error:', error);
+      alert(error.response?.data?.message || 'Failed to generate impersonation link. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        onClick={() => setShowConfirm(true)}
+        className="w-full flex items-center justify-center gap-2 border-orange-300 text-orange-700 hover:bg-orange-50"
+        disabled={loading}
+      >
+        <LogIn className="w-4 h-4" />
+        {loading ? 'Generating...' : 'Log in as this user'}
+      </Button>
+
+      {showConfirm && (
+        <Modal
+          isOpen={showConfirm}
+          onClose={() => setShowConfirm(false)}
+          title="Confirm Impersonation"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800 mb-2">
+                <strong>⚠️ Warning:</strong> You are about to log in as:
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {userName} ({userEmail})
+              </p>
+            </div>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>• A new window will open with this user's session</p>
+              <p>• The impersonation link expires in 5 minutes</p>
+              <p>• This action will be logged in the audit trail</p>
+              <p>• Use this feature responsibly for support and debugging</p>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirm(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleImpersonate}
+                className="flex-1"
+                disabled={loading}
+              >
+                {loading ? 'Generating...' : 'Continue'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+};
+
 const UserEditModal: React.FC<{
   user: UserType;
   onClose: () => void;
@@ -2109,6 +2198,11 @@ const UserEditModal: React.FC<{
                   if (activity.activityType === 'PASSWORD_CHANGED') {
                     return 'Password Changed';
                   }
+                  if (activity.activityType === 'ADMIN_IMPERSONATION') {
+                    return activity.details?.action === 'impersonation_completed' 
+                      ? 'Admin Impersonation Completed'
+                      : 'Admin Impersonation Token Generated';
+                  }
                   if (fieldName) {
                     return `${fieldName} Updated`;
                   }
@@ -2167,21 +2261,24 @@ const UserEditModal: React.FC<{
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-4 border-t">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            className="flex-1"
-          >
-            Save All Changes
-          </Button>
+        <div className="flex flex-col gap-3 pt-4 border-t">
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              className="flex-1"
+            >
+              Save All Changes
+            </Button>
+          </div>
+          <ImpersonateButton userId={user._id} userEmail={user.email} userName={`${user.firstName} ${user.lastName}`} />
         </div>
       </div>
     </Modal>
@@ -2591,6 +2688,11 @@ const CampEditModal: React.FC<{
                       if (activity.activityType === 'PASSWORD_CHANGED') {
                         return 'Password Changed';
                       }
+                      if (activity.activityType === 'ADMIN_IMPERSONATION') {
+                        return activity.details?.action === 'impersonation_completed' 
+                          ? 'Admin Impersonation Completed'
+                          : 'Admin Impersonation Token Generated';
+                      }
                       if (fieldName) {
                         return `${fieldName} Updated`;
                       }
@@ -2649,13 +2751,22 @@ const CampEditModal: React.FC<{
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button variant="outline" onClick={onClose} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleSave} className="flex-1">
-                Save Changes
-              </Button>
+            <div className="flex flex-col gap-3 pt-4 border-t">
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={onClose} className="flex-1">
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} className="flex-1">
+                  Save Changes
+                </Button>
+              </div>
+              {camp.owner && (
+                <ImpersonateButton 
+                  userId={typeof camp.owner === 'object' ? camp.owner._id : camp.owner} 
+                  userEmail={camp.contactEmail || ''} 
+                  userName={camp.name || camp.campName || 'Camp'} 
+                />
+              )}
             </div>
           </div>
         </div>
