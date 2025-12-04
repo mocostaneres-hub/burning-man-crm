@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, ArrowRight } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -1482,7 +1482,7 @@ const ImpersonateButton: React.FC<{
         className="w-full flex items-center justify-center gap-2 border-orange-300 text-orange-700 hover:bg-orange-50"
         disabled={loading}
       >
-        <ArrowRight className="w-4 h-4" />
+        <span className="mr-2">🔐</span>
         {loading ? 'Generating...' : 'Log in as this user'}
       </Button>
 
