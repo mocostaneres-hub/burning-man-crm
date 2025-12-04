@@ -92,8 +92,15 @@ app.use('/api/camps', require('./routes/camps'));
 app.use('/api/members', require('./routes/members'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/rosters', require('./routes/rosters'));
-app.use('/api/admin', require('./routes/admin'));
-console.log('✅ Admin routes registered at /api/admin');
+// Register admin routes
+try {
+  const adminRouter = require('./routes/admin');
+  app.use('/api/admin', adminRouter);
+  console.log('✅ Admin routes registered at /api/admin');
+} catch (error) {
+  console.error('❌ Error loading admin routes:', error);
+  throw error;
+}
 app.use('/api/email', require('./routes/email'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
@@ -166,9 +173,12 @@ if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_ROUTES === 'true'
   });
 }
 
-// Request logging middleware (for debugging)
+// Request logging middleware (for debugging) - placed BEFORE routes
+// This will log all incoming requests to help debug routing issues
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  console.log(`📥 Original URL: ${req.originalUrl}`);
+  console.log(`📥 Base URL: ${req.baseUrl}`);
   next();
 });
 
