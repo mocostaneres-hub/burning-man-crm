@@ -248,8 +248,21 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       const campData = camp.toObject ? camp.toObject() : camp;
       
       let owner = null;
-      if (campData.contactEmail) {
+      
+      // Try multiple strategies to find owner user:
+      // 1. If camp.owner exists, try to find that user
+      if (campData.owner) {
+        owner = await db.findUser({ _id: campData.owner });
+      }
+      
+      // 2. Fallback: Find user by contactEmail
+      if (!owner && campData.contactEmail) {
         owner = await db.findUser({ email: campData.contactEmail });
+        
+        // If found user but camp.owner is missing/incorrect, flag for repair
+        if (owner && (!campData.owner || campData.owner.toString() !== owner._id.toString())) {
+          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name}) needs owner repair. Found user ${owner._id} by email but camp.owner is ${campData.owner}`);
+        }
       }
 
       // Get actual member count from roster
@@ -272,7 +285,8 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
           lastName: owner.lastName,
           email: owner.email,
           accountType: owner.accountType
-        } : null
+        } : null,
+        needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString())
       };
     }));
     
@@ -1685,13 +1699,55 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
       }
     }
 
-    const { targetUserId } = req.body;
+    const { targetUserId, campId } = req.body;
 
     // Find target user (supports both member and camp accounts)
-    const targetUser = await db.findUser({ _id: targetUserId });
+    let targetUser = await db.findUser({ _id: targetUserId });
+    
+    // If user not found and campId provided, try to find/create user for camp
+    if (!targetUser && campId) {
+      console.log('⚠️ [Impersonation] Target user not found, checking camp:', campId);
+      
+      // Find the camp
+      const camp = await db.findCamp({ _id: campId });
+      if (!camp) {
+        console.log('❌ [Impersonation] Camp not found:', campId);
+        return res.status(404).json({ message: 'Camp not found' });
+      }
+      
+      // Try to find user by camp's contactEmail
+      if (camp.contactEmail) {
+        targetUser = await db.findUser({ email: camp.contactEmail });
+        
+        if (targetUser) {
+          console.log('✅ [Impersonation] Found user by camp contactEmail:', targetUser.email);
+          
+          // Repair camp.owner link if needed
+          if (!camp.owner || camp.owner.toString() !== targetUser._id.toString()) {
+            console.log('🔧 [Impersonation] Repairing camp.owner link...');
+            await db.updateCamp(camp._id, { owner: targetUser._id });
+            
+            // Log the repair
+            await recordActivity('CAMP', camp._id, req.user._id, 'DATA_REPAIR', {
+              field: 'owner',
+              action: 'owner_link_repaired',
+              oldValue: camp.owner ? camp.owner.toString() : null,
+              newValue: targetUser._id.toString(),
+              repairedBy: req.user._id,
+              note: 'Automatically repaired during impersonation attempt'
+            });
+            console.log('✅ [Impersonation] Camp owner link repaired');
+          }
+          
+          // Update targetUserId for subsequent logic
+          req.body.targetUserId = targetUser._id;
+        }
+      }
+    }
+    
     if (!targetUser) {
-      console.log('❌ [Impersonation] Target user not found:', targetUserId);
-      return res.status(404).json({ message: 'Target user not found' });
+      console.log('❌ [Impersonation] Target user not found after all fallbacks:', targetUserId);
+      return res.status(404).json({ message: 'Target user not found. Cannot impersonate this camp.' });
     }
 
     console.log('✅ [Impersonation] Target user found:', {

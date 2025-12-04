@@ -1451,7 +1451,9 @@ const ImpersonateButton: React.FC<{
   userEmail: string;
   userName: string;
   accountType?: 'personal' | 'camp' | 'admin';
-}> = ({ userId, userEmail, userName, accountType }) => {
+  campId?: string;
+  needsRepair?: boolean;
+}> = ({ userId, userEmail, userName, accountType, campId, needsRepair = false }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -1459,7 +1461,8 @@ const ImpersonateButton: React.FC<{
     try {
       setLoading(true);
       const response = await apiService.post('/admin/impersonate', {
-        targetUserId: userId
+        targetUserId: userId === 'camp-repair-needed' ? undefined : userId,
+        campId: campId
       });
 
       if (response.url) {
@@ -1481,11 +1484,12 @@ const ImpersonateButton: React.FC<{
       <Button
         variant="outline"
         onClick={() => setShowConfirm(true)}
-        className="w-full flex items-center justify-center gap-2 border-orange-300 text-orange-700 hover:bg-orange-50"
+        className={`w-full flex items-center justify-center gap-2 ${needsRepair ? 'border-yellow-400 text-yellow-700 hover:bg-yellow-50' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}`}
         disabled={loading}
+        title={needsRepair ? 'Will attempt to repair camp owner link before impersonation' : 'Log in as this user'}
       >
-        <span className="mr-2">🔐</span>
-        {loading ? 'Generating...' : 'Log in as this user'}
+        <span className="mr-2">{needsRepair ? '🔧' : '🔐'}</span>
+        {loading ? 'Generating...' : (needsRepair ? 'Repair & Log in' : 'Log in as this user')}
       </Button>
 
       {showConfirm && (
@@ -1506,6 +1510,11 @@ const ImpersonateButton: React.FC<{
               {accountType && (
                 <p className="text-xs text-gray-600 mt-1">
                   Account Type: {accountType === 'camp' ? 'Camp Account' : accountType === 'personal' ? 'Member Account' : 'Admin Account'}
+                </p>
+              )}
+              {needsRepair && (
+                <p className="text-xs text-yellow-700 mt-2 font-medium">
+                  ⚠️ This camp's owner link will be automatically repaired before impersonation.
                 </p>
               )}
             </div>
@@ -2772,18 +2781,14 @@ const CampEditModal: React.FC<{
                   Save Changes
                 </Button>
               </div>
-              {camp.owner ? (
-                <ImpersonateButton 
-                  userId={typeof camp.owner === 'object' ? camp.owner._id : camp.owner} 
-                  userEmail={typeof camp.owner === 'object' ? camp.owner.email : camp.contactEmail || ''} 
-                  userName={camp.name || camp.campName || 'Camp'}
-                  accountType={typeof camp.owner === 'object' ? camp.owner.accountType : 'camp'}
-                />
-              ) : (
-                <div className="text-sm text-gray-500 italic">
-                  Camp owner user account not found. Cannot impersonate.
-                </div>
-              )}
+              <ImpersonateButton 
+                userId={camp.owner && typeof camp.owner === 'object' ? camp.owner._id : (camp.owner || 'camp-repair-needed')} 
+                userEmail={camp.owner && typeof camp.owner === 'object' ? camp.owner.email : camp.contactEmail || ''} 
+                userName={camp.name || camp.campName || 'Camp'}
+                accountType={camp.owner && typeof camp.owner === 'object' ? camp.owner.accountType : 'camp'}
+                campId={camp._id}
+                needsRepair={!camp.owner && camp.contactEmail}
+              />
             </div>
           </div>
         </div>
