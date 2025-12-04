@@ -2791,7 +2791,7 @@ const CampEditModal: React.FC<{
                 userName={camp.name || camp.campName || 'Camp'}
                 accountType={camp.owner && typeof camp.owner === 'object' ? camp.owner.accountType : 'camp'}
                 campId={camp._id}
-                needsRepair={!camp.owner && camp.contactEmail}
+                needsRepair={!camp.owner && !!camp.contactEmail}
               />
             </div>
           </div>
