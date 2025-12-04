@@ -127,7 +127,7 @@ interface Camp {
   selectedPerks?: any[];
   isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
-  owner?: string | { _id: string; firstName?: string; lastName?: string; email?: string }; // Camp owner user ID
+  owner?: string | { _id: string; firstName?: string; lastName?: string; email?: string; accountType?: 'personal' | 'camp' | 'admin' }; // Camp owner user ID
   socialMedia?: {
     facebook?: string;
     instagram?: string;
