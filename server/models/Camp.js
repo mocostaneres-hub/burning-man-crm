@@ -3,10 +3,17 @@ const mongoose = require('mongoose');
 
 const campSchema = new mongoose.Schema({
   // Camp owner (User with accountType: 'camp')
+  // CRITICAL: Owner must ALWAYS be set to prevent impersonation issues
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: [true, 'Camp owner is required'],
+    validate: {
+      validator: function(v) {
+        return v != null && v.toString().length > 0;
+      },
+      message: 'Camp owner cannot be null or empty'
+    }
   },
   
   // Camp basic info

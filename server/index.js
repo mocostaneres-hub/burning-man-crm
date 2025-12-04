@@ -82,9 +82,18 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => {
+.then(async () => {
   console.log('MongoDB connected successfully');
   db.setMongoDBMode(true);
+  
+  // Run automated camp owner repair on startup
+  try {
+    const { fixCampsMissingOwnersOnStartup } = require('./startup/fixCampsMissingOwners');
+    await fixCampsMissingOwnersOnStartup();
+  } catch (repairError) {
+    console.error('⚠️  [Startup] Camp repair failed:', repairError.message);
+    // Don't crash server if repair fails, just log it
+  }
 })
 .catch(err => {
   console.log('MongoDB connection failed, using mock database for development');

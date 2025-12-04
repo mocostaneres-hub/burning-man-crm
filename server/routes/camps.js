@@ -588,14 +588,26 @@ router.post('/', authenticateToken, [
       uniqueSlug = campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     }
 
+    // CRITICAL: Always set owner field to prevent null owner issues
+    if (!req.user || !req.user._id) {
+      console.error('❌ [POST /camps] Cannot create camp: User ID is missing');
+      return res.status(400).json({ message: 'User authentication required' });
+    }
+
     const campData = {
       ...req.body,
       name: campName, // Ensure 'name' field is set
       slug: uniqueSlug, // Set the generated slug
       contactEmail: req.user.email,
-      owner: req.user._id,
+      owner: req.user._id, // CRITICAL: Always set owner
       description: req.body.description || `Welcome to ${campName}! We're excited to share our camp experience with you.` // Provide default description if none given
     };
+    
+    // Defensive validation: Ensure owner is set
+    if (!campData.owner) {
+      console.error('❌ [POST /camps] Owner is missing after assignment');
+      return res.status(500).json({ message: 'Server error: Unable to set camp owner' });
+    }
 
     console.log('🏕️ [POST /camps] Creating camp with data:', JSON.stringify(campData, null, 2));
 

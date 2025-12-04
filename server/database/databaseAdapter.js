@@ -105,6 +105,14 @@ class DatabaseAdapter {
   }
 
   async createCamp(campData) {
+    // CRITICAL VALIDATION: Ensure owner is always set
+    if (!campData.owner) {
+      const error = new Error('Camp owner is required. Cannot create camp without owner field.');
+      error.code = 'CAMP_OWNER_REQUIRED';
+      console.error('❌ [Database Adapter] Attempted to create camp without owner:', campData);
+      throw error;
+    }
+    
     if (this.useMongoDB) {
       const Camp = require('../models/Camp');
       const camp = new Camp(campData);
