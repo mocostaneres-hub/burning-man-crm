@@ -2782,7 +2782,11 @@ const CampEditModal: React.FC<{
                 </Button>
               </div>
               <ImpersonateButton 
-                userId={camp.owner && typeof camp.owner === 'object' ? camp.owner._id : (camp.owner || 'camp-repair-needed')} 
+                userId={
+                  camp.owner && typeof camp.owner === 'object' 
+                    ? camp.owner._id 
+                    : (typeof camp.owner === 'string' ? camp.owner : 'camp-repair-needed')
+                } 
                 userEmail={camp.owner && typeof camp.owner === 'object' ? camp.owner.email : camp.contactEmail || ''} 
                 userName={camp.name || camp.campName || 'Camp'}
                 accountType={camp.owner && typeof camp.owner === 'object' ? camp.owner.accountType : 'camp'}
