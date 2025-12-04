@@ -45,6 +45,7 @@ interface Camp {
   isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
   isCampAdmin?: boolean; // Flag from backend indicating user is camp admin
+  isSystemAdmin?: boolean; // Flag from backend indicating user is system admin
   categories?: CampCategory[]; // Updated to include full category objects
   selectedPerks?: SelectedPerk[]; // Array of selected perks with populated data
   // Legacy offerings object for backward compatibility
@@ -358,7 +359,7 @@ const PublicCampProfile: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Private Profile Banner - Only shown to camp admin when profile is not public */}
-      {camp.isCampAdmin && camp.isPubliclyVisible === false && (
+      {camp.isCampAdmin && !camp.isSystemAdmin && camp.isPubliclyVisible === false && (
         <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-6">
           <div className="flex items-start gap-3">
             <div className="text-3xl">⚠️</div>
