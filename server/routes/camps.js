@@ -319,6 +319,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     );
     
     // Check if the authenticated user is a system admin (admin without campId, or in Admin collection)
+    // Also check if user is currently being impersonated by a system admin
     let isSystemAdmin = false;
     if (req.user) {
       // System admin: accountType is 'admin' but no campId (not assigned to a specific camp)
@@ -330,6 +331,41 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
         const adminRecord = await Admin.findOne({ user: req.user._id, isActive: true });
         if (adminRecord) {
           isSystemAdmin = true;
+        }
+        
+        // Check if user is currently being impersonated by a system admin
+        // Look for recent (within last hour) impersonation tokens for this user
+        // that were created by a system admin
+        if (!isSystemAdmin) {
+          const ImpersonationToken = require('../models/ImpersonationToken');
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+          
+          // Find recent impersonation token for this user
+          const recentImpersonation = await ImpersonationToken.findOne({
+            targetUserId: req.user._id,
+            used: true,
+            usedAt: { $gte: oneHourAgo },
+            expiresAt: { $gte: new Date() }
+          }).sort({ usedAt: -1 }); // Most recent first
+          
+          if (recentImpersonation) {
+            // Check if the admin who created this impersonation is a system admin
+            const impersonatingAdmin = await db.findUser({ _id: recentImpersonation.adminId });
+            if (impersonatingAdmin && impersonatingAdmin.accountType === 'admin' && !impersonatingAdmin.campId) {
+              isSystemAdmin = true;
+              console.log('🔍 [GET /api/camps/public/:slug] User is impersonated by system admin:', impersonatingAdmin.email);
+            } else {
+              // Also check Admin collection for the impersonating admin
+              const impersonatingAdminRecord = await Admin.findOne({ 
+                user: recentImpersonation.adminId, 
+                isActive: true 
+              });
+              if (impersonatingAdminRecord) {
+                isSystemAdmin = true;
+                console.log('🔍 [GET /api/camps/public/:slug] User is impersonated by system admin (via Admin collection)');
+              }
+            }
+          }
         }
       }
     }
