@@ -1666,6 +1666,9 @@ router.get('/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
 router.post('/impersonate', authenticateToken, requireAdmin, [
   body('targetUserId').notEmpty().withMessage('Target user ID is required')
 ], async (req, res) => {
+  console.log('🔐 [Impersonation] POST /api/admin/impersonate called');
+  console.log('🔐 [Impersonation] Request body:', req.body);
+  console.log('🔐 [Impersonation] User:', req.user?.email, req.user?.accountType);
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -1754,6 +1757,15 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
   } catch (error) {
     console.error('Impersonation token generation error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Log all registered admin routes on startup
+console.log('✅ [Admin Routes] Registered routes:');
+router.stack.forEach((layer) => {
+  if (layer.route) {
+    const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+    console.log(`   ${methods} /api/admin${layer.route.path}`);
   }
 });
 

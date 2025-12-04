@@ -93,6 +93,7 @@ app.use('/api/members', require('./routes/members'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/rosters', require('./routes/rosters'));
 app.use('/api/admin', require('./routes/admin'));
+console.log('✅ Admin routes registered at /api/admin');
 app.use('/api/email', require('./routes/email'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
@@ -154,9 +155,34 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
+// Debug: Log all registered routes (only in development or when DEBUG_ROUTES is set)
+if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_ROUTES === 'true') {
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      console.log(`📍 Route: ${Object.keys(middleware.route.methods).join(', ').toUpperCase()} ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      console.log(`📍 Router mounted at: ${middleware.regexp}`);
+    }
+  });
+}
+
+// Request logging middleware (for debugging)
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
+});
+
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found - Railway deployment test ' + new Date().toISOString() });
+  console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
+  console.log(`❌ Original URL: ${req.originalUrl}`);
+  console.log(`❌ Base URL: ${req.baseUrl}`);
+  res.status(404).json({ 
+    message: 'Route not found - Railway deployment test ' + new Date().toISOString(),
+    method: req.method,
+    path: req.path,
+    originalUrl: req.originalUrl
+  });
 });
 
 const PORT = process.env.PORT || 5000;
