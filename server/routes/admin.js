@@ -1687,15 +1687,33 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
 
     const { targetUserId } = req.body;
 
-    // Find target user
+    // Find target user (supports both member and camp accounts)
     const targetUser = await db.findUser({ _id: targetUserId });
     if (!targetUser) {
+      console.log('❌ [Impersonation] Target user not found:', targetUserId);
       return res.status(404).json({ message: 'Target user not found' });
     }
+
+    console.log('✅ [Impersonation] Target user found:', {
+      _id: targetUser._id,
+      email: targetUser.email,
+      accountType: targetUser.accountType,
+      isActive: targetUser.isActive,
+      campId: targetUser.campId
+    });
 
     // Check if target user is active
     if (!targetUser.isActive) {
       return res.status(400).json({ message: 'Cannot impersonate deactivated user' });
+    }
+
+    // Validate account type (must be personal or camp, not another admin)
+    if (targetUser.accountType === 'admin' && !targetUser.campId) {
+      // Allow impersonating camp admins (admin with campId), but not system admins
+      const isSystemAdmin = targetUser.accountType === 'admin' && !targetUser.campId;
+      if (isSystemAdmin) {
+        return res.status(403).json({ message: 'Cannot impersonate system admin accounts' });
+      }
     }
 
     // Generate secure one-time token
@@ -1713,18 +1731,25 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
     });
     await impersonationToken.save();
 
-    // Log impersonation attempt for MEMBER entity
-    await recordActivity('MEMBER', targetUser._id, req.user._id, 'ADMIN_IMPERSONATION', {
-      field: 'impersonation',
-      adminId: req.user._id,
-      adminName: `${req.user.firstName} ${req.user.lastName}`,
-      adminEmail: req.user.email,
-      action: 'impersonation_token_generated'
-    });
-    
-    // If target user is a camp account, also log for CAMP entity
-    if (targetUser.accountType === 'camp' && targetUser.campId) {
-      await recordActivity('CAMP', targetUser.campId, req.user._id, 'ADMIN_IMPERSONATION', {
+    // Log impersonation attempt based on account type
+    if (targetUser.accountType === 'camp') {
+      // For camp accounts, log for CAMP entity
+      const campId = targetUser.campId || targetUser._id; // Use campId if available, otherwise use user ID
+      await recordActivity('CAMP', campId, req.user._id, 'ADMIN_IMPERSONATION', {
+        field: 'impersonation',
+        adminId: req.user._id,
+        adminName: `${req.user.firstName} ${req.user.lastName}`,
+        adminEmail: req.user.email,
+        targetUserId: targetUser._id,
+        targetUserName: targetUser.campName || `${targetUser.firstName} ${targetUser.lastName}` || 'Camp Account',
+        targetUserEmail: targetUser.email,
+        accountType: 'camp',
+        action: 'impersonation_token_generated'
+      });
+      console.log(`✅ [Impersonation] Logged for CAMP entity: ${campId}`);
+    } else {
+      // For personal/member accounts, log for MEMBER entity
+      await recordActivity('MEMBER', targetUser._id, req.user._id, 'ADMIN_IMPERSONATION', {
         field: 'impersonation',
         adminId: req.user._id,
         adminName: `${req.user.firstName} ${req.user.lastName}`,
@@ -1732,15 +1757,17 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
         targetUserId: targetUser._id,
         targetUserName: `${targetUser.firstName} ${targetUser.lastName}`,
         targetUserEmail: targetUser.email,
+        accountType: targetUser.accountType,
         action: 'impersonation_token_generated'
       });
+      console.log(`✅ [Impersonation] Logged for MEMBER entity: ${targetUser._id}`);
     }
 
     // Generate impersonation URL
     const clientUrl = process.env.CLIENT_URL || 'https://www.g8road.com';
     const impersonationUrl = `${clientUrl}/auth/impersonate?token=${token}`;
 
-    console.log(`✅ [Impersonation] Token generated for user ${targetUser.email} by admin ${req.user.email}`);
+    console.log(`✅ [Impersonation] Token generated for ${targetUser.accountType} account ${targetUser.email} (${targetUser.campName || `${targetUser.firstName} ${targetUser.lastName}`}) by admin ${req.user.email}`);
 
     res.json({
       url: impersonationUrl,

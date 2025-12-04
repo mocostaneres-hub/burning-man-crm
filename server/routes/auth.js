@@ -397,25 +397,34 @@ router.get('/impersonate', async (req, res) => {
     // Generate JWT token for the target user
     const userToken = generateToken(targetUser._id);
 
-    // Log successful impersonation for MEMBER entity
-    await recordActivity('MEMBER', targetUser._id, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
-      field: 'impersonation',
-      action: 'impersonation_completed',
-      adminId: impersonationToken.adminId,
-      timestamp: new Date()
-    });
-    
-    // If target user is a camp account, also log for CAMP entity
-    if (targetUser.accountType === 'camp' && targetUser.campId) {
-      await recordActivity('CAMP', targetUser.campId, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
+    // Log successful impersonation based on account type
+    if (targetUser.accountType === 'camp') {
+      // For camp accounts, log for CAMP entity
+      const campId = targetUser.campId || targetUser._id;
+      await recordActivity('CAMP', campId, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
+        field: 'impersonation',
+        action: 'impersonation_completed',
+        adminId: impersonationToken.adminId,
+        targetUserId: targetUser._id,
+        targetUserName: targetUser.campName || `${targetUser.firstName} ${targetUser.lastName}` || 'Camp Account',
+        targetUserEmail: targetUser.email,
+        accountType: 'camp',
+        timestamp: new Date()
+      });
+      console.log(`✅ [Impersonation] Completed for CAMP entity: ${campId}`);
+    } else {
+      // For personal/member accounts, log for MEMBER entity
+      await recordActivity('MEMBER', targetUser._id, impersonationToken.adminId, 'ADMIN_IMPERSONATION', {
         field: 'impersonation',
         action: 'impersonation_completed',
         adminId: impersonationToken.adminId,
         targetUserId: targetUser._id,
         targetUserName: `${targetUser.firstName} ${targetUser.lastName}`,
         targetUserEmail: targetUser.email,
+        accountType: targetUser.accountType,
         timestamp: new Date()
       });
+      console.log(`✅ [Impersonation] Completed for MEMBER entity: ${targetUser._id}`);
     }
 
     console.log(`✅ [Impersonation] User ${targetUser.email} impersonated successfully`);

@@ -1445,11 +1445,13 @@ const AdminDashboard: React.FC = () => {
 
 // Enhanced User Edit Modal Component with Full SystemAdmin Controls
 // Impersonate Button Component
+// Supports both member accounts (personal) and camp accounts
 const ImpersonateButton: React.FC<{
   userId: string;
   userEmail: string;
   userName: string;
-}> = ({ userId, userEmail, userName }) => {
+  accountType?: 'personal' | 'camp' | 'admin';
+}> = ({ userId, userEmail, userName, accountType }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -2278,7 +2280,12 @@ const UserEditModal: React.FC<{
               Save All Changes
             </Button>
           </div>
-          <ImpersonateButton userId={user._id} userEmail={user.email} userName={`${user.firstName} ${user.lastName}`} />
+          <ImpersonateButton 
+            userId={user._id} 
+            userEmail={user.email} 
+            userName={`${user.firstName} ${user.lastName}`}
+            accountType={user.accountType}
+          />
         </div>
       </div>
     </Modal>
@@ -2760,12 +2767,17 @@ const CampEditModal: React.FC<{
                   Save Changes
                 </Button>
               </div>
-              {camp.owner && (
+              {camp.owner ? (
                 <ImpersonateButton 
                   userId={typeof camp.owner === 'object' ? camp.owner._id : camp.owner} 
-                  userEmail={camp.contactEmail || ''} 
-                  userName={camp.name || camp.campName || 'Camp'} 
+                  userEmail={typeof camp.owner === 'object' ? camp.owner.email : camp.contactEmail || ''} 
+                  userName={camp.name || camp.campName || 'Camp'}
+                  accountType={typeof camp.owner === 'object' ? camp.owner.accountType : 'camp'}
                 />
+              ) : (
+                <div className="text-sm text-gray-500 italic">
+                  Camp owner user account not found. Cannot impersonate.
+                </div>
               )}
             </div>
           </div>
