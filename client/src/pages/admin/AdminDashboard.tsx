@@ -1503,6 +1503,11 @@ const ImpersonateButton: React.FC<{
               <p className="text-sm font-semibold text-gray-900">
                 {userName} ({userEmail})
               </p>
+              {accountType && (
+                <p className="text-xs text-gray-600 mt-1">
+                  Account Type: {accountType === 'camp' ? 'Camp Account' : accountType === 'personal' ? 'Member Account' : 'Admin Account'}
+                </p>
+              )}
             </div>
             <div className="text-sm text-gray-700 space-y-2">
               <p>• A new window will open with this user's session</p>
