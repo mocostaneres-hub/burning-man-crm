@@ -311,11 +311,28 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       (req.user._id && req.user._id.toString() === camp.userId?.toString())
     );
     
+    // Check if the authenticated user is a system admin (admin without campId, or in Admin collection)
+    let isSystemAdmin = false;
+    if (req.user) {
+      // System admin: accountType is 'admin' but no campId (not assigned to a specific camp)
+      if (req.user.accountType === 'admin' && !req.user.campId) {
+        isSystemAdmin = true;
+      } else {
+        // Fallback: check Admin collection for system admin status
+        const Admin = require('../models/Admin');
+        const adminRecord = await Admin.findOne({ user: req.user._id, isActive: true });
+        if (adminRecord) {
+          isSystemAdmin = true;
+        }
+      }
+    }
+    
     console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin);
+    console.log('🔍 [GET /api/camps/public/:slug] Is system admin?', isSystemAdmin);
     console.log('🔍 [GET /api/camps/public/:slug] User:', req.user?._id, 'Camp userId:', camp.userId);
     
-    // Check if camp is publicly visible (allow camp admin to view even if private)
-    if (camp.isPubliclyVisible === false && !isCampAdmin) {
+    // Check if camp is publicly visible (allow camp admin and system admin to view even if private)
+    if (camp.isPubliclyVisible === false && !isCampAdmin && !isSystemAdmin) {
       console.log('❌ [GET /api/camps/public/:slug] Camp profile is not publicly visible:', camp.name);
       return res.status(404).json({ message: 'Camp profile not found or not public' });
     }
@@ -377,6 +394,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       isPubliclyVisible: campData.isPubliclyVisible !== undefined ? campData.isPubliclyVisible : false,
       acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
       isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
+      isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,
