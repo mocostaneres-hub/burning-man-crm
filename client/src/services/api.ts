@@ -24,15 +24,14 @@ class ApiService {
         if (config.url) {
           const baseURL = this.api.defaults.baseURL || '';
           // If baseURL ends with /api and url starts with /api, remove the leading /api from url
-          if (baseURL.endsWith('/api') && config.url.startsWith('/api/')) {
-            config.url = config.url.replace(/^\/api/, '');
+          // Handle both /api/ and /api (without trailing slash)
+          if (baseURL.endsWith('/api') && (config.url.startsWith('/api/') || config.url === '/api')) {
+            config.url = config.url.replace(/^\/api\/?/, '');
+            // Ensure url starts with / if it doesn't already
+            if (!config.url.startsWith('/')) {
+              config.url = '/' + config.url;
+            }
             console.log('🔧 [API Interceptor] Normalized path to prevent double /api prefix:', config.url);
-          }
-          // Also handle case where url starts with /api/ but baseURL doesn't end with /api
-          // This shouldn't happen, but handle it gracefully
-          if (!baseURL.endsWith('/api') && config.url.startsWith('/api/')) {
-            // Keep the /api prefix if baseURL doesn't have it
-            // This is fine
           }
         }
 
