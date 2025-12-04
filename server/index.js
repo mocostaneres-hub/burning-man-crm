@@ -58,6 +58,14 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Request logging middleware (placed early to catch all requests)
+app.use((req, res, next) => {
+  console.log(`📥 [${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`📥 Original URL: ${req.originalUrl}`);
+  console.log(`📥 Base URL: ${req.baseUrl}`);
+  next();
+});
+
 // Rate limiting (relaxed for development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -173,14 +181,6 @@ if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_ROUTES === 'true'
   });
 }
 
-// Request logging middleware (for debugging) - placed BEFORE routes
-// This will log all incoming requests to help debug routing issues
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
-  console.log(`📥 Original URL: ${req.originalUrl}`);
-  console.log(`📥 Base URL: ${req.baseUrl}`);
-  next();
-});
 
 // 404 handler
 app.use('*', (req, res) => {
