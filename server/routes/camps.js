@@ -306,9 +306,16 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     }
     
     // Check if the authenticated user is the camp admin
+    // Camp admin can be:
+    // 1. User with accountType 'admin' and campId matching this camp
+    // 2. User with accountType 'camp' and campId matching this camp
+    // 3. User whose _id matches camp.owner (the camp owner user ID)
+    // 4. User whose email matches camp.contactEmail (fallback for camp accounts)
     const isCampAdmin = req.user && (
       (req.user.accountType === 'admin' && req.user.campId && req.user.campId.toString() === camp._id.toString()) ||
-      (req.user._id && req.user._id.toString() === camp.userId?.toString())
+      (req.user.accountType === 'camp' && req.user.campId && req.user.campId.toString() === camp._id.toString()) ||
+      (req.user._id && camp.owner && req.user._id.toString() === camp.owner.toString()) ||
+      (req.user.email && camp.contactEmail && req.user.email.toLowerCase() === camp.contactEmail.toLowerCase())
     );
     
     // Check if the authenticated user is a system admin (admin without campId, or in Admin collection)
@@ -394,7 +401,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       isPubliclyVisible: campData.isPubliclyVisible !== undefined ? campData.isPubliclyVisible : false,
       acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
       isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
-      isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin
+      isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin (includes impersonated system admins)
       members: members.map(member => ({
         _id: member._id,
         firstName: member.firstName,

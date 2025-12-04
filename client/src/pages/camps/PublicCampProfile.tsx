@@ -318,8 +318,16 @@ const PublicCampProfile: React.FC = () => {
   }
 
   // Show custom 404 page for not found or private camps
-  if (isNotFound) {
+  // BUT allow camp admins and system admins to view private camps
+  if (isNotFound && !camp?.isCampAdmin && !camp?.isSystemAdmin) {
     return <CampNotFound />;
+  }
+  
+  // If camp is not found but user is system admin or camp admin, try to fetch anyway
+  // This handles the case where the API returns 404 but user should have access
+  if (isNotFound && (camp?.isCampAdmin || camp?.isSystemAdmin)) {
+    // Clear the not found flag to allow rendering
+    setIsNotFound(false);
   }
 
   // Show generic error for other errors
@@ -359,6 +367,7 @@ const PublicCampProfile: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Private Profile Banner - Only shown to camp admin when profile is not public */}
+      {/* System admins (including impersonated) can view but don't need the banner */}
       {camp.isCampAdmin && !camp.isSystemAdmin && camp.isPubliclyVisible === false && (
         <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-lg p-6">
           <div className="flex items-start gap-3">
