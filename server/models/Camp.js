@@ -337,6 +337,35 @@ campSchema.virtual('primaryPhoto').get(function() {
 
 // Note: Slug generation is now handled in the route handlers
 // to ensure uniqueness checking is performed properly
+// Pre-save hook 1: Defensive validation to ensure owner is always set
+campSchema.pre('save', function(next) {
+  // CRITICAL: Validate owner is set
+  if (!this.owner) {
+    const error = new Error('Camp owner is required and cannot be null');
+    error.code = 'CAMP_OWNER_REQUIRED';
+    console.error('❌ [Camp Model] Pre-save validation failed: Owner is missing', {
+      campId: this._id,
+      campName: this.name,
+      contactEmail: this.contactEmail
+    });
+    return next(error);
+  }
+  
+  // Ensure owner is a valid ObjectId
+  if (this.owner && !mongoose.Types.ObjectId.isValid(this.owner)) {
+    const error = new Error('Camp owner must be a valid ObjectId');
+    error.code = 'INVALID_OWNER_ID';
+    console.error('❌ [Camp Model] Pre-save validation failed: Invalid owner ID', {
+      campId: this._id,
+      owner: this.owner
+    });
+    return next(error);
+  }
+  
+  next();
+});
+
+// Pre-save hook 2: Slug generation
 // The pre-save hook is kept for backward compatibility but may be removed
 // if all routes properly handle slug generation
 campSchema.pre('save', async function(next) {
