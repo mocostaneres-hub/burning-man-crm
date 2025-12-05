@@ -236,13 +236,22 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       limit = 20,
       search,
       status,
-      recruiting
+      recruiting,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
     } = req.query;
 
     // Get all camps from mock database
     const allCamps = await db.findCamps();
     
-    // Enrich camps with owner information and member count
+    // Import models for calculations
+    const Roster = require('../models/Roster');
+    const Event = require('../models/Event');
+    const Task = require('../models/Task');
+    const MemberApplication = require('../models/MemberApplication');
+    const User = require('../models/User');
+    
+    // Enrich camps with owner information, member count, and new metrics
     const enrichedCamps = await Promise.all(allCamps.map(async (camp) => {
       // Convert Mongoose document to plain object to avoid internal properties
       const campData = camp.toObject ? camp.toObject() : camp;
@@ -267,13 +276,115 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
 
       // Get actual member count from roster
       let memberCount = 0;
+      let hasActiveRoster = false;
       try {
         const activeRoster = await db.findActiveRoster({ camp: campData._id });
         if (activeRoster && activeRoster.members) {
           memberCount = activeRoster.members.length;
+          hasActiveRoster = true;
         }
       } catch (rosterError) {
         console.warn(`Could not get roster for camp ${campData._id}:`, rosterError.message);
+      }
+
+      // Calculate new metrics
+      // 1. Roster info (already calculated above)
+      const rosterInfo = {
+        hasActive: hasActiveRoster,
+        memberCount: memberCount
+      };
+
+      // 2. Last Login - most recent login for any member in the camp
+      let lastLogin = null;
+      try {
+        // Get all users associated with this camp (owner + roster members)
+        const userIds = new Set();
+        if (owner) userIds.add(owner._id.toString());
+        
+        // Get roster members
+        const rosters = await Roster.find({ camp: campData._id, isActive: true });
+        for (const roster of rosters) {
+          if (roster.members) {
+            roster.members.forEach(m => {
+              if (m.member) userIds.add(m.member.toString());
+              if (m.user) userIds.add(m.user.toString());
+            });
+          }
+        }
+        
+        // Find most recent lastLogin
+        if (userIds.size > 0) {
+          const users = await User.find({ 
+            _id: { $in: Array.from(userIds) },
+            lastLogin: { $exists: true, $ne: null }
+          }).sort({ lastLogin: -1 }).limit(1);
+          
+          if (users.length > 0 && users[0].lastLogin) {
+            lastLogin = users[0].lastLogin;
+          }
+        }
+      } catch (error) {
+        console.warn(`Could not get last login for camp ${campData._id}:`, error.message);
+      }
+
+      // 3. Active Member Apps - count where status != "rejected"
+      let activeApps = 0;
+      try {
+        activeApps = await MemberApplication.countDocuments({
+          camp: campData._id,
+          status: { $ne: 'rejected' }
+        });
+      } catch (error) {
+        console.warn(`Could not count applications for camp ${campData._id}:`, error.message);
+      }
+
+      // 4. Active Events - count where deletedAt IS NULL (or doesn't exist)
+      let activeEvents = 0;
+      try {
+        activeEvents = await Event.countDocuments({
+          campId: campData._id,
+          $or: [
+            { deletedAt: { $exists: false } },
+            { deletedAt: null }
+          ]
+        });
+      } catch (error) {
+        console.warn(`Could not count events for camp ${campData._id}:`, error.message);
+      }
+
+      // 5. Active Shifts - count shifts in events where deletedAt IS NULL
+      let activeShifts = 0;
+      try {
+        const events = await Event.find({
+          campId: campData._id,
+          $or: [
+            { deletedAt: { $exists: false } },
+            { deletedAt: null }
+          ]
+        });
+        
+        events.forEach(event => {
+          if (event.shifts && Array.isArray(event.shifts)) {
+            // Count shifts that don't have deletedAt
+            const activeShiftsInEvent = event.shifts.filter(shift => 
+              !shift.deletedAt || shift.deletedAt === null
+            ).length;
+            activeShifts += activeShiftsInEvent;
+          }
+        });
+      } catch (error) {
+        console.warn(`Could not count shifts for camp ${campData._id}:`, error.message);
+      }
+
+      // 6. Active Tasks - count where status != "closed"
+      let activeTasks = 0;
+      try {
+        activeTasks = await Task.countDocuments({
+          campId: campData._id,
+          status: { $ne: 'closed' }
+        });
+      } catch (error) {
+        console.warn(`Could not count tasks for camp ${campData._id}:`, error.message);
       }
 
       return {
@@ -286,7 +397,14 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
           email: owner.email,
           accountType: owner.accountType
         } : null,
-        needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString())
+        needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
+        // New compact columns
+        rosterInfo,
+        lastLogin,
+        activeApps,
+        activeEvents,
+        activeShifts,
+        activeTasks
       };
     }));
     
@@ -316,8 +434,56 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       filteredCamps = filteredCamps.filter(camp => camp.isRecruiting === (recruiting === 'true'));
     }
     
-    // Sort by creation date
-    filteredCamps.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Sort camps
+    const sortField = sortBy || 'createdAt';
+    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    
+    filteredCamps.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortField) {
+        case 'rosterInfo':
+          // Sort by member count
+          aVal = a.rosterInfo?.memberCount || 0;
+          bVal = b.rosterInfo?.memberCount || 0;
+          break;
+        case 'lastLogin':
+          aVal = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+          bVal = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+          break;
+        case 'activeApps':
+          aVal = a.activeApps || 0;
+          bVal = b.activeApps || 0;
+          break;
+        case 'activeEvents':
+          aVal = a.activeEvents || 0;
+          bVal = b.activeEvents || 0;
+          break;
+        case 'activeShifts':
+          aVal = a.activeShifts || 0;
+          bVal = b.activeShifts || 0;
+          break;
+        case 'activeTasks':
+          aVal = a.activeTasks || 0;
+          bVal = b.activeTasks || 0;
+          break;
+        case 'name':
+        case 'campName':
+          aVal = (a.name || a.campName || '').toLowerCase();
+          bVal = (b.name || b.campName || '').toLowerCase();
+          break;
+        case 'createdAt':
+        default:
+          aVal = new Date(a.createdAt || 0).getTime();
+          bVal = new Date(b.createdAt || 0).getTime();
+          break;
+      }
+      
+      if (typeof aVal === 'string') {
+        return sortDirection * aVal.localeCompare(bVal);
+      }
+      return sortDirection * (aVal - bVal);
+    });
     
     // Apply pagination
     const startIndex = (page - 1) * limit;

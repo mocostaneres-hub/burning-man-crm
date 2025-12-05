@@ -127,6 +127,16 @@ interface Camp {
   selectedPerks?: any[];
   isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
+  // New compact columns
+  rosterInfo?: {
+    hasActive: boolean;
+    memberCount: number;
+  };
+  lastLogin?: string | Date;
+  activeApps?: number;
+  activeEvents?: number;
+  activeShifts?: number;
+  activeTasks?: number;
   owner?: string | { _id: string; firstName?: string; lastName?: string; email?: string; accountType?: 'personal' | 'camp' | 'admin' }; // Camp owner user ID
   socialMedia?: {
     facebook?: string;
@@ -182,10 +192,20 @@ const AdminDashboard: React.FC = () => {
   const [dateRange, setDateRange] = useState<string>('30d');
   const [activityHistory, setActivityHistory] = useState<ActivityLog[]>([]);
   const [showActivityHistory, setShowActivityHistory] = useState(false);
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    // Reload camps when sort changes (only if already loaded)
+    if (!loading && camps.length >= 0) {
+      loadCamps();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortField, sortOrder]);
 
   const loadDashboardData = async () => {
     try {
@@ -332,7 +352,7 @@ const AdminDashboard: React.FC = () => {
 
   const loadCamps = async () => {
     try {
-      const response = await apiService.get('/admin/camps');
+      const response = await apiService.get(`/admin/camps?sortBy=${sortField}&sortOrder=${sortOrder}`);
       console.log('🔍 [AdminDashboard] Camps response:', response);
       // Backend returns { data: camps[], totalPages, currentPage, total }
       const campData = response.data || response.camps;
@@ -340,6 +360,17 @@ const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Error loading camps:', err);
       setCamps([]); // Ensure camps is always an array
+    }
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      // Toggle sort order
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to descending
+      setSortField(field);
+      setSortOrder('desc');
     }
   };
 
@@ -919,31 +950,54 @@ const AdminDashboard: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Camp Name
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('name')}>
+                      Camp Name {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Camp ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Hometown
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Members
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('rosterInfo')}>
+                      Roster {sortField === 'rosterInfo' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('lastLogin')}>
+                      Last Login {sortField === 'lastLogin' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('activeApps')}>
+                      Apps {sortField === 'activeApps' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('activeEvents')}>
+                      Events {sortField === 'activeEvents' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('activeShifts')}>
+                      Shifts {sortField === 'activeShifts' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('activeTasks')}>
+                      Tasks {sortField === 'activeTasks' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Profile Visibility
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Applications
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('createdAt')}>
+                      Created {sortField === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -951,19 +1005,47 @@ const AdminDashboard: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredCamps.map((camp) => (
                     <tr key={camp._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {camp.name || camp.campName || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                        {camp._id}
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono text-xs">
+                        {camp._id.substring(0, 8)}...
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.hometown || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {camp.memberCount || camp.members?.length || 0}
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.rosterInfo?.hasActive ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                            {camp.rosterInfo.memberCount || 0}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.lastLogin ? (
+                          <span className="text-xs" title={new Date(camp.lastLogin).toLocaleString()}>
+                            {new Date(camp.lastLogin).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.activeApps ?? '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.activeEvents ?? '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.activeShifts ?? '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {camp.activeTasks ?? '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <button
                           onClick={() => handleTogglePubliclyVisible(camp._id, camp.isPubliclyVisible !== false)}
                           className="flex items-center gap-2"
@@ -973,7 +1055,7 @@ const AdminDashboard: React.FC = () => {
                           </Badge>
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <button
                           onClick={() => handleToggleAcceptingApplications(camp._id, camp.acceptingApplications !== false)}
                           className="flex items-center gap-2"
@@ -983,15 +1065,15 @@ const AdminDashboard: React.FC = () => {
                           </Badge>
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <Badge variant={camp.isActive !== false ? 'success' : 'error'}>
                           {camp.isActive !== false ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.createdAt ? new Date(camp.createdAt).toLocaleDateString() : 'Invalid Date'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
