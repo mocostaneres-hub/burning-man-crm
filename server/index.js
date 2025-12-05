@@ -120,6 +120,8 @@ try {
 }
 // Register diagnostic routes (admin only)
 app.use('/api/diagnostic', require('./routes/diagnostic'));
+// Register admin deletion routes (admin only - USE WITH CAUTION)
+app.use('/api/admin-delete', require('./routes/admin-delete'));
 app.use('/api/email', require('./routes/email'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
