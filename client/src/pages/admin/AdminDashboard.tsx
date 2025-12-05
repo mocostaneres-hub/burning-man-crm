@@ -1025,11 +1025,25 @@ const AdminDashboard: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                        {camp.lastLogin ? (
-                          <span className="text-xs" title={new Date(camp.lastLogin).toLocaleString()}>
-                            {new Date(camp.lastLogin).toLocaleDateString()}
-                          </span>
-                        ) : (
+                        {camp.lastLogin ? (() => {
+                          try {
+                            const date = new Date(camp.lastLogin);
+                            if (!isNaN(date.getTime())) {
+                              // Format as MM/DD/YYYY
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              const year = date.getFullYear();
+                              return (
+                                <span className="text-xs" title={date.toLocaleString()}>
+                                  {month}/{day}/{year}
+                                </span>
+                              );
+                            }
+                          } catch (e) {
+                            console.warn('Invalid lastLogin date:', camp.lastLogin);
+                          }
+                          return <span className="text-gray-400">-</span>;
+                        })() : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>

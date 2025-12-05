@@ -295,37 +295,100 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       };
 
       // 2. Last Login - most recent login for any member in the camp
+      // Use MAX of (lastLogin OR createdAt) for each user, then MAX of all users
+      // Always return a valid timestamp (use createdAt as fallback for first login)
       let lastLogin = null;
       try {
-        // Get all users associated with this camp (owner + roster members)
+        const Member = require('../models/Member');
         const userIds = new Set();
-        if (owner) userIds.add(owner._id.toString());
         
-        // Get roster members
-        const rosters = await Roster.find({ camp: campData._id, isActive: true });
+        // Add camp owner
+        if (owner) {
+          userIds.add(owner._id.toString());
+        }
+        
+        // Get all active rosters for this camp
+        const rosters = await Roster.find({ 
+          camp: campData._id, 
+          isActive: true 
+        }).select('members');
+        
+        // Collect all member IDs from rosters
+        const memberIds = [];
         for (const roster of rosters) {
-          if (roster.members) {
-            roster.members.forEach(m => {
-              if (m.member) userIds.add(m.member.toString());
-              if (m.user) userIds.add(m.user.toString());
-            });
+          if (roster.members && Array.isArray(roster.members)) {
+            for (const memberEntry of roster.members) {
+              if (memberEntry.member) {
+                const memberId = memberEntry.member._id || memberEntry.member;
+                memberIds.push(memberId);
+              }
+              // Also check direct user reference if present
+              if (memberEntry.user) {
+                userIds.add(memberEntry.user.toString());
+              }
+            }
           }
         }
         
-        // Find most recent lastLogin
+        // Get all Members in one query to find their user IDs
+        if (memberIds.length > 0) {
+          const members = await Member.find({
+            _id: { $in: memberIds }
+          }).select('user');
+          
+          for (const member of members) {
+            if (member.user) {
+              userIds.add(member.user.toString());
+            }
+          }
+        }
+        
+        // Get all users in one query (avoid N+1)
         if (userIds.size > 0) {
           const users = await User.find({ 
-            _id: { $in: Array.from(userIds) },
-            lastLogin: { $exists: true, $ne: null }
-          }).sort({ lastLogin: -1 }).limit(1);
+            _id: { $in: Array.from(userIds) }
+          }).select('lastLogin createdAt');
           
-          if (users.length > 0 && users[0].lastLogin) {
-            lastLogin = users[0].lastLogin;
+          if (users.length > 0) {
+            // For each user, use MAX(lastLogin, createdAt)
+            // Treat createdAt as first login if lastLogin is null
+            const loginTimestamps = users.map(user => {
+              const lastLoginTime = user.lastLogin ? new Date(user.lastLogin).getTime() : 0;
+              const createdAtTime = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+              // Use the later of the two (createdAt is always present, so this ensures we have a value)
+              return Math.max(lastLoginTime, createdAtTime);
+            });
+            
+            // Get the maximum timestamp across all users
+            const maxTimestamp = Math.max(...loginTimestamps);
+            
+            if (maxTimestamp > 0) {
+              lastLogin = new Date(maxTimestamp);
+            }
           }
+        }
+        
+        // Fallback: if no roster members, use owner's createdAt
+        if (!lastLogin && owner && owner.createdAt) {
+          lastLogin = new Date(owner.createdAt);
         }
       } catch (error) {
         console.warn(`Could not get last login for camp ${campData._id}:`, error.message);
+        // Fallback to owner's createdAt if available
+        if (!lastLogin && owner && owner.createdAt) {
+          lastLogin = new Date(owner.createdAt);
+        }
       }
+      
+      // Ensure we always return a valid ISO timestamp string (never null)
+      // This should rarely happen, but ensures data integrity
+      if (!lastLogin) {
+        // Ultimate fallback: use camp's createdAt
+        lastLogin = campData.createdAt ? new Date(campData.createdAt) : new Date();
+      }
+      
+      // Convert to ISO string for consistent API response
+      lastLogin = lastLogin.toISOString();
 
       // 3. Active Member Apps - count where status != "rejected"
       let activeApps = 0;
