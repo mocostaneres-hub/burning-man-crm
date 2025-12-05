@@ -118,6 +118,8 @@ try {
   console.error('❌ Error loading admin routes:', error);
   throw error;
 }
+// Register diagnostic routes (admin only)
+app.use('/api/diagnostic', require('./routes/diagnostic'));
 app.use('/api/email', require('./routes/email'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
