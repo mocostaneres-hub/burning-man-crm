@@ -198,17 +198,28 @@ const optionalAuth = async (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId).select('-password');
-      
-      if (user && user.isActive) {
-        req.user = user;
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId).select('-password');
+        
+        if (user && user.isActive) {
+          req.user = user;
+          console.log('✅ [optionalAuth] Authenticated user:', user.email);
+        } else {
+          console.log('⚠️ [optionalAuth] User not found or inactive, continuing without auth');
+        }
+      } catch (tokenError) {
+        // Token is invalid/expired - continue without authentication
+        console.log('⚠️ [optionalAuth] Token invalid/expired, continuing without auth:', tokenError.message);
       }
+    } else {
+      console.log('ℹ️ [optionalAuth] No token provided, continuing without auth');
     }
 
     next();
   } catch (error) {
-    // Continue without authentication
+    // Continue without authentication on any error
+    console.log('⚠️ [optionalAuth] Error in middleware, continuing without auth:', error.message);
     next();
   }
 };
