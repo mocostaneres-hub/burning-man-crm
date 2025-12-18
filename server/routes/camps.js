@@ -43,8 +43,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const query = {
       status: 'active',
-      isPublic: true,
-      isPubliclyVisible: true // Only show camps with public profiles
+      isPubliclyVisible: true // Only show camps with public profiles (this is the controlling field)
     };
 
     // Add search filters
@@ -147,8 +146,13 @@ router.get('/', optionalAuth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get camps error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [GET /api/camps] Error:', error);
+    console.error('❌ [GET /api/camps] Error stack:', error.stack);
+    console.error('❌ [GET /api/camps] Error message:', error.message);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

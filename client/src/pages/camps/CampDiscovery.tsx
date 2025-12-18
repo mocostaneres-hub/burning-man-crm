@@ -138,12 +138,33 @@ const CampDiscovery: React.FC = () => {
         setCamps(response.camps);
         console.log('✅ [CampDiscovery] Set camps:', response.camps.length);
       } else {
-        console.warn('⚠️ [CampDiscovery] No camps in response');
+        console.warn('⚠️ [CampDiscovery] No camps in response. Response structure:', response);
         setCamps([]);
+        // Don't show error if response is valid but empty - just no camps found
+        if (response && typeof response === 'object' && !response.camps) {
+          setError('Invalid response format from server');
+        }
       }
     } catch (err: any) {
-      console.error('❌ [CampDiscovery] Error:', err);
-      setError('Failed to load camps');
+      console.error('❌ [CampDiscovery] Error fetching camps:', err);
+      console.error('❌ [CampDiscovery] Error response:', err.response);
+      console.error('❌ [CampDiscovery] Error status:', err.response?.status);
+      console.error('❌ [CampDiscovery] Error data:', err.response?.data);
+      console.error('❌ [CampDiscovery] Error message:', err.message);
+      
+      // Provide more specific error message
+      let errorMessage = 'Failed to load camps';
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        errorMessage = 'Authentication error. Please try refreshing the page.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Camps endpoint not found. Please contact support.';
+      } else if (err.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (err.message) {
+        errorMessage = `Failed to load camps: ${err.message}`;
+      }
+      
+      setError(errorMessage);
       setCamps([]);
     } finally {
       setLoading(false);
