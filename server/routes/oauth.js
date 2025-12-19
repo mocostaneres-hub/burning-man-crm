@@ -44,8 +44,13 @@ let googleClient = null;
 if (process.env.GOOGLE_CLIENT_ID) {
   googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
   console.log('✅ [OAuth] Google OAuth client initialized');
+  console.log('✅ [OAuth] GOOGLE_CLIENT_ID is configured');
 } else {
   console.warn('⚠️ [OAuth] GOOGLE_CLIENT_ID not set - Google OAuth will be disabled');
+  console.warn('⚠️ [OAuth] To enable Google OAuth:');
+  console.warn('   1. Get your Client ID from https://console.cloud.google.com/apis/credentials');
+  console.warn('   2. Add GOOGLE_CLIENT_ID=your-client-id to environment variables');
+  console.warn('   3. Restart the server');
 }
 
 /**
