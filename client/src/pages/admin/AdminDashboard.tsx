@@ -265,6 +265,25 @@ const AdminDashboard: React.FC = () => {
   const handleBulkAction = async () => {
     if (!bulkAction || selectedUsers.length === 0) return;
 
+    // Add confirmation for permanent deletion
+    if (bulkAction === 'delete') {
+      const confirmed = window.confirm(
+        `⚠️ PERMANENT DELETION WARNING ⚠️\n\n` +
+        `You are about to PERMANENTLY DELETE ${selectedUsers.length} user account(s).\n\n` +
+        `This action is IRREVERSIBLE and will:\n` +
+        `• Delete user accounts permanently\n` +
+        `• For CAMP accounts: Preserve all camp data (roster, events, tasks)\n` +
+        `• For MEMBER accounts: Transfer tasks to camps and replace name with "Unknown User"\n` +
+        `• Allow the email to be used for new signups\n\n` +
+        `Are you ABSOLUTELY SURE you want to proceed?`
+      );
+      
+      if (!confirmed) {
+        console.log('Permanent deletion cancelled by admin');
+        return;
+      }
+    }
+
     try {
       const response = await apiService.post('/admin/users/bulk-action', {
         action: bulkAction,
@@ -1377,7 +1396,7 @@ const AdminDashboard: React.FC = () => {
                   <option value="activate">Activate Users</option>
                   <option value="deactivate">Deactivate Users</option>
                   <option value="changeAccountType">Change Account Type</option>
-                  <option value="delete">Delete Users (Soft)</option>
+                  <option value="delete">Permanently Delete</option>
                 </select>
               </div>
               
@@ -1396,9 +1415,19 @@ const AdminDashboard: React.FC = () => {
                 </div>
               )}
               
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm text-yellow-800">
-                  This action will affect <strong>{selectedUsers.length}</strong> selected users.
+              <div className={`${bulkAction === 'delete' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'} border rounded-lg p-4`}>
+                <p className={`text-sm ${bulkAction === 'delete' ? 'text-red-800 font-semibold' : 'text-yellow-800'}`}>
+                  {bulkAction === 'delete' ? (
+                    <>
+                      ⚠️ <strong>PERMANENT DELETION WARNING:</strong> This action will <strong>IRREVERSIBLY DELETE</strong> {selectedUsers.length} user account(s).
+                      <br /><br />
+                      • CAMP accounts: User deleted, camp data preserved
+                      <br />
+                      • MEMBER accounts: User deleted, tasks transferred to camps
+                    </>
+                  ) : (
+                    <>This action will affect <strong>{selectedUsers.length}</strong> selected users.</>
+                  )}
                 </p>
               </div>
               

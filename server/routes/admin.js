@@ -12,6 +12,7 @@ const { authenticateToken, requireAdmin, requirePermission } = require('../middl
 const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { getFieldDisplayName, formatFieldValue } = require('../utils/fieldNameMapper');
+const { permanentlyDeleteAccount } = require('../services/permanentDeletionService');
 
 // Configure multer for photo uploads
 const storage = multer.memoryStorage();
@@ -1749,10 +1750,26 @@ router.post('/users/bulk-action', authenticateToken, requireAdmin, [
             actionDescription = `account type changed to ${accountType}`;
             break;
           case 'delete':
-            // Soft delete by deactivating
-            updateData = { isActive: false, deletedAt: new Date() };
-            actionDescription = 'deleted (soft)';
-            break;
+            // PERMANENT DELETION - irreversible
+            // Uses permanentDeletionService to handle CAMP vs MEMBER accounts appropriately
+            const deletionResult = await permanentlyDeleteAccount(userId, req.user._id);
+            
+            if (deletionResult.success) {
+              actionDescription = 'permanently deleted';
+              results.push({
+                userId,
+                success: true,
+                action: actionDescription,
+                details: deletionResult.message,
+                email: deletionResult.email,
+                tasksTransferred: deletionResult.tasksTransferred
+              });
+            } else {
+              actionErrors.push({ userId, error: deletionResult.message });
+            }
+            
+            // Skip the updateData logic below for delete action
+            continue;
         }
 
         if (Object.keys(updateData).length > 0) {
