@@ -730,29 +730,14 @@ const PublicCampProfile: React.FC = () => {
             {/* Motivation */}
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
-                Why do you want to join {camp.campName}? *
+                Why do you want to join {camp.campName}?
               </label>
               <textarea
                 value={applicationData.motivation}
                 onChange={(e) => setApplicationData(prev => ({ ...prev, motivation: e.target.value }))}
-                placeholder="Tell us about your motivation, what you can contribute, and why you'd be a good fit..."
+                placeholder="Tell us about your motivation to join us, how you can contribute, any past experience working in a camp project, or anything you'd like us to know."
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
                 rows={5}
-                required
-              />
-            </div>
-
-            {/* Experience */}
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                Burning Man Experience (Optional)
-              </label>
-              <textarea
-                value={applicationData.experience}
-                onChange={(e) => setApplicationData(prev => ({ ...prev, experience: e.target.value }))}
-                placeholder="Tell us about your Burning Man experience, previous camps, or relevant skills..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
-                rows={3}
               />
             </div>
 
