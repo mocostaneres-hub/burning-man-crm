@@ -103,42 +103,54 @@ const Login: React.FC = () => {
   const handleOAuthSuccess = (oauthData: any) => {
     console.log('🔍 [Login] OAuth success callback triggered with data:', oauthData);
     
-    // Extract user and token from OAuth response
+    // Extract user, token, and isNewUser flag from OAuth response
     const user = oauthData.user || oauthData;
     const token = oauthData.token;
+    const isNewUser = oauthData.isNewUser; // Backend tells us if this is a new user
     
     console.log('🔍 [Login] Extracted user:', user);
     console.log('🔍 [Login] Token present:', !!token);
+    console.log('🔍 [Login] isNewUser flag from backend:', isNewUser);
+    console.log('🔍 [Login] User accountType:', user.accountType);
     console.log('🔍 [Login] User role:', user.role);
-    console.log('🔍 [Login] Needs onboarding?', user.role === 'unassigned' || !user.role);
     
     setOauthLoading(false);
     setError('');
     
-    // CRITICAL FIX: Force a page reload to ensure AuthContext picks up the new token
-    // This is necessary because OAuth happens in a different component than AuthContext
-    // Alternative: We could pass a callback to update AuthContext directly
+    // ============================================================================
+    // CRITICAL: OAuth Login Must Not Trigger Onboarding for Existing Users
+    // ============================================================================
+    // The backend sets `isNewUser: true` ONLY when creating a brand new account.
+    // For existing users (including camp accounts), `isNewUser: false`.
+    // 
+    // WHY we trust the backend flag instead of re-checking:
+    // 1. Backend has authoritative state (database)
+    // 2. Re-checking user fields is error-prone (different account types)
+    // 3. Camp accounts don't use `role` field, so checking it fails
+    // 4. Backend already updated lastLogin, so that check also fails
+    // 
+    // HOW OAuth login should behave (same as email/password):
+    // - New users: Go to onboarding (/onboarding/select-role)
+    // - Existing users: Go to dashboard (no onboarding)
+    // - Login method (OAuth vs password) should NOT affect this
+    // ============================================================================
     
     // Small delay to ensure localStorage write completes
     setTimeout(() => {
       console.log('🔄 [Login] Reloading to update AuthContext...');
       
-      // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
-      if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
-        console.log('✅ [Login] Redirecting to onboarding...');
+      // TRUST THE BACKEND: Use isNewUser flag instead of re-checking user fields
+      if (isNewUser) {
+        // This is a brand new user created via OAuth
+        console.log('✅ [Login] New user detected, redirecting to onboarding...');
         window.location.href = '/onboarding/select-role';
         return;
       }
       
-      // Check if this is a new camp account (no lastLogin)
-      if (user.accountType === 'camp' && !user.lastLogin) {
-        console.log('✅ [Login] Redirecting to camp edit...');
-        window.location.href = '/camp/edit';
-      } else {
-        const from = location.state?.from?.pathname || '/dashboard';
-        console.log('✅ [Login] Redirecting to:', from);
-        window.location.href = from;
-      }
+      // Existing user - redirect to dashboard like email/password login
+      const from = location.state?.from?.pathname || '/dashboard';
+      console.log('✅ [Login] Existing user, redirecting to:', from);
+      window.location.href = from;
     }, 100); // 100ms delay to ensure localStorage write completes
   };
 
