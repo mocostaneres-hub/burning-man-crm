@@ -160,22 +160,41 @@ const Register: React.FC = () => {
     }
   };
 
-  const handleOAuthSuccess = (user: any) => {
+  const handleOAuthSuccess = (oauthData: any) => {
+    console.log('🔍 [Register] OAuth success callback triggered with data:', oauthData);
+    
+    // Extract user from OAuth response
+    const user = oauthData.user || oauthData;
+    const token = oauthData.token;
+    
+    console.log('🔍 [Register] Extracted user:', user);
+    console.log('🔍 [Register] Token present:', !!token);
+    console.log('🔍 [Register] User role:', user.role);
+    
     setOauthLoading(false);
     setError('');
     
-    // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
-    if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
-      navigate('/onboarding/select-role', { replace: true });
-      return;
-    }
-    
-    // Redirect based on account type
-    if (user.accountType === 'camp') {
-      navigate('/camp/edit');
-    } else {
-      navigate('/user/profile');
-    }
+    // CRITICAL FIX: Force a page reload to ensure AuthContext picks up the new token
+    // Small delay to ensure localStorage write completes
+    setTimeout(() => {
+      console.log('🔄 [Register] Reloading to update AuthContext...');
+      
+      // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
+      if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
+        console.log('✅ [Register] Redirecting to onboarding...');
+        window.location.href = '/onboarding/select-role';
+        return;
+      }
+      
+      // Redirect based on account type
+      if (user.accountType === 'camp') {
+        console.log('✅ [Register] Redirecting to camp edit...');
+        window.location.href = '/camp/edit';
+      } else {
+        console.log('✅ [Register] Redirecting to user profile...');
+        window.location.href = '/user/profile';
+      }
+    }, 100); // 100ms delay to ensure localStorage write completes
   };
 
   const handleOAuthError = (error: string) => {

@@ -204,13 +204,24 @@ router.post('/google', [
     }
 
     console.log(`✅ [OAuth] Google authentication successful for ${isNewUser ? 'new' : 'existing'} user: ${googleUser.email}`);
+    console.log('✅ [OAuth] Sending response with token (length:', token?.length, ') and user (email:', userResponse.email, ')');
 
-    res.json({
+    const responsePayload = {
       message: 'Google authentication successful',
       token,
       user: userResponse,
       isNewUser
+    };
+    
+    console.log('✅ [OAuth] Response payload structure:', {
+      hasMessage: !!responsePayload.message,
+      hasToken: !!responsePayload.token,
+      hasUser: !!responsePayload.user,
+      isNewUser: responsePayload.isNewUser,
+      userEmail: responsePayload.user?.email
     });
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error('❌ [OAuth] Google authentication error:', error);

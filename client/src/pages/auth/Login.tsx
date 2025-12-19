@@ -100,35 +100,46 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleOAuthSuccess = (userData: any) => {
-    console.log('🔍 [Login] OAuth success callback triggered with userData:', userData);
+  const handleOAuthSuccess = (oauthData: any) => {
+    console.log('🔍 [Login] OAuth success callback triggered with data:', oauthData);
     
-    // Extract user object from the response (GoogleOAuth passes the full API response)
-    const user = userData.user || userData;
+    // Extract user and token from OAuth response
+    const user = oauthData.user || oauthData;
+    const token = oauthData.token;
     
     console.log('🔍 [Login] Extracted user:', user);
+    console.log('🔍 [Login] Token present:', !!token);
     console.log('🔍 [Login] User role:', user.role);
     console.log('🔍 [Login] Needs onboarding?', user.role === 'unassigned' || !user.role);
     
     setOauthLoading(false);
     setError('');
     
-    // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
-    if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
-      console.log('✅ [Login] Redirecting to onboarding...');
-      navigate('/onboarding/select-role', { replace: true });
-      return;
-    }
+    // CRITICAL FIX: Force a page reload to ensure AuthContext picks up the new token
+    // This is necessary because OAuth happens in a different component than AuthContext
+    // Alternative: We could pass a callback to update AuthContext directly
     
-    // Check if this is a new camp account (no lastLogin)
-    if (user.accountType === 'camp' && !user.lastLogin) {
-      console.log('✅ [Login] Redirecting to camp edit...');
-      navigate('/camp/edit', { replace: true });
-    } else {
-      const from = location.state?.from?.pathname || '/dashboard';
-      console.log('✅ [Login] Redirecting to:', from);
-      navigate(from, { replace: true });
-    }
+    // Small delay to ensure localStorage write completes
+    setTimeout(() => {
+      console.log('🔄 [Login] Reloading to update AuthContext...');
+      
+      // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
+      if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
+        console.log('✅ [Login] Redirecting to onboarding...');
+        window.location.href = '/onboarding/select-role';
+        return;
+      }
+      
+      // Check if this is a new camp account (no lastLogin)
+      if (user.accountType === 'camp' && !user.lastLogin) {
+        console.log('✅ [Login] Redirecting to camp edit...');
+        window.location.href = '/camp/edit';
+      } else {
+        const from = location.state?.from?.pathname || '/dashboard';
+        console.log('✅ [Login] Redirecting to:', from);
+        window.location.href = from;
+      }
+    }, 100); // 100ms delay to ensure localStorage write completes
   };
 
   const handleOAuthError = (error: string) => {

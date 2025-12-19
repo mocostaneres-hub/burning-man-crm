@@ -176,18 +176,34 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
         idToken: response.credential,
       });
 
+      console.log('✅ [GoogleOAuth] Backend response:', apiResponse);
+
       if (apiResponse.token && apiResponse.user) {
-        // Store token and user data
+        // Store token and user data in localStorage
+        // This is crucial for AuthContext to pick up on page load/refresh
+        console.log('💾 [GoogleOAuth] Saving token to localStorage...');
         localStorage.setItem('token', apiResponse.token);
         localStorage.setItem('user', JSON.stringify(apiResponse.user));
+        
+        console.log('✅ [GoogleOAuth] Token saved. Length:', apiResponse.token.length);
+        console.log('✅ [GoogleOAuth] User saved:', apiResponse.user.email);
+        console.log('✅ [GoogleOAuth] Calling onSuccess callback...');
 
-        console.log('✅ [GoogleOAuth] Authentication successful');
-        onSuccess(apiResponse.user);
+        // CRITICAL: Pass the full response to onSuccess
+        // This allows the parent component to update AuthContext
+        onSuccess({
+          user: apiResponse.user,
+          token: apiResponse.token,
+          isNewUser: apiResponse.isNewUser
+        });
       } else {
+        console.error('❌ [GoogleOAuth] Invalid response structure:', apiResponse);
         throw new Error('Invalid response from server');
       }
     } catch (error: any) {
       console.error('❌ [GoogleOAuth] Authentication failed:', error);
+      console.error('❌ [GoogleOAuth] Error response:', error.response);
+      console.error('❌ [GoogleOAuth] Error data:', error.response?.data);
       
       // Provide user-friendly error messages
       let errorMessage = 'Failed to sign in with Google';
