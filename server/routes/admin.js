@@ -475,6 +475,17 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     // Apply filters
     let filteredCamps = enrichedCamps;
     
+    // CRITICAL: Exclude camps with no owner (orphaned camps from permanent deletion)
+    // After permanent deletion of a CAMP account, the User is deleted but Camp record is preserved
+    // We don't want to show orphaned camps in the admin list
+    filteredCamps = filteredCamps.filter(camp => {
+      if (!camp.owner) {
+        console.log(`🚫 [Admin Camps List] Excluding orphaned camp ${camp._id} (${camp.name || camp.campName}) - owner user deleted`);
+        return false;
+      }
+      return true;
+    });
+    
     if (search) {
       const searchLower = search.toLowerCase();
       filteredCamps = filteredCamps.filter(camp => 

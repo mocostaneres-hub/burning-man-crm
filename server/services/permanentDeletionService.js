@@ -62,8 +62,11 @@ async function permanentlyDeleteCampAccount(userId, adminId) {
 
     // IMPORTANT: Do NOT delete camp-related entities
     // - Camp profile, roster, applications, events, shifts, tasks all remain
-    // - These are preserved for other camp admins to access
-    console.log(`ℹ️  [Permanent Deletion] Preserving all camp entities for camp: ${campId}`);
+    // - These are preserved for data integrity and potential future recovery
+    // - The Camp record remains in database but is filtered out of admin lists
+    //   (camps without owners are considered "orphaned" and hidden from UI)
+    console.log(`ℹ️  [Permanent Deletion] Preserving camp entities for camp: ${campId}`);
+    console.log(`ℹ️  [Permanent Deletion] Camp will be hidden from admin list (orphaned camp)`);
 
     // Delete the user account
     await User.findByIdAndDelete(userId);
