@@ -321,7 +321,24 @@ router.post('/apple', [
 // Returns OAuth client IDs for frontend initialization
 // Mobile apps will use their own client IDs from Google Cloud Console
 router.get('/config', (req, res) => {
-  res.json({
+  // Debug logging to diagnose production issues
+  console.log('🔍 [OAuth Config] Checking environment variables...');
+  console.log('🔍 [OAuth Config] GOOGLE_CLIENT_ID present:', !!process.env.GOOGLE_CLIENT_ID);
+  console.log('🔍 [OAuth Config] GOOGLE_CLIENT_ID length:', process.env.GOOGLE_CLIENT_ID?.length || 0);
+  console.log('🔍 [OAuth Config] APPLE_CLIENT_ID present:', !!process.env.APPLE_CLIENT_ID);
+  
+  // Log first/last few characters for verification (never log full credentials)
+  if (process.env.GOOGLE_CLIENT_ID) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const preview = `${clientId.substring(0, 10)}...${clientId.substring(clientId.length - 20)}`;
+    console.log('🔍 [OAuth Config] GOOGLE_CLIENT_ID preview:', preview);
+  } else {
+    console.warn('⚠️ [OAuth Config] GOOGLE_CLIENT_ID is not set in environment');
+    console.warn('⚠️ [OAuth Config] Google OAuth will be DISABLED');
+    console.warn('⚠️ [OAuth Config] Set GOOGLE_CLIENT_ID in Railway/Vercel environment variables');
+  }
+  
+  const config = {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || null,
       enabled: !!process.env.GOOGLE_CLIENT_ID
@@ -330,7 +347,14 @@ router.get('/config', (req, res) => {
       clientId: process.env.APPLE_CLIENT_ID || null,
       enabled: !!process.env.APPLE_CLIENT_ID
     }
+  };
+  
+  console.log('✅ [OAuth Config] Sending config:', {
+    google: { enabled: config.google.enabled, clientIdPresent: !!config.google.clientId },
+    apple: { enabled: config.apple.enabled, clientIdPresent: !!config.apple.clientId }
   });
+  
+  res.json(config);
 });
 
 module.exports = router;
