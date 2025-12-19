@@ -33,6 +33,7 @@
     "express-rate-limit": "^6.10.0",
     "express-session": "^1.18.2",
     "express-validator": "^7.0.1",
+    "google-auth-library": "^10.5.0",
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.5.0",

@@ -5,6 +5,7 @@ import * as yup from 'yup';
 import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AppleOAuth from '../../components/auth/AppleOAuth';
+import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
@@ -216,6 +217,12 @@ const Register: React.FC = () => {
               Or sign up with
             </p>
             <div className="flex flex-col gap-3">
+              <GoogleOAuth
+                onSuccess={handleOAuthSuccess}
+                onError={handleOAuthError}
+                disabled={oauthLoading || loading}
+                mode="signup"
+              />
               <AppleOAuth
                 onSuccess={handleOAuthSuccess}
                 onError={handleOAuthError}

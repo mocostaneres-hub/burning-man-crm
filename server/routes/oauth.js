@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { sendWelcomeEmail } = require('../services/emailService');
@@ -13,30 +14,130 @@ const generateToken = (userId) => {
   });
 };
 
+// ============================================================================
+// GOOGLE OAUTH IMPLEMENTATION (Mobile-Compatible)
+// ============================================================================
+// 
+// This implementation uses Google ID token verification, which works for:
+// - Web: Google Identity Services (JavaScript library)
+// - iOS: Google Sign-In SDK (will call this same endpoint with ID token)
+// - Android: Google Sign-In SDK (will call this same endpoint with ID token)
+//
+// Key Design Decisions for Mobile Compatibility:
+// 1. ID Token Verification: We verify Google's ID token server-side (secure, works for all platforms)
+// 2. Single Backend Endpoint: Web and mobile apps use the same /api/oauth/google endpoint
+// 3. JWT Session Tokens: Our own JWT tokens work across web and mobile
+// 4. No Platform-Specific Code: Backend doesn't care if request comes from web or mobile
+//
+// Common Failure Points:
+// - Invalid ID token (expired, wrong audience, tampered)
+// - Missing GOOGLE_CLIENT_ID environment variable
+// - Network issues during token verification
+// - User email already registered as camp account
+// ============================================================================
+
+const { OAuth2Client } = require('google-auth-library');
+
+// Initialize Google OAuth client for ID token verification
+// This client ID must match the one used by the frontend/mobile app
+let googleClient = null;
+if (process.env.GOOGLE_CLIENT_ID) {
+  googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  console.log('✅ [OAuth] Google OAuth client initialized');
+} else {
+  console.warn('⚠️ [OAuth] GOOGLE_CLIENT_ID not set - Google OAuth will be disabled');
+}
+
+/**
+ * Verify Google ID token and extract user information
+ * This function works for tokens from web, iOS, and Android apps
+ * 
+ * @param {string} idToken - Google ID token from client
+ * @returns {Promise<{email: string, name: string, picture: string, googleId: string}>}
+ */
+async function verifyGoogleIdToken(idToken) {
+  if (!googleClient) {
+    throw new Error('Google OAuth not configured');
+  }
+
+  try {
+    // Verify the ID token
+    // This checks: signature, expiration, audience (client ID), issuer
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID, // Must match the client ID
+    });
+
+    // Extract user information from the verified token
+    const payload = ticket.getPayload();
+    
+    if (!payload) {
+      throw new Error('Invalid token payload');
+    }
+
+    return {
+      email: payload.email,
+      name: payload.name || `${payload.given_name || ''} ${payload.family_name || ''}`.trim(),
+      picture: payload.picture || '',
+      googleId: payload.sub, // Google's unique user ID
+      emailVerified: payload.email_verified || false,
+    };
+  } catch (error) {
+    console.error('❌ [OAuth] Google ID token verification failed:', error.message);
+    
+    // Provide helpful error messages for common issues
+    if (error.message.includes('audience')) {
+      throw new Error('Token audience mismatch - check GOOGLE_CLIENT_ID configuration');
+    } else if (error.message.includes('expired')) {
+      throw new Error('Token has expired - please sign in again');
+    } else if (error.message.includes('signature')) {
+      throw new Error('Invalid token signature - token may be tampered');
+    }
+    
+    throw new Error(`Token verification failed: ${error.message}`);
+  }
+}
+
 // @route   POST /api/oauth/google
-// @desc    Handle Google OAuth for personal accounts only
+// @desc    Handle Google OAuth authentication (web + mobile compatible)
 // @access  Public
-// DISABLED: Google OAuth has been disabled for this CRM
-/*
+// 
+// This endpoint accepts a Google ID token, verifies it server-side, and:
+// - Creates a new user account if email doesn't exist
+// - Links Google account to existing user if email exists
+// - Returns JWT token for session management
+//
+// Request body: { idToken: string }
+// Response: { token: string, user: User, isNewUser: boolean }
 router.post('/google', [
-  body('email').isEmail().normalizeEmail(),
-  body('name').trim().notEmpty(),
-  body('googleId').notEmpty(),
-  body('profilePicture').optional()
+  body('idToken').notEmpty().withMessage('ID token is required'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        errors: errors.array() 
+      });
     }
 
-    const { email, name, googleId, profilePicture } = req.body;
+    const { idToken } = req.body;
+
+    // Verify Google ID token (works for web, iOS, Android)
+    const googleUser = await verifyGoogleIdToken(idToken);
+
+    if (!googleUser.email) {
+      return res.status(400).json({ 
+        message: 'Email not provided by Google account' 
+      });
+    }
 
     // Check if user already exists
-    let user = await db.findUser({ email });
+    let user = await db.findUser({ email: googleUser.email });
+    let isNewUser = false;
     
     if (user) {
-      // User exists, check if it's a personal account
+      // User exists - check if it's a personal account
       if (user.accountType !== 'personal') {
         return res.status(400).json({ 
           message: 'OAuth is only available for personal accounts. This email is registered as a camp account.' 
@@ -45,58 +146,83 @@ router.post('/google', [
       
       // Update user with Google info if not already linked
       if (!user.googleId) {
-        await db.updateUser(email, {
-          googleId,
-          profilePhoto: profilePicture,
+        await db.updateUser(googleUser.email, {
+          googleId: googleUser.googleId,
+          profilePhoto: googleUser.picture,
           lastLogin: new Date()
         });
-        user.googleId = googleId;
-        user.profilePhoto = profilePicture;
-        user.lastLogin = new Date();
+        user.googleId = googleUser.googleId;
+        user.profilePhoto = googleUser.picture;
       }
+      
+      // Update last login
+      user.lastLogin = new Date();
+      await db.updateUser(googleUser.email, { lastLogin: new Date() });
     } else {
       // Create new personal account
-      const [firstName, ...lastNameParts] = name.split(' ');
+      isNewUser = true;
+      const [firstName, ...lastNameParts] = (googleUser.name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
       user = await db.createUser({
-        email,
-        password: 'oauth-user', // Will be hashed, but not used for OAuth users
+        email: googleUser.email,
+        password: crypto.randomUUID(), // Random password (not used for OAuth users, but required by schema)
         accountType: 'personal',
         firstName: firstName || '',
         lastName: lastName || '',
-        googleId,
-        profilePhoto: profilePicture || '',
+        googleId: googleUser.googleId,
+        profilePhoto: googleUser.picture || '',
         lastLogin: new Date(),
-        role: 'unassigned' // New OAuth users start with unassigned role
+        role: 'unassigned', // New OAuth users start with unassigned role
+        isVerified: googleUser.emailVerified || false,
       });
     }
 
-    // Generate token
+    // Generate our own JWT token for session management
+    // This token works across web and mobile platforms
     const token = generateToken(user._id);
 
     // Return user data (without sensitive info)
     const userResponse = { ...user };
     delete userResponse.password;
 
+    // Send welcome email for new users (non-blocking)
+    if (isNewUser) {
+      sendWelcomeEmail(userResponse)
+        .then(() => {
+          console.log('✅ [OAuth] Welcome email sent to:', userResponse.email);
+        })
+        .catch((emailError) => {
+          // Log but don't fail OAuth if email fails
+          console.error('⚠️ [OAuth] Failed to send welcome email:', emailError);
+        });
+    }
+
+    console.log(`✅ [OAuth] Google authentication successful for ${isNewUser ? 'new' : 'existing'} user: ${googleUser.email}`);
+
     res.json({
-      message: 'Google OAuth successful',
+      message: 'Google authentication successful',
       token,
-      user: userResponse
+      user: userResponse,
+      isNewUser
     });
 
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Google OAuth error:', error);
-      console.error('Error stack:', error.stack);
+    console.error('❌ [OAuth] Google authentication error:', error);
+    
+    // Provide helpful error messages
+    if (error.message.includes('not configured')) {
+      return res.status(503).json({ 
+        message: 'Google authentication is not configured on the server' 
+      });
     }
+    
     res.status(500).json({ 
-      message: 'Server error during Google OAuth',
-      ...(process.env.NODE_ENV === 'development' && { error: error.message })
+      message: error.message || 'Server error during Google authentication',
+      ...(process.env.NODE_ENV === 'development' && { error: error.stack })
     });
   }
 });
-*/
 
 // @route   POST /api/oauth/apple
 // @desc    Handle Apple OAuth for personal accounts only
@@ -191,11 +317,14 @@ router.post('/apple', [
 // @route   GET /api/oauth/config
 // @desc    Get OAuth configuration for frontend
 // @access  Public
+// 
+// Returns OAuth client IDs for frontend initialization
+// Mobile apps will use their own client IDs from Google Cloud Console
 router.get('/config', (req, res) => {
   res.json({
     google: {
-      clientId: null,
-      enabled: false
+      clientId: process.env.GOOGLE_CLIENT_ID || null,
+      enabled: !!process.env.GOOGLE_CLIENT_ID
     },
     apple: {
       clientId: process.env.APPLE_CLIENT_ID || null,
