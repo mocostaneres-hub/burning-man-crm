@@ -783,7 +783,7 @@ const PublicCampProfile: React.FC = () => {
               <Button
                 onClick={handleSubmitApplication}
                 className="flex-1"
-                disabled={applicationLoading || !applicationData.motivation.trim()}
+                disabled={applicationLoading}
               >
                 {applicationLoading ? (
                   <>
