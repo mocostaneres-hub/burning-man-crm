@@ -262,7 +262,7 @@ router.post('/google', [
 });
 
 // @route   POST /api/oauth/apple
-// @desc    Handle Apple OAuth for personal accounts only
+// @desc    Handle Apple OAuth authentication (account-type agnostic)
 // @access  Public
 router.post('/apple', [
   body('email').isEmail().normalizeEmail(),
@@ -278,20 +278,19 @@ router.post('/apple', [
 
     const { email, name, appleId, profilePicture } = req.body;
 
+    // OAuth must be account-type agnostic (see Google OAuth handler for full explanation)
+    
     // Check if user already exists
     let user = await db.findUser({ email });
     let isNewUser = false;
     
     if (user) {
-      // User exists, check if it's a personal account
-      if (user.accountType !== 'personal') {
-        return res.status(400).json({ 
-          message: 'OAuth is only available for personal accounts. This email is registered as a camp account.' 
-        });
-      }
+      // Existing user - link Apple account if not already linked
+      console.log(`✅ [OAuth] Existing user found: ${email} (accountType: ${user.accountType})`);
       
       // Update user with Apple info if not already linked
       if (!user.appleId) {
+        console.log(`🔗 [OAuth] Linking Apple account to user: ${email}`);
         await db.updateUser(email, {
           appleId,
           profilePhoto: profilePicture,
@@ -300,10 +299,17 @@ router.post('/apple', [
         user.appleId = appleId;
         user.profilePhoto = profilePicture;
         user.lastLogin = new Date();
+      } else {
+        // Update last login
+        user.lastLogin = new Date();
+        await db.updateUser(email, { lastLogin: new Date() });
       }
     } else {
       // Create new personal account
+      // Note: New OAuth users always start as "personal" accounts
       isNewUser = true;
+      console.log(`✨ [OAuth] Creating new user: ${email}`);
+      
       const [firstName, ...lastNameParts] = (name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
