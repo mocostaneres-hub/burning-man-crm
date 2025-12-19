@@ -349,18 +349,59 @@ const PublicCampProfile: React.FC = () => {
   }
 
 
-  // Check if current user is the camp owner
-  // For admin accounts, compare campId with camp._id
-  // For camp accounts, generate slug from campName if urlSlug not available
+  // ============================================================================
+  // CRITICAL: Camp Ownership Check Must Use IDs, Never Slugs or URL Matching
+  // ============================================================================
+  // Camp ownership (user.campId === camp._id) is the ONLY source of truth.
+  // 
+  // WHY URL alone must never determine edit permissions:
+  // 1. Security: URLs can be guessed, manipulated, or spoofed
+  // 2. Slugs can change: Camp renames change slug, breaking slug-based checks
+  // 3. User data unreliable: user.urlSlug doesn't exist, user.campName is inconsistent
+  // 4. Backend has authority: Database relationship is definitive
+  // 
+  // INCORRECT (old logic):
+  // - Comparing user.urlSlug with camp slug (user.urlSlug doesn't exist)
+  // - Generating slug from user.campName and comparing (inconsistent)
+  // - URL-based authentication (insecure)
+  // 
+  // CORRECT (new logic):
+  // - Compare camp._id with user.campId (admin users)
+  // - Compare camp._id with user._id (camp user is the camp entity)
+  // - Trust backend flags: camp.isCampAdmin (set by backend based on DB)
+  // 
+  // This ensures:
+  // - Secure: Only actual owners can edit
+  // - Consistent: Works for OAuth, password, impersonation
+  // - Reliable: Based on database relationships, not URLs
+  // ============================================================================
   const isCampOwner = (() => {
-    if (user?.accountType === 'admin' && user?.campId) {
-      // Admin accounts: compare campId with camp's _id
-      return camp?._id === user.campId;
-    } else if (user?.accountType === 'camp') {
-      // Camp accounts: compare slug
-      const currentUserSlug = user.urlSlug || (user.campName ? user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : null);
-      return currentUserSlug === slug;
+    if (!user || !camp) return false;
+    
+    // Method 1: Trust backend flag (most reliable)
+    // Backend sets camp.isCampAdmin based on database relationships
+    if (camp.isCampAdmin === true) {
+      console.log('✅ [PublicCampProfile] User is camp admin (backend flag)');
+      return true;
     }
+    
+    // Method 2: Fallback to manual ID comparison
+    // Admin users: compare campId with camp's _id
+    if (user.accountType === 'admin' && user.campId) {
+      const isOwner = camp._id === user.campId;
+      console.log('🔍 [PublicCampProfile] Admin ownership check:', { campId: camp._id, userCampId: user.campId, isOwner });
+      return isOwner;
+    }
+    
+    // Camp users: compare user's _id or campId with camp's _id
+    // (Camp user account IS the camp, so user._id === camp._id OR user.campId === camp._id)
+    if (user.accountType === 'camp') {
+      const isOwner = camp._id === user._id || camp._id === user.campId;
+      console.log('🔍 [PublicCampProfile] Camp ownership check:', { campId: camp._id, userId: user._id, userCampId: user.campId, isOwner });
+      return isOwner;
+    }
+    
+    console.log('⚠️ [PublicCampProfile] Not a camp owner');
     return false;
   })();
 
