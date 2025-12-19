@@ -137,20 +137,37 @@ router.post('/google', [
       });
     }
 
+    // ============================================================================
+    // CRITICAL: OAuth Must Be Account-Type Agnostic
+    // ============================================================================
+    // OAuth (Google, Apple, etc.) is an AUTHENTICATION method, not an authorization method.
+    // 
+    // Authentication: Verifying WHO the user is (identity)
+    // Authorization: Verifying WHAT the user can do (permissions)
+    // 
+    // WHY we allow OAuth for ALL account types:
+    // 1. A camp admin should be able to sign in with Google just like a member
+    // 2. Account type affects WHAT they can access, not HOW they authenticate
+    // 3. Blocking OAuth by account type creates poor UX and security issues
+    // 4. Mobile apps (iOS/Android) will use OAuth - must work for all users
+    // 
+    // WHERE account type matters:
+    // - After authentication: redirect to correct dashboard
+    // - During API requests: check permissions for actions
+    // - NOT during authentication itself
+    // ============================================================================
+    
     // Check if user already exists
     let user = await db.findUser({ email: googleUser.email });
     let isNewUser = false;
     
     if (user) {
-      // User exists - check if it's a personal account
-      if (user.accountType !== 'personal') {
-        return res.status(400).json({ 
-          message: 'OAuth is only available for personal accounts. This email is registered as a camp account.' 
-        });
-      }
+      // Existing user - link Google account if not already linked
+      console.log(`✅ [OAuth] Existing user found: ${googleUser.email} (accountType: ${user.accountType})`);
       
       // Update user with Google info if not already linked
       if (!user.googleId) {
+        console.log(`🔗 [OAuth] Linking Google account to user: ${googleUser.email}`);
         await db.updateUser(googleUser.email, {
           googleId: googleUser.googleId,
           profilePhoto: googleUser.picture,
@@ -165,7 +182,11 @@ router.post('/google', [
       await db.updateUser(googleUser.email, { lastLogin: new Date() });
     } else {
       // Create new personal account
+      // Note: New OAuth users always start as "personal" accounts
+      // They can be promoted to other roles/types later through proper channels
       isNewUser = true;
+      console.log(`✨ [OAuth] Creating new user: ${googleUser.email}`);
+      
       const [firstName, ...lastNameParts] = (googleUser.name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
