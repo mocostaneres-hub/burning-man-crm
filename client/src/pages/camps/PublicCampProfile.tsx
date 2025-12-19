@@ -730,7 +730,7 @@ const PublicCampProfile: React.FC = () => {
             {/* Motivation */}
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
-                Why do you want to join {camp.campName}?
+                Why do you want to join {camp.campName}? (Optional)
               </label>
               <textarea
                 value={applicationData.motivation}
