@@ -85,7 +85,7 @@ const isPersonalProfileComplete = (user) => {
 // @access  Private (Personal accounts only)
 router.post('/apply', authenticateToken, [
   body('campId').notEmpty().withMessage('Camp ID is required'),
-  body('applicationData.motivation').notEmpty().isLength({ min: 10, max: 1000 }).withMessage('Motivation is required (10-1000 characters)'),
+  body('applicationData.motivation').optional().isLength({ max: 1000 }).withMessage('Motivation must be under 1000 characters'),
   body('applicationData.experience').optional().isLength({ max: 1000 }),
   body('applicationData.skills').optional().isArray()
 ], async (req, res) => {
