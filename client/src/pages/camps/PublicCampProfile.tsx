@@ -242,11 +242,6 @@ const PublicCampProfile: React.FC = () => {
   };
 
   const handleSubmitApplication = async () => {
-    if (!applicationData.motivation.trim()) {
-      alert('Please provide your motivation for joining this camp');
-      return;
-    }
-
     try {
       setApplicationLoading(true);
       console.log('🔄 [PublicCampProfile] Submitting application to camp:', camp?._id);
