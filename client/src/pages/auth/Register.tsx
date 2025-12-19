@@ -163,36 +163,35 @@ const Register: React.FC = () => {
   const handleOAuthSuccess = (oauthData: any) => {
     console.log('🔍 [Register] OAuth success callback triggered with data:', oauthData);
     
-    // Extract user from OAuth response
+    // Extract user, token, and isNewUser flag from OAuth response
     const user = oauthData.user || oauthData;
     const token = oauthData.token;
+    const isNewUser = oauthData.isNewUser; // Backend tells us if this is a new user
     
     console.log('🔍 [Register] Extracted user:', user);
     console.log('🔍 [Register] Token present:', !!token);
-    console.log('🔍 [Register] User role:', user.role);
+    console.log('🔍 [Register] isNewUser flag from backend:', isNewUser);
+    console.log('🔍 [Register] User accountType:', user.accountType);
     
     setOauthLoading(false);
     setError('');
     
-    // CRITICAL FIX: Force a page reload to ensure AuthContext picks up the new token
+    // OAuth registration must use isNewUser flag (see Login.tsx for full explanation)
+    // Register page: We expect mostly new users, but existing users can also click "Sign up with Google"
+    
     // Small delay to ensure localStorage write completes
     setTimeout(() => {
       console.log('🔄 [Register] Reloading to update AuthContext...');
       
-      // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
-      if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
-        console.log('✅ [Register] Redirecting to onboarding...');
+      // TRUST THE BACKEND: Use isNewUser flag
+      if (isNewUser) {
+        // Brand new user - go to onboarding
+        console.log('✅ [Register] New user, redirecting to onboarding...');
         window.location.href = '/onboarding/select-role';
-        return;
-      }
-      
-      // Redirect based on account type
-      if (user.accountType === 'camp') {
-        console.log('✅ [Register] Redirecting to camp edit...');
-        window.location.href = '/camp/edit';
       } else {
-        console.log('✅ [Register] Redirecting to user profile...');
-        window.location.href = '/user/profile';
+        // Existing user who clicked "Sign up" instead of "Sign in" - go to dashboard
+        console.log('✅ [Register] Existing user, redirecting to dashboard...');
+        window.location.href = '/dashboard';
       }
     }, 100); // 100ms delay to ensure localStorage write completes
   };
