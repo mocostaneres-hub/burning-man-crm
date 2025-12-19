@@ -114,10 +114,14 @@ async function sendEmailNotification(camp, applicant, application) {
             
             <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 15px 0;">
               <h4 style="margin-top: 0; color: #333;">Application Details:</h4>
-              <p><strong>Motivation:</strong></p>
-              <p style="margin-left: 20px; font-style: italic;">"${application.applicationData.motivation}"</p>
+              ${application.applicationData.motivation && application.applicationData.motivation.trim() ? `
+                <p><strong>Motivation:</strong></p>
+                <p style="margin-left: 20px; font-style: italic;">"${application.applicationData.motivation}"</p>
+              ` : `
+                <p><strong>Motivation:</strong> <em style="color: #999;">(Not provided)</em></p>
+              `}
               
-              ${application.applicationData.experience ? `
+              ${application.applicationData.experience && application.applicationData.experience.trim() ? `
                 <p><strong>Experience:</strong></p>
                 <p style="margin-left: 20px;">${application.applicationData.experience}</p>
               ` : ''}
