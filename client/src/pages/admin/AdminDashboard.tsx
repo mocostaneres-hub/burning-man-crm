@@ -186,6 +186,7 @@ const AdminDashboard: React.FC = () => {
   const [selectedAccountType, setSelectedAccountType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedCamps, setSelectedCamps] = useState<string[]>([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [bulkAction, setBulkAction] = useState<string>('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -263,13 +264,31 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleBulkAction = async () => {
-    if (!bulkAction || selectedUsers.length === 0) return;
+    // Determine which accounts are selected (users or camps)
+    const totalSelected = selectedUsers.length + selectedCamps.length;
+    if (!bulkAction || totalSelected === 0) return;
+
+    // For camps, we need to get their owner user IDs
+    let userIdsToProcess = [...selectedUsers];
+    
+    if (selectedCamps.length > 0) {
+      // Extract owner user IDs from selected camps
+      for (const campId of selectedCamps) {
+        const camp = camps.find(c => c._id === campId);
+        if (camp && camp.owner) {
+          const ownerId = typeof camp.owner === 'object' ? camp.owner._id : camp.owner;
+          if (ownerId && !userIdsToProcess.includes(ownerId)) {
+            userIdsToProcess.push(ownerId);
+          }
+        }
+      }
+    }
 
     // Add confirmation for permanent deletion
     if (bulkAction === 'delete') {
       const confirmed = window.confirm(
         `⚠️ PERMANENT DELETION WARNING ⚠️\n\n` +
-        `You are about to PERMANENTLY DELETE ${selectedUsers.length} user account(s).\n\n` +
+        `You are about to PERMANENTLY DELETE ${totalSelected} account(s).\n\n` +
         `This action is IRREVERSIBLE and will:\n` +
         `• Delete user accounts permanently\n` +
         `• For CAMP accounts: Preserve all camp data (roster, events, tasks)\n` +
@@ -287,7 +306,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const response = await apiService.post('/admin/users/bulk-action', {
         action: bulkAction,
-        userIds: selectedUsers,
+        userIds: userIdsToProcess,
         accountType: bulkAction === 'changeAccountType' ? selectedAccountType : undefined
       });
 
@@ -295,7 +314,9 @@ const AdminDashboard: React.FC = () => {
       
       // Refresh data
       await loadUsers();
+      await loadCamps();
       setSelectedUsers([]);
+      setSelectedCamps([]);
       setShowBulkActions(false);
       setBulkAction('');
     } catch (error) {
@@ -317,6 +338,22 @@ const AdminDashboard: React.FC = () => {
 
   const clearSelection = () => {
     setSelectedUsers([]);
+  };
+
+  const toggleCampSelection = (campId: string) => {
+    setSelectedCamps(prev => 
+      prev.includes(campId) 
+        ? prev.filter(id => id !== campId)
+        : [...prev, campId]
+    );
+  };
+
+  const selectAllCamps = () => {
+    setSelectedCamps(filteredCamps.map(camp => camp._id));
+  };
+
+  const clearCampSelection = () => {
+    setSelectedCamps([]);
   };
 
   const loadStats = async () => {
@@ -961,20 +998,57 @@ const AdminDashboard: React.FC = () => {
       {activeTab === 2 && (
         <Card>
           <div className="p-6">
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              Camps Management
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-h2 font-lato-bold text-custom-text">
+                Camps Management
+              </h2>
+              <div className="flex items-center gap-2">
+                {selectedCamps.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-custom-text-secondary">
+                      {selectedCamps.length} selected
+                    </span>
+                    <Button 
+                      onClick={() => setShowBulkActions(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Bulk Actions
+                    </Button>
+                    <Button 
+                      onClick={clearCampSelection}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+                <Button 
+                  onClick={selectAllCamps}
+                  variant="outline"
+                  size="sm"
+                >
+                  Select All
+                </Button>
+              </div>
+            </div>
             
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort('name')}>
-                      Camp Name {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedCamps.length === filteredCamps.length && filteredCamps.length > 0}
+                        onChange={(e) => e.target.checked ? selectAllCamps() : clearCampSelection()}
+                        className="rounded"
+                      />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Camp ID
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('name')}>
+                      Camp & User Info {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Hometown
@@ -1022,14 +1096,47 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCamps.map((camp) => (
-                    <tr key={camp._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {camp.name || camp.campName || '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono text-xs">
-                        {camp._id.substring(0, 8)}...
-                      </td>
+                  {filteredCamps.map((camp) => {
+                    // Extract user info from camp owner
+                    const ownerEmail = camp.owner && typeof camp.owner === 'object' 
+                      ? camp.owner.email 
+                      : camp.contactEmail || '';
+                    const ownerFirstName = camp.owner && typeof camp.owner === 'object' 
+                      ? camp.owner.firstName 
+                      : '';
+                    const ownerLastName = camp.owner && typeof camp.owner === 'object' 
+                      ? camp.owner.lastName 
+                      : '';
+                    const ownerUserId = camp.owner && typeof camp.owner === 'object' 
+                      ? camp.owner._id 
+                      : (typeof camp.owner === 'string' ? camp.owner : '');
+                    
+                    return (
+                      <tr key={camp._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedCamps.includes(camp._id)}
+                            onChange={() => toggleCampSelection(camp._id)}
+                            className="rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {camp.name || camp.campName || '-'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {ownerFirstName && ownerLastName 
+                                ? `${ownerFirstName} ${ownerLastName}` 
+                                : 'No owner'}
+                            </div>
+                            <div className="text-sm text-gray-500">{ownerEmail}</div>
+                            <div className="text-xs text-gray-400 font-mono">
+                              User ID: {ownerUserId || 'N/A'}
+                            </div>
+                          </div>
+                        </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {camp.hometown || '-'}
                       </td>
@@ -1129,7 +1236,8 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1419,14 +1527,20 @@ const AdminDashboard: React.FC = () => {
                 <p className={`text-sm ${bulkAction === 'delete' ? 'text-red-800 font-semibold' : 'text-yellow-800'}`}>
                   {bulkAction === 'delete' ? (
                     <>
-                      ⚠️ <strong>PERMANENT DELETION WARNING:</strong> This action will <strong>IRREVERSIBLY DELETE</strong> {selectedUsers.length} user account(s).
+                      ⚠️ <strong>PERMANENT DELETION WARNING:</strong> This action will <strong>IRREVERSIBLY DELETE</strong> {selectedUsers.length + selectedCamps.length} account(s).
+                      {selectedUsers.length > 0 && <><br />• {selectedUsers.length} member account(s)</>}
+                      {selectedCamps.length > 0 && <><br />• {selectedCamps.length} camp account(s)</>}
                       <br /><br />
                       • CAMP accounts: User deleted, camp data preserved
                       <br />
                       • MEMBER accounts: User deleted, tasks transferred to camps
                     </>
                   ) : (
-                    <>This action will affect <strong>{selectedUsers.length}</strong> selected users.</>
+                    <>
+                      This action will affect <strong>{selectedUsers.length + selectedCamps.length}</strong> selected account(s).
+                      {selectedUsers.length > 0 && <><br />• {selectedUsers.length} member account(s)</>}
+                      {selectedCamps.length > 0 && <><br />• {selectedCamps.length} camp account(s)</>}
+                    </>
                   )}
                 </p>
               </div>
@@ -1440,7 +1554,7 @@ const AdminDashboard: React.FC = () => {
                 </Button>
                 <Button 
                   onClick={handleBulkAction}
-                  disabled={!bulkAction || selectedUsers.length === 0}
+                  disabled={!bulkAction || (selectedUsers.length === 0 && selectedCamps.length === 0)}
                   className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Execute Action
