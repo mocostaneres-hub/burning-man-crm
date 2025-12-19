@@ -19,7 +19,7 @@ const memberApplicationSchema = new mongoose.Schema({
   applicationData: {
     motivation: {
       type: String,
-      required: true,
+      required: false,
       maxlength: 1000
     },
     experience: {
