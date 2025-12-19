@@ -25,7 +25,7 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [campSlug, setCampSlug] = useState<string | null>(null);
-
+  const [campSlugLoading, setCampSlugLoading] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -36,22 +36,54 @@ const Navbar: React.FC = () => {
     return location.pathname === path;
   };
 
-  // Fetch camp slug for admin users if needed
+  // ============================================================================
+  // CRITICAL: Fetch Camp Slug from Camp Entity, Never from User
+  // ============================================================================
+  // Camp pages MUST use the Camp's slug, not the User's slug.
+  // 
+  // WHY users and camps must remain separate routing entities:
+  // 1. Users are NOT camps - they are accounts that may own/admin a camp
+  // 2. A user (like mauricio@camp.com) owns a Camp entity (like "Mudskippers")
+  // 3. The Camp entity has the authoritative slug (generated from camp name)
+  // 4. User entities don't have (and shouldn't have) urlSlug or camp slugs
+  // 
+  // INCORRECT (old logic):
+  // - Using user.urlSlug → creates /camps/:userSlug (WRONG)
+  // - Generating slug from user.campName → inconsistent, not authoritative
+  // 
+  // CORRECT (new logic):
+  // - Fetch actual Camp entity via /api/camps/my-camp
+  // - Use camp.slug from the Camp model
+  // - Camp slug is authoritative and consistent
+  // 
+  // This ensures:
+  // - No camp pages are created for users
+  // - Routing uses correct Camp slug
+  // - Works for login, impersonation, and mobile
+  // ============================================================================
   useEffect(() => {
     const fetchCampSlug = async () => {
-      if (user?.accountType === 'admin' && user?.campId && !user?.campName && !campSlug) {
+      // Only fetch for camp and admin users with a camp
+      if ((user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) && !campSlug && !campSlugLoading) {
+        setCampSlugLoading(true);
         try {
+          // Fetch the ACTUAL camp entity to get its slug
           const response = await api.get('/camps/my-camp');
           if (response.slug) {
+            console.log('✅ [Navbar] Fetched camp slug:', response.slug);
             setCampSlug(response.slug);
+          } else {
+            console.warn('⚠️ [Navbar] Camp found but has no slug:', response);
           }
         } catch (error) {
-          console.error('Error fetching camp slug:', error);
+          console.error('❌ [Navbar] Error fetching camp slug:', error);
+        } finally {
+          setCampSlugLoading(false);
         }
       }
     };
     fetchCampSlug();
-  }, [user, campSlug]);
+  }, [user, campSlug, campSlugLoading]);
 
   // Define navigation items based on user type
   const getNavItems = () => {
@@ -68,38 +100,64 @@ const Navbar: React.FC = () => {
       // Get camp identifier for profile edit URL
       const campIdentifier = user?.campId?.toString() || user?._id?.toString() || '';
       
-      // Generate slug from campName if urlSlug not available (for public profile)
-      let campPublicProfilePath = '/camps';
+      // ============================================================================
+      // CRITICAL: Camp Public Profile Path Must Use Camp Slug, Not User Data
+      // ============================================================================
+      // ALWAYS source the camp slug from the Camp entity (fetched via useEffect above).
+      // NEVER use user properties (user.urlSlug, user.campName) for camp URLs.
+      // 
+      // Defensive checks:
+      // - If campSlug exists: Use it (correct)
+      // - If campSlug is loading/missing: Disable or hide "My Camp" link
+      // - DO NOT generate slug from user data (creates wrong URLs)
+      // ============================================================================
+      let campPublicProfilePath: string | null = null;
       
-      if (user?.urlSlug) {
-        campPublicProfilePath = `/camps/${user.urlSlug}`;
-      } else if (user?.campName) {
-        // Generate slug from campName on the fly
-        const slug = user.campName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)/g, '');
-        campPublicProfilePath = `/camps/${slug}`;
-      } else if (campSlug) {
-        // Use fetched camp slug for admin accounts
+      if (campSlug) {
+        // ✅ CORRECT: Use the camp's authoritative slug from Camp entity
         campPublicProfilePath = `/camps/${campSlug}`;
+        console.log('✅ [Navbar] Using camp slug for My Camp link:', campSlug);
+      } else {
+        // ⚠️ Camp slug not yet loaded - link will be disabled
+        console.warn('⚠️ [Navbar] Camp slug not loaded yet, My Camp link disabled');
+        campPublicProfilePath = null;
       }
       
       // Profile edit path with identifier
       const campProfileEditPath = campIdentifier ? `/camp/${campIdentifier}/profile` : '/camp/profile';
       
-      return [
-        { label: 'My Camp', path: campPublicProfilePath, icon: <AccountCircle size={18} /> },
-        { label: 'Roster', path: campIdentifier ? `/camp/${campIdentifier}/roster` : '/camp/rosters', icon: <People size={18} /> },
-        { label: 'Applications', path: campIdentifier ? `/camp/${campIdentifier}/applications` : '/camp/applications', icon: <Assignment size={18} /> },
-        { label: 'Tasks', path: campIdentifier ? `/camp/${campIdentifier}/tasks` : '/camp/tasks', icon: <Task size={18} /> },
-        { label: 'Events', path: campIdentifier ? `/camp/${campIdentifier}/events` : '/camp/shifts', icon: <Calendar size={18} /> },
-        { label: 'Dashboard', path: campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard', icon: <Dashboard size={18} /> },
-        { label: 'Help', path: '/camp/help', icon: <Help size={18} /> },
-        ...(user?.accountType === 'admin' ? [
-          { label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> }
-        ] : [])
-      ];
+      const navItems = [];
+      
+      // Only add "My Camp" link if we have a valid camp slug
+      if (campPublicProfilePath) {
+        navItems.push({ label: 'My Camp', path: campPublicProfilePath, icon: <AccountCircle size={18} /> });
+      }
+      
+      // Add other nav items
+      navItems.push(
+        { label: 'Roster', path: campIdentifier ? `/camp/${campIdentifier}/roster` : '/camp/rosters', icon: <People size={18} /> }
+      );
+      navItems.push(
+        { label: 'Applications', path: campIdentifier ? `/camp/${campIdentifier}/applications` : '/camp/applications', icon: <Assignment size={18} /> }
+      );
+      navItems.push(
+        { label: 'Tasks', path: campIdentifier ? `/camp/${campIdentifier}/tasks` : '/camp/tasks', icon: <Task size={18} /> }
+      );
+      navItems.push(
+        { label: 'Events', path: campIdentifier ? `/camp/${campIdentifier}/events` : '/camp/shifts', icon: <Calendar size={18} /> }
+      );
+      navItems.push(
+        { label: 'Dashboard', path: campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard', icon: <Dashboard size={18} /> }
+      );
+      navItems.push(
+        { label: 'Help', path: '/camp/help', icon: <Help size={18} /> }
+      );
+      
+      if (user?.accountType === 'admin') {
+        navItems.push({ label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> });
+      }
+      
+      return navItems;
     }
 
     // Personal accounts navigation
