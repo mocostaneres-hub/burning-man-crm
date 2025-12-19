@@ -276,7 +276,16 @@ const sendRosterInviteEmail = async (user, camp, invitedBy) => {
  * @param {string} customMessage - Custom message from template (already has placeholders replaced)
  */
 const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customMessage = null) => {
-  const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+  // CLIENT_URL is used for other links in the email (camp profile, etc.)
+  // The inviteLink itself is already constructed with CLIENT_URL in the calling code
+  const clientUrl = process.env.CLIENT_URL;
+  
+  // Enforce CLIENT_URL configuration for email links
+  if (!clientUrl) {
+    console.error('❌ [CRITICAL] CLIENT_URL not set - cannot send invitation email with valid links');
+    throw new Error('CLIENT_URL environment variable is required for invitation emails');
+  }
+  
   const campName = camp.name || camp.campName || 'a camp';
   const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() : 'Camp Lead';
   

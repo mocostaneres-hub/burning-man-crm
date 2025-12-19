@@ -108,8 +108,47 @@ inviteSchema.methods.isExpired = function() {
   return this.expiresAt < new Date();
 };
 
+// ============================================================================
+// CRITICAL: Invitation Links Must Never Hardcode localhost
+// ============================================================================
+// Email links MUST use environment-based URLs for production safety.
+// 
+// WHY email links must never hardcode localhost:
+// 1. Emails are sent to external recipients (not just developers)
+// 2. Localhost links don't work outside local machine
+// 3. Production emails with localhost links are broken
+// 4. Users can't click links in real invitation emails
+// 
+// WHY environment-based URLs are required:
+// 1. Development: CLIENT_URL = http://localhost:3000
+// 2. Production: CLIENT_URL = https://www.g8road.com
+// 3. Staging: CLIENT_URL = https://staging.g8road.com
+// 4. Future: Deep links for mobile apps (g8road://apply?token=...)
+// 
+// This method REQUIRES CLIENT_URL to be set and throws if missing.
+// This prevents silent failures and broken production emails.
+// ============================================================================
+
 // Instance method to generate invite link
-inviteSchema.methods.generateInviteLink = function(baseUrl = 'http://localhost:3000') {
+inviteSchema.methods.generateInviteLink = function(baseUrl) {
+  // NEVER provide a default - force explicit configuration
+  if (!baseUrl) {
+    throw new Error(
+      'CLIENT_URL environment variable is required for invitation links. ' +
+      'Set CLIENT_URL in your environment (e.g., https://www.g8road.com for production, ' +
+      'http://localhost:3000 for development)'
+    );
+  }
+  
+  // Validate that it's not localhost in production-like environments
+  if (process.env.NODE_ENV === 'production' && baseUrl.includes('localhost')) {
+    console.error('❌ [CRITICAL] CLIENT_URL is set to localhost in production environment!');
+    throw new Error(
+      'CLIENT_URL cannot be localhost in production. ' +
+      'Set CLIENT_URL=https://www.g8road.com in your production environment variables.'
+    );
+  }
+  
   return `${baseUrl}/apply?token=${this.token}`;
 };
 

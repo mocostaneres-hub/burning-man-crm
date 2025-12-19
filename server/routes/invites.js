@@ -185,8 +185,40 @@ router.post('/invites',
           // For mock database, we'll create a simplified invite record
           const invite = await db.createInvite(inviteData);
           
-          // Generate invite link using CLIENT_URL environment variable - points to camp profile
-          const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+          // ============================================================================
+          // Generate invite link using CLIENT_URL environment variable
+          // ============================================================================
+          // CRITICAL: This link is sent via email to external recipients.
+          // It MUST use the correct environment-based URL, never localhost in production.
+          // 
+          // The link points to the camp profile page with an invite token parameter.
+          // Format: https://www.g8road.com/camps/:campSlug?invite=<token>
+          // 
+          // Environment-aware URL ensures:
+          // - Local development: http://localhost:3000
+          // - Production: https://www.g8road.com
+          // - Future mobile: Deep link support (g8road://camps/...)
+          // ============================================================================
+          
+          const clientUrl = process.env.CLIENT_URL;
+          
+          // Enforce CLIENT_URL configuration - fail loudly if missing
+          if (!clientUrl) {
+            console.error('❌ [CRITICAL] CLIENT_URL environment variable is not set!');
+            console.error('❌ Cannot send invitation emails without CLIENT_URL');
+            console.error('❌ Set CLIENT_URL in your environment:');
+            console.error('   - Development: CLIENT_URL=http://localhost:3000');
+            console.error('   - Production: CLIENT_URL=https://www.g8road.com');
+            throw new Error('CLIENT_URL environment variable is required for invitation links');
+          }
+          
+          // Warn if localhost is used in production
+          if (process.env.NODE_ENV === 'production' && clientUrl.includes('localhost')) {
+            console.error('❌ [CRITICAL] CLIENT_URL is set to localhost in production!');
+            console.error('❌ Invitation emails will have broken links!');
+            console.error('❌ Update CLIENT_URL to your production domain: https://www.g8road.com');
+          }
+          
           const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           const inviteLink = `${clientUrl}/camps/${campSlug}?invite=${token}`;
           
