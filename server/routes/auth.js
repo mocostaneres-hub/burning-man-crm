@@ -55,7 +55,8 @@ router.post('/register', [
       email,
       password,
       accountType,
-      role: 'unassigned' // New users start with unassigned role
+      role: 'unassigned', // New users start with unassigned role
+      authProviders: ['password'] // Track that this user uses password authentication
     };
 
     if (accountType === 'personal') {

@@ -138,12 +138,18 @@ router.post('/google', [
     }
 
     // ============================================================================
-    // CRITICAL: OAuth Must Be Account-Type Agnostic
+    // CRITICAL: OAuth Provider Linking and Account Identity
     // ============================================================================
     // OAuth (Google, Apple, etc.) is an AUTHENTICATION method, not an authorization method.
     // 
     // Authentication: Verifying WHO the user is (identity)
     // Authorization: Verifying WHAT the user can do (permissions)
+    // 
+    // WHY OAuth providers must be linkable:
+    // 1. Users may sign up with email/password, then want to use Google login
+    // 2. Email is the primary identity - one email = one account
+    // 3. Multiple auth methods can be linked to the same account
+    // 4. User convenience: sign in with email/password OR Google OR Apple
     // 
     // WHY we allow OAuth for ALL account types:
     // 1. A camp admin should be able to sign in with Google just like a member
@@ -155,32 +161,56 @@ router.post('/google', [
     // - After authentication: redirect to correct dashboard
     // - During API requests: check permissions for actions
     // - NOT during authentication itself
+    //
+    // CRITICAL LOOKUP ORDER to prevent duplicate accounts:
+    // 1. First try googleId (for returning OAuth users)
+    // 2. Then try email (to link OAuth to existing email/password users)
+    // 3. Only create new user if neither exists
     // ============================================================================
     
-    // Check if user already exists
-    let user = await db.findUser({ email: googleUser.email });
+    console.log('🔍 [OAuth] Looking up user by googleId:', googleUser.googleId);
+    let user = await db.findUser({ googleId: googleUser.googleId });
     let isNewUser = false;
+    let isLinkingOAuth = false;
     
     if (user) {
-      // Existing user - link Google account if not already linked
-      console.log(`✅ [OAuth] Existing user found: ${googleUser.email} (accountType: ${user.accountType})`);
-      
-      // Update user with Google info if not already linked
-      if (!user.googleId) {
-        console.log(`🔗 [OAuth] Linking Google account to user: ${googleUser.email}`);
-        await db.updateUser(googleUser.email, {
-          googleId: googleUser.googleId,
-          profilePhoto: googleUser.picture,
-          lastLogin: new Date()
-        });
-        user.googleId = googleUser.googleId;
-        user.profilePhoto = googleUser.picture;
-      }
-      
-      // Update last login
+      // Returning OAuth user - update last login
+      console.log(`✅ [OAuth] Returning Google user found: ${googleUser.email} (accountType: ${user.accountType})`);
+      await db.updateUser(user.email, { lastLogin: new Date() });
       user.lastLogin = new Date();
-      await db.updateUser(googleUser.email, { lastLogin: new Date() });
     } else {
+      // Not found by googleId, try email (to link OAuth to existing account)
+      console.log('🔍 [OAuth] User not found by googleId, trying email:', googleUser.email);
+      user = await db.findUser({ email: googleUser.email });
+      
+      if (user) {
+        // Existing email/password user - link Google account
+        isLinkingOAuth = true;
+        console.log(`🔗 [OAuth] Linking Google account to existing user: ${googleUser.email} (accountType: ${user.accountType})`);
+        console.log(`🔗 [OAuth] User currently has these auth providers: ${user.authProviders || ['password (default)']}`);
+        
+        // CRITICAL: Use $set to update specific fields without triggering slug regeneration
+        // Never pass firstName/lastName in updates to existing users from OAuth
+        const updateFields = {
+          googleId: googleUser.googleId,
+          lastLogin: new Date(),
+          $addToSet: { authProviders: 'google' } // Add 'google' to authProviders array if not present
+        };
+        
+        // Only update profile photo if user doesn't have one
+        if (!user.profilePhoto && googleUser.picture) {
+          updateFields.profilePhoto = googleUser.picture;
+        }
+        
+        await db.updateUserById(user._id, updateFields);
+        
+        // Refresh user object with updated data
+        user = await db.findUserById(user._id);
+        console.log(`✅ [OAuth] Successfully linked Google account. Updated auth providers: ${user.authProviders}`);
+      }
+    }
+    
+    if (!user) {
       // Create new personal account
       // Note: New OAuth users always start as "personal" accounts
       // They can be promoted to other roles/types later through proper channels
@@ -201,7 +231,10 @@ router.post('/google', [
         lastLogin: new Date(),
         role: 'unassigned', // New OAuth users start with unassigned role
         isVerified: googleUser.emailVerified || false,
+        authProviders: ['google'] // Track that this user uses Google OAuth
       });
+      
+      console.log(`✅ [OAuth] Created new user with ID: ${user._id}, slug: ${user.urlSlug || 'none'}`);
     }
 
     // Generate our own JWT token for session management
@@ -224,7 +257,9 @@ router.post('/google', [
         });
     }
 
-    console.log(`✅ [OAuth] Google authentication successful for ${isNewUser ? 'new' : 'existing'} user: ${googleUser.email}`);
+    const authAction = isNewUser ? 'new user created' : (isLinkingOAuth ? 'Google linked to existing account' : 'returning OAuth user');
+    console.log(`✅ [OAuth] Google authentication successful (${authAction}): ${googleUser.email}`);
+    console.log(`✅ [OAuth] User details: accountType=${userResponse.accountType}, authProviders=${userResponse.authProviders || 'not set'}`);
     console.log('✅ [OAuth] Sending response with token (length:', token?.length, ') and user (email:', userResponse.email, ')');
 
     const responsePayload = {
@@ -278,33 +313,51 @@ router.post('/apple', [
 
     const { email, name, appleId, profilePicture } = req.body;
 
-    // OAuth must be account-type agnostic (see Google OAuth handler for full explanation)
+    // OAuth must be account-type agnostic and support account linking
+    // (see Google OAuth handler for comprehensive explanation)
     
-    // Check if user already exists
-    let user = await db.findUser({ email });
+    console.log('🔍 [OAuth] Looking up user by appleId:', appleId);
+    let user = await db.findUser({ appleId });
     let isNewUser = false;
+    let isLinkingOAuth = false;
     
     if (user) {
-      // Existing user - link Apple account if not already linked
-      console.log(`✅ [OAuth] Existing user found: ${email} (accountType: ${user.accountType})`);
-      
-      // Update user with Apple info if not already linked
-      if (!user.appleId) {
-        console.log(`🔗 [OAuth] Linking Apple account to user: ${email}`);
-        await db.updateUser(email, {
-          appleId,
-          profilePhoto: profilePicture,
-          lastLogin: new Date()
-        });
-        user.appleId = appleId;
-        user.profilePhoto = profilePicture;
-        user.lastLogin = new Date();
-      } else {
-        // Update last login
-        user.lastLogin = new Date();
-        await db.updateUser(email, { lastLogin: new Date() });
-      }
+      // Returning OAuth user - update last login
+      console.log(`✅ [OAuth] Returning Apple user found: ${email} (accountType: ${user.accountType})`);
+      await db.updateUser(user.email, { lastLogin: new Date() });
+      user.lastLogin = new Date();
     } else {
+      // Not found by appleId, try email (to link OAuth to existing account)
+      console.log('🔍 [OAuth] User not found by appleId, trying email:', email);
+      user = await db.findUser({ email });
+      
+      if (user) {
+        // Existing email/password user - link Apple account
+        isLinkingOAuth = true;
+        console.log(`🔗 [OAuth] Linking Apple account to existing user: ${email} (accountType: ${user.accountType})`);
+        console.log(`🔗 [OAuth] User currently has these auth providers: ${user.authProviders || ['password (default)']}`);
+        
+        // CRITICAL: Use $set to update specific fields without triggering slug regeneration
+        const updateFields = {
+          appleId,
+          lastLogin: new Date(),
+          $addToSet: { authProviders: 'apple' } // Add 'apple' to authProviders array if not present
+        };
+        
+        // Only update profile photo if user doesn't have one
+        if (!user.profilePhoto && profilePicture) {
+          updateFields.profilePhoto = profilePicture;
+        }
+        
+        await db.updateUserById(user._id, updateFields);
+        
+        // Refresh user object with updated data
+        user = await db.findUserById(user._id);
+        console.log(`✅ [OAuth] Successfully linked Apple account. Updated auth providers: ${user.authProviders}`);
+      }
+    }
+    
+    if (!user) {
       // Create new personal account
       // Note: New OAuth users always start as "personal" accounts
       isNewUser = true;
@@ -315,15 +368,18 @@ router.post('/apple', [
       
       user = await db.createUser({
         email,
-        password: 'oauth-user', // Will be hashed, but not used for OAuth users
+        password: crypto.randomUUID(), // Random password (not used for OAuth users, but required by schema)
         accountType: 'personal',
         firstName: firstName || '',
         lastName: lastName || '',
         appleId,
         profilePhoto: profilePicture || '',
         lastLogin: new Date(),
-        role: 'unassigned' // New OAuth users start with unassigned role
+        role: 'unassigned', // New OAuth users start with unassigned role
+        authProviders: ['apple'] // Track that this user uses Apple OAuth
       });
+      
+      console.log(`✅ [OAuth] Created new user with ID: ${user._id}, slug: ${user.urlSlug || 'none'}`);
     }
 
     // Generate token
@@ -345,10 +401,15 @@ router.post('/apple', [
         });
     }
 
+    const authAction = isNewUser ? 'new user created' : (isLinkingOAuth ? 'Apple linked to existing account' : 'returning OAuth user');
+    console.log(`✅ [OAuth] Apple authentication successful (${authAction}): ${email}`);
+    console.log(`✅ [OAuth] User details: accountType=${userResponse.accountType}, authProviders=${userResponse.authProviders || 'not set'}`);
+
     res.json({
       message: 'Apple OAuth successful',
       token,
-      user: userResponse
+      user: userResponse,
+      isNewUser
     });
 
   } catch (error) {

@@ -30,12 +30,19 @@ const userSchema = new mongoose.Schema({
   // OAuth fields
   googleId: {
     type: String,
-    sparse: true // Allows multiple null values
+    sparse: true, // Allows multiple null values
+    unique: true // Prevent duplicate Google accounts
   },
   appleId: {
     type: String,
-    sparse: true // Allows multiple null values
+    sparse: true, // Allows multiple null values
+    unique: true // Prevent duplicate Apple accounts
   },
+  // Track which authentication providers are linked to this account
+  authProviders: [{
+    type: String,
+    enum: ['password', 'google', 'apple']
+  }],
   accountType: {
     type: String,
     enum: ['personal', 'camp', 'admin'],
@@ -216,6 +223,8 @@ const userSchema = new mongoose.Schema({
 // Index for efficient queries
 userSchema.index({ email: 1 });
 userSchema.index({ accountType: 1 });
+userSchema.index({ googleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup
+userSchema.index({ appleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup
 userSchema.index({ 'location.city': 1, 'location.state': 1 });
 userSchema.index({ 'campLocation.city': 1, 'campLocation.state': 1 });
 
@@ -233,17 +242,42 @@ userSchema.pre('save', async function(next) {
 });
 
 // Generate URL slug for personal accounts
-userSchema.pre('save', function(next) {
-  if (this.accountType === 'personal' && (this.isModified('firstName') || this.isModified('lastName') || this.isModified('playaName'))) {
-    const nameToUse = this.playaName || `${this.firstName || ''} ${this.lastName || ''}`.trim();
-    if (nameToUse) {
-      this.urlSlug = nameToUse
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
+// CRITICAL: Only generate slug on initial creation or explicit name changes
+// OAuth linking must NEVER regenerate slugs for existing users
+userSchema.pre('save', async function(next) {
+  try {
+    // Only generate slug for personal accounts when name fields change
+    if (this.accountType === 'personal' && 
+        (this.isModified('firstName') || this.isModified('lastName') || this.isModified('playaName'))) {
+      
+      const nameToUse = this.playaName || `${this.firstName || ''} ${this.lastName || ''}`.trim();
+      if (nameToUse) {
+        let baseSlug = nameToUse
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        
+        // Ensure slug uniqueness by appending counter if needed
+        // This prevents E11000 duplicate key errors
+        let slug = baseSlug;
+        let counter = 1;
+        const User = mongoose.model('User');
+        
+        // Only check for uniqueness if slug was actually modified
+        if (this.isModified('urlSlug') || !this.urlSlug) {
+          while (await User.findOne({ urlSlug: slug, _id: { $ne: this._id } })) {
+            slug = `${baseSlug}-${counter}`;
+            counter++;
+          }
+          this.urlSlug = slug;
+        }
+      }
     }
+    next();
+  } catch (error) {
+    console.error('❌ [User Model] Error generating URL slug:', error);
+    next(error);
   }
-  next();
 });
 
 // Compare password method
