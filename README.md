@@ -1,6 +1,6 @@
 # G8Road CRM
 
-A comprehensive web-based CRM system designed specifically for G8Road camps to manage their rosters, recruit members, and build their communities.
+A comprehensive web-based CRM system designed specifically for Burning Man camps to manage their rosters, recruit members, manage projects, collaborate with other camps  and build their communities.
 
 ## 🌟 Features
 
