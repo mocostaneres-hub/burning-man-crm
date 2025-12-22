@@ -27,6 +27,7 @@ export interface User {
   departureDate?: string | Date;
   interestedInEAP?: boolean;
   interestedInStrike?: boolean;
+  burningPlans?: 'confirmed' | 'undecided';
   location?: {
     city?: string;
     state?: string;

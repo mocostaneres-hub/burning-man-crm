@@ -57,6 +57,7 @@ router.put('/profile', authenticateToken, [
   }),
   body('interestedInEAP').optional().isBoolean(),
   body('interestedInStrike').optional().isBoolean(),
+  body('burningPlans').optional().isIn(['confirmed', 'undecided']),
   body('campName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 100)),
   body('campBio').optional().trim().custom((value) => value === '' || value.length <= 2000)
 ], async (req, res) => {
@@ -79,14 +80,14 @@ router.put('/profile', authenticateToken, [
     const allowedFields = [];
     
            if (user.accountType === 'personal') {
-             allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike');
+             allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
     } else if (user.accountType === 'camp') {
       // Camp accounts can update both personal and camp fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike');
+      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     } else {
       // Admin or other account types - allow all fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike');
+      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     }
 
@@ -726,6 +727,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
   }),
   body('interestedInEAP').optional().isBoolean(),
   body('interestedInStrike').optional().isBoolean(),
+  body('burningPlans').optional().isIn(['confirmed', 'undecided']),
   body('campName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 100)),
   body('campBio').optional().trim().custom((value) => value === '' || value.length <= 2000),
   body('accountType').optional().isIn(['personal', 'camp', 'admin']).withMessage('Invalid account type'),

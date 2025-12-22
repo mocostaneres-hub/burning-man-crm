@@ -8,6 +8,7 @@ const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 
 // Helper function to validate if personal profile is complete
+// This validation must match the fields collected in ProfileCompletionModal.tsx
 const isPersonalProfileComplete = (user) => {
   if (user.accountType !== 'personal') {
     return true; // Not a personal account, no validation needed
@@ -17,59 +18,61 @@ const isPersonalProfileComplete = (user) => {
   console.log('🔍 [Profile Validation] User data:', {
     firstName: user.firstName,
     lastName: user.lastName,
+    playaName: user.playaName,
     phoneNumber: user.phoneNumber,
     city: user.city,
     locationCity: user.location?.city,
     yearsBurned: user.yearsBurned,
     bio: user.bio,
-    interestedInEAP: user.interestedInEAP,
-    interestedInStrike: user.interestedInStrike
+    burningPlans: user.burningPlans,
+    skills: user.skills
   });
 
   const missingFields = [];
 
-  // Check firstName
+  // Check firstName (required during registration, should always be present)
   if (!user.firstName || user.firstName.trim() === '') {
     missingFields.push('First Name');
   }
 
-  // Check lastName
+  // Check lastName (required during registration, should always be present)
   if (!user.lastName || user.lastName.trim() === '') {
     missingFields.push('Last Name');
   }
 
-  // Check phoneNumber
+  // Check playaName (required in ProfileCompletionModal)
+  if (!user.playaName || user.playaName.trim() === '') {
+    missingFields.push('Playa Name');
+  }
+
+  // Check phoneNumber (required in ProfileCompletionModal)
   if (!user.phoneNumber || user.phoneNumber.trim() === '') {
     missingFields.push('Phone Number');
   }
 
-  // Check city (check both top-level and location.city)
+  // Check city (check both top-level and location.city) (required in ProfileCompletionModal)
   const hasCity = (user.city && user.city.trim() !== '') || (user.location?.city && user.location.city.trim() !== '');
   if (!hasCity) {
     missingFields.push('City');
   }
 
-  // Check yearsBurned (0 is valid for first-timers)
+  // Check yearsBurned (0 is valid for first-timers) (required in ProfileCompletionModal)
   if (typeof user.yearsBurned !== 'number' || user.yearsBurned < 0) {
     missingFields.push('Years Burned');
   }
 
-  // Check bio
-  if (!user.bio || user.bio.trim() === '') {
-    missingFields.push('Bio');
+  // Check burningPlans (required in ProfileCompletionModal - radio button with 'confirmed' or 'undecided')
+  if (!user.burningPlans || (user.burningPlans !== 'confirmed' && user.burningPlans !== 'undecided')) {
+    missingFields.push('Burning Man Plans');
   }
 
-  // Check interestedInEAP (boolean, allow undefined/null as valid - defaults to false)
-  // Only fail if explicitly set to a non-boolean value
-  if (user.interestedInEAP !== undefined && user.interestedInEAP !== null && typeof user.interestedInEAP !== 'boolean') {
-    missingFields.push('Interested in Early Arrival');
+  // Check skills (at least one required in ProfileCompletionModal)
+  if (!user.skills || !Array.isArray(user.skills) || user.skills.length === 0) {
+    missingFields.push('Skills (at least one)');
   }
 
-  // Check interestedInStrike (boolean, allow undefined/null as valid - defaults to false)
-  // Only fail if explicitly set to a non-boolean value
-  if (user.interestedInStrike !== undefined && user.interestedInStrike !== null && typeof user.interestedInStrike !== 'boolean') {
-    missingFields.push('Interested in Strike Team');
-  }
+  // Bio is optional in ProfileCompletionModal, so we don't validate it here
+  // interestedInEAP and interestedInStrike are optional checkboxes, so we don't validate them
 
   if (missingFields.length > 0) {
     console.log('❌ [Profile Validation] Missing fields:', missingFields);
@@ -113,7 +116,7 @@ router.post('/apply', authenticateToken, [
       console.error('❌ [Applications] Incomplete profile for user:', freshUser.email);
       console.error('User data:', JSON.stringify(freshUser, null, 2));
       return res.status(400).json({ 
-        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Phone Number, City, Years Burned, Bio, and Burning Man Plans (Interested in Early Arrival/Strike Team).',
+        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Playa Name, Phone Number, City, Years Burned, Burning Man Plans, and at least one Skill.',
         incompleteProfile: true,
         redirectTo: '/user/profile'
       });

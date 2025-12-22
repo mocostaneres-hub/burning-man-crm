@@ -158,9 +158,18 @@ const PublicCampProfile: React.FC = () => {
     const pendingInvite = localStorage.getItem('pendingInvite');
     if (!pendingInvite) return;
     
-    // Check if profile is incomplete (required fields: playaName, city, phoneNumber, skills, yearsBurned)
-    const isProfileIncomplete = !user.playaName || !user.city || !user.phoneNumber || 
-                                !user.skills || user.skills.length === 0 || user.yearsBurned === undefined;
+    // Check if profile is complete - must match backend validation in applications.js
+    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills (at least one)
+    const isProfileIncomplete = 
+      !user.firstName || 
+      !user.lastName || 
+      !user.playaName || 
+      !user.city || 
+      !user.phoneNumber || 
+      !user.skills || 
+      user.skills.length === 0 || 
+      user.yearsBurned === undefined ||
+      !user.burningPlans;
     
     if (isProfileIncomplete) {
       console.log('🎟️ [PublicCampProfile] Showing profile completion modal');
@@ -221,9 +230,19 @@ const PublicCampProfile: React.FC = () => {
       return;
     }
     
-    // Check if profile is incomplete (required fields: playaName, city, phoneNumber, skills, yearsBurned)
-    const isProfileIncomplete = !user.playaName || !user.city || !user.phoneNumber || 
-                                !user.skills || user.skills.length === 0 || user.yearsBurned === undefined;
+    // Check if profile is complete - must match backend validation in applications.js
+    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills (at least one)
+    const isProfileIncomplete = 
+      !user.firstName || 
+      !user.lastName || 
+      !user.playaName || 
+      !user.city || 
+      !user.phoneNumber || 
+      !user.skills || 
+      user.skills.length === 0 || 
+      user.yearsBurned === undefined ||
+      !user.burningPlans;
+      
     if (isProfileIncomplete) {
       setShowProfileCompletionModal(true);
       return;
