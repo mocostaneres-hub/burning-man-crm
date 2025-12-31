@@ -192,6 +192,40 @@ const requireCampMember = async (req, res, next) => {
 };
 
 // Optional authentication (doesn't fail if no token)
+// Check if user is camp account and owns the camp
+const requireCampAccount = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const campId = req.params.campId || req.body.campId;
+    if (!campId) {
+      return res.status(400).json({ message: 'Camp ID required' });
+    }
+
+    // Check if user is admin (admins can access everything)
+    const admin = await Admin.findOne({ user: req.user._id, isActive: true });
+    if (admin) {
+      req.admin = admin;
+      return next();
+    }
+
+    // Check if user is camp account uploading for themselves
+    if (req.user.accountType === 'camp' && req.user._id.toString() === campId.toString()) {
+      console.log('✅ [requireCampAccount] Camp account authorized:', req.user._id);
+      return next();
+    }
+
+    console.log('❌ [requireCampAccount] Access denied - not camp account or wrong camp');
+    console.log('   User ID:', req.user._id, 'Account Type:', req.user.accountType, 'Target Camp:', campId);
+    return res.status(403).json({ message: 'Only the camp account can perform this action' });
+  } catch (error) {
+    console.error('Camp account middleware error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -231,5 +265,6 @@ module.exports = {
   requireCampLead,
   requireProjectLead,
   requireCampMember,
+  requireCampAccount,
   optionalAuth
 };

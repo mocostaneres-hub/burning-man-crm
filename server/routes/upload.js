@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 
 const router = express.Router();
@@ -123,8 +123,8 @@ router.delete('/photo/:publicId', authenticateToken, async (req, res) => {
 
 // @route   POST /api/upload/camp-photo/:campId
 // @desc    Upload photo for specific camp
-// @access  Private (Camp lead only)
-router.post('/camp-photo/:campId', authenticateToken, upload.single('photo'), async (req, res) => {
+// @access  Private (Camp account only - no role required)
+router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
@@ -137,11 +137,8 @@ router.post('/camp-photo/:campId', authenticateToken, upload.single('photo'), as
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper
-    const hasAccess = await canAccessCamp(req, camp._id);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Not authorized to upload photos for this camp' });
-    }
+    // Authorization already handled by requireCampAccount middleware
+    console.log('✅ Camp photo upload authorized for camp:', camp._id);
 
     // Add photo to camp
     const photoData = {
