@@ -21,6 +21,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,21 +55,28 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     try {
       setUploading(true);
       setError(null);
+      setImageError(false);
 
       console.log('📸 Uploading photo:', file.name, file.size, 'bytes', file.type);
 
       const response = await apiService.uploadProfilePhoto(file);
 
       if (response.photoUrl) {
-        if (onPhotoChange) {
-          onPhotoChange(response.photoUrl);
+        // Validate URL format before setting
+        if (response.photoUrl.startsWith('http') || response.photoUrl.startsWith('data:')) {
+          if (onPhotoChange) {
+            onPhotoChange(response.photoUrl);
+          }
+          if (onPhotosChange && photos) {
+            onPhotosChange([response.photoUrl, ...photos.slice(1)]);
+          }
+          setPreview(null);
+          setImageError(false);
+        } else {
+          throw new Error('Invalid photo URL format returned from server');
         }
-        if (onPhotosChange && photos) {
-          onPhotosChange([response.photoUrl, ...photos.slice(1)]);
-        }
-        setPreview(null);
       } else {
-        throw new Error('No photo URL returned');
+        throw new Error('No photo URL returned from server');
       }
     } catch (error: any) {
       console.error('Photo upload error:', error);
@@ -83,7 +91,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       } else if (error.response?.status === 413) {
-        errorMessage = 'File too large. Please select a smaller image.';
+        errorMessage = 'File too large. Please select a smaller image (max 5MB).';
       } else if (error.response?.status === 415) {
         errorMessage = 'Invalid file type. Please select a valid image file.';
       } else if (error.response?.status === 401) {
@@ -108,6 +116,13 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
     setPreview(null);
     setError(null);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    console.error('Failed to load image:', displayPhoto);
+    setImageError(true);
+    setError('Failed to load image. Please try uploading again.');
   };
 
   const handleCameraClick = () => {
@@ -132,11 +147,12 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
         }`}
         onClick={isEditing ? handleCameraClick : undefined}
       >
-        {displayPhoto ? (
+        {displayPhoto && !imageError ? (
           <img
             src={displayPhoto}
             alt="Profile"
             className="w-full h-full object-cover"
+            onError={handleImageError}
           />
         ) : (
           <Camera className="w-12 h-12 text-gray-400" />
