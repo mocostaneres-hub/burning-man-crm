@@ -192,7 +192,8 @@ const requireCampMember = async (req, res, next) => {
 };
 
 // Optional authentication (doesn't fail if no token)
-// Check if user is camp account and owns the camp
+// Check if user can access camp (camp account OR Camp Admin with roster membership)
+// This matches the authorization used for camp profile editing (PUT /api/camps/:id)
 const requireCampAccount = async (req, res, next) => {
   try {
     if (!req.user) {
@@ -204,22 +205,41 @@ const requireCampAccount = async (req, res, next) => {
       return res.status(400).json({ message: 'Camp ID required' });
     }
 
-    // Check if user is admin (admins can access everything)
+    // Check if user is system admin (admins can access everything)
     const admin = await Admin.findOne({ user: req.user._id, isActive: true });
     if (admin) {
       req.admin = admin;
+      console.log('✅ [requireCampAccount] System admin authorized:', req.user._id);
       return next();
     }
 
     // Check if user is camp account uploading for themselves
-    if (req.user.accountType === 'camp' && req.user._id.toString() === campId.toString()) {
+    const { canAccessCamp } = require('../utils/permissionHelpers');
+    const isCampOwner = await canAccessCamp(req, campId);
+    if (isCampOwner) {
       console.log('✅ [requireCampAccount] Camp account authorized:', req.user._id);
       return next();
     }
 
-    console.log('❌ [requireCampAccount] Access denied - not camp account or wrong camp');
+    // Check if user is Camp Admin (roster member with camp-lead role)
+    // This matches the authorization logic in PUT /api/camps/:id
+    const db = require('../database/databaseAdapter');
+    const campLead = await db.findMember({ 
+      user: req.user._id, 
+      camp: campId, 
+      role: 'camp-lead',
+      status: 'active'
+    });
+    
+    if (campLead) {
+      console.log('✅ [requireCampAccount] Camp Admin (camp-lead) authorized:', req.user._id);
+      req.member = campLead;
+      return next();
+    }
+
+    console.log('❌ [requireCampAccount] Access denied - not camp account, system admin, or Camp Admin');
     console.log('   User ID:', req.user._id, 'Account Type:', req.user.accountType, 'Target Camp:', campId);
-    return res.status(403).json({ message: 'Only the camp account can perform this action' });
+    return res.status(403).json({ message: 'Access denied. You must be the camp account or a Camp Admin for this camp.' });
   } catch (error) {
     console.error('Camp account middleware error:', error);
     return res.status(500).json({ message: 'Server error' });
