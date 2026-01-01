@@ -192,7 +192,8 @@ const requireCampMember = async (req, res, next) => {
 };
 
 // Optional authentication (doesn't fail if no token)
-// Check if user can access camp (camp account OR Camp Admin with roster membership)
+// Check if user can access camp (camp account OR Camp Admin)
+// Camp Admin = any authenticated user with camp-lead role for the camp (does NOT require roster membership)
 // This matches the authorization used for camp profile editing (PUT /api/camps/:id)
 const requireCampAccount = async (req, res, next) => {
   try {
@@ -221,7 +222,9 @@ const requireCampAccount = async (req, res, next) => {
       return next();
     }
 
-    // Check if user is Camp Admin (roster member with camp-lead role)
+    // Check if user is Camp Admin (has camp-lead role for this camp)
+    // IMPORTANT: This does NOT require active roster membership - any Member record with camp-lead role grants access
+    // Any authenticated user with camp-lead role can upload photos, regardless of roster status
     // This matches the authorization logic in PUT /api/camps/:id
     const db = require('../database/databaseAdapter');
     const campLead = await db.findMember({ 
@@ -232,7 +235,8 @@ const requireCampAccount = async (req, res, next) => {
     });
     
     if (campLead) {
-      console.log('✅ [requireCampAccount] Camp Admin (camp-lead) authorized:', req.user._id);
+      console.log('✅ [requireCampAccount] Camp Admin (camp-lead role) authorized:', req.user._id);
+      console.log('   Camp Admin access granted - roster membership NOT required');
       req.member = campLead;
       return next();
     }
