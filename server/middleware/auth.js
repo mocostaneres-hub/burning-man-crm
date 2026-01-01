@@ -226,13 +226,64 @@ const requireCampAccount = async (req, res, next) => {
     // IMPORTANT: This does NOT require active roster membership - any Member record with camp-lead role grants access
     // Any authenticated user with camp-lead role can upload photos, regardless of roster status
     // This matches the authorization logic in PUT /api/camps/:id
+    
+    console.log('🔍 [requireCampAccount] Checking Camp Admin status...');
+    console.log('   User ID:', req.user._id, 'Type:', typeof req.user._id);
+    console.log('   Target Camp ID:', campId, 'Type:', typeof campId);
+    console.log('   Account Type:', req.user.accountType);
+    
     const db = require('../database/databaseAdapter');
-    const campLead = await db.findMember({ 
+    
+    // First try: Check for camp-lead role with active status
+    let campLead = await db.findMember({ 
       user: req.user._id, 
       camp: campId, 
       role: 'camp-lead',
       status: 'active'
     });
+    
+    // If not found with active status, check for any camp-lead role (regardless of status)
+    // This handles cases where Member might have different status but still has camp-lead role
+    if (!campLead) {
+      console.log('⚠️ [requireCampAccount] No active camp-lead found, checking for any camp-lead role...');
+      campLead = await db.findMember({ 
+        user: req.user._id, 
+        camp: campId, 
+        role: 'camp-lead'
+        // No status filter - check for any camp-lead role
+      });
+    }
+    
+    // Also check if user has access to edit camp (same logic as camp profile edit)
+    // This ensures consistency - if they can edit camp, they can upload photos
+    if (!campLead) {
+      console.log('⚠️ [requireCampAccount] No camp-lead Member record found');
+      console.log('   Checking if user can access camp for editing...');
+      
+      // Use the same logic as PUT /api/camps/:id - check for any Member record for this camp
+      // This catches users who might have access via other means
+      const anyMember = await db.findMember({
+        user: req.user._id,
+        camp: campId
+      });
+      
+      if (anyMember) {
+        console.log('🔍 [requireCampAccount] Found Member record:', {
+          role: anyMember.role,
+          status: anyMember.status,
+          camp: anyMember.camp
+        });
+        
+        // Allow if they have camp-lead or project-lead role (matching camp edit logic)
+        if (anyMember.role === 'camp-lead' || anyMember.role === 'project-lead') {
+          console.log('✅ [requireCampAccount] Camp Admin/Project Lead authorized via Member record:', req.user._id);
+          req.member = anyMember;
+          return next();
+        }
+      } else {
+        console.log('❌ [requireCampAccount] No Member record found for user in this camp');
+      }
+    }
     
     if (campLead) {
       console.log('✅ [requireCampAccount] Camp Admin (camp-lead role) authorized:', req.user._id);
@@ -243,6 +294,8 @@ const requireCampAccount = async (req, res, next) => {
 
     console.log('❌ [requireCampAccount] Access denied - not camp account, system admin, or Camp Admin');
     console.log('   User ID:', req.user._id, 'Account Type:', req.user.accountType, 'Target Camp:', campId);
+    console.log('   User campId:', req.user.campId);
+    
     return res.status(403).json({ message: 'Access denied. You must be the camp account or a Camp Admin for this camp.' });
   } catch (error) {
     console.error('Camp account middleware error:', error);

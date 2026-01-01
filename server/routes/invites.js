@@ -20,24 +20,48 @@ router.get('/camps/:campId/invites/template', authenticateToken, async (req, res
     // Check if user is camp account for this camp
     const isOwnCamp = req.user._id.toString() === campId.toString();
     
-    // Check if user is admin
-    const isAdmin = req.user.accountType === 'admin';
+    // Check if user is system admin
+    const Admin = require('../models/Admin');
+    const admin = await Admin.findOne({ user: req.user._id, isActive: true });
+    const isSystemAdmin = !!admin;
     
-    // Check if user is roster member of this camp
+    // Check if user is camp account (canAccessCamp)
+    const { canAccessCamp } = require('../utils/permissionHelpers');
+    const isCampOwner = await canAccessCamp(req, campId);
+    
+    // Check if user is Camp Admin (has camp-lead role) - does NOT require roster membership
+    // This matches the authorization used for camp profile editing and photo upload
+    const db = require('../database/databaseAdapter');
+    let isCampAdmin = false;
     let isRosterMember = false;
-    if (!isOwnCamp && !isAdmin) {
-      const Member = require('../models/Member');
-      const member = await Member.findOne({
+    
+    if (!isOwnCamp && !isSystemAdmin && !isCampOwner) {
+      // Check for Camp Admin (camp-lead role) - can be any status, not just active
+      const campLead = await db.findMember({
         user: req.user._id,
         camp: campId,
-        status: 'active'
+        role: 'camp-lead'
+        // No status filter - Camp Admin access doesn't require active status
       });
-      isRosterMember = !!member;
+      isCampAdmin = !!campLead;
+      
+      // Also check for any roster member (for other users who should have access)
+      if (!isCampAdmin) {
+        const member = await db.findMember({
+          user: req.user._id,
+          camp: campId,
+          status: 'active'
+        });
+        isRosterMember = !!member;
+      }
     }
     
-    if (!isOwnCamp && !isAdmin && !isRosterMember) {
+    const hasAccess = isOwnCamp || isSystemAdmin || isCampOwner || isCampAdmin || isRosterMember;
+    
+    if (!hasAccess) {
       console.log(`❌ [Templates] Access denied for user ${req.user._id}, not authorized for camp ${campId}`);
-      return res.status(403).json({ message: 'Access denied. You must be a member of this camp.' });
+      console.log(`   isOwnCamp: ${isOwnCamp}, isSystemAdmin: ${isSystemAdmin}, isCampOwner: ${isCampOwner}, isCampAdmin: ${isCampAdmin}, isRosterMember: ${isRosterMember}`);
+      return res.status(403).json({ message: 'Access denied. You must be the camp account or a Camp Admin for this camp.' });
     }
     
     console.log(`✅ [Templates] Access granted for campId: ${campId}, isOwnCamp: ${isOwnCamp}, isAdmin: ${isAdmin}, isRosterMember: ${isRosterMember}`);
