@@ -12,21 +12,35 @@ const router = express.Router();
 
 // @route   GET /api/camps/:campId/invites/template
 // @desc    Get invite templates for a camp
-// @access  Private (Camp Lead only)
+// @access  Private (Any authenticated camp member can read)
 router.get('/camps/:campId/invites/template', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
     
-    // Check if user is camp account (user ID matches camp ID) or admin with matching campId
+    // Check if user is camp account for this camp
     const isOwnCamp = req.user._id.toString() === campId.toString();
-    const isAdmin = req.user.accountType === 'admin' && req.user.campId && req.user.campId.toString() === campId.toString();
     
+    // Check if user is admin
+    const isAdmin = req.user.accountType === 'admin';
+    
+    // Check if user is roster member of this camp
+    let isRosterMember = false;
     if (!isOwnCamp && !isAdmin) {
-      console.log(`❌ [Templates] Access denied for user ${req.user._id}, accountType: ${req.user.accountType}, requested campId: ${campId}`);
-      return res.status(403).json({ message: 'Access denied. Camp Lead role required.' });
+      const Member = require('../models/Member');
+      const member = await Member.findOne({
+        user: req.user._id,
+        camp: campId,
+        status: 'active'
+      });
+      isRosterMember = !!member;
     }
     
-    console.log(`✅ [Templates] Access granted for campId: ${campId}, accountType: ${req.user.accountType}`);
+    if (!isOwnCamp && !isAdmin && !isRosterMember) {
+      console.log(`❌ [Templates] Access denied for user ${req.user._id}, not authorized for camp ${campId}`);
+      return res.status(403).json({ message: 'Access denied. You must be a member of this camp.' });
+    }
+    
+    console.log(`✅ [Templates] Access granted for campId: ${campId}, isOwnCamp: ${isOwnCamp}, isAdmin: ${isAdmin}, isRosterMember: ${isRosterMember}`);
     
     // Get camp with invite templates
     const camp = await db.findCamp({ _id: campId });

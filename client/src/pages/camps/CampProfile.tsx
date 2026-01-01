@@ -1035,8 +1035,8 @@ const CampProfile: React.FC = () => {
         </div>
       )}
 
-      {/* Invite Templates Section - Only show when not editing profile */}
-      {!isEditing && campId && (
+      {/* Invite Templates Section - Only show when not editing profile and user is authorized */}
+      {!isEditing && campId && (user?.accountType === 'camp' || user?.accountType === 'admin') && (
         <div className="mt-8">
           <InviteTemplateEditor campId={campId} />
         </div>

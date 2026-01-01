@@ -23,6 +23,7 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Check if user is camp lead
   const isCampLead = user?.accountType === 'admin' || user?.accountType === 'camp';
@@ -37,10 +38,22 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
     try {
       setLoading(true);
       setError(null);
+      setAccessDenied(false);
       const response = await api.getInviteTemplates(campId!);
       setTemplates(response);
     } catch (err: any) {
       console.error('Error loading templates:', err);
+      
+      // If 403, user is not authorized - hide component silently
+      if (err.response?.status === 403) {
+        console.log('⚠️ [InviteTemplateEditor] User not authorized to view templates - component will hide');
+        setAccessDenied(true);
+        setError(null); // Don't show error to user
+        setLoading(false);
+        return;
+      }
+      
+      // For other errors, show error message
       setError('Failed to load invite templates');
     } finally {
       setLoading(false);
@@ -94,16 +107,9 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
   const smsHasPlaceholders = templates.inviteTemplateSMS.includes('{{campName}}') && 
                             templates.inviteTemplateSMS.includes('{{link}}');
 
-  if (!isCampLead) {
-    return (
-      <Card>
-        <div className="p-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
-          <p className="text-gray-600">Only Camp Leads can edit invite templates.</p>
-        </div>
-      </Card>
-    );
+  // Hide component if user is not camp lead or access was denied
+  if (!isCampLead || accessDenied) {
+    return null;
   }
 
   if (loading) {
