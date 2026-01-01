@@ -964,6 +964,8 @@ const CampProfile: React.FC = () => {
                 photos={campData.photos}
                 onPhotosChange={(photos: string[]) => handleInputChange('photos', photos)}
                 isEditing={isEditing}
+                context="camp"
+                campId={campId}
               />
               <p className="text-sm text-gray-600 mt-2">
                 Upload a photo to represent your camp. This will be displayed on your camp profile and in camp discovery.

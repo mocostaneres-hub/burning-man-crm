@@ -9,6 +9,8 @@ interface PhotoUploadProps {
   onPhotoChange?: (photoUrl: string) => void;
   onPhotosChange?: (photos: string[]) => void;
   isEditing: boolean;
+  context?: 'user' | 'camp'; // Context for upload (user profile or camp)
+  campId?: string; // Required if context === 'camp'
 }
 
 const PhotoUpload: React.FC<PhotoUploadProps> = ({
@@ -16,7 +18,9 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
   photos,
   onPhotoChange,
   onPhotosChange,
-  isEditing
+  isEditing,
+  context = 'user', // Default to user context for backward compatibility
+  campId
 }) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +62,27 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
       setImageError(false);
 
       console.log('📸 Uploading photo:', file.name, file.size, 'bytes', file.type);
+      console.log('📸 Upload context:', context, context === 'camp' ? `campId: ${campId}` : '');
 
-      const response = await apiService.uploadProfilePhoto(file);
+      let response: { photoUrl?: string; photo?: { url: string } };
+      
+      // Choose endpoint based on context
+      if (context === 'camp') {
+        if (!campId) {
+          throw new Error('Camp ID is required for camp photo upload');
+        }
+        // Upload to camp photo endpoint
+        console.log('📸 Uploading to camp photo endpoint for camp:', campId);
+        response = await apiService.uploadCampPhoto(campId, file);
+        // Camp endpoint returns { photo: { url, ... } }
+        if (response.photo?.url) {
+          response.photoUrl = response.photo.url;
+        }
+      } else {
+        // Upload to user profile photo endpoint
+        console.log('📸 Uploading to user profile photo endpoint');
+        response = await apiService.uploadProfilePhoto(file);
+      }
 
       if (response.photoUrl) {
         // Validate URL format before setting
@@ -96,6 +119,8 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
         errorMessage = 'Invalid file type. Please select a valid image file.';
       } else if (error.response?.status === 401) {
         errorMessage = 'Please log in to upload photos.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to upload photos for this camp.';
       } else if (error.response?.status >= 500) {
         errorMessage = 'Server error. Please try again later.';
       }
