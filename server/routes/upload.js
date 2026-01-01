@@ -4,6 +4,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const db = require('../database/databaseAdapter');
 
 const router = express.Router();
 
@@ -123,22 +124,25 @@ router.delete('/photo/:publicId', authenticateToken, async (req, res) => {
 
 // @route   POST /api/upload/camp-photo/:campId
 // @desc    Upload photo for specific camp
-// @access  Private (Camp account only - no role required)
+// @access  Private (Camp account or Camp Admin)
 router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const Camp = require('../models/Camp');
-    const camp = await Camp.findById(req.params.campId);
+    const campId = req.params.campId;
+    const camp = await db.findCamp({ _id: campId });
     
     if (!camp) {
+      console.log('❌ [Camp Photo Upload] Camp not found:', campId);
       return res.status(404).json({ message: 'Camp not found' });
     }
 
     // Authorization already handled by requireCampAccount middleware
-    console.log('✅ Camp photo upload authorized for camp:', camp._id);
+    console.log('✅ [Camp Photo Upload] Authorized for camp:', camp._id);
+    console.log('📸 [Camp Photo Upload] File uploaded:', req.file.originalname, req.file.size, 'bytes');
+    console.log('📸 [Camp Photo Upload] Cloudinary URL:', req.file.path);
 
     // Add photo to camp
     const photoData = {
@@ -147,15 +151,46 @@ router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload
       isPrimary: req.body.isPrimary === 'true'
     };
 
-    // If this is set as primary, unset other primary photos
-    if (photoData.isPrimary) {
-      camp.photos.forEach(photo => {
-        photo.isPrimary = false;
-      });
+    // Initialize photos array if it doesn't exist or handle different formats
+    let photos = [];
+    if (camp.photos) {
+      // Handle both array of objects and array of strings
+      if (Array.isArray(camp.photos)) {
+        photos = camp.photos.map(photo => {
+          if (typeof photo === 'string') {
+            // Convert string URL to object format
+            return { url: photo, caption: '', isPrimary: false };
+          }
+          return photo;
+        });
+      }
     }
 
-    camp.photos.push(photoData);
-    await camp.save();
+    // If this is set as primary, unset other primary photos
+    if (photoData.isPrimary) {
+      photos = photos.map(photo => ({
+        ...photo,
+        isPrimary: false
+      }));
+    }
+
+    // Add new photo to array
+    photos.push(photoData);
+
+    console.log('📸 [Camp Photo Upload] Updating camp with', photos.length, 'photos');
+
+    // Update camp using database adapter (handles both MongoDB and mock DB)
+    const updatedCamp = await db.updateCampById(campId, {
+      photos: photos,
+      updatedAt: new Date()
+    });
+
+    if (!updatedCamp) {
+      console.error('❌ [Camp Photo Upload] Failed to update camp - updateCampById returned null');
+      return res.status(500).json({ message: 'Failed to save photo to camp' });
+    }
+
+    console.log('✅ [Camp Photo Upload] Photo added successfully to camp:', campId);
 
     res.json({
       message: 'Camp photo uploaded successfully',
@@ -163,8 +198,9 @@ router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload
     });
 
   } catch (error) {
-    console.error('Upload camp photo error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [Camp Photo Upload] Error:', error);
+    console.error('❌ [Camp Photo Upload] Error stack:', error.stack);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
