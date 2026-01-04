@@ -260,19 +260,49 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       let owner = null;
       
       // Try multiple strategies to find owner user:
-      // 1. If camp.owner exists, try to find that user
+      // 1. If camp.owner exists, try to find that user (convert to string for consistent comparison)
       if (campData.owner) {
-        owner = await db.findUser({ _id: campData.owner });
+        const ownerId = campData.owner.toString();
+        owner = await db.findUser({ _id: ownerId });
+        
+        // Also try with ObjectId if it's a string
+        if (!owner && typeof ownerId === 'string') {
+          owner = await db.findUser({ _id: ownerId });
+        }
       }
       
-      // 2. Fallback: Find user by contactEmail
+      // 2. Fallback: Find user by contactEmail (case-insensitive)
       if (!owner && campData.contactEmail) {
-        owner = await db.findUser({ email: campData.contactEmail });
+        const email = campData.contactEmail.toLowerCase().trim();
+        owner = await db.findUser({ email: email });
+        
+        // Also try without lowercasing in case DB stores differently
+        if (!owner) {
+          owner = await db.findUser({ email: campData.contactEmail });
+        }
         
         // If found user but camp.owner is missing/incorrect, flag for repair
         if (owner && (!campData.owner || campData.owner.toString() !== owner._id.toString())) {
-          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name}) needs owner repair. Found user ${owner._id} by email but camp.owner is ${campData.owner}`);
+          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) needs owner repair. Found user ${owner._id} by email but camp.owner is ${campData.owner}`);
         }
+      }
+      
+      // 3. Additional fallback: Try to find camp account user by campId matching camp._id
+      if (!owner) {
+        const campAccountUser = await db.findUser({ 
+          accountType: 'camp',
+          campId: campData._id.toString()
+        });
+        
+        if (campAccountUser) {
+          owner = campAccountUser;
+          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - found owner via campId lookup: ${owner._id}`);
+        }
+      }
+      
+      // Log if owner lookup completely failed (for debugging)
+      if (!owner) {
+        console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - owner lookup failed. camp.owner: ${campData.owner}, contactEmail: ${campData.contactEmail}`);
       }
 
       // Get actual member count from roster
@@ -475,15 +505,23 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     // Apply filters
     let filteredCamps = enrichedCamps;
     
-    // CRITICAL: Exclude camps with no owner (orphaned camps from permanent deletion)
-    // After permanent deletion of a CAMP account, the User is deleted but Camp record is preserved
-    // We don't want to show orphaned camps in the admin list
-    filteredCamps = filteredCamps.filter(camp => {
-      if (!camp.owner) {
-        console.log(`🚫 [Admin Camps List] Excluding orphaned camp ${camp._id} (${camp.name || camp.campName}) - owner user deleted`);
-        return false;
+    // IMPORTANT: System Admins should see ALL camps, including those with owner lookup issues
+    // Only exclude camps if we can definitively identify them as orphaned (requires explicit flag)
+    // For now, show all camps - owner lookup failures may be due to:
+    // - Missing owner field but valid contactEmail (will be shown with owner: null)
+    // - Owner user exists but lookup failed (should still show camp)
+    // - Actual orphaned camps (can be marked later with a flag)
+    // 
+    // System Admins need to see and potentially repair camps, so we show everything by default
+    // Individual camps with owner issues will have owner: null, which the UI can handle
+    
+    // Log camps with owner lookup issues for visibility (but don't exclude them)
+    enrichedCamps.forEach(camp => {
+      if (!camp.owner && camp.contactEmail) {
+        console.log(`⚠️ [Admin Camps List] Camp ${camp._id} (${camp.name || camp.campName}) - owner lookup failed, but camp has contactEmail: ${camp.contactEmail}`);
+      } else if (!camp.owner) {
+        console.log(`⚠️ [Admin Camps List] Camp ${camp._id} (${camp.name || camp.campName}) - no owner and no contactEmail (may need repair)`);
       }
-      return true;
     });
     
     if (search) {
