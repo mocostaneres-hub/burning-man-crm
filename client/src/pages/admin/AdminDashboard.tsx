@@ -408,7 +408,8 @@ const AdminDashboard: React.FC = () => {
 
   const loadCamps = async () => {
     try {
-      const response = await apiService.get(`/admin/camps?sortBy=${sortField}&sortOrder=${sortOrder}`);
+      // Request ALL camps (no pagination limit)
+      const response = await apiService.get(`/admin/camps?sortBy=${sortField}&sortOrder=${sortOrder}&limit=1000`);
       console.log('🔍 [AdminDashboard] Camps response:', response);
       // Backend returns { data: camps[], totalPages, currentPage, total }
       const campData = response.data || response.camps;
@@ -416,19 +417,25 @@ const AdminDashboard: React.FC = () => {
       console.log('🔍 [AdminDashboard] Is array?', Array.isArray(campData));
       console.log('🔍 [AdminDashboard] Camp count:', campData?.length);
       if (campData && Array.isArray(campData)) {
-        console.log('🔍 [AdminDashboard] Camp names:', campData.map(c => c.name || c.campName));
+        const campNames = campData.map(c => c.name || c.campName);
+        console.log('🔍 [AdminDashboard] Camp names:', campNames);
+        console.log('🔍 [AdminDashboard] All camp names as string:', campNames.join(', '));
         const mudskippers = campData.find(c => 
           (c.name || c.campName || '').toLowerCase().includes('mudskippers') ||
           c.slug === 'mudskippers'
         );
         console.log('🔍 [AdminDashboard] Mudskippers found?', !!mudskippers);
         if (mudskippers) {
-          console.log('🔍 [AdminDashboard] Mudskippers data:', mudskippers);
+          console.log('✅ [AdminDashboard] Mudskippers data:', mudskippers);
+        } else {
+          console.log('❌ [AdminDashboard] Mudskippers NOT in response. Checking all camp data...');
+          console.log('All camps:', campData);
         }
       }
       setCamps(Array.isArray(campData) ? campData : []);
     } catch (err) {
-      console.error('Error loading camps:', err);
+      console.error('❌ Error loading camps:', err);
+      console.error('Error details:', err.response?.data);
       setCamps([]); // Ensure camps is always an array
     }
   };
