@@ -60,25 +60,58 @@ async function permanentlyDeleteCampAccount(userId, adminId) {
       });
     }
 
-    // IMPORTANT: Do NOT delete camp-related entities
-    // - Camp profile, roster, applications, events, shifts, tasks all remain
-    // - These are preserved for data integrity and potential future recovery
-    // - The Camp record remains in database but is filtered out of admin lists
-    //   (camps without owners are considered "orphaned" and hidden from UI)
-    console.log(`ℹ️  [Permanent Deletion] Preserving camp entities for camp: ${campId}`);
-    console.log(`ℹ️  [Permanent Deletion] Camp will be hidden from admin list (orphaned camp)`);
+    // PERMANENT DELETION: Delete camp-related entities
+    // This is a HARD DELETE that removes:
+    // - The User account
+    // - The Camp record
+    // - Associated rosters, events, tasks, applications (via cascade/cleanup)
+    console.log(`🗑️  [Permanent Deletion] Deleting camp entities for camp: ${campId}`);
+    
+    let deletedEntities = {
+      rosters: 0,
+      applications: 0,
+      events: 0,
+      tasks: 0
+    };
+    
+    if (campId) {
+      // Delete rosters
+      const rostersDeleted = await Roster.deleteMany({ camp: campId });
+      deletedEntities.rosters = rostersDeleted.deletedCount || 0;
+      
+      // Delete member applications
+      const applicationsDeleted = await MemberApplication.deleteMany({ camp: campId });
+      deletedEntities.applications = applicationsDeleted.deletedCount || 0;
+      
+      // Delete events
+      const eventsDeleted = await Event.deleteMany({ campId: campId });
+      deletedEntities.events = eventsDeleted.deletedCount || 0;
+      
+      // Delete tasks
+      const tasksDeleted = await Task.deleteMany({ camp: campId });
+      deletedEntities.tasks = tasksDeleted.deletedCount || 0;
+      
+      // Delete members
+      const membersDeleted = await Member.deleteMany({ camp: campId });
+      console.log(`   🗑️  Deleted ${membersDeleted.deletedCount || 0} member records`);
+      
+      // Finally, delete the camp record itself
+      await Camp.findByIdAndDelete(campId);
+      console.log(`   🗑️  Deleted camp record: ${campId}`);
+    }
 
     // Delete the user account
     await User.findByIdAndDelete(userId);
     
     console.log(`✅ [Permanent Deletion] CAMP user account deleted: ${user.email}`);
-    console.log(`✅ [Permanent Deletion] All camp entities preserved for camp: ${campId}`);
+    console.log(`✅ [Permanent Deletion] Camp and all associated data deleted:`, deletedEntities);
 
     return {
       success: true,
-      message: 'Camp account permanently deleted. All camp entities preserved.',
+      message: `Camp permanently deleted. Removed ${deletedEntities.rosters} rosters, ${deletedEntities.applications} applications, ${deletedEntities.events} events, ${deletedEntities.tasks} tasks.`,
       campId: campId?.toString(),
-      email: user.email
+      email: user.email,
+      deletedEntities
     };
   } catch (error) {
     console.error(`❌ [Permanent Deletion] Error deleting CAMP account:`, error);
