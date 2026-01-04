@@ -1,5 +1,9 @@
 # G8Road CRM
 
+> **📁 Repository Structure**: See [REPOSITORY_STRUCTURE.md](./REPOSITORY_STRUCTURE.md) for the complete directory layout and file organization.
+
+
+
 A comprehensive web-based CRM system designed specifically for Burning Man camps to manage their rosters, recruit members, manage projects, collaborate with other camps  and build their communities.
 
 ## 🌟 Features
