@@ -412,6 +412,20 @@ const AdminDashboard: React.FC = () => {
       console.log('🔍 [AdminDashboard] Camps response:', response);
       // Backend returns { data: camps[], totalPages, currentPage, total }
       const campData = response.data || response.camps;
+      console.log('🔍 [AdminDashboard] Camp data:', campData);
+      console.log('🔍 [AdminDashboard] Is array?', Array.isArray(campData));
+      console.log('🔍 [AdminDashboard] Camp count:', campData?.length);
+      if (campData && Array.isArray(campData)) {
+        console.log('🔍 [AdminDashboard] Camp names:', campData.map(c => c.name || c.campName));
+        const mudskippers = campData.find(c => 
+          (c.name || c.campName || '').toLowerCase().includes('mudskippers') ||
+          c.slug === 'mudskippers'
+        );
+        console.log('🔍 [AdminDashboard] Mudskippers found?', !!mudskippers);
+        if (mudskippers) {
+          console.log('🔍 [AdminDashboard] Mudskippers data:', mudskippers);
+        }
+      }
       setCamps(Array.isArray(campData) ? campData : []);
     } catch (err) {
       console.error('Error loading camps:', err);
