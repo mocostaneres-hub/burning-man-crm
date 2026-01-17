@@ -35,36 +35,57 @@ class ApiService {
           }
         }
 
-        const token = localStorage.getItem('token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-          
-          // Log token info for debugging (only first/last few chars for security)
-          console.log('🔑 [API Interceptor] Token present:', 
-            `${token.substring(0, 10)}...${token.substring(token.length - 10)}`
-          );
-          
-          // Try to decode JWT to check expiration (without verifying signature)
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const now = Math.floor(Date.now() / 1000);
-            const expiresIn = payload.exp - now;
+        // Define public endpoints that don't require authentication
+        const publicEndpoints = [
+          '/auth/register',
+          '/auth/login',
+          '/auth/google',
+          '/auth/apple',
+          '/auth/forgot-password',
+          '/auth/reset-password',
+          '/oauth/config',
+          '/help/faqs',
+          '/health'
+        ];
+
+        // Check if this is a public endpoint
+        const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.startsWith(endpoint));
+
+        // Only add token for non-public endpoints
+        if (!isPublicEndpoint) {
+          const token = localStorage.getItem('token');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
             
-            if (expiresIn < 0) {
-              console.warn('⚠️ [API Interceptor] Token appears to be expired!', {
-                expired: new Date(payload.exp * 1000).toISOString(),
-                now: new Date(now * 1000).toISOString()
-              });
-            } else if (expiresIn < 300) { // Less than 5 minutes
-              console.warn('⚠️ [API Interceptor] Token expires soon:', expiresIn, 'seconds');
-            } else {
-              console.log('✅ [API Interceptor] Token valid for:', Math.floor(expiresIn / 60), 'minutes');
+            // Log token info for debugging (only first/last few chars for security)
+            console.log('🔑 [API Interceptor] Token present:', 
+              `${token.substring(0, 10)}...${token.substring(token.length - 10)}`
+            );
+            
+            // Try to decode JWT to check expiration (without verifying signature)
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              const now = Math.floor(Date.now() / 1000);
+              const expiresIn = payload.exp - now;
+              
+              if (expiresIn < 0) {
+                console.warn('⚠️ [API Interceptor] Token appears to be expired!', {
+                  expired: new Date(payload.exp * 1000).toISOString(),
+                  now: new Date(now * 1000).toISOString()
+                });
+              } else if (expiresIn < 300) { // Less than 5 minutes
+                console.warn('⚠️ [API Interceptor] Token expires soon:', expiresIn, 'seconds');
+              } else {
+                console.log('✅ [API Interceptor] Token valid for:', Math.floor(expiresIn / 60), 'minutes');
+              }
+            } catch (e) {
+              console.error('❌ [API Interceptor] Could not decode token:', e);
             }
-          } catch (e) {
-            console.error('❌ [API Interceptor] Could not decode token:', e);
+          } else {
+            console.warn('⚠️ [API Interceptor] No token found - protected endpoint may fail');
           }
         } else {
-          console.warn('⚠️ [API Interceptor] No token found in localStorage');
+          console.log('🔓 [API Interceptor] Public endpoint - no auth required:', config.url);
         }
         
         console.log('🔄 [API Interceptor] Request:', config.method?.toUpperCase(), config.url);
@@ -86,8 +107,33 @@ class ApiService {
         return response;
       },
       (error) => {
-        console.error('❌ [API Interceptor] Error:', error.response?.status, error.response?.data);
+        // Detailed error logging for all error types
+        if (error.response) {
+          // Server responded with error status
+          console.error('❌ [API Interceptor] Server Error:', {
+            status: error.response.status,
+            data: error.response.data,
+            url: error.config?.url,
+            method: error.config?.method
+          });
+        } else if (error.request) {
+          // Request made but no response (timeout, network failure, CORS)
+          console.error('❌ [API Interceptor] Network/Timeout Error:', {
+            code: error.code,
+            message: error.message,
+            url: error.config?.url,
+            method: error.config?.method,
+            timeout: error.config?.timeout
+          });
+        } else {
+          // Something else happened
+          console.error('❌ [API Interceptor] Request Setup Error:', {
+            message: error.message,
+            url: error.config?.url
+          });
+        }
         
+        // Handle auth errors specifically
         if (error.response?.status === 401 || error.response?.status === 403) {
           const errorMessage = error.response?.data?.message || '';
           console.error('❌ [API Interceptor] Auth error:', errorMessage);
@@ -133,8 +179,25 @@ class ApiService {
   }
 
   async register(userData: RegisterData): Promise<{ token: string; user: User; isNewAccount?: boolean }> {
-    const response: AxiosResponse<{ token: string; user: User; isNewAccount?: boolean }> = await this.api.post('/auth/register', userData);
-    return response.data;
+    console.log('🔐 [DEBUG] API Service - Registration attempt:', { email: userData.email, baseURL: this.api.defaults.baseURL });
+    try {
+      // Registration can take longer due to password hashing, DB writes, and email queuing
+      // Use a 30-second timeout for registration
+      const response: AxiosResponse<{ token: string; user: User; isNewAccount?: boolean }> = await this.api.post('/auth/register', userData, {
+        timeout: 30000 // 30 seconds for registration
+      });
+      console.log('✅ [DEBUG] API Service - Registration successful:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ [DEBUG] API Service - Registration failed:', error);
+      console.error('❌ [DEBUG] Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code
+      });
+      throw error;
+    }
   }
 
   async getCurrentUser(): Promise<{ user: User }> {
