@@ -1,15 +1,16 @@
-const sgMail = require('@sendgrid/mail');
+const { Resend } = require('resend');
 
-// Initialize SendGrid with API key from environment variables
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  console.log('✅ SendGrid initialized successfully');
+// Initialize Resend with API key from environment variables
+let resend;
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
+  console.log('✅ Resend initialized successfully');
 } else {
-  console.warn('⚠️  SENDGRID_API_KEY not found in environment variables');
+  console.warn('⚠️  RESEND_API_KEY not found in environment variables');
 }
 
 /**
- * Send an email using SendGrid
+ * Send an email using Resend
  * @param {Object} options - Email options
  * @param {string|string[]} options.to - Recipient email address(es)
  * @param {string} options.subject - Email subject
@@ -17,42 +18,42 @@ if (process.env.SENDGRID_API_KEY) {
  * @param {string} options.html - HTML content (optional)
  * @param {string} options.from - Sender email (optional, uses env default)
  * @param {string} options.fromName - Sender name (optional, uses env default)
- * @returns {Promise<Object>} SendGrid response
+ * @returns {Promise<Object>} Resend response
  */
 const sendEmail = async ({
   to,
   subject,
   text = '',
   html = '',
-  from = process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
-  fromName = process.env.SENDGRID_FROM_NAME || 'G8Road'
+  from = process.env.RESEND_FROM_EMAIL || 'noreply@g8road.com',
+  fromName = process.env.RESEND_FROM_NAME || 'G8Road'
 }) => {
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      throw new Error('SendGrid API key is not configured');
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('Resend API key is not configured');
     }
 
-    const msg = {
-      to,
-      from: {
-        email: from,
-        name: fromName
-      },
-      subject,
-      text: text || 'This email requires HTML support',
-      html: html || text
-    };
+    // Resend requires from to be in "Name <email>" format or just email
+    const fromEmail = fromName ? `${fromName} <${from}>` : from;
 
     console.log(`📧 Sending email to: ${to}`);
     console.log(`📧 Subject: ${subject}`);
 
-    const response = await sgMail.send(msg);
+    const response = await resend.emails.send({
+      from: fromEmail,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      text: text || 'This email requires HTML support',
+      html: html || text
+    });
+
     console.log('✅ Email sent successfully');
+    console.log('📧 Email ID:', response.data?.id);
     return response;
   } catch (error) {
     console.error('❌ Error sending email:', error);
-    if (error.response) {
-      console.error('SendGrid Error Response:', error.response.body);
+    if (error.message) {
+      console.error('Resend Error Message:', error.message);
     }
     throw error;
   }
@@ -361,19 +362,19 @@ The G8Road Team`
 };
 
 /**
- * Send test email (for SendGrid verification)
+ * Send test email (for Resend verification)
  */
 const sendTestEmail = async (to) => {
   return sendEmail({
     to,
-    subject: 'Test Email from G8Road - SendGrid Integration',
+    subject: 'Test Email from G8Road - Resend Integration',
     html: `
-      <h2>🎉 SendGrid Integration Successful!</h2>
+      <h2>🎉 Resend Integration Successful!</h2>
       <p>This is a test email from your G8Road CRM application.</p>
-      <p>If you're seeing this, your SendGrid integration is working perfectly!</p>
+      <p>If you're seeing this, your Resend integration is working perfectly!</p>
       <p style="color: #666; font-size: 12px;">Sent at: ${new Date().toLocaleString()}</p>
     `,
-    text: 'Test email from G8Road CRM. SendGrid integration is working!'
+    text: 'Test email from G8Road CRM. Resend integration is working!'
   });
 };
 
@@ -386,4 +387,3 @@ module.exports = {
   sendInviteEmail,
   sendTestEmail
 };
-
