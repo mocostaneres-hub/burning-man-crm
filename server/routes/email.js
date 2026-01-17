@@ -117,19 +117,19 @@ router.post('/welcome', authenticateToken, requireAdmin, [
 
 /**
  * @route   GET /api/email/status
- * @desc    Check SendGrid configuration status
+ * @desc    Check Resend configuration status
  * @access  Private (Admin)
  */
 router.get('/status', authenticateToken, requireAdmin, (req, res) => {
-  const isConfigured = !!process.env.SENDGRID_API_KEY;
+  const isConfigured = !!process.env.RESEND_API_KEY;
 
   res.json({
     configured: isConfigured,
-    fromEmail: process.env.SENDGRID_FROM_EMAIL || 'Not set',
-    fromName: process.env.SENDGRID_FROM_NAME || 'Not set',
+    fromEmail: process.env.RESEND_FROM_EMAIL || 'Not set',
+    fromName: process.env.RESEND_FROM_NAME || 'Not set',
     message: isConfigured
-      ? 'SendGrid is properly configured'
-      : 'SendGrid API key is missing. Please set SENDGRID_API_KEY in environment variables.'
+      ? 'Resend is properly configured'
+      : 'Resend API key is missing. Please set RESEND_API_KEY in environment variables.'
   });
 });
 

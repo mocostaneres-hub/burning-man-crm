@@ -14,7 +14,8 @@ sendTestEmail(testEmail)
   .then((response) => {
     console.log('');
     console.log('✅ SUCCESS! Email sent via Resend');
-    console.log('📧 Email ID:', response.data?.id);
+    console.log('📦 Full Response:', JSON.stringify(response, null, 2));
+    console.log('📧 Email ID:', response.data?.id || response.id);
     console.log('');
     console.log('Next steps:');
     console.log('1. Check your inbox:', testEmail);
@@ -25,6 +26,7 @@ sendTestEmail(testEmail)
     console.log('');
     console.error('❌ ERROR sending email');
     console.error('Error message:', error.message);
+    console.error('Full error:', JSON.stringify(error, null, 2));
     console.error('');
     console.log('Troubleshooting:');
     console.log('1. Check RESEND_API_KEY is set in .env');

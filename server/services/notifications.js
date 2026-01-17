@@ -1,14 +1,6 @@
 // Notification service for sending email and SMS notifications
-const sgMail = require('@sendgrid/mail');
+const { sendEmail } = require('./emailService');
 const twilio = require('twilio');
-
-// SendGrid configuration
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  console.log('✅ Notifications service using SendGrid');
-} else {
-  console.warn('⚠️  SENDGRID_API_KEY not found - email notifications will not work');
-}
 
 // Twilio configuration for SMS
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
@@ -76,14 +68,7 @@ async function sendEmailNotification(camp, applicant, application) {
   const isUndecided = application.status === 'undecided' || application.applicationData?.burningPlans === 'undecided';
   const statusNote = isUndecided ? ' as "Maybe" joining' : '';
   
-  const mailOptions = {
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
-      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
-    },
-    to: camp.contactEmail,
-    subject: `New Application to ${camp.name || camp.campName}${statusNote}`,
-    html: `
+  const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
           <h1 style="color: white; margin: 0;">🏕️ G8Road CRM</h1>
@@ -145,21 +130,28 @@ async function sendEmailNotification(camp, applicant, application) {
           </div>
         </div>
       </div>
-    `,
-    text: `New Application to ${camp.campName || camp.name}\n\nApplicant: ${applicant.firstName} ${applicant.lastName}\nEmail: ${applicant.email}\n\nPlease log in to your camp dashboard to review this application.\n\n${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`
-  };
+    `;
+
+  const textContent = `New Application to ${camp.campName || camp.name}\n\nApplicant: ${applicant.firstName} ${applicant.lastName}\nEmail: ${applicant.email}\n\nPlease log in to your camp dashboard to review this application.\n\n${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
 
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  Cannot send email - RESEND_API_KEY not configured');
       return;
     }
-    await sgMail.send(mailOptions);
-    console.log(`✅ Email notification sent to ${camp.contactEmail} via SendGrid`);
+    
+    await sendEmail({
+      to: camp.contactEmail,
+      subject: `New Application to ${camp.name || camp.campName}${statusNote}`,
+      html: htmlContent,
+      text: textContent
+    });
+    
+    console.log(`✅ Email notification sent to ${camp.contactEmail} via Resend`);
   } catch (error) {
     console.error('❌ Error sending email notification:', error);
     if (error.response) {
-      console.error('SendGrid error details:', error.response.body);
+      console.error('Resend error details:', error.response.body);
     }
   }
 }
@@ -209,14 +201,7 @@ async function sendApplicationStatusNotification(application, applicant, camp, n
  * Send approval notification to applicant
  */
 async function sendApprovalNotification(applicant, camp) {
-  const mailOptions = {
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
-      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
-    },
-    to: applicant.email,
-    subject: `🎉 Welcome to ${camp.name || camp.campName}!`,
-    html: `
+  const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; text-align: center;">
           <h1 style="color: white; margin: 0;">🎉 Congratulations!</h1>
@@ -249,21 +234,28 @@ async function sendApprovalNotification(applicant, camp) {
           </div>
         </div>
       </div>
-    `,
-    text: `Congratulations ${applicant.firstName}! You've been accepted to ${camp.campName || camp.name}. Go to your dashboard to learn more: ${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`
-  };
+    `;
+
+  const textContent = `Congratulations ${applicant.firstName}! You've been accepted to ${camp.campName || camp.name}. Go to your dashboard to learn more: ${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
 
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  Cannot send email - RESEND_API_KEY not configured');
       return;
     }
-    await sgMail.send(mailOptions);
-    console.log(`✅ Approval notification sent to ${applicant.email} via SendGrid`);
+    
+    await sendEmail({
+      to: applicant.email,
+      subject: `🎉 Welcome to ${camp.name || camp.campName}!`,
+      html: htmlContent,
+      text: textContent
+    });
+    
+    console.log(`✅ Approval notification sent to ${applicant.email} via Resend`);
   } catch (error) {
     console.error('❌ Error sending approval notification:', error);
     if (error.response) {
-      console.error('SendGrid error details:', error.response.body);
+      console.error('Resend error details:', error.response.body);
     }
   }
 }
@@ -272,14 +264,7 @@ async function sendApprovalNotification(applicant, camp) {
  * Send rejection notification to applicant
  */
 async function sendRejectionNotification(applicant, camp) {
-  const mailOptions = {
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
-      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
-    },
-    to: applicant.email,
-    subject: `Application Update - ${camp.name || camp.campName}`,
-    html: `
+  const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
           <h1 style="color: white; margin: 0;">🏕️ G8Road CRM</h1>
@@ -310,21 +295,28 @@ async function sendRejectionNotification(applicant, camp) {
           The ${camp.campName || camp.name} Team</p>
         </div>
       </div>
-    `,
-    text: `Thank you for your application to ${camp.campName || camp.name}. After careful consideration, we have decided not to move forward at this time. We encourage you to explore other camps: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camps`
-  };
+    `;
+
+  const textContent = `Thank you for your application to ${camp.campName || camp.name}. After careful consideration, we have decided not to move forward at this time. We encourage you to explore other camps: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camps`;
 
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  Cannot send email - RESEND_API_KEY not configured');
       return;
     }
-    await sgMail.send(mailOptions);
-    console.log(`✅ Rejection notification sent to ${applicant.email} via SendGrid`);
+    
+    await sendEmail({
+      to: applicant.email,
+      subject: `Application Update - ${camp.name || camp.campName}`,
+      html: htmlContent,
+      text: textContent
+    });
+    
+    console.log(`✅ Rejection notification sent to ${applicant.email} via Resend`);
   } catch (error) {
     console.error('❌ Error sending rejection notification:', error);
     if (error.response) {
-      console.error('SendGrid error details:', error.response.body);
+      console.error('Resend error details:', error.response.body);
     }
   }
 }
@@ -336,14 +328,7 @@ async function sendApplicationWelcomeEmail(applicant) {
   const userFirstName = applicant.firstName || 'there';
   const profileUrl = `${process.env.CLIENT_URL || 'https://g8road.com'}/user/profile`;
 
-  const mailOptions = {
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@g8road.com',
-      name: process.env.SENDGRID_FROM_NAME || 'G8Road'
-    },
-    to: applicant.email,
-    subject: 'Welcome to G8Road: Your Camp Management & Connection Hub!',
-    html: `
+  const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
         <!-- Header -->
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 30px 20px; text-align: center;">
@@ -416,8 +401,9 @@ async function sendApplicationWelcomeEmail(applicant) {
           </div>
         </div>
       </div>
-    `,
-    text: `Welcome to G8Road: Your Camp Management & Connection Hub!
+    `;
+
+  const textContent = `Welcome to G8Road: Your Camp Management & Connection Hub!
 
 Hey ${userFirstName},
 
@@ -451,20 +437,26 @@ We can't wait to see what you build.
 See you in the dust,
 
 The G8Road Team
-`
-  };
+`;
 
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️  Cannot send email - SENDGRID_API_KEY not configured');
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  Cannot send email - RESEND_API_KEY not configured');
       return;
     }
-    await sgMail.send(mailOptions);
-    console.log(`✅ Application welcome email sent to ${applicant.email} via SendGrid`);
+    
+    await sendEmail({
+      to: applicant.email,
+      subject: 'Welcome to G8Road: Your Camp Management & Connection Hub!',
+      html: htmlContent,
+      text: textContent
+    });
+    
+    console.log(`✅ Application welcome email sent to ${applicant.email} via Resend`);
   } catch (error) {
     console.error('❌ Error sending application welcome email:', error);
     if (error.response) {
-      console.error('SendGrid error details:', error.response.body);
+      console.error('Resend error details:', error.response.body);
     }
     throw error;
   }
