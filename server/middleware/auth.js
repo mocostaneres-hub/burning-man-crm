@@ -197,30 +197,49 @@ const requireCampMember = async (req, res, next) => {
 // This matches the authorization used for camp profile editing (PUT /api/camps/:id)
 const requireCampAccount = async (req, res, next) => {
   try {
+    console.log('🔍 [requireCampAccount] Middleware started');
+    console.log('   User ID:', req.user?._id, 'Account Type:', req.user?.accountType);
+    
     if (!req.user) {
+      console.error('❌ [requireCampAccount] No user in request');
       return res.status(401).json({ message: 'Authentication required' });
     }
 
     const campId = req.params.campId || req.body.campId;
     if (!campId) {
+      console.error('❌ [requireCampAccount] No campId in request');
       return res.status(400).json({ message: 'Camp ID required' });
+    }
+    
+    console.log('🔍 [requireCampAccount] Target campId:', campId);
+    
+    // Validate campId format for MongoDB
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(campId)) {
+      console.error('❌ [requireCampAccount] Invalid campId format:', campId);
+      return res.status(400).json({ message: 'Invalid camp ID format' });
     }
 
     // Check if user is system admin (admins can access everything)
+    console.log('🔍 [requireCampAccount] Checking system admin...');
     const admin = await Admin.findOne({ user: req.user._id, isActive: true });
     if (admin) {
       req.admin = admin;
       console.log('✅ [requireCampAccount] System admin authorized:', req.user._id);
       return next();
     }
+    console.log('   Not a system admin');
+
 
     // Check if user is camp account uploading for themselves
+    console.log('🔍 [requireCampAccount] Checking camp ownership...');
     const { canAccessCamp } = require('../utils/permissionHelpers');
     const isCampOwner = await canAccessCamp(req, campId);
     if (isCampOwner) {
       console.log('✅ [requireCampAccount] Camp account authorized:', req.user._id);
       return next();
     }
+    console.log('   Not camp owner');
 
     // Check if user is Camp Admin (has camp-lead role for this camp)
     // IMPORTANT: This does NOT require active roster membership - any Member record with camp-lead role grants access
@@ -298,8 +317,22 @@ const requireCampAccount = async (req, res, next) => {
     
     return res.status(403).json({ message: 'Access denied. You must be the camp account or a Camp Admin for this camp.' });
   } catch (error) {
-    console.error('Camp account middleware error:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error('❌ [requireCampAccount] Middleware error:', error.message);
+    console.error('❌ [requireCampAccount] Error name:', error.name);
+    console.error('❌ [requireCampAccount] Stack:', error.stack);
+    
+    // Handle specific error types
+    if (error.name === 'CastError') {
+      return res.status(400).json({ message: 'Invalid camp ID format' });
+    }
+    if (error.name === 'MongoError' || error.name === 'MongooseError') {
+      return res.status(503).json({ message: 'Database temporarily unavailable' });
+    }
+    
+    return res.status(500).json({ 
+      message: 'Server error during authorization',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 

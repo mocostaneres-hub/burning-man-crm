@@ -64,7 +64,7 @@ router.get('/camps/:campId/invites/template', authenticateToken, async (req, res
       return res.status(403).json({ message: 'Access denied. You must be the camp account or a Camp Admin for this camp.' });
     }
     
-    console.log(`✅ [Templates] Access granted for campId: ${campId}, isOwnCamp: ${isOwnCamp}, isAdmin: ${isAdmin}, isRosterMember: ${isRosterMember}`);
+    console.log(`✅ [Templates] Access granted for campId: ${campId}, isOwnCamp: ${isOwnCamp}, isSystemAdmin: ${isSystemAdmin}, isRosterMember: ${isRosterMember}`);
     
     // Get camp with invite templates
     const camp = await db.findCamp({ _id: campId });

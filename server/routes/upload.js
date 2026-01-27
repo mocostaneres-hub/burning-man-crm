@@ -15,6 +15,17 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// Validate Cloudinary configuration on startup
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('❌ [Upload] Cloudinary configuration missing!');
+  console.error('   CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? 'set' : 'MISSING');
+  console.error('   CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? 'set' : 'MISSING');
+  console.error('   CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? 'set' : 'MISSING');
+  console.error('   Photo uploads will fail!');
+} else {
+  console.log('✅ [Upload] Cloudinary configured:', process.env.CLOUDINARY_CLOUD_NAME);
+}
+
 // Configure multer with Cloudinary storage
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
@@ -127,11 +138,25 @@ router.delete('/photo/:publicId', authenticateToken, async (req, res) => {
 // @access  Private (Camp account or Camp Admin)
 router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload.single('photo'), async (req, res) => {
   try {
+    console.log('📸 [Camp Photo Upload] Route handler started');
+    console.log('📸 [Camp Photo Upload] req.file:', req.file ? 'present' : 'missing');
+    console.log('📸 [Camp Photo Upload] campId:', req.params.campId);
+    
     if (!req.file) {
+      console.error('❌ [Camp Photo Upload] No file in request - multer may have failed');
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const campId = req.params.campId;
+    
+    // Validate campId format for MongoDB
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(campId)) {
+      console.error('❌ [Camp Photo Upload] Invalid campId format:', campId);
+      return res.status(400).json({ message: 'Invalid camp ID format' });
+    }
+    
+    console.log('📸 [Camp Photo Upload] Looking up camp:', campId);
     const camp = await db.findCamp({ _id: campId });
     
     if (!camp) {
