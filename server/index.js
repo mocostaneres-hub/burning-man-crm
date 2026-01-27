@@ -179,8 +179,37 @@ io.on('connection', (socket) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  console.error('❌ [Error Handler] Error caught:', err.message);
+  console.error('❌ [Error Handler] Stack:', err.stack);
+  
+  // Handle Multer errors specifically
+  if (err.name === 'MulterError') {
+    console.error('❌ [Error Handler] Multer error:', err.code);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'File too large. Maximum size is 10MB.' });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ message: 'Unexpected field in upload. Expected field name: "photo" or "photos".' });
+    }
+    return res.status(400).json({ message: `Upload error: ${err.message}` });
+  }
+  
+  // Handle validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
+  }
+  
+  // Handle CORS errors
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ message: 'CORS policy does not allow access from your origin.' });
+  }
+  
+  // Generic server error
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    // Include error message in development for easier debugging
+    ...(process.env.NODE_ENV !== 'production' && { error: err.message })
+  });
 });
 
 // Debug: Log all registered routes (only in development or when DEBUG_ROUTES is set)

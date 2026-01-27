@@ -90,7 +90,19 @@ class ApiService {
         
         console.log('🔄 [API Interceptor] Request:', config.method?.toUpperCase(), config.url);
         if (config.data) {
-          console.log('🔄 [API Interceptor] Request Data:', JSON.stringify(config.data, null, 2));
+          // Handle FormData specially (can't JSON.stringify it)
+          if (config.data instanceof FormData) {
+            console.log('🔄 [API Interceptor] Request Data: FormData with entries:');
+            for (const [key, value] of config.data.entries()) {
+              if (value instanceof File) {
+                console.log(`  - ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+              } else {
+                console.log(`  - ${key}:`, value);
+              }
+            }
+          } else {
+            console.log('🔄 [API Interceptor] Request Data:', JSON.stringify(config.data, null, 2));
+          }
         }
         return config;
       },
@@ -345,9 +357,7 @@ class ApiService {
     formData.append('photo', file);
     
     const response: AxiosResponse<{ photoUrl: string }> = await this.api.post('/upload/profile-photo', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type manually - let Axios set it with the boundary parameter
       transformRequest: [(data) => data], // Don't transform FormData
     });
     return response.data;
@@ -357,9 +367,8 @@ class ApiService {
     const formData = new FormData();
     files.forEach(file => formData.append('photos', file));
     const response: AxiosResponse<{ photos: string[] }> = await this.api.post('/upload/camp-photos', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type manually - let Axios set it with the boundary parameter
+      transformRequest: [(data) => data], // Don't transform FormData
     });
     return response.data;
   }
@@ -371,9 +380,8 @@ class ApiService {
     if (isPrimary) formData.append('isPrimary', isPrimary.toString());
     
     const response: AxiosResponse<{ photo: any }> = await this.api.post(`/upload/camp-photo/${campId}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type manually - let Axios set it with the boundary parameter
+      transformRequest: [(data) => data], // Don't transform FormData
     });
     return response.data;
   }
@@ -433,9 +441,8 @@ class ApiService {
 
   async uploadAdminCampPhoto(campId: string, formData: FormData): Promise<{ photo: string; camp: Camp }> {
     const response: AxiosResponse<{ photo: string; camp: Camp }> = await this.api.post(`/admin/camps/${campId}/upload-photo`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type manually - let Axios set it with the boundary parameter
+      transformRequest: [(data) => data], // Don't transform FormData
     });
     return response.data;
   }
