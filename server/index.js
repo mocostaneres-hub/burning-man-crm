@@ -86,6 +86,15 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
   console.log('MongoDB connected successfully');
   db.setMongoDBMode(true);
   
+  // Validate schemas on startup
+  try {
+    const { validateAllSchemas } = require('./startup/validateSchemas');
+    validateAllSchemas();
+  } catch (validationError) {
+    console.error('⚠️  [Startup] Schema validation failed:', validationError.message);
+    // Don't crash in production, but log prominently
+  }
+  
   // Run automated camp owner repair on startup
   try {
     const { fixCampsMissingOwnersOnStartup } = require('./startup/fixCampsMissingOwners');

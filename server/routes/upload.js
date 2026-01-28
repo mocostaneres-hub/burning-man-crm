@@ -203,6 +203,7 @@ router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload
     photos.push(photoData);
 
     console.log('📸 [Camp Photo Upload] Updating camp with', photos.length, 'photos');
+    console.log('📸 [Camp Photo Upload] Photo data structure:', JSON.stringify(photos[photos.length - 1]));
 
     // Update camp using database adapter (handles both MongoDB and mock DB)
     const updatedCamp = await db.updateCampById(campId, {
@@ -224,8 +225,30 @@ router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload
 
   } catch (error) {
     console.error('❌ [Camp Photo Upload] Error:', error);
+    console.error('❌ [Camp Photo Upload] Error name:', error.name);
     console.error('❌ [Camp Photo Upload] Error stack:', error.stack);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    
+    // Handle specific Mongoose errors
+    if (error.name === 'ValidationError') {
+      console.error('❌ [Camp Photo Upload] Validation Error Details:', error.errors);
+      return res.status(400).json({ 
+        message: 'Photo data validation failed',
+        details: process.env.NODE_ENV !== 'production' ? error.message : undefined
+      });
+    }
+    
+    if (error.name === 'CastError') {
+      console.error('❌ [Camp Photo Upload] Cast Error - attempting to save wrong data type');
+      return res.status(400).json({ 
+        message: 'Invalid photo data format',
+        details: process.env.NODE_ENV !== 'production' ? error.message : undefined
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error during photo upload',
+      error: process.env.NODE_ENV !== 'production' ? error.message : 'Please contact support'
+    });
   }
 });
 

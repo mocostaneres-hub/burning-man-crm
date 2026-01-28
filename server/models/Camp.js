@@ -269,7 +269,8 @@ const campSchema = new mongoose.Schema({
     caption: String,
     order: { type: Number, default: 0 }
   }],
-  photos: [String], // Array of photo URLs
+  // REMOVED DUPLICATE: photos field already defined at line 86-93
+  // photos: [String], // ❌ DUPLICATE - conflicts with line 86
   primaryPhotoIndex: { type: Number, default: 0 }, // Index of the primary photo
   
   // Statistics
