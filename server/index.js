@@ -103,6 +103,15 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] Camp repair failed:', repairError.message);
     // Don't crash server if repair fails, just log it
   }
+  
+  // Auto-migrate photos on startup (if enabled)
+  try {
+    const { autoMigratePhotosOnStartup } = require('./startup/autoMigratePhotos');
+    await autoMigratePhotosOnStartup();
+  } catch (migrationError) {
+    console.error('⚠️  [Startup] Photo migration failed:', migrationError.message);
+    // Don't crash server if migration fails, just log it
+  }
 })
 .catch(err => {
   console.log('MongoDB connection failed, using mock database for development');
@@ -167,6 +176,7 @@ app.use('/api/skills', require('./routes/skills'));
 app.use('/api/mudskippers', require('./routes/mudskippers-applications'));
 app.use('/api/migrate', require('./routes/migrate-application-statuses'));
 app.use('/api/migrate', require('./routes/migrate-slugs'));
+app.use('/api/migrate', require('./routes/migrate-photos'));
 app.use('/api/debug', require('./routes/debug-user'));
 
 // Socket.io for real-time features

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Migration Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .step-number {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .loader::after {
+            content: '⏳';
+            font-size: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Photo Migration Tool</h1>
+        <p class="subtitle">Convert camp photos from string format to object format</p>
+        
+        <div class="warning">
+            <strong>⚠️ Admin Access Required</strong><br>
+            You must be logged in as an admin to run this migration.
+        </div>
+        
+        <div class="step">
+            <div class="step-number">Step 1</div>
+            <div>Check if migration is needed</div>
+        </div>
+        <button id="checkBtn" onclick="checkStatus()">Check Migration Status</button>
+        
+        <div class="step" style="margin-top: 30px;">
+            <div class="step-number">Step 2</div>
+            <div>Run the migration (if needed)</div>
+        </div>
+        <button id="migrateBtn" onclick="runMigration()" disabled>Run Migration</button>
+        
+        <div class="loader" id="loader"></div>
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5001/api'
+            : 'https://api.g8road.com/api';
+        
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+        
+        function showStatus(message, type, details) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            let html = message;
+            if (details) {
+                html += '<pre>' + JSON.stringify(details, null, 2) + '</pre>';
+            }
+            statusEl.innerHTML = html;
+        }
+        
+        function showLoader(show) {
+            document.getElementById('loader').style.display = show ? 'block' : 'none';
+        }
+        
+        async function checkStatus() {
+            const token = getToken();
+            if (!token) {
+                showStatus('❌ Not logged in. Please log in first.', 'error');
+                return;
+            }
+            
+            const checkBtn = document.getElementById('checkBtn');
+            checkBtn.disabled = true;
+            showLoader(true);
+            
+            try {
+                const response = await fetch(`${API_BASE}/migrate/photos-status`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('✅ Status Check Complete', 'success', data);
+                    
+                    if (data.needsMigration) {
+                        document.getElementById('migrateBtn').disabled = false;
+                    } else {
+                        showStatus(
+                            '✅ No migration needed! All camps already have correct format.',
+                            'success',
+                            data
+                        );
+                    }
+                } else {
+                    showStatus(`❌ ${data.message || 'Status check failed'}`, 'error', data);
+                }
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                showLoader(false);
+                checkBtn.disabled = false;
+            }
+        }
+        
+        async function runMigration() {
+            const token = getToken();
+            if (!token) {
+                showStatus('❌ Not logged in. Please log in first.', 'error');
+                return;
+            }
+            
+            if (!confirm('Run photo migration? This will update camps with string photos to object format.')) {
+                return;
+            }
+            
+            const migrateBtn = document.getElementById('migrateBtn');
+            migrateBtn.disabled = true;
+            showLoader(true);
+            showStatus('🔄 Migration in progress... Please wait.', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/migrate/photos-to-objects`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showStatus(
+                        `✅ Migration Complete!\n\n` +
+                        `• Migrated: ${data.migrated} camps\n` +
+                        `• Already correct: ${data.alreadyCorrect} camps\n` +
+                        `• Errors: ${data.errors}`,
+                        'success',
+                        data
+                    );
+                } else {
+                    showStatus(`❌ Migration failed: ${data.message}`, 'error', data);
+                }
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                showLoader(false);
+            }
+        }
+        
+        // Auto-check on page load
+        window.addEventListener('load', () => {
+            const token = getToken();
+            if (token) {
+                showStatus('ℹ️ Click "Check Migration Status" to begin', 'info');
+            } else {
+                showStatus('⚠️ Please log in first at g8road.com, then return to this page', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
