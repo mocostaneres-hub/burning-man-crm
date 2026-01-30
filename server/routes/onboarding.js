@@ -3,6 +3,8 @@ const { body, validationResult } = require('express-validator');
 const router = express.Router();
 const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
+const mongoose = require('mongoose');
+const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 
 // @route   POST /api/onboarding/select-role
 // @desc    Select role for new user (member or camp_lead)
@@ -34,40 +36,75 @@ router.post('/select-role', [
       });
     }
 
-    // Update user role
-    const updatedUser = await db.updateUserById(userId, { 
-      role: role,
-      updatedAt: new Date()
-    });
-
-    if (!updatedUser) {
-      return res.status(500).json({ message: 'Failed to update user role' });
+    // VALIDATION: Check for conflicting states
+    if (role === 'camp_lead') {
+      // Prevent admin accounts from becoming camp leads
+      if (user.accountType === 'admin') {
+        return res.status(400).json({ 
+          message: 'Admin accounts cannot become camp leads'
+        });
+      }
+      
+      // Check if user already has a camp
+      if (user.campId) {
+        console.log('⚠️ [Onboarding] User already has campId:', user.campId);
+        // Continue but don't create duplicate camp
+      }
     }
 
-    // For camp_lead role, also update accountType to 'camp' and create camp if needed
-    if (role === 'camp_lead') {
-      // Update accountType to 'camp'
-      if (user.accountType !== 'camp') {
-        await db.updateUserById(userId, { 
-          accountType: 'camp',
-          updatedAt: new Date()
+    if (role === 'member') {
+      // Warn if user already owns a camp
+      if (user.campId) {
+        console.warn(`⚠️ [Onboarding] User ${user.email} selected 'member' but already owns camp ${user.campId}`);
+        return res.status(400).json({
+          message: 'You already own a camp. Please select "Lead a Camp" role instead, or contact support if you need to transfer ownership.'
         });
-        updatedUser.accountType = 'camp';
+      }
+    }
+
+    // START TRANSACTION for atomicity
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const User = require('../models/User');
+      const Camp = require('../models/Camp');
+
+      // Update user role
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { role: role, updatedAt: new Date() },
+        { new: true, session }
+      );
+
+      if (!updatedUser) {
+        throw new Error('Failed to update user role');
       }
 
-      // Create camp if user doesn't have one
-      if (!user.campId) {
-        try {
-          // Generate camp name from user's name (without "Camp" suffix)
-          const campName = user.campName || `${user.firstName} ${user.lastName}`;
-          
-          // Generate slug
-          const slug = campName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/(^-|-$)/g, '');
+      console.log('✅ [Onboarding] Updated role to:', role);
 
-          // Create camp data
+      // For camp_lead role, also update accountType to 'camp' and create camp
+      if (role === 'camp_lead') {
+        // Update accountType to 'camp'
+        if (updatedUser.accountType !== 'camp') {
+          await User.findByIdAndUpdate(
+            userId,
+            { accountType: 'camp', updatedAt: new Date() },
+            { session }
+          );
+          updatedUser.accountType = 'camp';
+          console.log('✅ [Onboarding] Updated accountType to: camp');
+        }
+
+        // Create camp ONLY if user doesn't have one
+        if (!user.campId) {
+          // Generate camp name from user's name
+          const campName = user.campName || `${user.firstName} ${user.lastName}`.trim() || 'My Camp';
+          
+          // Generate unique slug using utility (prevents collisions)
+          const slug = await generateUniqueCampSlug(campName);
+
+          // Create camp data with required fields
           const campData = {
             owner: user._id,
             name: campName,
@@ -76,54 +113,99 @@ router.post('/select-role', [
             contactEmail: user.email,
             status: 'active',
             isRecruiting: true,
-            isPublic: true, // Make camps public by default so they appear in discovery
+            isPublic: false, // Start private - user can make public after completing profile
+            isPubliclyVisible: false, // Ensure it doesn't appear in discovery until ready
             acceptingNewMembers: true,
             showApplyNow: true,
             showMemberCount: true
           };
 
+          console.log('🏕️ [Onboarding] Creating camp with slug:', slug);
+
           // Create camp record
-          const camp = await db.createCamp(campData);
+          const camp = new Camp(campData);
+          await camp.save({ session });
+
+          console.log('✅ [Onboarding] Camp created:', camp._id);
 
           // Update user with campId and urlSlug
-          await db.updateUserById(user._id, {
-            campId: camp._id,
-            urlSlug: slug
-          });
+          await User.findByIdAndUpdate(
+            user._id,
+            { 
+              campId: camp._id,
+              urlSlug: slug,
+              updatedAt: new Date()
+            },
+            { session }
+          );
           
           updatedUser.campId = camp._id;
           updatedUser.urlSlug = slug;
 
-          console.log('✅ [Onboarding] Camp created for user:', user.email, 'Camp ID:', camp._id);
-        } catch (campError) {
-          console.error('❌ [Onboarding] Error creating camp:', campError);
-          // Don't fail the onboarding if camp creation fails
-          // They can create it later from their profile
+          console.log('✅ [Onboarding] Linked user to camp');
+        } else {
+          console.log('ℹ️ [Onboarding] User already has camp, skipping creation');
         }
       }
-    }
 
-    // For member role, ensure accountType is 'personal'
-    if (role === 'member' && user.accountType !== 'personal') {
-      await db.updateUserById(userId, { 
-        accountType: 'personal',
-        updatedAt: new Date()
+      // For member role, ensure accountType is 'personal'
+      if (role === 'member' && updatedUser.accountType !== 'personal') {
+        await User.findByIdAndUpdate(
+          userId,
+          { accountType: 'personal', updatedAt: new Date() },
+          { session }
+        );
+        updatedUser.accountType = 'personal';
+        console.log('✅ [Onboarding] Updated accountType to: personal');
+      }
+
+      // COMMIT TRANSACTION - All operations succeeded
+      await session.commitTransaction();
+      console.log('✅ [Onboarding] Transaction committed successfully');
+
+      // Fetch the fully updated user to ensure we have all the latest data
+      const finalUser = await db.findUserById(userId);
+      
+      // Return success response with user data
+      const userResponse = finalUser.toObject ? finalUser.toObject() : { ...finalUser };
+      delete userResponse.password;
+
+      res.json({
+        message: 'Role selected successfully',
+        user: userResponse,
+        redirectTo: role === 'camp_lead' ? '/camp/edit' : '/user/profile'
       });
-      updatedUser.accountType = 'personal';
+
+    } catch (transactionError) {
+      // ROLLBACK TRANSACTION on any error
+      await session.abortTransaction();
+      console.error('❌ [Onboarding] Transaction aborted:', transactionError);
+
+      // Return specific error messages
+      if (transactionError.code === 11000) {
+        // Duplicate key error (shouldn't happen with generateUniqueCampSlug, but just in case)
+        return res.status(409).json({ 
+          message: 'A camp with this name already exists. Please try again or contact support.',
+          error: process.env.NODE_ENV === 'development' ? transactionError.message : undefined
+        });
+      }
+
+      if (transactionError.message.includes('Camp owner')) {
+        return res.status(500).json({
+          message: 'Unable to create camp. Please contact support.',
+          supportEmail: process.env.SUPPORT_EMAIL || 'support@g8road.com'
+        });
+      }
+
+      // Generic error
+      return res.status(500).json({ 
+        message: 'Failed to complete onboarding. Please try again.',
+        error: process.env.NODE_ENV === 'development' ? transactionError.message : undefined
+      });
+    } finally {
+      // Always end the session
+      session.endSession();
     }
-
-    // Fetch the fully updated user to ensure we have all the latest data
-    const finalUser = await db.findUserById(userId);
-    
-    // Return success response with user data
-    const userResponse = finalUser.toObject ? finalUser.toObject() : { ...finalUser };
-    delete userResponse.password;
-
-    res.json({
-      message: 'Role selected successfully',
-      user: userResponse,
-      redirectTo: role === 'camp_lead' ? '/camp/edit' : '/user/profile'
-    });
 
   } catch (error) {
     console.error('Role selection error:', error);
