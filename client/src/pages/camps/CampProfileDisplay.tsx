@@ -2,6 +2,12 @@ import React from 'react';
 import { Card, Badge } from '../../components/ui';
 import { MapPin, Mail, Globe, Facebook, Instagram, Twitter, Calendar, Edit } from 'lucide-react';
 
+interface CampPhoto {
+  url: string;
+  caption: string;
+  isPrimary: boolean;
+}
+
 interface CampProfileDisplayProps {
   camp: {
     campName: string;
@@ -21,7 +27,7 @@ interface CampProfileDisplayProps {
       time: string;
       description: string;
     };
-    photos: string[];
+    photos: (string | CampPhoto)[]; // Support both legacy and new photo formats
   };
   onEdit?: () => void;
 }

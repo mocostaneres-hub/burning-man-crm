@@ -5,12 +5,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
 
+interface CampPhoto {
+  url: string;
+  caption: string;
+  isPrimary: boolean;
+}
+
 interface Camp {
   _id: string;
   campName: string;
   theme?: string;
   hometown?: string;
-  photos?: string[];
+  photos?: (string | CampPhoto)[]; // Support both legacy and new photo formats
   primaryPhotoIndex?: number;
 }
 
@@ -139,15 +145,19 @@ const MyApplications: React.FC = () => {
             <Card key={application._id} className="p-6">
               <div className="flex flex-col lg:flex-row gap-6">
                 {/* Camp Photo */}
-                {application.camp.photos && application.camp.photos.length > 0 && (
-                  <div className="lg:w-48 flex-shrink-0">
-                    <img
-                      src={application.camp.photos[application.camp.primaryPhotoIndex || 0]}
-                      alt={application.camp.campName}
-                      className="w-full h-32 lg:h-full object-cover rounded-lg"
-                    />
-                  </div>
-                )}
+                {application.camp.photos && application.camp.photos.length > 0 && (() => {
+                  const photo = application.camp.photos[application.camp.primaryPhotoIndex || 0];
+                  const photoUrl = typeof photo === 'string' ? photo : photo.url;
+                  return (
+                    <div className="lg:w-48 flex-shrink-0">
+                      <img
+                        src={photoUrl}
+                        alt={application.camp.campName}
+                        className="w-full h-32 lg:h-full object-cover rounded-lg"
+                      />
+                    </div>
+                  );
+                })()}
 
                 {/* Application Details */}
                 <div className="flex-1">

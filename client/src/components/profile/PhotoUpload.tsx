@@ -11,7 +11,7 @@ interface CampPhoto {
 
 interface PhotoUploadProps {
   profilePhoto?: string;
-  photos?: string[] | CampPhoto[]; // Support both legacy string[] and new object format
+  photos?: (string | CampPhoto)[]; // Support mixed array with both formats
   onPhotoChange?: (photoUrl: string) => void;
   onPhotosChange?: (photos: string[]) => void;
   isEditing: boolean;
