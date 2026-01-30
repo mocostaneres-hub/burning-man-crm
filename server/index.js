@@ -74,11 +74,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting (relaxed for development)
+// Rate limiting (reasonable limits for both environments)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 10000, // 10,000 for dev, 100 for production
-  message: 'Too many requests, please try again later.'
+  max: process.env.NODE_ENV === 'production' ? 1000 : 10000, // 1,000 for production, 10,000 for dev
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Skip rate limiting for health checks
+  skip: (req) => req.path === '/api/health' || req.path === '/health'
 });
 app.use('/api/', limiter);
 
