@@ -134,7 +134,8 @@ const CampDiscovery: React.FC = () => {
       setError('');
       console.log('🏕️ [CampDiscovery] Fetching camps...');
       
-      const response = await api.get('/camps');
+      // Fetch all camps (limit=100 to ensure we get all of them)
+      const response = await api.get('/camps?limit=100');
       console.log('🏕️ [CampDiscovery] Response:', response);
       
       if (response && response.camps) {
