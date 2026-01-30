@@ -96,8 +96,11 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
           if (onPhotoChange) {
             onPhotoChange(response.photoUrl);
           }
-          if (onPhotosChange && photos) {
-            onPhotosChange([response.photoUrl, ...photos.slice(1)]);
+          // For camp context, photos are managed server-side, so don't update local state
+          // For user context, update the photos array
+          if (onPhotosChange && photos && context === 'user') {
+            // User photos are always strings, so safe to spread
+            onPhotosChange([response.photoUrl, ...(photos as string[]).slice(1)]);
           }
           setPreview(null);
           setImageError(false);
@@ -142,8 +145,10 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     if (onPhotoChange) {
       onPhotoChange('');
     }
-    if (onPhotosChange && photos) {
-      onPhotosChange(photos.slice(1));
+    // For camp context, photos are managed server-side
+    // For user context, update the photos array
+    if (onPhotosChange && photos && context === 'user') {
+      onPhotosChange((photos as string[]).slice(1));
     }
     setPreview(null);
     setError(null);
