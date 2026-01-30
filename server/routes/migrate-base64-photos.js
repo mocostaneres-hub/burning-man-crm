@@ -129,8 +129,10 @@ router.post('/run', authenticateToken, async (req, res) => {
       throw new Error('Cloudinary not configured. Please set CLOUDINARY_* environment variables.');
     }
     
-    // Get all camps
-    const allCamps = await Camp.find({});
+    // Get all camps with .lean() to avoid Mongoose document conversion issues
+    const allCamps = await Camp.find({}).lean();
+    
+    console.log(`📊 [Migrate BASE64] Found ${allCamps.length} total camps`);
     
     let processedCamps = 0;
     let migratedPhotos = 0;
@@ -139,7 +141,12 @@ router.post('/run', authenticateToken, async (req, res) => {
     const migratedCampDetails = [];
     
     for (const camp of allCamps) {
-      if (!camp.photos || camp.photos.length === 0) continue;
+      if (!camp.photos || camp.photos.length === 0) {
+        continue;
+      }
+      
+      console.log(`\n🔍 [Migrate BASE64] Checking camp: ${camp.name} (${camp._id})`);
+      console.log(`   Photos array length: ${camp.photos.length}`);
       
       let campNeedsMigration = false;
       const newPhotos = [];
@@ -221,8 +228,12 @@ router.post('/run', authenticateToken, async (req, res) => {
       // Save if camp had base64 photos
       if (campNeedsMigration) {
         try {
-          camp.photos = newPhotos;
-          await camp.save({ validateBeforeSave: true });
+          // Need to use findById and update since we used .lean()
+          await Camp.findByIdAndUpdate(
+            camp._id,
+            { photos: newPhotos },
+            { validateBeforeSave: true, runValidators: true }
+          );
           
           processedCamps++;
           migratedCampDetails.push({
@@ -237,6 +248,8 @@ router.post('/run', authenticateToken, async (req, res) => {
           console.error(`❌ [Migrate BASE64] ${errorMsg}`);
           errors.push(errorMsg);
         }
+      } else {
+        console.log(`⏭️ [Migrate BASE64] Skipping camp: ${camp.name} - no migration needed`);
       }
     }
     
