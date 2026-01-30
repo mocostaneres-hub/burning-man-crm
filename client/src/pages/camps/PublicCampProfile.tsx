@@ -31,6 +31,12 @@ interface SelectedPerk {
   offering?: GlobalPerk; // Populated perk data
 }
 
+interface CampPhoto {
+  url: string;
+  caption: string;
+  isPrimary: boolean;
+}
+
 interface Camp {
   _id: string;
   campName: string;
@@ -94,7 +100,7 @@ interface Camp {
     time?: string;
     description?: string;
   };
-  photos?: string[];
+  photos?: (string | CampPhoto)[]; // Support both legacy string format and new object format
   primaryPhotoIndex?: number;
   stats?: {
     totalMembers?: number;

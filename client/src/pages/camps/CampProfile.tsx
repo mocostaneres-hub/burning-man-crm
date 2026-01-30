@@ -88,7 +88,7 @@ interface CampProfileData {
     time: string;
     description: string;
   };
-  photos: CampPhoto[]; // Updated to match backend schema (array of photo objects, not strings)
+  photos: (string | CampPhoto)[]; // Support both legacy string format and new object format
   visibility: 'public' | 'private';
 }
 
