@@ -27,7 +27,10 @@ const io = new Server(server, {
 // Middleware
 app.use(helmet());
 
-// CORS configuration to support multiple origins
+// Trust proxy - required for Railway and rate limiting
+app.set('trust proxy', 1);
+
+// CORS configuration to support multiple origins including Vercel previews
 const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.CORS_ORIGIN,
@@ -45,7 +48,12 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(allowed => origin.includes(allowed))) {
+    // Check if origin matches allowed origins or Vercel preview URLs
+    const isAllowed = allowedOrigins.indexOf(origin) !== -1 || 
+                     allowedOrigins.some(allowed => origin.includes(allowed)) ||
+                     origin.endsWith('.vercel.app'); // Allow all Vercel preview/staging URLs
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.log('❌ CORS blocked origin:', origin);
