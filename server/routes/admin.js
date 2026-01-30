@@ -254,8 +254,9 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     
     // Enrich camps with owner information, member count, and new metrics
     const enrichedCamps = await Promise.all(allCamps.map(async (camp) => {
-      // Convert Mongoose document to plain object to avoid internal properties
-      const campData = camp.toObject ? camp.toObject() : camp;
+      try {
+        // Convert Mongoose document to plain object to avoid internal properties
+        const campData = camp.toObject ? camp.toObject() : camp;
       
       let owner = null;
       
@@ -481,25 +482,44 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
         console.warn(`Could not count tasks for camp ${campData._id}:`, error.message);
       }
 
-      return {
-        ...campData,
-        memberCount, // Override with actual roster member count
-        owner: owner ? {
-          _id: owner._id,
-          firstName: owner.firstName,
-          lastName: owner.lastName,
-          email: owner.email,
-          accountType: owner.accountType
-        } : null,
-        needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
-        // New compact columns
-        rosterInfo,
-        lastLogin,
-        activeApps,
-        activeEvents,
-        activeShifts,
-        activeTasks
-      };
+        return {
+          ...campData,
+          memberCount, // Override with actual roster member count
+          owner: owner ? {
+            _id: owner._id,
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            email: owner.email,
+            accountType: owner.accountType
+          } : null,
+          needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
+          // New compact columns
+          rosterInfo,
+          lastLogin,
+          activeApps,
+          activeEvents,
+          activeShifts,
+          activeTasks
+        };
+      } catch (enrichmentError) {
+        // If enrichment fails for this camp, return basic camp data
+        console.error(`❌ [Admin Camps] Enrichment failed for camp ${camp._id || 'unknown'}:`, enrichmentError.message);
+        console.error('❌ [Admin Camps] Stack:', enrichmentError.stack);
+        
+        const campData = camp.toObject ? camp.toObject() : camp;
+        return {
+          ...campData,
+          enrichmentError: enrichmentError.message,
+          memberCount: 0,
+          owner: null,
+          rosterInfo: { hasActive: false, memberCount: 0 },
+          lastLogin: null,
+          activeApps: 0,
+          activeEvents: 0,
+          activeShifts: 0,
+          activeTasks: 0
+        };
+      }
     }));
     
     // Apply filters
