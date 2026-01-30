@@ -121,6 +121,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
 
 // Routes
 app.use('/api/health', require('./routes/health'));
+app.use('/api/debug-db', require('./routes/debug-db')); // Temporary debug route
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/camps', require('./routes/camps'));
