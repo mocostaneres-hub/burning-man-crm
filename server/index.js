@@ -135,6 +135,7 @@ app.use('/api/debug-admin-camps', require('./routes/debug-admin-camps')); // Tem
 app.use('/api/debug-photos', require('./routes/debug-photos')); // Temporary debug route
 app.use('/api/debug-visibility', require('./routes/debug-visibility')); // Temporary debug route
 app.use('/api/migrate-visibility', require('./routes/migrate-visibility')); // Migration endpoint
+app.use('/api/migrate-base64-photos', require('./routes/migrate-base64-photos')); // Migration endpoint  
 app.use('/api/debug-camp-raw', require('./routes/debug-camp-raw')); // Temporary debug route
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
