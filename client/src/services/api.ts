@@ -386,6 +386,11 @@ class ApiService {
     return response.data;
   }
 
+  async deleteCampPhoto(campId: string): Promise<{ message: string; remainingPhotos: number }> {
+    const response: AxiosResponse<{ message: string; remainingPhotos: number }> = await this.api.delete(`/upload/camp-photo/${campId}`);
+    return response.data;
+  }
+
   async deletePhoto(publicId: string): Promise<ApiResponse> {
     const response: AxiosResponse<ApiResponse> = await this.api.delete(`/upload/photo/${publicId}`);
     return response.data;

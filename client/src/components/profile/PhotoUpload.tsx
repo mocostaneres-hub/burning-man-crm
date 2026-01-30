@@ -17,6 +17,7 @@ interface PhotoUploadProps {
   isEditing: boolean;
   context?: 'user' | 'camp'; // Context for upload (user profile or camp)
   campId?: string; // Required if context === 'camp'
+  onUploadComplete?: () => void; // Callback after successful upload (for camp context to refresh data)
 }
 
 const PhotoUpload: React.FC<PhotoUploadProps> = ({
@@ -26,12 +27,15 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
   onPhotosChange,
   isEditing,
   context = 'user', // Default to user context for backward compatibility
-  campId
+  campId,
+  onUploadComplete
 }) => {
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,11 +100,14 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
           if (onPhotoChange) {
             onPhotoChange(response.photoUrl);
           }
-          // For camp context, photos are managed server-side, so don't update local state
-          // For user context, update the photos array
+          // For user context, update the photos array locally
           if (onPhotosChange && photos && context === 'user') {
             // User photos are always strings, so safe to spread
             onPhotosChange([response.photoUrl, ...(photos as string[]).slice(1)]);
+          }
+          // For camp context, trigger refresh to get updated data from server
+          if (context === 'camp' && onUploadComplete) {
+            onUploadComplete();
           }
           setPreview(null);
           setImageError(false);
@@ -141,18 +148,52 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
   };
 
-  const handleRemovePhoto = () => {
-    if (onPhotoChange) {
-      onPhotoChange('');
+  const handleRemovePhoto = async () => {
+    try {
+      setDeleting(true);
+      setError(null);
+
+      if (context === 'camp') {
+        // For camp photos, delete from server
+        if (!campId) {
+          throw new Error('Camp ID is required to delete photo');
+        }
+        
+        console.log('🗑️ Deleting camp photo for camp:', campId);
+        await apiService.deleteCampPhoto(campId);
+        console.log('✅ Camp photo deleted successfully');
+        
+        // Trigger refresh to get updated data from server
+        if (onUploadComplete) {
+          onUploadComplete();
+        }
+      } else {
+        // For user photos, update local state
+        if (onPhotoChange) {
+          onPhotoChange('');
+        }
+        if (onPhotosChange && photos) {
+          onPhotosChange((photos as string[]).slice(1));
+        }
+      }
+      
+      setPreview(null);
+      setImageError(false);
+      setShowDeleteConfirm(false);
+    } catch (error: any) {
+      console.error('Photo deletion error:', error);
+      let errorMessage = 'Failed to delete photo. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setDeleting(false);
     }
-    // For camp context, photos are managed server-side
-    // For user context, update the photos array
-    if (onPhotosChange && photos && context === 'user') {
-      onPhotosChange((photos as string[]).slice(1));
-    }
-    setPreview(null);
-    setError(null);
-    setImageError(false);
   };
 
   const handleImageError = () => {
@@ -207,7 +248,7 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
           <Button
             variant="outline"
             onClick={handleCameraClick}
-            disabled={uploading}
+            disabled={uploading || deleting}
             size="sm"
             className="w-full"
           >
@@ -224,17 +265,55 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
             )}
           </Button>
           
-          {displayPhoto && (
+          {displayPhoto && !showDeleteConfirm && (
             <Button
               variant="outline"
-              onClick={handleRemovePhoto}
-              disabled={uploading}
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={uploading || deleting}
               size="sm"
               className="w-full text-red-600 border-red-600 hover:bg-red-50"
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Remove Photo
             </Button>
+          )}
+
+          {showDeleteConfirm && (
+            <div className="p-4 bg-yellow-50 border border-yellow-400 rounded-lg">
+              <p className="text-sm text-yellow-800 mb-3 font-medium">
+                ⚠️ This action is permanent. Are you sure you want to delete this photo?
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleRemovePhoto}
+                  disabled={deleting}
+                  size="sm"
+                  className="flex-1 text-red-600 border-red-600 hover:bg-red-50"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Yes, Delete
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                  size="sm"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       )}

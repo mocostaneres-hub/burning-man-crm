@@ -252,4 +252,86 @@ router.post('/camp-photo/:campId', authenticateToken, requireCampAccount, upload
   }
 });
 
+// @route   DELETE /api/upload/camp-photo/:campId
+// @desc    Delete primary camp photo
+// @access  Private (Camp account or Camp Admin)
+router.delete('/camp-photo/:campId', authenticateToken, requireCampAccount, async (req, res) => {
+  try {
+    console.log('🗑️ [Camp Photo Delete] Route handler started');
+    console.log('🗑️ [Camp Photo Delete] campId:', req.params.campId);
+    
+    const campId = req.params.campId;
+    
+    // Validate campId format for MongoDB
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(campId)) {
+      console.error('❌ [Camp Photo Delete] Invalid campId format:', campId);
+      return res.status(400).json({ message: 'Invalid camp ID format' });
+    }
+    
+    const camp = await db.findCamp({ _id: campId });
+    
+    if (!camp) {
+      console.log('❌ [Camp Photo Delete] Camp not found:', campId);
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Check if there are photos to delete
+    if (!camp.photos || camp.photos.length === 0) {
+      return res.status(404).json({ message: 'No photos to delete' });
+    }
+
+    // Get the first (primary) photo
+    const primaryPhoto = camp.photos[0];
+    const photoUrl = typeof primaryPhoto === 'string' ? primaryPhoto : primaryPhoto.url;
+
+    // Delete from Cloudinary if it's a Cloudinary URL
+    if (photoUrl && photoUrl.includes('cloudinary.com')) {
+      try {
+        // Extract public_id from Cloudinary URL
+        const urlParts = photoUrl.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        const publicId = `burning-man-crm/${filename.split('.')[0]}`;
+        
+        console.log('🗑️ [Camp Photo Delete] Deleting from Cloudinary:', publicId);
+        const result = await cloudinary.uploader.destroy(publicId);
+        console.log('🗑️ [Camp Photo Delete] Cloudinary result:', result);
+      } catch (cloudinaryError) {
+        console.error('⚠️ [Camp Photo Delete] Cloudinary deletion failed:', cloudinaryError.message);
+        // Continue anyway - we'll still remove from database
+      }
+    }
+
+    // Remove the first photo from the array
+    const updatedPhotos = camp.photos.slice(1);
+
+    console.log('🗑️ [Camp Photo Delete] Updating camp with', updatedPhotos.length, 'photos');
+
+    // Update camp using database adapter
+    const updatedCamp = await db.updateCampById(campId, {
+      photos: updatedPhotos,
+      updatedAt: new Date()
+    });
+
+    if (!updatedCamp) {
+      console.error('❌ [Camp Photo Delete] Failed to update camp');
+      return res.status(500).json({ message: 'Failed to delete photo from camp' });
+    }
+
+    console.log('✅ [Camp Photo Delete] Photo deleted successfully from camp:', campId);
+
+    res.json({
+      message: 'Camp photo deleted successfully',
+      remainingPhotos: updatedPhotos.length
+    });
+
+  } catch (error) {
+    console.error('❌ [Camp Photo Delete] Error:', error);
+    res.status(500).json({ 
+      message: 'Server error during photo deletion',
+      error: process.env.NODE_ENV !== 'production' ? error.message : 'Please contact support'
+    });
+  }
+});
+
 module.exports = router;

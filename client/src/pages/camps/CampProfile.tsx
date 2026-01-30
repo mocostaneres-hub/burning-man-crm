@@ -974,6 +974,7 @@ const CampProfile: React.FC = () => {
                 isEditing={isEditing}
                 context="camp"
                 campId={campId}
+                onUploadComplete={fetchCampProfile}
               />
               <p className="text-sm text-gray-600 mt-2">
                 Upload a photo to represent your camp. This will be displayed on your camp profile and in camp discovery.
