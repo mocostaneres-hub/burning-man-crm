@@ -1,13 +1,34 @@
 const { Resend } = require('resend');
 
 // Initialize Resend with API key from environment variables
-let resend;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-  console.log('✅ Resend initialized successfully');
-} else {
-  console.warn('⚠️  RESEND_API_KEY not found in environment variables');
+// CRITICAL: Fail-fast if not configured properly
+if (!process.env.RESEND_API_KEY) {
+  throw new Error('CRITICAL: RESEND_API_KEY environment variable is required for email service');
 }
+
+if (!process.env.RESEND_FROM_EMAIL) {
+  throw new Error('CRITICAL: RESEND_FROM_EMAIL environment variable is required for email service');
+}
+
+// Validate API key format
+if (!process.env.RESEND_API_KEY.startsWith('re_')) {
+  throw new Error('CRITICAL: RESEND_API_KEY appears invalid (should start with "re_")');
+}
+
+// Warn if using test domain
+const fromDomain = process.env.RESEND_FROM_EMAIL.split('@')[1];
+if (fromDomain === 'resend.dev') {
+  console.warn('⚠️  ═══════════════════════════════════════');
+  console.warn('⚠️  WARNING: Using Resend TEST domain (resend.dev)');
+  console.warn('⚠️  This is OK for development, but NOT for production');
+  console.warn('⚠️  Test domains cannot send real emails');
+  console.warn('⚠️  Add and verify your domain at resend.com/domains');
+  console.warn('⚠️  ═══════════════════════════════════════');
+}
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+console.log('✅ Resend initialized successfully');
+console.log('📧 Sending emails from:', process.env.RESEND_FROM_EMAIL);
 
 /**
  * Send an email using Resend
@@ -29,8 +50,22 @@ const sendEmail = async ({
   fromName = process.env.RESEND_FROM_NAME || 'G8Road'
 }) => {
   try {
+    // This check is now redundant (init throws if missing) but kept for safety
     if (!process.env.RESEND_API_KEY) {
       throw new Error('Resend API key is not configured');
+    }
+    
+    // Additional validation
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+      throw new Error('Email recipient (to) is required');
+    }
+    
+    if (!subject || subject.trim() === '') {
+      throw new Error('Email subject is required');
+    }
+    
+    if (!html && !text) {
+      throw new Error('Email must have either HTML or text content');
     }
 
     // Resend requires from to be in "Name <email>" format or just email
@@ -51,10 +86,20 @@ const sendEmail = async ({
     console.log('📧 Email ID:', response.data?.id);
     return response;
   } catch (error) {
-    console.error('❌ Error sending email:', error);
-    if (error.message) {
-      console.error('Resend Error Message:', error.message);
+    console.error('❌ ═══════════════════════════════════════');
+    console.error('❌ RESEND EMAIL SEND FAILURE');
+    console.error('❌ ═══════════════════════════════════════');
+    console.error('Error Message:', error.message);
+    console.error('Error Name:', error.name);
+    console.error('HTTP Status:', error.statusCode);
+    if (error.response) {
+      console.error('Resend Response:', JSON.stringify(error.response, null, 2));
     }
+    console.error('Email Details:');
+    console.error('  To:', Array.isArray(to) ? to.join(', ') : to);
+    console.error('  From:', process.env.RESEND_FROM_EMAIL);
+    console.error('  Subject:', subject);
+    console.error('❌ ═══════════════════════════════════════');
     throw error;
   }
 };
