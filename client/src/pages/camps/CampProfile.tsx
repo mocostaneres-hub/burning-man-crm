@@ -983,24 +983,28 @@ const CampProfile: React.FC = () => {
             <div className="space-y-4">
               {campData.photos && campData.photos.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {campData.photos.map((photo, index) => (
-                    <div
-                      key={index}
-                      className="aspect-square rounded-lg overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <img
-                        src={photo}
-                        alt={`Camp photo ${index + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.error('🖼️ [CampProfile] Image failed to load:', photo.substring(0, 100));
-                        }}
-                        onLoad={() => {
-                          console.log('✅ [CampProfile] Image loaded successfully:', index);
-                        }}
-                      />
-                    </div>
-                  ))}
+                  {campData.photos.map((photo, index) => {
+                    // Handle both string (legacy) and object (new) photo formats
+                    const photoUrl = typeof photo === 'string' ? photo : photo.url;
+                    return (
+                      <div
+                        key={index}
+                        className="aspect-square rounded-lg overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Camp photo ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            console.error('🖼️ [CampProfile] Image failed to load:', photoUrl.substring(0, 100));
+                          }}
+                          onLoad={() => {
+                            console.log('✅ [CampProfile] Image loaded successfully:', index);
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">

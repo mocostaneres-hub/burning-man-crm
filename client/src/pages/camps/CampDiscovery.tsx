@@ -409,21 +409,25 @@ const CampDiscovery: React.FC = () => {
             >
               <div className="flex flex-col md:flex-row">
                 {/* Camp Photo - Left Side */}
-                {camp.photos && camp.photos.length > 0 && (
-                  <div className="md:w-1/3 lg:w-1/4">
-                    <img
-                      src={camp.photos[Math.min(camp.primaryPhotoIndex || 0, camp.photos.length - 1)]}
-                      alt={camp.campName || 'Camp Photo'}
-                      className="w-full h-64 md:h-full object-cover md:rounded-l-lg"
-                      onError={(e) => {
-                        console.error('🖼️ [CampDiscovery] Image failed to load:', e.currentTarget.src);
-                      }}
-                      onLoad={() => {
-                        console.log('✅ [CampDiscovery] Image loaded successfully');
-                      }}
-                    />
-                  </div>
-                )}
+                {camp.photos && camp.photos.length > 0 && (() => {
+                  const photo = camp.photos[Math.min(camp.primaryPhotoIndex || 0, camp.photos.length - 1)];
+                  const photoUrl = typeof photo === 'string' ? photo : photo.url;
+                  return (
+                    <div className="md:w-1/3 lg:w-1/4">
+                      <img
+                        src={photoUrl}
+                        alt={camp.campName || 'Camp Photo'}
+                        className="w-full h-64 md:h-full object-cover md:rounded-l-lg"
+                        onError={(e) => {
+                          console.error('🖼️ [CampDiscovery] Image failed to load:', e.currentTarget.src);
+                        }}
+                        onLoad={() => {
+                          console.log('✅ [CampDiscovery] Image loaded successfully');
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
 
                 {/* Camp Info - Right Side */}
                 <div className={`flex-1 p-6 ${camp.photos && camp.photos.length > 0 ? '' : 'w-full'}`}>

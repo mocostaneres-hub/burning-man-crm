@@ -75,18 +75,22 @@ const CampProfileDisplay: React.FC<CampProfileDisplayProps> = ({ camp, onEdit })
                   Photos
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {camp.photos.map((photo, index) => (
-                    <div
-                      key={index}
-                      className="h-48 rounded-lg overflow-hidden border border-gray-200"
-                    >
-                      <img
-                        src={photo}
-                        alt={`Camp photo ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
+                  {camp.photos.map((photo, index) => {
+                    // Handle both string (legacy) and object (new) photo formats
+                    const photoUrl = typeof photo === 'string' ? photo : photo.url;
+                    return (
+                      <div
+                        key={index}
+                        className="h-48 rounded-lg overflow-hidden border border-gray-200"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Camp photo ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
