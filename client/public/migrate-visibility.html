@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restore Camp Visibility</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .status-box {
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .log {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Restore Camp Visibility</h1>
+        <p class="subtitle">This will restore visibility for camps that have photos but aren't showing publicly</p>
+        
+        <div class="status-box">
+            <h3>What this does:</h3>
+            <ul>
+                <li>✅ Sets <code>isPubliclyVisible = true</code> for camps where <code>isPublic = true</code></li>
+                <li>✅ <strong>SAFE:</strong> Only adds the missing flag, doesn't modify photos or other data</li>
+                <li>✅ Will restore visibility for ~16 camps</li>
+            </ul>
+        </div>
+
+        <div style="margin: 30px 0;">
+            <button id="checkStatus" onclick="checkStatus()">1️⃣ Check Status</button>
+            <button id="runMigration" onclick="runMigration()" disabled>2️⃣ Run Migration</button>
+        </div>
+
+        <div id="result"></div>
+        <div id="log" class="log" style="display:none;"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://api.g8road.com/api';
+        
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            logDiv.textContent += message + '\n';
+        }
+        
+        async function checkStatus() {
+            const resultDiv = document.getElementById('result');
+            const token = getToken();
+            
+            if (!token) {
+                resultDiv.innerHTML = '<div class="error">❌ Not logged in! Please log in first at <a href="https://www.g8road.com">g8road.com</a></div>';
+                return;
+            }
+            
+            log('🔍 Checking migration status...');
+            document.getElementById('checkStatus').disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/migrate-visibility/status`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                log(`✅ Status check complete`);
+                log(`   Total camps: ${data.totalCamps}`);
+                log(`   Visible camps: ${data.visibleCamps}`);
+                log(`   Camps with old flag: ${data.oldPublicCamps}`);
+                log(`   Needs migration: ${data.needsMigration}`);
+                
+                if (data.needsMigration > 0) {
+                    resultDiv.innerHTML = `<div class="status-box">
+                        <h3>📊 Migration Status</h3>
+                        <p><strong>${data.needsMigration} camps need migration</strong></p>
+                        <ul>
+                            <li>Total camps: ${data.totalCamps}</li>
+                            <li>Currently visible: ${data.visibleCamps}</li>
+                            <li>Will be visible after migration: ${data.oldPublicCamps}</li>
+                        </ul>
+                        <p>✅ Ready to migrate ${data.needsMigration} camps</p>
+                    </div>`;
+                    document.getElementById('runMigration').disabled = false;
+                } else {
+                    resultDiv.innerHTML = '<div class="success">✅ All camps already migrated! No action needed.</div>';
+                }
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+                resultDiv.innerHTML = `<div class="error">❌ Error checking status: ${error.message}</div>`;
+            } finally {
+                document.getElementById('checkStatus').disabled = false;
+            }
+        }
+        
+        async function runMigration() {
+            const resultDiv = document.getElementById('result');
+            const token = getToken();
+            
+            if (!token) {
+                resultDiv.innerHTML = '<div class="error">❌ Not logged in! Please log in first.</div>';
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to run the migration? This will restore visibility for hidden camps.')) {
+                return;
+            }
+            
+            log('\n🚀 Starting migration...');
+            document.getElementById('runMigration').disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/migrate-visibility/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                log(`✅ Migration complete!`);
+                log(`   Camps checked: ${data.summary.campsChecked}`);
+                log(`   Migrated: ${data.summary.migratedCount}`);
+                log(`   Errors: ${data.summary.errorCount}`);
+                log(`   Final visible count: ${data.summary.finalVisibleCount}`);
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="success">
+                        <h3>✅ Migration Successful!</h3>
+                        <p>${data.message}</p>
+                        <ul>
+                            <li>Camps migrated: ${data.summary.migratedCount}</li>
+                            <li>Total visible camps: ${data.summary.finalVisibleCount}</li>
+                        </ul>
+                        <p><strong>🎉 Your camps are now visible again!</strong></p>
+                        <p>Refresh the camp discovery page to see them.</p>
+                    </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">
+                        <h3>⚠️ Migration completed with issues</h3>
+                        <p>${data.message}</p>
+                        ${data.errors ? `<p>Errors: ${data.errors.join(', ')}</p>` : ''}
+                    </div>`;
+                }
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+                resultDiv.innerHTML = `<div class="error">❌ Migration failed: ${error.message}</div>`;
+            } finally {
+                // Keep button disabled after successful migration
+                if (!document.querySelector('.success')) {
+                    document.getElementById('runMigration').disabled = false;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
