@@ -3,9 +3,15 @@ import { Button } from '../ui';
 import { Camera, Trash2, Upload, Loader2 } from 'lucide-react';
 import apiService from '../../services/api';
 
+interface CampPhoto {
+  url: string;
+  caption: string;
+  isPrimary: boolean;
+}
+
 interface PhotoUploadProps {
   profilePhoto?: string;
-  photos?: string[];
+  photos?: string[] | CampPhoto[]; // Support both legacy string[] and new object format
   onPhotoChange?: (photoUrl: string) => void;
   onPhotosChange?: (photos: string[]) => void;
   isEditing: boolean;
@@ -154,7 +160,14 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
     fileInputRef.current?.click();
   };
 
-  const displayPhoto = preview || profilePhoto || (photos && photos.length > 0 ? photos[0] : null);
+  // Helper function to extract photo URL from either string or object format
+  const getPhotoUrl = (photo: string | CampPhoto | undefined): string | null => {
+    if (!photo) return null;
+    if (typeof photo === 'string') return photo;
+    return photo.url; // Extract URL from photo object
+  };
+
+  const displayPhoto = preview || profilePhoto || (photos && photos.length > 0 ? getPhotoUrl(photos[0]) : null);
 
   return (
     <div className="text-center">
