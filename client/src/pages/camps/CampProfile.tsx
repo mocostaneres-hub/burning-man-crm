@@ -25,6 +25,12 @@ interface SelectedPerk {
   isOn: boolean;
 }
 
+interface CampPhoto {
+  url: string;
+  caption: string;
+  isPrimary: boolean;
+}
+
 interface CampProfileData {
   campName: string;
   burningSince: number;
@@ -82,7 +88,7 @@ interface CampProfileData {
     time: string;
     description: string;
   };
-  photos: string[];
+  photos: CampPhoto[]; // Updated to match backend schema (array of photo objects, not strings)
   visibility: 'public' | 'private';
 }
 
@@ -427,8 +433,10 @@ const CampProfile: React.FC = () => {
       console.log('🔍 [CampProfile] Camp ID:', campId);
       
       // Prepare data for saving, including new fields
+      // IMPORTANT: Exclude 'photos' field - photos are managed separately via upload endpoint
+      const { photos, ...campDataWithoutPhotos } = campData;
       const saveData = {
-        ...campData,
+        ...campDataWithoutPhotos,
         name: campData.campName, // Backend expects 'name' not 'campName'
         categories: campData.categories, // Array of category IDs
         selectedPerks: campData.selectedPerks, // Array of selected perks
