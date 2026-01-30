@@ -338,8 +338,8 @@ campSchema.virtual('primaryPhoto').get(function() {
 
 // Note: Slug generation is now handled in the route handlers
 // to ensure uniqueness checking is performed properly
-// Pre-save hook 1: Defensive validation to ensure owner is always set
-campSchema.pre('save', function(next) {
+// Pre-save hook 1: Defensive validation to ensure owner is always set and exists
+campSchema.pre('save', async function(next) {
   // CRITICAL: Validate owner is set
   if (!this.owner) {
     const error = new Error('Camp owner is required and cannot be null');
@@ -361,6 +361,27 @@ campSchema.pre('save', function(next) {
       owner: this.owner
     });
     return next(error);
+  }
+  
+  // Validate that owner user exists (only on new camps or owner changes)
+  if (this.isNew || this.isModified('owner')) {
+    try {
+      const User = mongoose.model('User');
+      const ownerExists = await User.exists({ _id: this.owner });
+      
+      if (!ownerExists) {
+        const error = new Error('Camp owner must be a valid user');
+        error.code = 'OWNER_USER_NOT_FOUND';
+        console.error('❌ [Camp Model] Pre-save validation failed: Owner user does not exist', {
+          campId: this._id,
+          ownerId: this.owner
+        });
+        return next(error);
+      }
+    } catch (validationError) {
+      console.error('❌ [Camp Model] Error validating owner:', validationError);
+      return next(validationError);
+    }
   }
   
   next();

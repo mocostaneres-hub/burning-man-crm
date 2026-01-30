@@ -23,7 +23,11 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      // Password only required if user has 'password' auth provider
+      // OAuth users don't need passwords
+      return this.authProviders && this.authProviders.includes('password');
+    },
     minlength: 6
   },
   
@@ -228,9 +232,18 @@ userSchema.index({ appleId: 1 }, { sparse: true, unique: true }); // OAuth provi
 userSchema.index({ 'location.city': 1, 'location.state': 1 });
 userSchema.index({ 'campLocation.city': 1, 'campLocation.state': 1 });
 
-// Hash password before saving
+// Normalize email before saving (ensures consistency)
+userSchema.pre('save', function(next) {
+  if (this.isModified('email') && this.email) {
+    this.email = this.email.toLowerCase().trim();
+  }
+  next();
+});
+
+// Hash password before saving (only if password exists)
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  // Skip if password wasn't modified or doesn't exist (OAuth users)
+  if (!this.isModified('password') || !this.password) return next();
   
   try {
     const salt = await bcrypt.genSalt(12);
@@ -262,20 +275,47 @@ userSchema.pre('save', async function(next) {
         let slug = baseSlug;
         let counter = 1;
         const User = mongoose.model('User');
+        const maxAttempts = 100; // Safety limit
         
         // Only check for uniqueness if slug was actually modified
         if (this.isModified('urlSlug') || !this.urlSlug) {
-          while (await User.findOne({ urlSlug: slug, _id: { $ne: this._id } })) {
-            slug = `${baseSlug}-${counter}`;
-            counter++;
+          let attempts = 0;
+          let isUnique = false;
+          
+          while (!isUnique && attempts < maxAttempts) {
+            // Use findOne with projection for better performance
+            const existing = await User.findOne(
+              { urlSlug: slug, _id: { $ne: this._id } },
+              { _id: 1 }
+            ).lean();
+            
+            if (!existing) {
+              isUnique = true;
+              this.urlSlug = slug;
+            } else {
+              counter++;
+              slug = `${baseSlug}-${counter}`;
+              attempts++;
+            }
           }
-          this.urlSlug = slug;
+          
+          if (!isUnique) {
+            // Fallback to UUID-based slug if too many collisions
+            const { v4: uuidv4 } = require('uuid');
+            this.urlSlug = `${baseSlug}-${uuidv4().substring(0, 8)}`;
+            console.warn(`⚠️ [User Model] Generated UUID-based slug after ${maxAttempts} attempts: ${this.urlSlug}`);
+          }
         }
       }
     }
     next();
   } catch (error) {
     console.error('❌ [User Model] Error generating URL slug:', error);
+    // On error, try to set a safe default
+    if (!this.urlSlug) {
+      const { v4: uuidv4 } = require('uuid');
+      this.urlSlug = `user-${uuidv4().substring(0, 8)}`;
+    }
     next(error);
   }
 });

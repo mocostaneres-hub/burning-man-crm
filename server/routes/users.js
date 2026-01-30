@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
+const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
 
@@ -91,11 +92,24 @@ router.put('/profile', authenticateToken, [
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     }
 
-    // Update only allowed fields
+    // Update only allowed fields with deep merge for nested objects
     const updates = {};
+    const nestedObjectFields = ['socialMedia', 'location', 'preferences', 'campSocialMedia', 'campLocation'];
+    
     Object.keys(req.body).forEach(key => {
       if (allowedFields.includes(key)) {
-        updates[key] = req.body[key];
+        // Deep merge for nested objects to preserve existing fields
+        if (nestedObjectFields.includes(key) && 
+            typeof req.body[key] === 'object' && 
+            req.body[key] !== null && 
+            !Array.isArray(req.body[key])) {
+          // Merge with existing value
+          const existingValue = user[key] || {};
+          updates[key] = _.merge({}, existingValue, req.body[key]);
+        } else {
+          // Direct assignment for non-nested fields and arrays
+          updates[key] = req.body[key];
+        }
       }
     });
 

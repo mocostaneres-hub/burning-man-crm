@@ -6,12 +6,24 @@ const { authenticateToken } = require('../middleware/auth');
 const { sendWelcomeEmail } = require('../services/emailService');
 const ImpersonationToken = require('../models/ImpersonationToken');
 const { recordActivity } = require('../services/activityLogger');
+const { normalizeEmail } = require('../utils/emailUtils');
 
 const router = express.Router();
 
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+// Generate JWT token with rich claims
+const generateToken = (user) => {
+  // Support both user object and userId for backward compatibility
+  const userId = user._id || user;
+  const payload = {
+    userId: userId.toString(),
+    // Include additional claims for better performance (reduces DB lookups)
+    accountType: user.accountType || undefined,
+    role: user.role || undefined,
+    campId: user.campId ? user.campId.toString() : undefined,
+    email: user.email || undefined
+  };
+  
+  return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
@@ -35,8 +47,11 @@ router.post('/register', [
 
     const { email, password, accountType, firstName, lastName, campName } = req.body;
 
+    // Normalize email for consistency
+    const normalizedEmail = normalizeEmail(email);
+
     // Check if user already exists
-    const existingUser = await db.findUser({ email });
+    const existingUser = await db.findUser({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: 'Email already registered' });
     }
@@ -52,7 +67,7 @@ router.post('/register', [
 
     // Create user data
     const userData = {
-      email,
+      email: normalizedEmail,
       password,
       accountType,
       role: 'unassigned', // New users start with unassigned role
@@ -71,8 +86,8 @@ router.post('/register', [
     // Registration only creates the user account - onboarding will handle camp setup
     const user = await db.createUser(userData);
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token with user context
+    const token = generateToken(user);
 
     // Return user data (without password)
     // Convert Mongoose document to plain object if needed
@@ -123,8 +138,11 @@ router.post('/login', [
 
     const { email, password } = req.body;
 
+    // Normalize email for consistency
+    const normalizedEmail = normalizeEmail(email);
+
     // Find user in database
-    const user = await db.findUser({ email });
+    const user = await db.findUser({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -165,10 +183,10 @@ router.post('/login', [
     }
 
     // Update last login
-    await db.updateUser(email, { lastLogin: new Date() });
+    await db.updateUser(normalizedEmail, { lastLogin: new Date() });
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token with user context
+    const token = generateToken(user);
 
     // Return user data (without password)
     // Convert Mongoose document to plain object if needed
@@ -226,7 +244,10 @@ router.post('/forgot-password', [
 
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
+    // Normalize email for consistency
+    const normalizedEmail = normalizeEmail(email);
+
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       // Don't reveal if email exists or not
       return res.json({ message: 'If email exists, reset instructions sent' });
@@ -355,7 +376,7 @@ router.get('/impersonate', async (req, res) => {
     await impersonationToken.save();
 
     // Generate JWT token for the target user
-    const userToken = generateToken(targetUser._id);
+    const userToken = generateToken(targetUser);
 
     // Log successful impersonation based on account type
     if (targetUser.accountType === 'camp') {
