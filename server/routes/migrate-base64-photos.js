@@ -150,23 +150,33 @@ router.post('/run', authenticateToken, async (req, res) => {
         
         // Handle both string and object formats
         let photoStr = null;
+        let isCharacterObject = false;
+        
         if (typeof photo === 'string') {
           photoStr = photo;
         } else if (photo && typeof photo === 'object') {
           // Try to reconstruct string from character object
           const keys = Object.keys(photo).filter(k => !isNaN(k)).sort((a, b) => Number(a) - Number(b));
-          if (keys.length > 0) {
+          if (keys.length > 10) { // Character objects have many numeric keys
             photoStr = keys.map(k => photo[k]).join('');
+            isCharacterObject = true;
+            console.log(`🔄 [Migrate BASE64] Reconstructed string from character object (${keys.length} chars)`);
+          } else if (photo.url) {
+            // Already proper photo object with url
+            photoStr = photo.url;
           }
         }
         
         if (!photoStr) {
+          console.log(`⚠️ [Migrate BASE64] Skipping photo ${i} - couldn't extract string`);
           newPhotos.push(photo); // Keep as-is if we can't process it
           continue;
         }
         
+        console.log(`🔍 [Migrate BASE64] Photo ${i}: type=${typeof photo}, isCharObj=${isCharacterObject}, starts with=${photoStr.substring(0, 20)}`);
+        
         // Check if it's base64
-        if (photoStr.startsWith('data:image/')) {
+        if (photoStr.startsWith('data:image/') || isCharacterObject) {
           campNeedsMigration = true;
           
           try {
