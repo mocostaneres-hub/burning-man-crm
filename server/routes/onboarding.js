@@ -168,13 +168,16 @@ router.post('/select-role', [
       await session.commitTransaction();
       console.log('✅ [Onboarding] Transaction committed successfully');
 
-      // Fetch the fully updated user to ensure we have all the latest data
-      const finalUser = await db.findUserById(userId);
+      // Use the updatedUser we already have instead of fetching again
+      // (Fetching immediately after commit can sometimes fail due to replication lag)
+      console.log('📋 [Onboarding] Preparing response with updatedUser');
       
       // Return success response with user data
-      const userResponse = finalUser.toObject ? finalUser.toObject() : { ...finalUser };
+      const userResponse = updatedUser.toObject ? updatedUser.toObject() : { ...updatedUser };
       delete userResponse.password;
 
+      console.log('✅ [Onboarding] Sending success response');
+      
       res.json({
         message: 'Role selected successfully',
         user: userResponse,
