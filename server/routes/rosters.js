@@ -956,7 +956,19 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     });
 
     // Find the member in the roster
-    const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
+    // Handle both populated member objects and member ID strings
+    const memberIndex = roster.members.findIndex(m => {
+      if (!m.member) return false;
+      
+      // If member is populated (object), compare by _id
+      if (typeof m.member === 'object' && m.member._id) {
+        return m.member._id.toString() === memberId.toString();
+      }
+      
+      // If member is just an ID (string/ObjectId)
+      return m.member.toString() === memberId.toString();
+    });
+    
     if (memberIndex === -1) {
       console.error('❌ [Dues Update] Member not found in roster:', memberId);
       return res.status(404).json({ message: 'Member not found in roster' });
@@ -1008,7 +1020,13 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     
     // Verify the save
     const verifyRoster = await db.findRoster({ _id: roster._id });
-    const verifyMember = verifyRoster.members.find(m => m.member.toString() === memberId.toString());
+    const verifyMember = verifyRoster.members.find(m => {
+      if (!m.member) return false;
+      if (typeof m.member === 'object' && m.member._id) {
+        return m.member._id.toString() === memberId.toString();
+      }
+      return m.member.toString() === memberId.toString();
+    });
     console.log('🔍 [Dues Update] Verified after save - duesStatus:', verifyMember?.duesStatus);
 
     res.json({ 
@@ -1084,10 +1102,28 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     console.log('✅ [Roster Override] Roster found:', { rosterId: roster._id, membersCount: roster.members?.length });
 
     // Find the member in the roster
+    // Handle both populated member objects and member ID strings
     console.log('🔍 [Roster Override] Searching for member in roster...');
-    const memberIndex = roster.members.findIndex(m => m.member.toString() === memberId.toString());
+    const memberIndex = roster.members.findIndex(m => {
+      if (!m.member) return false;
+      
+      // If member is populated (object), compare by _id
+      if (typeof m.member === 'object' && m.member._id) {
+        return m.member._id.toString() === memberId.toString();
+      }
+      
+      // If member is just an ID (string/ObjectId)
+      return m.member.toString() === memberId.toString();
+    });
+    
     if (memberIndex === -1) {
-      console.error('❌ [Roster Override] Member not found in roster:', { memberId, rosterMembers: roster.members.map(m => m.member.toString()) });
+      console.error('❌ [Roster Override] Member not found in roster:', { 
+        memberId, 
+        availableMembers: roster.members.map(m => {
+          const id = typeof m.member === 'object' ? m.member?._id?.toString() : m.member?.toString();
+          return id;
+        })
+      });
       return res.status(404).json({ message: 'Member not found in roster' });
     }
 
@@ -1472,9 +1508,13 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     // Find the specific member entry in the roster
     let targetMemberEntry = null;
     for (const memberEntry of activeRoster.members) {
-      console.log('📝 [DUES UPDATE] Comparing:', memberEntry.member, 'vs', memberId, 
-        '| toString comparison:', memberEntry.member?.toString() === memberId);
-      if (memberEntry.member && memberEntry.member.toString() === memberId) {
+      const memberId_str = typeof memberEntry.member === 'object' && memberEntry.member._id 
+        ? memberEntry.member._id.toString() 
+        : memberEntry.member?.toString();
+      
+      console.log('📝 [DUES UPDATE] Comparing:', memberId_str, 'vs', memberId);
+      
+      if (memberId_str === memberId) {
         targetMemberEntry = memberEntry;
         break;
       }
@@ -1502,9 +1542,13 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     console.log('📝 [DUES UPDATE] Update payload:', updatePayload);
     
     // Find the index of the member entry in the roster for targeted update
-    const memberIndex = activeRoster.members.findIndex(memberEntry => 
-      memberEntry.member && memberEntry.member.toString() === memberId
-    );
+    const memberIndex = activeRoster.members.findIndex(memberEntry => {
+      if (!memberEntry.member) return false;
+      if (typeof memberEntry.member === 'object' && memberEntry.member._id) {
+        return memberEntry.member._id.toString() === memberId;
+      }
+      return memberEntry.member.toString() === memberId;
+    });
     
     if (memberIndex === -1) {
       console.log('❌ [DUES UPDATE] Member index not found in roster');
