@@ -92,12 +92,14 @@ router.post('/select-role', [
       if (role === 'camp_lead') {
         // Update accountType to 'camp'
         if (updatedUser.accountType !== 'camp') {
-          await User.findByIdAndUpdate(
+          const userWithAccountType = await User.findByIdAndUpdate(
             userId,
             { accountType: 'camp', updatedAt: new Date() },
-            { session }
+            { new: true, session }
           );
-          updatedUser.accountType = 'camp';
+          if (userWithAccountType) {
+            updatedUser.accountType = userWithAccountType.accountType;
+          }
           console.log('✅ [Onboarding] Updated accountType to: camp');
         }
 
@@ -134,18 +136,20 @@ router.post('/select-role', [
           console.log('✅ [Onboarding] Camp created:', camp._id);
 
           // Update user with campId and urlSlug
-          await User.findByIdAndUpdate(
+          const userWithCamp = await User.findByIdAndUpdate(
             user._id,
             { 
               campId: camp._id,
               urlSlug: slug,
               updatedAt: new Date()
             },
-            { session }
+            { new: true, session }
           );
           
-          updatedUser.campId = camp._id;
-          updatedUser.urlSlug = slug;
+          if (userWithCamp) {
+            updatedUser.campId = userWithCamp.campId;
+            updatedUser.urlSlug = userWithCamp.urlSlug;
+          }
 
           console.log('✅ [Onboarding] Linked user to camp');
         } else {
@@ -155,12 +159,14 @@ router.post('/select-role', [
 
       // For member role, ensure accountType is 'personal'
       if (role === 'member' && updatedUser.accountType !== 'personal') {
-        await User.findByIdAndUpdate(
+        const userWithAccountType = await User.findByIdAndUpdate(
           userId,
           { accountType: 'personal', updatedAt: new Date() },
           { session }
         );
-        updatedUser.accountType = 'personal';
+        if (userWithAccountType) {
+          updatedUser.accountType = userWithAccountType.accountType;
+        }
         console.log('✅ [Onboarding] Updated accountType to: personal');
       }
 
