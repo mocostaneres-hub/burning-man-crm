@@ -99,9 +99,10 @@ router.post('/select-role', [
             { accountType: 'camp', updatedAt: new Date() },
             { new: true }
           );
-          if (userWithAccountType) {
-            updatedUser.accountType = userWithAccountType.accountType;
+          if (!userWithAccountType) {
+            throw new Error('Failed to update user accountType to camp');
           }
+          updatedUser.accountType = userWithAccountType.accountType;
           console.log('✅ [Onboarding] Updated accountType to: camp');
         }
 
@@ -135,6 +136,10 @@ router.post('/select-role', [
           const camp = new Camp(campData);
           await camp.save();
 
+          if (!camp._id) {
+            throw new Error('Failed to create camp - no ID returned');
+          }
+
           console.log('✅ [Onboarding] Camp created:', camp._id);
 
           // Update user with campId and urlSlug
@@ -148,10 +153,15 @@ router.post('/select-role', [
             { new: true }
           );
           
-          if (userWithCamp) {
-            updatedUser.campId = userWithCamp.campId;
-            updatedUser.urlSlug = userWithCamp.urlSlug;
+          if (!userWithCamp) {
+            // CRITICAL: Rollback camp creation if user linking fails
+            console.error('❌ [Onboarding] Failed to link user to camp, rolling back camp creation');
+            await Camp.findByIdAndDelete(camp._id);
+            throw new Error('Failed to link user to camp');
           }
+          
+          updatedUser.campId = userWithCamp.campId;
+          updatedUser.urlSlug = userWithCamp.urlSlug;
 
           console.log('✅ [Onboarding] Linked user to camp');
         } else {
@@ -160,16 +170,21 @@ router.post('/select-role', [
       }
 
       // For member role, ensure accountType is 'personal'
-      if (role === 'member' && updatedUser.accountType !== 'personal') {
-        const userWithAccountType = await User.findByIdAndUpdate(
-          userId,
-          { accountType: 'personal', updatedAt: new Date() },
-          { new: true }
-        );
-        if (userWithAccountType) {
+      if (role === 'member') {
+        if (updatedUser.accountType !== 'personal') {
+          const userWithAccountType = await User.findByIdAndUpdate(
+            userId,
+            { accountType: 'personal', updatedAt: new Date() },
+            { new: true }
+          );
+          if (!userWithAccountType) {
+            throw new Error('Failed to update user accountType to personal');
+          }
           updatedUser.accountType = userWithAccountType.accountType;
+          console.log('✅ [Onboarding] Updated accountType to: personal');
+        } else {
+          console.log('✅ [Onboarding] accountType already personal, no update needed');
         }
-        console.log('✅ [Onboarding] Updated accountType to: personal');
       }
 
       // ALL OPERATIONS COMPLETED
