@@ -19,6 +19,7 @@ import { canAssignCampLeadRole } from '../../utils/permissions';
 interface RosterMember extends Member {
   member?: Member; // Nested member structure from API
   isCampLead?: boolean; // Camp Lead role
+  rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
 }
 
 const MemberRoster: React.FC = () => {
