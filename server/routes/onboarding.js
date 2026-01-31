@@ -62,26 +62,13 @@ router.post('/select-role', [
       }
     }
 
-    // START TRANSACTION for atomicity (if supported by MongoDB)
-    // MongoDB transactions require a replica set
-    // For standalone MongoDB, operations will run without transactions
-    let session = null;
-    let useTransactions = false;
+    // SKIP TRANSACTIONS - Not supported on standalone MongoDB in production
+    // Onboarding operations are safe without transactions as they're mostly
+    // single-document updates. Atomicity not critical here.
+    const session = null;
+    const useTransactions = false;
     
-    try {
-      session = await mongoose.startSession();
-      await session.startTransaction();
-      useTransactions = true;
-      console.log('✅ [Onboarding] Transaction started successfully for role:', role, 'userId:', userId);
-    } catch (sessionError) {
-      console.warn('⚠️ [Onboarding] Transactions not supported (standalone MongoDB), continuing without transaction');
-      console.warn('⚠️ [Onboarding] Session error:', sessionError.message);
-      // CRITICAL: Set session to null so we don't try to use it
-      if (session) {
-        session.endSession();
-        session = null;
-      }
-    }
+    console.log('ℹ️ [Onboarding] Skipping transactions (not required for onboarding) for role:', role, 'userId:', userId);
 
     try {
       const User = require('../models/User');
@@ -94,7 +81,7 @@ router.post('/select-role', [
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         { role: role, updatedAt: new Date() },
-        { new: true, ...(session ? { session } : {}) }
+        { new: true }
       );
 
       if (!updatedUser) {
@@ -110,7 +97,7 @@ router.post('/select-role', [
           const userWithAccountType = await User.findByIdAndUpdate(
             userId,
             { accountType: 'camp', updatedAt: new Date() },
-            { new: true, ...(session ? { session } : {}) }
+            { new: true }
           );
           if (userWithAccountType) {
             updatedUser.accountType = userWithAccountType.accountType;
@@ -146,7 +133,7 @@ router.post('/select-role', [
 
           // Create camp record
           const camp = new Camp(campData);
-          await camp.save(session ? { session } : {});
+          await camp.save();
 
           console.log('✅ [Onboarding] Camp created:', camp._id);
 
@@ -158,7 +145,7 @@ router.post('/select-role', [
               urlSlug: slug,
               updatedAt: new Date()
             },
-            { new: true, ...(session ? { session } : {}) }
+            { new: true }
           );
           
           if (userWithCamp) {
@@ -177,7 +164,7 @@ router.post('/select-role', [
         const userWithAccountType = await User.findByIdAndUpdate(
           userId,
           { accountType: 'personal', updatedAt: new Date() },
-          { new: true, ...(session ? { session } : {}) }
+          { new: true }
         );
         if (userWithAccountType) {
           updatedUser.accountType = userWithAccountType.accountType;
@@ -185,13 +172,8 @@ router.post('/select-role', [
         console.log('✅ [Onboarding] Updated accountType to: personal');
       }
 
-      // COMMIT TRANSACTION (if using transactions)
-      if (useTransactions && session) {
-        await session.commitTransaction();
-        console.log('✅ [Onboarding] Transaction committed successfully');
-      } else {
-        console.log('✅ [Onboarding] Operations completed successfully (no transaction)');
-      }
+      // ALL OPERATIONS COMPLETED
+      console.log('✅ [Onboarding] Operations completed successfully (no transaction)');
 
       // Use the updatedUser we already have instead of fetching again
       // (Fetching immediately after commit can sometimes fail due to replication lag)
@@ -226,33 +208,28 @@ router.post('/select-role', [
         redirectTo: role === 'camp_lead' ? '/camp/edit' : '/user/profile'
       });
 
-    } catch (transactionError) {
-      // ROLLBACK TRANSACTION on any error (if using transactions)
-      if (useTransactions && session) {
-        await session.abortTransaction();
-        console.error('❌ [Onboarding] Transaction aborted:', transactionError);
-      } else {
-        console.error('❌ [Onboarding] Operation failed:', transactionError);
-      }
-      console.error('❌ [Onboarding] Error stack:', transactionError.stack);
+    } catch (onboardingError) {
+      // Log operation failure
+      console.error('❌ [Onboarding] Operation failed:', onboardingError);
+      console.error('❌ [Onboarding] Error stack:', onboardingError.stack);
       console.error('❌ [Onboarding] Error details:', {
-        name: transactionError.name,
-        message: transactionError.message,
-        code: transactionError.code,
+        name: onboardingError.name,
+        message: onboardingError.message,
+        code: onboardingError.code,
         role: role,
         userId: userId
       });
 
       // Return specific error messages
-      if (transactionError.code === 11000) {
+      if (onboardingError.code === 11000) {
         // Duplicate key error (shouldn't happen with generateUniqueCampSlug, but just in case)
         return res.status(409).json({ 
           message: 'A camp with this name already exists. Please try again or contact support.',
-          error: process.env.NODE_ENV === 'development' ? transactionError.message : undefined
+          error: process.env.NODE_ENV === 'development' ? onboardingError.message : undefined
         });
       }
 
-      if (transactionError.message.includes('Camp owner')) {
+      if (onboardingError.message.includes('Camp owner')) {
         return res.status(500).json({
           message: 'Unable to create camp. Please contact support.',
           supportEmail: process.env.SUPPORT_EMAIL || 'support@g8road.com'
@@ -262,13 +239,8 @@ router.post('/select-role', [
       // Generic error
       return res.status(500).json({ 
         message: 'Failed to complete onboarding. Please try again.',
-        error: process.env.NODE_ENV === 'development' ? transactionError.message : undefined
+        error: process.env.NODE_ENV === 'development' ? onboardingError.message : undefined
       });
-    } finally {
-      // Always end the session (if it was created)
-      if (session) {
-        session.endSession();
-      }
     }
 
   } catch (error) {
