@@ -49,16 +49,38 @@ export function canManageCamp(
 export function isCampOwner(user: User | null, campId: string | undefined): boolean {
   if (!user || !campId) return false;
 
-  // Camp owner
-  if (user.accountType === 'camp' && user.campId === campId) {
+  // For camp accounts, the campId is stored in user.campId OR user._id
+  // For admin accounts with camp affiliation, it's in user.campId
+  const userCampId = user.campId?.toString() || (user.accountType === 'camp' ? user._id?.toString() : undefined);
+
+  console.log('🔍 [isCampOwner] Checking:', {
+    userAccountType: user.accountType,
+    userCampId: user.campId,
+    userId: user._id,
+    derivedUserCampId: userCampId,
+    targetCampId: campId,
+    match: userCampId === campId
+  });
+
+  // Camp owner - compare derived campId
+  if (user.accountType === 'camp' && userCampId === campId) {
+    console.log('✅ [isCampOwner] User is camp owner');
     return true;
   }
 
-  // System admin (can act as owner)
+  // Admin with camp affiliation
+  if (user.accountType === 'admin' && user.campId && user.campId.toString() === campId) {
+    console.log('✅ [isCampOwner] User is camp-affiliated admin');
+    return true;
+  }
+
+  // System admin (can act as owner for any camp)
   if (user.accountType === 'admin' && !user.campId) {
+    console.log('✅ [isCampOwner] User is system admin');
     return true;
   }
 
+  console.log('❌ [isCampOwner] User is not camp owner');
   return false;
 }
 
@@ -93,6 +115,22 @@ export function isCampLead(
  * @returns boolean
  */
 export function canAssignCampLeadRole(user: User | null, campId: string | undefined): boolean {
+  if (!user || !campId) {
+    console.log('🔍 [canAssignCampLeadRole] Missing user or campId:', { user: !!user, campId });
+    return false;
+  }
+
+  console.log('🔍 [canAssignCampLeadRole] Checking:', {
+    userAccountType: user.accountType,
+    userCampId: user.campId,
+    targetCampId: campId,
+    match: user.campId === campId,
+    userCampIdType: typeof user.campId,
+    targetCampIdType: typeof campId
+  });
+
   // Only camp owners can assign roles
-  return isCampOwner(user, campId);
+  const result = isCampOwner(user, campId);
+  console.log('🔍 [canAssignCampLeadRole] Result:', result);
+  return result;
 }
