@@ -86,9 +86,10 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
           </Button>
           <Button
             onClick={onConfirm}
-            variant={isGrant ? 'primary' : 'danger'}
+            variant="primary"
             disabled={loading}
             loading={loading}
+            className={isGrant ? '' : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'}
           >
             {isGrant ? 'Grant Access' : 'Revoke Access'}
           </Button>
