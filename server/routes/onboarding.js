@@ -72,10 +72,15 @@ router.post('/select-role', [
       session = await mongoose.startSession();
       await session.startTransaction();
       useTransactions = true;
-      console.log('🔄 [Onboarding] Transaction started for role:', role, 'userId:', userId);
+      console.log('✅ [Onboarding] Transaction started successfully for role:', role, 'userId:', userId);
     } catch (sessionError) {
       console.warn('⚠️ [Onboarding] Transactions not supported (standalone MongoDB), continuing without transaction');
       console.warn('⚠️ [Onboarding] Session error:', sessionError.message);
+      // CRITICAL: Set session to null so we don't try to use it
+      if (session) {
+        session.endSession();
+        session = null;
+      }
     }
 
     try {
