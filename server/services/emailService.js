@@ -407,6 +407,135 @@ The G8Road Team`
 };
 
 /**
+ * Send Camp Lead role granted notification email
+ * @param {Object} user - User object who was granted Camp Lead role
+ * @param {Object} camp - Camp object
+ */
+const sendCampLeadGrantedEmail = async (user, camp) => {
+  const campName = camp.name || camp.campName || 'the camp';
+  const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+  
+  return sendEmail({
+    to: user.email,
+    subject: `🎖️ You've been made a Camp Lead for ${campName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 30px 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 32px;">🎖️ Camp Lead Role Granted</h1>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">New Responsibilities Unlocked!</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div style="padding: 30px 20px; background: #f9f9f9;">
+          <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #333; margin-top: 0; font-size: 24px;">Hey ${user.firstName},</h2>
+            
+            <p style="color: #555; font-size: 16px; line-height: 1.6;">
+              Great news! You've been granted <strong>Camp Lead</strong> permissions for <strong>${campName}</strong>.
+            </p>
+            
+            <p style="color: #555; font-size: 16px; line-height: 1.6;">
+              As a Camp Lead, you now have delegated admin permissions to help manage camp operations while the Main Camp Admin retains full control.
+            </p>
+          </div>
+
+          <!-- Permissions Section -->
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #FF6B35; margin-top: 0; font-size: 20px;">✅ What You Can Do</h3>
+            <ul style="color: #333; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+              <li>View and edit full roster member details</li>
+              <li>Review and manage application queue</li>
+              <li>Update application statuses (approve/reject)</li>
+              <li>Schedule and manage orientation calls</li>
+              <li>Manage dues and payment status</li>
+              <li>Update camp metadata (description, FAQs, notes)</li>
+              <li>Export roster data</li>
+              <li>Create, edit, and delete events</li>
+              <li>Create shifts and assign to roster members</li>
+              <li>Full control over tasks</li>
+              <li>Access all camp-level admin dashboards</li>
+            </ul>
+          </div>
+
+          <!-- Limitations Section -->
+          <div style="background: #FFF3E0; padding: 20px; border-radius: 8px; border-left: 4px solid #FF9800; margin-bottom: 20px;">
+            <h3 style="color: #F57C00; margin-top: 0; font-size: 18px;">⚠️ What You Cannot Do</h3>
+            <ul style="color: #555; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+              <li>Create, delete, or archive rosters</li>
+              <li>Delete or transfer camp ownership</li>
+              <li>Assign or revoke Camp Lead roles (only Main Admin can)</li>
+              <li>Remove the Main Camp Admin</li>
+              <li>Modify system-level permissions</li>
+            </ul>
+            <p style="color: #555; font-size: 14px; margin: 15px 0 0 0;">
+              <em>These permissions remain with the Main Camp Admin to ensure camp integrity and security.</em>
+            </p>
+          </div>
+
+          <!-- CTA -->
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${clientUrl}/camps/${camp.slug || camp._id}" 
+               style="background: #FF6B35; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Go to Camp Dashboard
+            </a>
+          </div>
+
+          <!-- Footer -->
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center;">
+            <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 10px 0;">
+              Thanks for stepping up to help lead <strong>${campName}</strong>!
+            </p>
+            <p style="color: #666; font-size: 14px; margin: 15px 0 5px 0;">
+              Questions about your new role?
+            </p>
+            <p style="color: #666; font-size: 14px; margin: 5px 0;">
+              Reach out to your Main Camp Admin or check the <a href="${clientUrl}/help" style="color: #FF6B35;">Help Center</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    `,
+    text: `Camp Lead Role Granted - ${campName}
+
+Hey ${user.firstName},
+
+Great news! You've been granted Camp Lead permissions for ${campName}.
+
+As a Camp Lead, you now have delegated admin permissions to help manage camp operations while the Main Camp Admin retains full control.
+
+WHAT YOU CAN DO:
+- View and edit full roster member details
+- Review and manage application queue
+- Update application statuses (approve/reject)
+- Schedule and manage orientation calls
+- Manage dues and payment status
+- Update camp metadata (description, FAQs, notes)
+- Export roster data
+- Create, edit, and delete events
+- Create shifts and assign to roster members
+- Full control over tasks
+- Access all camp-level admin dashboards
+
+WHAT YOU CANNOT DO:
+- Create, delete, or archive rosters
+- Delete or transfer camp ownership
+- Assign or revoke Camp Lead roles (only Main Admin can)
+- Remove the Main Camp Admin
+- Modify system-level permissions
+
+These permissions remain with the Main Camp Admin to ensure camp integrity and security.
+
+Go to Camp Dashboard: ${clientUrl}/camps/${camp.slug || camp._id}
+
+Thanks for stepping up to help lead ${campName}!
+
+Questions about your new role? Reach out to your Main Camp Admin or check the Help Center at ${clientUrl}/help
+`
+  });
+};
+
+/**
  * Send test email (for Resend verification)
  */
 const sendTestEmail = async (to) => {
@@ -430,5 +559,6 @@ module.exports = {
   sendWelcomeEmail,
   sendRosterInviteEmail,
   sendInviteEmail,
-  sendTestEmail
+  sendTestEmail,
+  sendCampLeadGrantedEmail
 };

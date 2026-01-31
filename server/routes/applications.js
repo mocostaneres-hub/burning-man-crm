@@ -471,22 +471,23 @@ router.get('/my-applications', authenticateToken, async (req, res) => {
 });
 
 // @route   GET /api/applications/camp/:campId
-// @desc    Get applications for a camp (camp admins only)
-// @access  Private (Camp owners only)
+// @desc    Get applications for a camp (camp owners and Camp Leads)
+// @access  Private (Camp owners and Camp Leads)
 router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
     
-    // Check if camp exists and user is owner (Mongo ObjectId string)
+    // Check if camp exists
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper (immutable campId)
-    const hasAccess = await canAccessCamp(req, campId);
+    // Check permission using canManageCamp helper (includes camp owners and Camp Leads)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, campId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     const applications = await db.findMemberApplications({ camp: campId });
@@ -598,7 +599,7 @@ router.put('/:applicationId/status', authenticateToken, [
     }
     console.log('🔍 [PUT /api/applications/:id/status] Application found:', { _id: application._id, camp: application.camp, applicant: application.applicant });
 
-    // Check if user is camp owner
+    // Check if user is camp owner or Camp Lead
     const camp = await db.findCamp({ _id: application.camp });
     if (!camp) {
       console.log('❌ [PUT /api/applications/:id/status] Camp not found');
@@ -606,19 +607,16 @@ router.put('/:applicationId/status', authenticateToken, [
     }
     console.log('🔍 [PUT /api/applications/:id/status] Camp found:', { _id: camp._id, contactEmail: camp.contactEmail });
     
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campId && camp._id.toString() === req.user.campId)
-    );
+    // Check permission using canManageCamp helper (includes camp owners and Camp Leads)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasPermission = await canManageCamp(req, camp._id);
     
-    console.log('🔍 [PUT /api/applications/:id/status] Permission check:', { isCampOwner, isAdminWithAccess });
-    
-    if (!isCampOwner && !isAdminWithAccess) {
-      console.log('❌ [PUT /api/applications/:id/status] Access denied');
-      return res.status(403).json({ message: 'Access denied' });
+    if (!hasPermission) {
+      console.log('❌ [PUT /api/applications/:id/status] Access denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
+    
+    console.log('✅ [PUT /api/applications/:id/status] Permission granted');
 
     // Track the status change manually for action history
     const previousStatus = application.status;

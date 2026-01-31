@@ -1024,7 +1024,7 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
 
 // @route   PUT /api/rosters/:rosterId/members/:memberId/overrides
 // @desc    Update roster-specific member overrides (playaName, yearsBurned, skills)
-// @access  Private (Camp admins/leads only)
+// @access  Private (Camp owners and Camp Leads)
 router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -1044,12 +1044,6 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
 
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [Roster Override] Permission denied');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     // Get camp using helper (immutable campId)
     const campId = await getUserCampId(req);
     if (!campId) {
@@ -1063,6 +1057,14 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     }
 
     console.log('✅ [Roster Override] Camp found:', { campId: camp._id, campName: camp.name });
+
+    // Check if user has permission (camp owner OR Camp Lead)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      console.log('❌ [Roster Override] Permission denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
 
     // Find roster - try as ObjectId first, then as integer
     let roster;
@@ -1392,40 +1394,17 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 
 // @route   PATCH /api/roster/member/:memberId/dues
 // @desc    Update member's dues status
-// @access  Private (Camp admins/leads only)
+// @access  Private (Camp owners and Camp Leads)
 router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
   try {
     console.log('🔄 [DUES UPDATE] Starting dues status update');
     console.log('📝 [DUES UPDATE] Request params:', { memberId: req.params.memberId });
     console.log('📝 [DUES UPDATE] Request body:', req.body);
-    console.log('📝 [DUES UPDATE] Request headers:', req.headers);
-    console.log('📝 [DUES UPDATE] User context:', { 
-      accountType: req.user?.accountType, 
-      email: req.user?.email, 
-      campName: req.user?.campName 
-    });
 
     // Validate request body exists
     if (!req.body || typeof req.body !== 'object') {
       console.log('❌ [DUES UPDATE] Request body is missing or invalid');
       return res.status(400).json({ message: 'Request body is required' });
-    }
-    
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [DUES UPDATE] Permission denied - user not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
-    const { memberId } = req.params;
-    const { isPaid } = req.body;
-
-    console.log('📝 [DUES UPDATE] Extracted values:', { memberId, isPaid, typeofIsPaid: typeof isPaid });
-
-    // Validate input
-    if (typeof isPaid !== 'boolean') {
-      console.log('❌ [DUES UPDATE] Invalid input - isPaid must be boolean, received:', isPaid, typeof isPaid);
-      return res.status(400).json({ message: 'isPaid must be a boolean value' });
     }
 
     // Get camp ID from user context
@@ -1450,6 +1429,14 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     }
 
     console.log('🏕️ [DUES UPDATE] Camp ID resolved:', campId);
+
+    // Check if user has permission (camp owner OR Camp Lead)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasPermission = await canManageCamp(req, campId);
+    if (!hasPermission) {
+      console.log('❌ [DUES UPDATE] Permission denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
 
     // Find the member in the active roster
     console.log('🔍 [DUES UPDATE] Looking for active roster...');
@@ -1566,6 +1553,212 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
       message: 'Server error during dues update',
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// @route   POST /api/rosters/member/:memberId/grant-camp-lead
+// @desc    Grant Camp Lead role to a roster member
+// @access  Private (Camp owners only)
+router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    console.log('🎖️ [GRANT CAMP LEAD] Starting role assignment for memberId:', memberId);
+
+    // Only camp owners can grant Camp Lead role (not Camp Leads themselves)
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
+      console.log('❌ [GRANT CAMP LEAD] Permission denied - user not camp owner');
+      return res.status(403).json({ message: 'Only camp owners can assign Camp Lead role' });
+    }
+
+    // Get camp ID from user context
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    console.log('🏕️ [GRANT CAMP LEAD] Camp ID resolved:', campId);
+
+    // Find the active roster
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (!activeRoster || !activeRoster.members) {
+      return res.status(404).json({ message: 'No active roster found for this camp' });
+    }
+
+    // Find the specific member entry in the roster
+    const memberIndex = activeRoster.members.findIndex(entry => 
+      entry.member && entry.member.toString() === memberId
+    );
+
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in roster' });
+    }
+
+    const memberEntry = activeRoster.members[memberIndex];
+
+    // Validate: Member must have status='approved'
+    if (memberEntry.status !== 'approved') {
+      return res.status(400).json({ 
+        message: 'Camp Lead role can only be assigned to approved roster members',
+        currentStatus: memberEntry.status
+      });
+    }
+
+    // Check if already a Camp Lead
+    if (memberEntry.isCampLead === true) {
+      return res.status(400).json({ message: 'Member is already a Camp Lead' });
+    }
+
+    // Get member details for logging and notification
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      return res.status(404).json({ message: 'Member record not found' });
+    }
+
+    const user = await db.findUser({ _id: member.user });
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found' });
+    }
+
+    // Update the member entry to grant Camp Lead role
+    activeRoster.members[memberIndex] = {
+      ...activeRoster.members[memberIndex],
+      isCampLead: true
+    };
+
+    // Save the updated roster
+    await db.updateRoster(activeRoster._id, activeRoster);
+    console.log('✅ [GRANT CAMP LEAD] Role granted successfully');
+
+    // Record activity
+    await recordActivity({
+      userId: req.user._id,
+      action: 'grant_camp_lead',
+      details: {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId
+      }
+    });
+
+    // Send email notification
+    try {
+      const { sendCampLeadGrantedEmail } = require('../services/emailService');
+      const camp = await db.findCamp({ _id: campId });
+      
+      await sendCampLeadGrantedEmail(user, camp);
+      console.log('✅ [GRANT CAMP LEAD] Notification email sent');
+    } catch (emailError) {
+      console.error('⚠️ [GRANT CAMP LEAD] Failed to send notification email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({
+      message: 'Camp Lead role granted successfully',
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      isCampLead: true
+    });
+  } catch (error) {
+    console.error('❌ [GRANT CAMP LEAD] Critical error:', error);
+    res.status(500).json({ 
+      message: 'Server error granting Camp Lead role',
+      error: error.message
+    });
+  }
+});
+
+// @route   POST /api/rosters/member/:memberId/revoke-camp-lead
+// @desc    Revoke Camp Lead role from a roster member
+// @access  Private (Camp owners only)
+router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    console.log('🚫 [REVOKE CAMP LEAD] Starting role revocation for memberId:', memberId);
+
+    // Only camp owners can revoke Camp Lead role (not Camp Leads themselves)
+    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
+      console.log('❌ [REVOKE CAMP LEAD] Permission denied - user not camp owner');
+      return res.status(403).json({ message: 'Only camp owners can revoke Camp Lead role' });
+    }
+
+    // Get camp ID from user context
+    const campId = await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    console.log('🏕️ [REVOKE CAMP LEAD] Camp ID resolved:', campId);
+
+    // Find the active roster
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (!activeRoster || !activeRoster.members) {
+      return res.status(404).json({ message: 'No active roster found for this camp' });
+    }
+
+    // Find the specific member entry in the roster
+    const memberIndex = activeRoster.members.findIndex(entry => 
+      entry.member && entry.member.toString() === memberId
+    );
+
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in roster' });
+    }
+
+    const memberEntry = activeRoster.members[memberIndex];
+
+    // Check if currently a Camp Lead
+    if (memberEntry.isCampLead !== true) {
+      return res.status(400).json({ message: 'Member is not currently a Camp Lead' });
+    }
+
+    // Get member details for logging
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      return res.status(404).json({ message: 'Member record not found' });
+    }
+
+    const user = await db.findUser({ _id: member.user });
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found' });
+    }
+
+    // Update the member entry to revoke Camp Lead role
+    activeRoster.members[memberIndex] = {
+      ...activeRoster.members[memberIndex],
+      isCampLead: false
+    };
+
+    // Save the updated roster
+    await db.updateRoster(activeRoster._id, activeRoster);
+    console.log('✅ [REVOKE CAMP LEAD] Role revoked successfully');
+
+    // Record activity
+    await recordActivity({
+      userId: req.user._id,
+      action: 'revoke_camp_lead',
+      details: {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId
+      }
+    });
+
+    // Note: Do NOT send email notification on revocation (per requirements)
+
+    res.json({
+      message: 'Camp Lead role revoked successfully',
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      isCampLead: false
+    });
+  } catch (error) {
+    console.error('❌ [REVOKE CAMP LEAD] Critical error:', error);
+    res.status(500).json({ 
+      message: 'Server error revoking Camp Lead role',
+      error: error.message
     });
   }
 });

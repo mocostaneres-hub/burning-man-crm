@@ -85,6 +85,14 @@ const rosterSchema = new mongoose.Schema({
       enum: ['member', 'lead', 'admin'],
       default: 'member'
     },
+    isCampLead: {
+      type: Boolean,
+      default: false,
+      // Camp Lead is a delegated admin role for this specific camp
+      // Grants permission to manage roster, applications, and camp operations
+      // Can only be assigned by Main Camp Admin (camp owner)
+      // User must be on roster with status='approved' to be eligible
+    },
     duesStatus: {
       type: String,
       enum: ['Paid', 'Unpaid'],
