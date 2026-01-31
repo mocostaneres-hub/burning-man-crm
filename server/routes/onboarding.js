@@ -65,12 +65,17 @@ router.post('/select-role', [
     // START TRANSACTION for atomicity
     const session = await mongoose.startSession();
     session.startTransaction();
+    
+    console.log('🔄 [Onboarding] Transaction started for role:', role, 'userId:', userId);
 
     try {
       const User = require('../models/User');
       const Camp = require('../models/Camp');
+      
+      console.log('📋 [Onboarding] Models loaded successfully');
 
       // Update user role
+      console.log('🔄 [Onboarding] Updating user role to:', role);
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         { role: role, updatedAt: new Date() },
@@ -180,6 +185,14 @@ router.post('/select-role', [
       // ROLLBACK TRANSACTION on any error
       await session.abortTransaction();
       console.error('❌ [Onboarding] Transaction aborted:', transactionError);
+      console.error('❌ [Onboarding] Error stack:', transactionError.stack);
+      console.error('❌ [Onboarding] Error details:', {
+        name: transactionError.name,
+        message: transactionError.message,
+        code: transactionError.code,
+        role: role,
+        userId: userId
+      });
 
       // Return specific error messages
       if (transactionError.code === 11000) {
@@ -208,8 +221,17 @@ router.post('/select-role', [
     }
 
   } catch (error) {
-    console.error('Role selection error:', error);
-    res.status(500).json({ message: 'Server error during role selection' });
+    console.error('❌ [Onboarding] Outer catch - Role selection error:', error);
+    console.error('❌ [Onboarding] Outer catch - Error stack:', error.stack);
+    console.error('❌ [Onboarding] Outer catch - Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code
+    });
+    res.status(500).json({ 
+      message: 'Server error during role selection',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
