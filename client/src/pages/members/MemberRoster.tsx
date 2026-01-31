@@ -367,29 +367,42 @@ const MemberRoster: React.FC = () => {
       
       // The roster now contains members with populated user data
       // Transform roster member entries into the format expected by the component
-      const enhancedMembers = (roster.members || []).map((memberEntry: any) => {
-        console.log('🔍 [MemberRoster] Processing member entry:', memberEntry);
-        console.log('🔍 [MemberRoster] Member entry duesStatus:', memberEntry.duesStatus);
-        console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
-        console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
-        
-        // Map duesStatus string to duesPaid boolean for frontend compatibility
-        // duesStatus is stored at the top level of memberEntry (roster.members[].duesStatus)
-        const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
-        
-        return {
-          _id: memberEntry.member?._id || memberEntry.member, // The member ID (handle both object and string)
-          member: memberEntry.member, // The full member object with nested user data
-          user: memberEntry.member?.user,  // The populated user data from the backend
-          duesPaid: duesPaid,
-          duesStatus: memberEntry.duesStatus || 'Unpaid', // Ensure we always have a duesStatus
-          isCampLead: memberEntry.isCampLead || false, // Camp Lead role
-          addedAt: memberEntry.addedAt,
-          addedBy: memberEntry.addedBy,
-          rosterStatus: memberEntry.status || 'active',
-          overrides: memberEntry.overrides || {} // Roster-specific overrides
-        };
-      });
+      const enhancedMembers = (roster.members || [])
+        .filter((memberEntry: any) => memberEntry.member) // Filter out any entries without a member reference
+        .map((memberEntry: any) => {
+          console.log('🔍 [MemberRoster] Processing member entry:', memberEntry);
+          console.log('🔍 [MemberRoster] Member entry duesStatus:', memberEntry.duesStatus);
+          console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
+          console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
+          
+          // Map duesStatus string to duesPaid boolean for frontend compatibility
+          // duesStatus is stored at the top level of memberEntry (roster.members[].duesStatus)
+          const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
+          
+          // Extract member ID safely
+          let memberId;
+          if (typeof memberEntry.member === 'object' && memberEntry.member._id) {
+            memberId = memberEntry.member._id.toString();
+          } else if (typeof memberEntry.member === 'string') {
+            memberId = memberEntry.member;
+          } else {
+            memberId = memberEntry.member?.toString() || null;
+          }
+          
+          return {
+            _id: memberId, // The member ID (handle both object and string)
+            member: memberEntry.member, // The full member object with nested user data
+            user: memberEntry.member?.user,  // The populated user data from the backend
+            duesPaid: duesPaid,
+            duesStatus: memberEntry.duesStatus || 'Unpaid', // Ensure we always have a duesStatus
+            isCampLead: memberEntry.isCampLead || false, // Camp Lead role
+            addedAt: memberEntry.addedAt,
+            addedBy: memberEntry.addedBy,
+            rosterStatus: memberEntry.status || 'active',
+            overrides: memberEntry.overrides || {} // Roster-specific overrides
+          };
+        })
+        .filter((member: any) => member._id); // Filter out any members without a valid ID
       
       console.log('✅ [MemberRoster] Enhanced members:', enhancedMembers);
       
