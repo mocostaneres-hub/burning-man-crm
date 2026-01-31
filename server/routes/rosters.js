@@ -1586,11 +1586,28 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
     }
 
     // Find the specific member entry in the roster
-    const memberIndex = activeRoster.members.findIndex(entry => 
-      entry.member && entry.member.toString() === memberId
-    );
+    // Handle both populated member objects and member ID strings
+    const memberIndex = activeRoster.members.findIndex(entry => {
+      if (!entry.member) return false;
+      
+      // If member is populated (object), compare by _id
+      if (typeof entry.member === 'object' && entry.member._id) {
+        return entry.member._id.toString() === memberId;
+      }
+      
+      // If member is just an ID (string/ObjectId)
+      return entry.member.toString() === memberId;
+    });
+
+    console.log('🔍 [GRANT CAMP LEAD] Searching for memberId:', memberId);
+    console.log('🔍 [GRANT CAMP LEAD] Found memberIndex:', memberIndex);
 
     if (memberIndex === -1) {
+      console.log('❌ [GRANT CAMP LEAD] Member not found in roster');
+      console.log('📋 [GRANT CAMP LEAD] Available member IDs:', activeRoster.members.map(m => {
+        const id = typeof m.member === 'object' ? m.member?._id?.toString() : m.member?.toString();
+        return id;
+      }));
       return res.status(404).json({ message: 'Member not found in roster' });
     }
 
@@ -1698,11 +1715,24 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
     }
 
     // Find the specific member entry in the roster
-    const memberIndex = activeRoster.members.findIndex(entry => 
-      entry.member && entry.member.toString() === memberId
-    );
+    // Handle both populated member objects and member ID strings
+    const memberIndex = activeRoster.members.findIndex(entry => {
+      if (!entry.member) return false;
+      
+      // If member is populated (object), compare by _id
+      if (typeof entry.member === 'object' && entry.member._id) {
+        return entry.member._id.toString() === memberId;
+      }
+      
+      // If member is just an ID (string/ObjectId)
+      return entry.member.toString() === memberId;
+    });
+
+    console.log('🔍 [REVOKE CAMP LEAD] Searching for memberId:', memberId);
+    console.log('🔍 [REVOKE CAMP LEAD] Found memberIndex:', memberIndex);
 
     if (memberIndex === -1) {
+      console.log('❌ [REVOKE CAMP LEAD] Member not found in roster');
       return res.status(404).json({ message: 'Member not found in roster' });
     }
 
