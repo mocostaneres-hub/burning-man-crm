@@ -62,11 +62,21 @@ router.post('/select-role', [
       }
     }
 
-    // START TRANSACTION for atomicity
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // START TRANSACTION for atomicity (if supported by MongoDB)
+    // MongoDB transactions require a replica set
+    // For standalone MongoDB, operations will run without transactions
+    let session = null;
+    let useTransactions = false;
     
-    console.log('🔄 [Onboarding] Transaction started for role:', role, 'userId:', userId);
+    try {
+      session = await mongoose.startSession();
+      await session.startTransaction();
+      useTransactions = true;
+      console.log('🔄 [Onboarding] Transaction started for role:', role, 'userId:', userId);
+    } catch (sessionError) {
+      console.warn('⚠️ [Onboarding] Transactions not supported (standalone MongoDB), continuing without transaction');
+      console.warn('⚠️ [Onboarding] Session error:', sessionError.message);
+    }
 
     try {
       const User = require('../models/User');
@@ -79,7 +89,7 @@ router.post('/select-role', [
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         { role: role, updatedAt: new Date() },
-        { new: true, session }
+        { new: true, ...(session ? { session } : {}) }
       );
 
       if (!updatedUser) {
@@ -95,7 +105,7 @@ router.post('/select-role', [
           const userWithAccountType = await User.findByIdAndUpdate(
             userId,
             { accountType: 'camp', updatedAt: new Date() },
-            { new: true, session }
+            { new: true, ...(session ? { session } : {}) }
           );
           if (userWithAccountType) {
             updatedUser.accountType = userWithAccountType.accountType;
@@ -131,7 +141,7 @@ router.post('/select-role', [
 
           // Create camp record
           const camp = new Camp(campData);
-          await camp.save({ session });
+          await camp.save(session ? { session } : {});
 
           console.log('✅ [Onboarding] Camp created:', camp._id);
 
@@ -143,7 +153,7 @@ router.post('/select-role', [
               urlSlug: slug,
               updatedAt: new Date()
             },
-            { new: true, session }
+            { new: true, ...(session ? { session } : {}) }
           );
           
           if (userWithCamp) {
@@ -162,7 +172,7 @@ router.post('/select-role', [
         const userWithAccountType = await User.findByIdAndUpdate(
           userId,
           { accountType: 'personal', updatedAt: new Date() },
-          { session }
+          { new: true, ...(session ? { session } : {}) }
         );
         if (userWithAccountType) {
           updatedUser.accountType = userWithAccountType.accountType;
@@ -170,9 +180,13 @@ router.post('/select-role', [
         console.log('✅ [Onboarding] Updated accountType to: personal');
       }
 
-      // COMMIT TRANSACTION - All operations succeeded
-      await session.commitTransaction();
-      console.log('✅ [Onboarding] Transaction committed successfully');
+      // COMMIT TRANSACTION (if using transactions)
+      if (useTransactions && session) {
+        await session.commitTransaction();
+        console.log('✅ [Onboarding] Transaction committed successfully');
+      } else {
+        console.log('✅ [Onboarding] Operations completed successfully (no transaction)');
+      }
 
       // Use the updatedUser we already have instead of fetching again
       // (Fetching immediately after commit can sometimes fail due to replication lag)
@@ -208,9 +222,13 @@ router.post('/select-role', [
       });
 
     } catch (transactionError) {
-      // ROLLBACK TRANSACTION on any error
-      await session.abortTransaction();
-      console.error('❌ [Onboarding] Transaction aborted:', transactionError);
+      // ROLLBACK TRANSACTION on any error (if using transactions)
+      if (useTransactions && session) {
+        await session.abortTransaction();
+        console.error('❌ [Onboarding] Transaction aborted:', transactionError);
+      } else {
+        console.error('❌ [Onboarding] Operation failed:', transactionError);
+      }
       console.error('❌ [Onboarding] Error stack:', transactionError.stack);
       console.error('❌ [Onboarding] Error details:', {
         name: transactionError.name,
@@ -242,8 +260,10 @@ router.post('/select-role', [
         error: process.env.NODE_ENV === 'development' ? transactionError.message : undefined
       });
     } finally {
-      // Always end the session
-      session.endSession();
+      // Always end the session (if it was created)
+      if (session) {
+        session.endSession();
+      }
     }
 
   } catch (error) {
