@@ -177,10 +177,27 @@ router.post('/select-role', [
       // Use the updatedUser we already have instead of fetching again
       // (Fetching immediately after commit can sometimes fail due to replication lag)
       console.log('📋 [Onboarding] Preparing response with updatedUser');
+      console.log('📋 [Onboarding] updatedUser type:', typeof updatedUser);
+      console.log('📋 [Onboarding] updatedUser has toObject:', typeof updatedUser.toObject);
       
-      // Return success response with user data
-      const userResponse = updatedUser.toObject ? updatedUser.toObject() : { ...updatedUser };
-      delete userResponse.password;
+      // Safely convert to plain object
+      let userResponse;
+      try {
+        if (updatedUser.toObject && typeof updatedUser.toObject === 'function') {
+          userResponse = updatedUser.toObject();
+        } else if (updatedUser._doc) {
+          // Mongoose document has _doc property
+          userResponse = { ...updatedUser._doc };
+        } else {
+          // Plain object
+          userResponse = { ...updatedUser };
+        }
+        delete userResponse.password;
+        console.log('✅ [Onboarding] userResponse prepared successfully');
+      } catch (conversionError) {
+        console.error('❌ [Onboarding] Failed to convert updatedUser to response object:', conversionError);
+        throw new Error('Failed to prepare user response: ' + conversionError.message);
+      }
 
       console.log('✅ [Onboarding] Sending success response');
       
