@@ -208,6 +208,8 @@ export interface Member {
       showContributions: boolean;
     };
   };
+  // Camp Lead role (roster-level, camp-scoped admin permissions)
+  isCampLead?: boolean;
   // Roster-specific overrides (for roster view only, doesn't affect user account)
   overrides?: {
     playaName?: string;

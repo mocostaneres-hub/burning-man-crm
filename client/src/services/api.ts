@@ -627,6 +627,17 @@ class ApiService {
     const response = await this.api.delete(url, config);
     return response.data;
   }
+
+  // Camp Lead role management methods
+  async grantCampLeadRole(memberId: string): Promise<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> {
+    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> = await this.api.post(`/rosters/member/${memberId}/grant-camp-lead`);
+    return response.data;
+  }
+
+  async revokeCampLeadRole(memberId: string): Promise<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> {
+    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> = await this.api.post(`/rosters/member/${memberId}/revoke-camp-lead`);
+    return response.data;
+  }
 }
 
 const apiService = new ApiService();

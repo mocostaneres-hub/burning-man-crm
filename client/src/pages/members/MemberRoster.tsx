@@ -11,10 +11,14 @@ import RosterFilters, { FilterType } from '../../components/roster/RosterFilters
 import { InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
 import { useSkills } from '../../hooks/useSkills';
+import CampLeadBadge from '../../components/badges/CampLeadBadge';
+import CampLeadConfirmModal from '../../components/modals/CampLeadConfirmModal';
+import { canAssignCampLeadRole } from '../../utils/permissions';
 
 // Extended type for roster members that includes nested member data
 interface RosterMember extends Member {
   member?: Member; // Nested member structure from API
+  isCampLead?: boolean; // Camp Lead role
 }
 
 const MemberRoster: React.FC = () => {
@@ -70,6 +74,13 @@ const MemberRoster: React.FC = () => {
   const [newRosterName, setNewRosterName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
+  // Camp Lead role management
+  const [campLeadConfirmModal, setCampLeadConfirmModal] = useState<{
+    isOpen: boolean;
+    member: RosterMember | null;
+    action: 'grant' | 'revoke';
+  }>({ isOpen: false, member: null, action: 'grant' });
+  const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
 
   // Check if current user can access roster features (STRICT: only admins and camp leads, NO standard members)
   const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId);
@@ -371,6 +382,7 @@ const MemberRoster: React.FC = () => {
           user: memberEntry.member?.user,  // The populated user data from the backend
           duesPaid: duesPaid,
           duesStatus: memberEntry.duesStatus || 'Unpaid', // Ensure we always have a duesStatus
+          isCampLead: memberEntry.isCampLead || false, // Camp Lead role
           addedAt: memberEntry.addedAt,
           addedBy: memberEntry.addedBy,
           rosterStatus: memberEntry.status || 'active',
@@ -568,6 +580,60 @@ const MemberRoster: React.FC = () => {
 
   const handleDuesCancel = () => {
     setDuesConfirmModal({ isOpen: false, member: null, currentStatus: false });
+  };
+
+  // Camp Lead role management handlers
+  const handleCampLeadToggle = (member: RosterMember, currentStatus: boolean) => {
+    setCampLeadConfirmModal({
+      isOpen: true,
+      member,
+      action: currentStatus ? 'revoke' : 'grant'
+    });
+  };
+
+  const handleConfirmCampLeadChange = async () => {
+    const { member, action } = campLeadConfirmModal;
+    if (!member) return;
+
+    try {
+      setCampLeadLoading(member._id.toString());
+
+      if (action === 'grant') {
+        await api.grantCampLeadRole(member._id.toString());
+      } else {
+        await api.revokeCampLeadRole(member._id.toString());
+      }
+
+      // Update local state immediately
+      setMembers(prevMembers =>
+        prevMembers.map(m =>
+          m._id === member._id
+            ? { ...m, isCampLead: action === 'grant' }
+            : m
+        )
+      );
+
+      // Get member name for success message
+      const memberData = member.member || member;
+      const user = typeof memberData.user === 'object' ? memberData.user : null;
+      const memberName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Member';
+
+      alert(`${action === 'grant' ? 'Granted' : 'Revoked'} Camp Lead role ${action === 'grant' ? 'to' : 'from'} ${memberName}`);
+
+      // Close modal
+      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant' });
+    } catch (error: any) {
+      console.error('❌ Error updating Camp Lead role:', error);
+      alert(error.response?.data?.message || `Failed to ${action} Camp Lead role`);
+    } finally {
+      setCampLeadLoading(null);
+    }
+  };
+
+  const handleCloseCampLeadModal = () => {
+    if (!campLeadLoading) {
+      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant' });
+    }
   };
 
   // Roster rename handlers
@@ -917,6 +983,11 @@ const MemberRoster: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   🛠️ Skills
                 </th>
+                {canEdit && canAssignCampLeadRole(authUser, campId || undefined) && (
+                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Camp Lead
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -963,14 +1034,17 @@ const MemberRoster: React.FC = () => {
                           )}
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {(authUser?.accountType === 'admin' || authUser?.accountType === 'camp') && authUser?.campId && (user?._id) ? (
-                              <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
-                                {userName}
-                              </Link>
-                            ) : (
-                              <>{userName}</>
-                            )}
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900">
+                              {(authUser?.accountType === 'admin' || authUser?.accountType === 'camp') && authUser?.campId && (user?._id) ? (
+                                <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
+                                  {userName}
+                                </Link>
+                              ) : (
+                                <>{userName}</>
+                              )}
+                            </div>
+                            {member.isCampLead && <CampLeadBadge size="sm" />}
                           </div>
                         </div>
                       </div>
@@ -1202,6 +1276,44 @@ const MemberRoster: React.FC = () => {
                         </div>
                       )}
                     </td>
+                    {/* Camp Lead Role (Main Admin Only) */}
+                    {canEdit && canAssignCampLeadRole(authUser, campId || undefined) && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={member.isCampLead || false}
+                                onChange={(e) => {
+                                  e.preventDefault();
+                                  handleCampLeadToggle(member, member.isCampLead || false);
+                                }}
+                                disabled={
+                                  campLeadLoading === member._id.toString() ||
+                                  member.rosterStatus !== 'approved'
+                                }
+                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded disabled:opacity-50"
+                                title={
+                                  member.rosterStatus !== 'approved'
+                                    ? 'Member must be approved to become Camp Lead'
+                                    : 'Grant or revoke Camp Lead role'
+                                }
+                              />
+                              <span className="ml-2 text-xs text-gray-600">Camp Lead</span>
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            {member.isCampLead ? (
+                              <span className="text-xs text-orange-600 font-medium">✓ Lead</span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
                         {isEditing ? (
@@ -2002,6 +2114,22 @@ const MemberRoster: React.FC = () => {
         isOpen={inviteModalOpen}
         onClose={() => setInviteModalOpen(false)}
         campId={campId || user?._id?.toString() || ''}
+      />
+
+      {/* Camp Lead Confirmation Modal */}
+      <CampLeadConfirmModal
+        isOpen={campLeadConfirmModal.isOpen}
+        onClose={handleCloseCampLeadModal}
+        onConfirm={handleConfirmCampLeadChange}
+        memberName={(() => {
+          const member = campLeadConfirmModal.member;
+          if (!member) return '';
+          const memberData = member.member || member;
+          const user = typeof memberData.user === 'object' ? memberData.user : null;
+          return user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Member';
+        })()}
+        action={campLeadConfirmModal.action}
+        loading={!!campLeadLoading}
       />
 
       {/* Rename Roster Modal */}
