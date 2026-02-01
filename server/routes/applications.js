@@ -703,19 +703,42 @@ router.put('/:applicationId/status', authenticateToken, [
       }
     }
 
-    // If approved, create member record
+    // If approved, create or reactivate member record
     if (status === 'approved') {
-      const memberData = {
-        camp: application.camp,
-        user: application.applicant,
-        role: 'member',
-        status: 'active',
-        appliedAt: application.appliedAt,
-        reviewedAt: new Date(),
-        reviewedBy: req.user._id
-      };
+      // Check if member record already exists for this user/camp combination
+      let existingMember = await db.findMember({ camp: application.camp, user: application.applicant });
+      let member;
       
-      const newMember = await db.createMember(memberData);
+      if (existingMember) {
+        console.log('ℹ️ [Application Approval] Member record exists, reactivating:', existingMember._id);
+        
+        // Reactivate existing member record
+        member = await db.updateMember(existingMember._id, {
+          status: 'active', // Reactivate
+          role: 'member',
+          reviewedAt: new Date(),
+          reviewedBy: req.user._id,
+          // Don't overwrite appliedAt - keep original application date
+        });
+        
+        console.log('✅ [Application Approval] Member reactivated:', member._id);
+      } else {
+        console.log('ℹ️ [Application Approval] Creating new member record');
+        
+        // Create new member record
+        const memberData = {
+          camp: application.camp,
+          user: application.applicant,
+          role: 'member',
+          status: 'active',
+          appliedAt: application.appliedAt,
+          reviewedAt: new Date(),
+          reviewedBy: req.user._id
+        };
+        
+        member = await db.createMember(memberData);
+        console.log('✅ [Application Approval] New member created:', member._id);
+      }
       
       // Add member to active roster - create roster if one doesn't exist
       let activeRoster = await db.findActiveRoster({ camp: camp._id });
@@ -740,33 +763,43 @@ router.put('/:applicationId/status', authenticateToken, [
         });
       }
       
-      await db.addMemberToRoster(activeRoster._id, newMember._id, req.user._id);
-      console.log('✅ [Application Approval] Added member to roster:', newMember._id);
-      
-      // Log member added to roster for both MEMBER and CAMP
-      await recordActivity('MEMBER', applicantId, req.user._id, 'ADDED_TO_ROSTER', {
-        field: 'roster',
-        rosterId: activeRoster._id,
-        campId: campId,
-        campName: camp.name || camp.campName,
-        memberId: newMember._id
+      // Check if member is already in roster
+      const isInRoster = activeRoster.members.some(m => {
+        const memberId = typeof m.member === 'object' ? m.member._id?.toString() : m.member?.toString();
+        return memberId === member._id.toString();
       });
       
-      await recordActivity('CAMP', campId, req.user._id, 'MEMBER_ADDED_TO_ROSTER', {
-        field: 'roster',
-        rosterId: activeRoster._id,
-        applicantId: applicantId,
-        applicantName: applicantName,
-        memberId: newMember._id
-      });
-      
-      // Update camp member count
-      if (camp.stats) {
-        camp.stats.totalMembers += 1;
+      if (!isInRoster) {
+        await db.addMemberToRoster(activeRoster._id, member._id, req.user._id);
+        console.log('✅ [Application Approval] Added member to roster:', member._id);
+        
+        // Log member added to roster for both MEMBER and CAMP
+        await recordActivity('MEMBER', applicantId, req.user._id, 'ADDED_TO_ROSTER', {
+          field: 'roster',
+          rosterId: activeRoster._id,
+          campId: campId,
+          campName: camp.name || camp.campName,
+          memberId: member._id
+        });
+        
+        await recordActivity('CAMP', campId, req.user._id, 'MEMBER_ADDED_TO_ROSTER', {
+          field: 'roster',
+          rosterId: activeRoster._id,
+          applicantId: applicantId,
+          applicantName: applicantName,
+          memberId: member._id
+        });
+        
+        // Update camp member count
+        if (camp.stats) {
+          camp.stats.totalMembers += 1;
+        } else {
+          camp.stats = { totalMembers: 1 };
+        }
+        await db.updateCamp(camp._id, { stats: camp.stats });
       } else {
-        camp.stats = { totalMembers: 1 };
+        console.log('ℹ️ [Application Approval] Member already in roster, skipping add');
       }
-      await db.updateCamp(camp._id, { stats: camp.stats });
     }
 
     // Send status change notification to applicant (approval or rejection)
