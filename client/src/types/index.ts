@@ -49,6 +49,12 @@ export interface User {
   campWebsite?: string;
   campEmail?: string;
   urlSlug?: string; // URL slug for camp or personal profile
+  // Camp Lead role (when user is a Camp Lead for a specific camp)
+  // These fields are populated by /api/auth/me if user has isCampLead=true in roster
+  isCampLead?: boolean;
+  campLeadCampId?: string;
+  campLeadCampSlug?: string;
+  campLeadCampName?: string;
   isActive: boolean;
   isVerified: boolean;
   lastLogin?: string;

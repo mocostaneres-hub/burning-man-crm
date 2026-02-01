@@ -210,10 +210,55 @@ router.post('/login', [
 });
 
 // @route   GET /api/auth/me
-// @desc    Get current user
+// @desc    Get current user (with Camp Lead status if applicable)
 // @access  Private
-router.get('/me', authenticateToken, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user is a Camp Lead in any roster
+    // Camp Leads are personal/member accounts with delegated admin permissions
+    if (user.accountType === 'personal' || user.role === 'member' || user.role === 'camp_lead') {
+      const Roster = require('../models/Roster');
+      
+      // Find all active rosters where user is a Camp Lead
+      const rosters = await Roster.find({
+        'members': {
+          $elemMatch: {
+            user: user._id,
+            isCampLead: true,
+            status: 'approved'
+          }
+        },
+        isActive: true
+      }).select('camp _id').populate('camp', 'name slug _id');
+      
+      if (rosters && rosters.length > 0) {
+        // User is Camp Lead! Return first camp
+        // Note: Users can only be Camp Lead in ONE camp at a time
+        const campLeadCamp = rosters[0].camp;
+        
+        console.log('✅ [Auth /me] User is Camp Lead for camp:', campLeadCamp.name);
+        
+        return res.json({
+          user: {
+            ...(user.toObject ? user.toObject() : user),
+            isCampLead: true,
+            campLeadCampId: campLeadCamp._id.toString(),
+            campLeadCampSlug: campLeadCamp.slug,
+            campLeadCampName: campLeadCamp.name
+          }
+        });
+      }
+    }
+    
+    // Not a Camp Lead, return normal user data
+    res.json({ user: req.user });
+  } catch (error) {
+    console.error('❌ [Auth /me] Error fetching Camp Lead status:', error);
+    // Fallback to basic user data if query fails
+    res.json({ user: req.user });
+  }
 });
 
 // @route   POST /api/auth/refresh

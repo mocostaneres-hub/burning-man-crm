@@ -92,10 +92,36 @@ const Navbar: React.FC = () => {
     // Debug logging
     console.log('Navbar - User data:', user);
     console.log('Navbar - Account type:', user?.accountType);
+    console.log('Navbar - Is Camp Lead:', user?.isCampLead);
+    console.log('Navbar - Camp Lead Camp:', user?.campLeadCampName);
     console.log('Navbar - Camp name:', user?.campName);
     console.log('Navbar - Is authenticated:', isAuthenticated);
 
+    // ============================================================================
+    // CAMP LEAD NAVIGATION
+    // Camp Leads are personal accounts with delegated admin permissions for a camp
+    // They should see camp management navigation (Roster, Applications, etc.)
+    // but NOT member discovery navigation (My Applications, Discover Camps)
+    // ============================================================================
+    if (user?.isCampLead && user?.campLeadCampId && user?.campLeadCampSlug) {
+      const campIdentifier = user.campLeadCampId;
+      const campSlug = user.campLeadCampSlug;
+      
+      console.log('✅ [Navbar] User is Camp Lead, showing camp management navigation');
+      
+      return [
+        { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
+        { label: 'Camp Profile', path: `/camps/${campSlug}`, icon: <HomeIcon size={18} /> },
+        { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
+        { label: 'Applications', path: `/camp/${campIdentifier}/applications`, icon: <Assignment size={18} /> },
+        { label: 'Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
+        { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> },
+        { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
+      ];
+    }
+
     // Camp/Admin accounts navigation (ordered as requested)
+    // Note: Camp Leads are handled separately above
     if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
       // Get camp identifier for profile edit URL
       const campIdentifier = user?.campId?.toString() || user?._id?.toString() || '';
