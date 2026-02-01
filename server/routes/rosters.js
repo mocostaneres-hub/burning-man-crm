@@ -1682,14 +1682,23 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
     }
 
     // Update the member entry to grant Camp Lead role
-    activeRoster.members[memberIndex] = {
-      ...activeRoster.members[memberIndex],
-      isCampLead: true
-    };
+    activeRoster.members[memberIndex].isCampLead = true;
 
-    // Save the updated roster
-    await db.updateRoster(activeRoster._id, activeRoster);
-    console.log('✅ [GRANT CAMP LEAD] Role granted successfully');
+    // CRITICAL: Mark the members array as modified for Mongoose to save it
+    activeRoster.markModified('members');
+    activeRoster.updatedAt = new Date();
+
+    // Save the updated roster directly (must use .save() for markModified to work)
+    await activeRoster.save();
+    console.log('✅ [GRANT CAMP LEAD] Role granted and saved successfully');
+    
+    // Verify the save worked
+    const verifyRoster = await db.findRoster({ _id: activeRoster._id });
+    const verifyMember = verifyRoster.members.find(m => {
+      const id = typeof m.member === 'object' ? m.member._id?.toString() : m.member?.toString();
+      return id === memberId;
+    });
+    console.log('🔍 [GRANT CAMP LEAD] Verified isCampLead after save:', verifyMember?.isCampLead);
 
     // Record activity
     await recordActivity({
@@ -1799,14 +1808,23 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
     }
 
     // Update the member entry to revoke Camp Lead role
-    activeRoster.members[memberIndex] = {
-      ...activeRoster.members[memberIndex],
-      isCampLead: false
-    };
+    activeRoster.members[memberIndex].isCampLead = false;
 
-    // Save the updated roster
-    await db.updateRoster(activeRoster._id, activeRoster);
-    console.log('✅ [REVOKE CAMP LEAD] Role revoked successfully');
+    // CRITICAL: Mark the members array as modified for Mongoose to save it
+    activeRoster.markModified('members');
+    activeRoster.updatedAt = new Date();
+
+    // Save the updated roster directly (must use .save() for markModified to work)
+    await activeRoster.save();
+    console.log('✅ [REVOKE CAMP LEAD] Role revoked and saved successfully');
+    
+    // Verify the save worked
+    const verifyRoster = await db.findRoster({ _id: activeRoster._id });
+    const verifyMember = verifyRoster.members.find(m => {
+      const id = typeof m.member === 'object' ? m.member._id?.toString() : m.member?.toString();
+      return id === memberId;
+    });
+    console.log('🔍 [REVOKE CAMP LEAD] Verified isCampLead after save:', verifyMember?.isCampLead);
 
     // Record activity
     await recordActivity({
