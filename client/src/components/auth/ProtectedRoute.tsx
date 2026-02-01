@@ -50,21 +50,30 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (requireCampAccount && user?.accountType !== 'camp' && !(user?.accountType === 'admin' && user?.campId)) {
+  // Allow access to camp management pages for:
+  // 1. Camp accounts (accountType === 'camp')
+  // 2. Admin accounts with campId
+  // 3. Camp Leads (personal accounts with isCampLead === true)
+  const hasCampAccess = user?.accountType === 'camp' 
+    || (user?.accountType === 'admin' && user?.campId)
+    || (user?.isCampLead === true && user?.campLeadCampId);
+
+  if (requireCampAccount && !hasCampAccess) {
     console.log('🔍 [ProtectedRoute] Camp account access denied');
     console.log('🔍 [ProtectedRoute] User account type:', user?.accountType);
-    console.log('🔍 [ProtectedRoute] User data:', JSON.stringify(user, null, 2));
-    console.log('🔍 [ProtectedRoute] isAuthenticated:', isAuthenticated);
+    console.log('🔍 [ProtectedRoute] User isCampLead:', user?.isCampLead);
+    console.log('🔍 [ProtectedRoute] User campLeadCampId:', user?.campLeadCampId);
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
         <h1 className="text-h1 text-red-600">
           Access Denied
         </h1>
         <p className="text-body text-custom-text-secondary">
-          This page is only accessible to camp accounts.
+          This page is only accessible to camp accounts and camp leads.
         </p>
         <p className="text-sm text-custom-text-secondary">
           Current account type: {user?.accountType || 'None'}
+          {user?.isCampLead && ' (Camp Lead)'}
         </p>
       </div>
     );

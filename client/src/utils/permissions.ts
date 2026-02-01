@@ -6,7 +6,7 @@ import { User } from '../types';
  * Check if user can manage a camp (owner, admin, or Camp Lead)
  * @param user - Current authenticated user
  * @param campId - Camp ID to check
- * @param campLeadFor - Optional array of camp IDs where user is Camp Lead
+ * @param campLeadFor - Optional array of camp IDs where user is Camp Lead (deprecated - use user.isCampLead instead)
  * @returns boolean
  */
 export function canManageCamp(
@@ -31,7 +31,12 @@ export function canManageCamp(
     return true;
   }
 
-  // Camp Lead for this specific camp
+  // Camp Lead - check new isCampLead field from /api/auth/me
+  if (user.isCampLead === true && user.campLeadCampId === campId) {
+    return true;
+  }
+
+  // Camp Lead for this specific camp (legacy array check)
   if (campLeadFor && campLeadFor.includes(campId)) {
     return true;
   }
@@ -133,4 +138,57 @@ export function canAssignCampLeadRole(user: User | null, campId: string | undefi
   const result = isCampOwner(user, campId);
   console.log('🔍 [canAssignCampLeadRole] Result:', result);
   return result;
+}
+
+/**
+ * Check if user has camp management access (either as camp account or camp lead)
+ * This is a quick check for route protection and UI visibility
+ * @param user - Current authenticated user
+ * @returns boolean - true if user can access camp management features
+ */
+export function hasCampManagementAccess(user: User | null): boolean {
+  if (!user) return false;
+
+  // Camp account
+  if (user.accountType === 'camp') {
+    return true;
+  }
+
+  // Admin with camp affiliation
+  if (user.accountType === 'admin' && user.campId) {
+    return true;
+  }
+
+  // Camp Lead
+  if (user.isCampLead === true && user.campLeadCampId) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Get the camp identifier for a user (campId for camp accounts, campLeadCampId for camp leads)
+ * @param user - Current authenticated user
+ * @returns string | undefined - the camp ID/identifier
+ */
+export function getUserCampIdentifier(user: User | null): string | undefined {
+  if (!user) return undefined;
+
+  // Camp Lead - use their delegated camp ID
+  if (user.isCampLead === true && user.campLeadCampId) {
+    return user.campLeadCampId;
+  }
+
+  // Camp account or admin with camp affiliation
+  if (user.campId) {
+    return user.campId;
+  }
+
+  // Camp account where _id IS the campId
+  if (user.accountType === 'camp' && user._id) {
+    return user._id;
+  }
+
+  return undefined;
 }
