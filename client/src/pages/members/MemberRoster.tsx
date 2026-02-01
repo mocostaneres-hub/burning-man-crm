@@ -31,16 +31,30 @@ const MemberRoster: React.FC = () => {
   
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
-    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
-      const userCampId = user.campId?.toString() || user._id?.toString();
-      const identifierMatches = campIdentifier === userCampId || 
-                                campIdentifier === user.urlSlug ||
-                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
-      
-      if (!identifierMatches) {
-        console.error('❌ [MemberRoster] Camp identifier mismatch. Redirecting...');
-        navigate('/dashboard', { replace: true });
-        return;
+    if (campIdentifier && user) {
+      // Camp accounts and admins - check campId/urlSlug match
+      if (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId)) {
+        const userCampId = user.campId?.toString() || user._id?.toString();
+        const identifierMatches = campIdentifier === userCampId || 
+                                  campIdentifier === user.urlSlug ||
+                                  (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+        
+        if (!identifierMatches) {
+          console.error('❌ [MemberRoster] Camp identifier mismatch. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
+      // Camp Leads - check campLeadCampId match
+      else if (user.isCampLead === true && user.campLeadCampId) {
+        const identifierMatches = campIdentifier === user.campLeadCampId ||
+                                  campIdentifier === user.campLeadCampSlug;
+        
+        if (!identifierMatches) {
+          console.error('❌ [MemberRoster] Camp Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
       }
     }
   }, [campIdentifier, user, navigate]);
@@ -83,10 +97,20 @@ const MemberRoster: React.FC = () => {
   }>({ isOpen: false, member: null, action: 'grant' });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
 
-  // Check if current user can access roster features (STRICT: only admins and camp leads, NO standard members)
-  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId);
-  const isAdminOrLead = user?.accountType === 'admin' || user?.accountType === 'camp';
-  const canAccessRoster = isCampContext && isAdminOrLead; // STRICT: Only admins/leads can access
+  // Check if current user can access roster features
+  // Allow access for:
+  // 1. Camp accounts (accountType === 'camp')
+  // 2. Admin accounts with campId
+  // 3. Camp Leads (personal accounts with isCampLead === true)
+  const isCampContext = user?.accountType === 'camp' 
+    || (user?.accountType === 'admin' && user?.campId)
+    || (user?.isCampLead === true && user?.campLeadCampId);
+  
+  const isAdminOrLead = user?.accountType === 'admin' 
+    || user?.accountType === 'camp'
+    || (user?.isCampLead === true);
+  
+  const canAccessRoster = isCampContext && isAdminOrLead;
   const canEdit = canAccessRoster;
   const canViewMetrics = canAccessRoster;
   const canUseFilters = canAccessRoster;

@@ -101,9 +101,15 @@ const VolunteerShifts: React.FC = () => {
   }>>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // Check if user has admin/lead access
-  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId);
-  const isAdminOrLead = user?.accountType === 'admin' || user?.accountType === 'camp';
+  // Check if user has admin/lead access (including Camp Leads)
+  const isCampContext = user?.accountType === 'camp' 
+    || (user?.accountType === 'admin' && user?.campId)
+    || (user?.isCampLead === true && user?.campLeadCampId);
+  
+  const isAdminOrLead = user?.accountType === 'admin' 
+    || user?.accountType === 'camp'
+    || (user?.isCampLead === true);
+  
   const canAccessShifts = isCampContext && isAdminOrLead;
 
   useEffect(() => {
