@@ -219,36 +219,49 @@ router.get('/me', authenticateToken, async (req, res) => {
     // Check if user is a Camp Lead in any roster
     // Camp Leads are personal/member accounts with delegated admin permissions
     if (user.accountType === 'personal' || user.role === 'member' || user.role === 'camp_lead') {
+      const Member = require('../models/Member');
       const Roster = require('../models/Roster');
       
-      // Find all active rosters where user is a Camp Lead
-      const rosters = await Roster.find({
-        'members': {
-          $elemMatch: {
-            user: user._id,
-            isCampLead: true,
-            status: 'approved'
-          }
-        },
-        isActive: true
-      }).select('camp _id').populate('camp', 'name slug _id');
+      // CRITICAL FIX: Roster stores Member IDs, not User IDs
+      // Need to find the Member record first, then query roster
+      const member = await Member.findOne({ user: user._id });
       
-      if (rosters && rosters.length > 0) {
-        // User is Camp Lead! Return first camp
-        // Note: Users can only be Camp Lead in ONE camp at a time
-        const campLeadCamp = rosters[0].camp;
+      if (member) {
+        console.log('🔍 [Auth /me] Found member record:', member._id);
         
-        console.log('✅ [Auth /me] User is Camp Lead for camp:', campLeadCamp.name);
+        // Find all active rosters where this MEMBER is a Camp Lead
+        const rosters = await Roster.find({
+          'members': {
+            $elemMatch: {
+              member: member._id, // ← FIXED: Use member._id, not user._id
+              isCampLead: true,
+              status: 'approved'
+            }
+          },
+          isActive: true
+        }).select('camp _id').populate('camp', 'name slug _id');
         
-        return res.json({
-          user: {
-            ...(user.toObject ? user.toObject() : user),
-            isCampLead: true,
-            campLeadCampId: campLeadCamp._id.toString(),
-            campLeadCampSlug: campLeadCamp.slug,
-            campLeadCampName: campLeadCamp.name
-          }
-        });
+        if (rosters && rosters.length > 0) {
+          // User is Camp Lead! Return first camp
+          // Note: Users can only be Camp Lead in ONE camp at a time
+          const campLeadCamp = rosters[0].camp;
+          
+          console.log('✅ [Auth /me] User is Camp Lead for camp:', campLeadCamp.name);
+          
+          return res.json({
+            user: {
+              ...(user.toObject ? user.toObject() : user),
+              isCampLead: true,
+              campLeadCampId: campLeadCamp._id.toString(),
+              campLeadCampSlug: campLeadCamp.slug,
+              campLeadCampName: campLeadCamp.name
+            }
+          });
+        } else {
+          console.log('ℹ️ [Auth /me] Member found but not a Camp Lead');
+        }
+      } else {
+        console.log('ℹ️ [Auth /me] No member record found for user');
       }
     }
     
