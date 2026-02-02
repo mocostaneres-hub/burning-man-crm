@@ -117,6 +117,20 @@ async function isActiveRosterMember(req, targetCampId) {
   }
 
   try {
+    const currentUserId = req.user._id.toString();
+    console.log('🔍 [Permission] Checking roster membership for user:', currentUserId);
+    
+    // CRITICAL: First find the Member record for this user
+    const Member = require('../models/Member');
+    const member = await Member.findOne({ user: currentUserId });
+    
+    if (!member) {
+      console.log('❌ [Permission] No member record found for user');
+      return false;
+    }
+    
+    console.log('🔍 [Permission] Found member record:', member._id);
+    
     // Get the active roster for the camp
     const activeRoster = await db.findActiveRoster({ camp: targetCampId });
     
@@ -125,42 +139,25 @@ async function isActiveRosterMember(req, targetCampId) {
       return false;
     }
 
-    const currentUserId = req.user._id.toString();
-    console.log('🔍 [Permission] Checking roster membership for user:', currentUserId);
     console.log('🔍 [Permission] Roster has', activeRoster.members.length, 'members');
 
-    // Check if user is in the active roster
+    // Check if member is in the active roster using Member ID
     const isMember = activeRoster.members.some(rosterEntry => {
-      // The roster structure is: roster.members[].member (Member doc) -> member.user (User ID)
-      // When populated: member.member.user._id
-      // When not populated: member.member (Member ID)
+      if (!rosterEntry.member) return false;
       
-      let userId = null;
+      // rosterEntry.member could be:
+      // 1. Populated Member object with _id
+      // 2. Member ObjectId string
+      const memberId = typeof rosterEntry.member === 'object' && rosterEntry.member._id 
+        ? rosterEntry.member._id.toString() 
+        : rosterEntry.member.toString();
       
-      if (rosterEntry.member) {
-        if (rosterEntry.member.user) {
-          // Populated: member.user could be an object or an ID
-          userId = rosterEntry.member.user._id || rosterEntry.member.user;
-        } else if (rosterEntry.user) {
-          // Some structures have user directly on the roster entry
-          userId = rosterEntry.user._id || rosterEntry.user;
-        }
-      } else if (rosterEntry.user) {
-        // Direct user reference on roster entry
-        userId = rosterEntry.user._id || rosterEntry.user;
-      }
-      
-      if (userId) {
-        const userIdStr = userId.toString();
-        console.log('🔍 [Permission] Comparing roster user:', userIdStr, 'with current user:', currentUserId);
-        return userIdStr === currentUserId;
-      }
-      
-      return false;
+      return memberId === member._id.toString();
     });
 
     console.log(`${isMember ? '✅' : '❌'} [Permission] Roster member check:`, {
       userId: currentUserId,
+      memberId: member._id.toString(),
       campId: targetCampId.toString(),
       isMember
     });
@@ -187,6 +184,20 @@ async function isCampLeadForCamp(req, targetCampId) {
   }
 
   try {
+    const currentUserId = req.user._id.toString();
+    console.log('🔍 [Permission] Checking Camp Lead status for user:', currentUserId);
+    
+    // CRITICAL: First find the Member record for this user
+    const Member = require('../models/Member');
+    const member = await Member.findOne({ user: currentUserId });
+    
+    if (!member) {
+      console.log('❌ [Permission] No member record found for user');
+      return false;
+    }
+    
+    console.log('🔍 [Permission] Found member record:', member._id);
+    
     // Get the active roster for the camp
     const activeRoster = await db.findActiveRoster({ camp: targetCampId });
     
@@ -195,33 +206,22 @@ async function isCampLeadForCamp(req, targetCampId) {
       return false;
     }
 
-    const currentUserId = req.user._id.toString();
-    console.log('🔍 [Permission] Checking Camp Lead status for user:', currentUserId);
-
-    // Find the user in the roster
+    // Find the member in the roster using Member ID (not User ID!)
     const rosterEntry = activeRoster.members.find(entry => {
-      // The roster structure is: roster.members[].member (Member doc) -> member.user (User ID)
-      let userId = null;
+      if (!entry.member) return false;
       
-      if (entry.member) {
-        if (entry.member.user) {
-          userId = entry.member.user._id || entry.member.user;
-        } else if (entry.user) {
-          userId = entry.user._id || entry.user;
-        }
-      } else if (entry.user) {
-        userId = entry.user._id || entry.user;
-      }
+      // entry.member could be:
+      // 1. Populated Member object with _id
+      // 2. Member ObjectId string
+      const memberId = typeof entry.member === 'object' && entry.member._id 
+        ? entry.member._id.toString() 
+        : entry.member.toString();
       
-      if (userId) {
-        return userId.toString() === currentUserId;
-      }
-      
-      return false;
+      return memberId === member._id.toString();
     });
 
     if (!rosterEntry) {
-      console.log('❌ [Permission] User not found in roster');
+      console.log('❌ [Permission] Member not found in roster');
       return false;
     }
 
@@ -235,6 +235,7 @@ async function isCampLeadForCamp(req, targetCampId) {
     
     console.log(`${hasAccess ? '✅' : '❌'} [Permission] Camp Lead check:`, {
       userId: currentUserId,
+      memberId: member._id.toString(),
       campId: targetCampId.toString(),
       isCampLead,
       isApproved,
