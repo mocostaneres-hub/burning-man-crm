@@ -766,19 +766,10 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     if (roster.camp.toString() !== campId.toString()) {
       return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
     }
-    }
+
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
-    }
-
-    // Verify roster belongs to this camp
-    const roster = await db.findRosterById(rosterId);
-    if (!roster) {
-      return res.status(404).json({ message: 'Roster not found' });
-    }
-    if (roster.camp.toString() !== camp._id.toString()) {
-      return res.status(403).json({ message: 'Roster does not belong to your camp' });
     }
 
     // Check if user with this email already exists
