@@ -74,16 +74,30 @@ const TaskManagement: React.FC = () => {
   
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
-    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
-      const userCampId = user.campId?.toString() || user._id?.toString();
-      const identifierMatches = campIdentifier === userCampId || 
-                                campIdentifier === user.urlSlug ||
-                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
-      
-      if (!identifierMatches) {
-        console.error('❌ [TaskManagement] Camp identifier mismatch. Redirecting...');
-        navigate('/dashboard', { replace: true });
-        return;
+    if (campIdentifier && user) {
+      // Camp accounts and admins - check campId/urlSlug match
+      if (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId)) {
+        const userCampId = user.campId?.toString() || user._id?.toString();
+        const identifierMatches = campIdentifier === userCampId || 
+                                  campIdentifier === user.urlSlug ||
+                                  (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+        
+        if (!identifierMatches) {
+          console.error('❌ [TaskManagement] Camp identifier mismatch. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
+      // Camp Leads - check campLeadCampId match
+      else if (user.isCampLead === true && user.campLeadCampId) {
+        const identifierMatches = campIdentifier === user.campLeadCampId ||
+                                  campIdentifier === user.campLeadCampSlug;
+        
+        if (!identifierMatches) {
+          console.error('❌ [TaskManagement] Camp Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
       }
     }
   }, [campIdentifier, user, navigate]);
