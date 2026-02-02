@@ -178,9 +178,9 @@ router.get('/active', authenticateToken, async (req, res) => {
     if (req.query.campId) {
       campId = req.query.campId;
       
-      // Verify Camp Lead has access to this camp
-      const { canAccessCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canAccessCamp(req, campId);
+      // Verify Camp Lead has access to this camp (use canManageCamp which includes Camp Leads!)
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, campId);
       if (!hasAccess) {
         return res.status(403).json({ message: 'Access denied to this camp' });
       }
