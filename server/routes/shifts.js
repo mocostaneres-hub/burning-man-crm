@@ -14,15 +14,25 @@ router.get('/debug-test', (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.get('/events', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    // Get camp ID for camp owners
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
+      }
     }
-
-    // Get camp ID using helper (immutable campId, fallback to email)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
+    // For Camp Leads: get campId from query parameter
+    else if (req.query.campId) {
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, req.query.campId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      }
+      campId = req.query.campId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Get events for this camp  
@@ -541,16 +551,25 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
 // @access  Private (Camp admins/leads only)
 router.get('/reports/per-person', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
+    // Get camp ID for camp owners
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
     }
-
-    // Get camp ID
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // For Camp Leads: get campId from query parameter
+    else if (req.query.campId) {
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, req.query.campId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      }
+      campId = req.query.campId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Get all events for this camp
@@ -587,21 +606,30 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.get('/reports/per-day', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { date } = req.query;
     if (!date) {
       return res.status(400).json({ message: 'Date parameter is required' });
     }
 
-    // Get camp ID
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // Get camp ID for camp owners
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
+    }
+    // For Camp Leads: get campId from query parameter
+    else if (req.query.campId) {
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, req.query.campId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      }
+      campId = req.query.campId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Get all events for this camp

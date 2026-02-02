@@ -172,7 +172,13 @@ const VolunteerShifts: React.FC = () => {
 
   const loadEvents = async () => {
     try {
-      const response = await api.get('/shifts/events');
+      // For Camp Leads: pass campId as query parameter for backend permission check
+      let url = '/shifts/events';
+      if (user?.isCampLead && user?.campLeadCampId) {
+        url += `?campId=${user.campLeadCampId}`;
+      }
+      
+      const response = await api.get(url);
       if (response?.events) {
         setEvents(response.events);
       } else {
