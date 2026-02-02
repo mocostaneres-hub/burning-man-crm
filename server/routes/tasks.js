@@ -273,8 +273,9 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, campId);
+    // Check camp ownership using helper (includes Camp Leads!)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const isCampOwner = await canManageCamp(req, campId);
     
     // Check if user is an active roster member
     const isRosterMember = await db.findMember({ 
@@ -283,9 +284,9 @@ router.post('/', authenticateToken, async (req, res) => {
       status: 'active' 
     });
 
-    // Allow camp owners, admins with campId, or active roster members
+    // Allow camp owners, Camp Leads, or active roster members
     if (!isCampOwner && !isRosterMember) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner or roster member' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, or roster member' });
     }
 
     console.log('✅ [POST /api/tasks] User authorized to create task:', {
@@ -633,22 +634,22 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const task = await db.findTask({ _id: id });
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user owns this camp
+    // Check if user owns this camp (includes Camp Leads!)
     const camp = await db.findCamp({ _id: task.campId });
-    // Check camp ownership using helper
-    const hasAccess = await canAccessCamp(req, task.campId);
-    if (!camp || !hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    
+    // Check camp ownership using helper (includes Camp Leads)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, task.campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
     }
 
     await db.deleteTask(id);
@@ -667,22 +668,22 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
     const { id } = req.params;
     let { assignedTo } = req.body;
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const task = await db.findTask({ _id: id });
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user owns this camp
+    // Check if user owns this camp (includes Camp Leads!)
     const camp = await db.findCamp({ _id: task.campId });
-    // Check camp ownership using helper
-    const hasAccess = await canAccessCamp(req, task.campId);
-    if (!camp || !hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+    
+    // Check camp ownership using helper (includes Camp Leads)
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, task.campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
     }
 
     // Convert assignedTo array to numbers for consistency with mock database

@@ -630,16 +630,22 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
   try {
     const { memberId } = req.params;
     
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
+    // Get camp ID (supports both camp owners and Camp Leads)
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
     }
-
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // For Camp Leads: get from their delegated camp
+    else if (req.user.isCampLead && req.user.campLeadCampId) {
+      campId = req.user.campLeadCampId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
+    
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
@@ -724,11 +730,6 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     const { rosterId } = req.params;
     const memberData = req.body;
 
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     // Validate required fields
     if (!memberData.firstName || !memberData.lastName || !memberData.email) {
       return res.status(400).json({ message: 'First name, last name, and email are required' });
@@ -740,11 +741,31 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid email address' });
     }
 
-    // Get camp ID from user context
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // Get camp ID (supports both camp owners and Camp Leads)
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
+    }
+    // For Camp Leads: get from their delegated camp
+    else if (req.user.isCampLead && req.user.campLeadCampId) {
+      campId = req.user.campLeadCampId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+    
+    // Verify roster belongs to this camp
+    const roster = await db.findRoster({ _id: rosterId });
+    if (!roster) {
+      return res.status(404).json({ message: 'Roster not found' });
+    }
+    
+    if (roster.camp.toString() !== campId.toString()) {
+      return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
+    }
     }
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {

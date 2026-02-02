@@ -111,11 +111,6 @@ router.get('/my-events', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.post('/events', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { eventName, description, shifts } = req.body;
 
     // Validation
@@ -123,10 +118,26 @@ router.post('/events', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Event name and at least one shift are required' });
     }
 
-    // Get camp ID using helper (immutable campId, fallback to email)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Unable to determine camp context. Please ensure you are logged in as a camp admin.' });
+    // Get camp ID for camp owners
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Unable to determine camp context' });
+      }
+    }
+    // For Camp Leads: get campId from body or query parameter
+    else if (req.body.campId || req.query.campId) {
+      const targetCampId = req.body.campId || req.query.campId;
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, targetCampId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      }
+      campId = targetCampId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Validate shifts
@@ -671,11 +682,6 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.put('/events/:eventId', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { eventId } = req.params;
     const { eventName, description, shifts } = req.body;
 
@@ -690,14 +696,13 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Get camp ID from user context and verify access
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-
-    const eventCampIdStr = (existingEvent.campId && existingEvent.campId._id ? existingEvent.campId._id : existingEvent.campId).toString();
-    const isCampAccount = req.user.accountType === 'camp';
-    if (!isCampAccount && (!campId || eventCampIdStr !== campId.toString())) {
-      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
+    // Verify user has access to this camp (includes Camp Leads)
+    const eventCampId = (existingEvent.campId && existingEvent.campId._id ? existingEvent.campId._id : existingEvent.campId).toString();
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
+    
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
     }
 
     // Validate shifts
@@ -763,41 +768,23 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     }
     console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
-    // PERMISSION CHECK: Allow camp accounts, admins with campId, or users who created the event
-    const isCampAccount = req.user.accountType === 'camp';
-    const isAdminWithCamp = req.user.accountType === 'admin' && req.user.campId;
+    // PERMISSION CHECK: Use canManageCamp helper (includes Camp Leads)
+    const eventCampId = event.campId?.toString() || event.campId;
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
     
-    // Check if user created the event (handle both populated and non-populated createdBy)
-    let createdById = null;
-    if (event.createdBy) {
-      if (event.createdBy._id) {
-        // Populated object
-        createdById = event.createdBy._id.toString();
-      } else if (typeof event.createdBy === 'object' && event.createdBy.toString) {
-        // Mongoose ObjectId
-        createdById = event.createdBy.toString();
-      } else if (typeof event.createdBy === 'string') {
-        // String ID
-        createdById = event.createdBy;
-      }
-    }
-    const userId = req.user._id ? req.user._id.toString() : req.user.toString();
-    const isEventCreator = createdById && createdById === userId;
-    
-    if (!isCampAccount && !isAdminWithCamp && !isEventCreator) {
+    if (!hasAccess) {
       console.log('❌ [EVENT DELETION] Permission denied');
       console.log('📝 [EVENT DELETION] User accountType:', req.user.accountType);
       console.log('📝 [EVENT DELETION] User campId:', req.user.campId);
-      console.log('📝 [EVENT DELETION] Event creator:', event.createdBy);
-      return res.status(403).json({ message: 'Camp account required to delete events' });
+      console.log('📝 [EVENT DELETION] User isCampLead:', req.user.isCampLead);
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required to delete events' });
     }
 
     console.log('✅ [EVENT DELETION] Permission check passed');
     
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    
-    console.log('🏕️ [EVENT DELETION] User camp ID:', campId);
+    // Get camp ID
+    const campId = eventCampId;
     console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
 
     // Verify event belongs to this camp (unless user created it)
