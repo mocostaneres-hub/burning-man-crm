@@ -101,9 +101,20 @@ const ApplicationManagementTable: React.FC = () => {
     try {
       setLoading(true);
       
-      // First get the camp data to get the camp ID
-      const campData = await api.getMyCamp();
-      const campId = campData._id;
+      // Get campId based on user type
+      let campId;
+      
+      // For Camp Leads: use their delegated campId
+      if (user?.isCampLead && user?.campLeadCampId) {
+        campId = user.campLeadCampId;
+        console.log('🔍 [Applications] Using Camp Lead campId:', campId);
+      } 
+      // For camp accounts and admins: fetch camp data
+      else {
+        const campData = await api.getMyCamp();
+        campId = campData._id;
+        console.log('🔍 [Applications] Using camp owner campId:', campId);
+      }
       
       const response = await api.get(`/applications/camp/${campId}`);
       

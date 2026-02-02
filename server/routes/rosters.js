@@ -169,27 +169,42 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // @route   GET /api/rosters/active
 // @desc    Get the active roster for the current camp
-// @access  Private (Camp owners only)
+// @access  Private (Camp owners, admins, and Camp Leads)
 router.get('/active', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
-    // Get camp using campId if available, otherwise fall back to contactEmail
-    let camp;
-    if (req.user.campId) {
-      camp = await db.findCamp({ _id: req.user.campId });
-    } else {
-      camp = await db.findCamp({ contactEmail: req.user.email });
-    }
+    let campId;
     
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // For Camp Leads: get campId from query parameter (passed by frontend)
+    if (req.query.campId) {
+      campId = req.query.campId;
+      
+      // Verify Camp Lead has access to this camp
+      const { canAccessCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canAccessCamp(req, campId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Access denied to this camp' });
+      }
+    }
+    // For camp owners and admins: get from user context
+    else if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      // Get camp using campId if available, otherwise fall back to contactEmail
+      let camp;
+      if (req.user.campId) {
+        camp = await db.findCamp({ _id: req.user.campId });
+      } else {
+        camp = await db.findCamp({ contactEmail: req.user.email });
+      }
+      
+      if (!camp) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
+      
+      campId = camp._id;
+    } else {
+      return res.status(403).json({ message: 'Camp account, admin, or Camp Lead required' });
     }
 
-    const roster = await db.findActiveRoster({ camp: camp._id });
+    const roster = await db.findActiveRoster({ camp: campId });
     
     // Debug: Log the roster data before sending
     console.log('🔍 [GET /api/rosters/active] Roster data:', JSON.stringify(roster, null, 2));

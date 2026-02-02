@@ -367,7 +367,8 @@ const MemberRoster: React.FC = () => {
       setError(''); // Clear any previous errors
       
       // Get roster data which now includes populated user information
-      const rosterResponse = await api.get('/rosters/active').catch((err) => {
+      // For Camp Leads, pass campId as query parameter
+      const rosterResponse = await api.get(`/rosters/active?campId=${campId}`).catch((err) => {
         console.log('ℹ️ [MemberRoster] No active roster found (expected for new camps):', err.response?.status);
         return null; // Return null if no roster exists
       });
