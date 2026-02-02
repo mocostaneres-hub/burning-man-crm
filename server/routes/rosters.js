@@ -943,16 +943,22 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
       return res.status(400).json({ message: 'Invalid dues status' });
     }
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
+    // Get camp ID (supports both camp owners and Camp Leads)
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Camp not found' });
+      }
     }
-
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    // For Camp Leads: get from their delegated camp
+    else if (req.user.isCampLead && req.user.campLeadCampId) {
+      campId = req.user.campLeadCampId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
+    
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
@@ -1089,12 +1095,25 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
 
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      console.log('❌ [Roster Override] Camp ID not found');
-      return res.status(404).json({ message: 'Camp not found' });
+    // Get camp ID (supports both camp owners and Camp Leads)
+    let campId;
+    
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        console.log('❌ [Roster Override] Camp ID not found for camp owner');
+        return res.status(404).json({ message: 'Camp not found' });
+      }
     }
+    // For Camp Leads: get from their delegated camp
+    else if (req.user.isCampLead && req.user.campLeadCampId) {
+      campId = req.user.campLeadCampId;
+      console.log('✅ [Roster Override] Using Camp Lead campId:', campId);
+    } else {
+      console.log('❌ [Roster Override] User is not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+    
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       console.log('❌ [Roster Override] Camp not found in database');
@@ -1475,11 +1494,15 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
     console.log('🔍 [DUES UPDATE] Looking up camp...');
     
     try {
-      if (req.user.accountType === 'camp' || req.user.accountType === 'admin') {
-        console.log('📝 [DUES UPDATE] Looking up camp by contactEmail:', req.user.email);
-        const camp = await db.findCamp({ contactEmail: req.user.email });
-        console.log('📝 [DUES UPDATE] Camp lookup result:', camp ? { _id: camp._id, campName: camp.campName } : 'null');
-        campId = camp ? camp._id : null;
+      if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+        // Use getUserCampId helper for camp owners
+        campId = await getUserCampId(req);
+        console.log('📝 [DUES UPDATE] Camp ID from getUserCampId:', campId);
+      }
+      // For Camp Leads: use their delegated camp
+      else if (req.user.isCampLead && req.user.campLeadCampId) {
+        campId = req.user.campLeadCampId;
+        console.log('📝 [DUES UPDATE] Camp ID from Camp Lead:', campId);
       }
     } catch (campLookupError) {
       console.error('❌ [DUES UPDATE] Error during camp lookup:', campLookupError);
