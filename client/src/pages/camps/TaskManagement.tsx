@@ -132,6 +132,14 @@ const TaskManagement: React.FC = () => {
 
   const fetchCampData = async () => {
     try {
+      // For Camp Leads, use their delegated camp ID
+      if (user?.isCampLead && user?.campLeadCampId) {
+        console.log('🔍 [TaskManagement] Setting campId for Camp Lead:', user.campLeadCampId);
+        setCampId(user.campLeadCampId);
+        return;
+      }
+      
+      // For camp accounts and admins
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
     } catch (err) {
@@ -158,10 +166,13 @@ const TaskManagement: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    if (user?.campId) {
+    // Fetch camp data for:
+    // 1. Admins with campId
+    // 2. Camp Leads (isCampLead === true)
+    if (user?.campId || user?.isCampLead) {
       fetchCampData();
     }
-  }, [user?.campId]);
+  }, [user?.campId, user?.isCampLead]);
 
   // Handle editTaskId from location state (for personal accounts)
   useEffect(() => {

@@ -131,10 +131,14 @@ const ApplicationManagementTable: React.FC = () => {
   }, [applications, statusFilter]);
 
   useEffect(() => {
-    if (user?.accountType === 'camp' || user?.campId) {
+    // Fetch applications for:
+    // 1. Camp accounts (accountType === 'camp')
+    // 2. Admins with campId
+    // 3. Camp Leads (isCampLead === true)
+    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
       fetchApplications();
     }
-  }, [user?.accountType, user?.campId]);
+  }, [user?.accountType, user?.campId, user?.isCampLead]);
 
   useEffect(() => {
     filterApplications();

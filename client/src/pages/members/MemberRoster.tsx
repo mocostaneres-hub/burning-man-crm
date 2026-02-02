@@ -343,6 +343,14 @@ const MemberRoster: React.FC = () => {
 
   const fetchCampData = async () => {
     try {
+      // For Camp Leads, use their delegated camp ID
+      if (user?.isCampLead && user?.campLeadCampId) {
+        console.log('🔍 [MemberRoster] Setting campId for Camp Lead:', user.campLeadCampId);
+        setCampId(user.campLeadCampId);
+        return;
+      }
+      
+      // For camp accounts and admins
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
     } catch (err) {
@@ -445,10 +453,14 @@ const MemberRoster: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    if (user?.accountType === 'camp' || user?.campId) {
+    // Fetch camp data for:
+    // 1. Camp accounts (accountType === 'camp')
+    // 2. Admins with campId
+    // 3. Camp Leads (isCampLead === true)
+    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
       fetchCampData();
     }
-  }, [user?.accountType, user?.campId]);
+  }, [user?.accountType, user?.campId, user?.isCampLead]);
 
   useEffect(() => {
     if (campId) {
