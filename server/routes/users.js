@@ -481,8 +481,12 @@ router.get('/public/:identifier', async (req, res) => {
     // Try to find by URL slug first, then by ID
     let member = await db.findUser({ urlSlug: identifier });
     if (!member) {
-      // If not found by slug, try by ID
-      member = await db.findUser({ _id: parseInt(identifier) });
+      // If not found by slug, try by ObjectId (MongoDB)
+      // Validate ObjectId format first to avoid Mongoose errors
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(identifier)) {
+        member = await db.findUser({ _id: identifier });
+      }
     }
     console.log('🔍 Member found:', member ? `ID: ${member._id}, Type: ${member.accountType}, Active: ${member.isActive}` : 'null');
     console.log('🔍 Profile visibility:', member?.preferences?.privacy?.profileVisibility);
