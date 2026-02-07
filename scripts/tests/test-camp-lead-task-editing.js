@@ -5,15 +5,20 @@
 
 const axios = require('axios');
 
-const API_URL = 'https://api.g8road.com/api';
+const API_URL = process.env.API_URL || 'https://api.g8road.com/api';
 
 // Test user: Camp Lead "test 8"
 const TEST_USER = {
-  email: 'lead8@g8road.com',
-  password: 'Test@1234',
-  expectedCampId: '68e43f61a8f6ec1271586306', // Mudskippers
-  expectedCampName: 'Mudskippers'
+  email: process.env.TEST_CAMP_LEAD_EMAIL || 'lead8@g8road.com',
+  password: process.env.TEST_CAMP_LEAD_PASSWORD || 'Test@1234',
+  expectedCampId: process.env.TEST_CAMP_LEAD_CAMP_ID || '68e43f61a8f6ec1271586306', // Mudskippers
+  expectedCampName: process.env.TEST_CAMP_LEAD_CAMP_NAME || 'Mudskippers'
 };
+
+if (!process.env.TEST_CAMP_LEAD_EMAIL || !process.env.TEST_CAMP_LEAD_PASSWORD) {
+  console.log('⚠️  Skipping camp lead task test - set TEST_CAMP_LEAD_EMAIL and TEST_CAMP_LEAD_PASSWORD to run.');
+  process.exit(0);
+}
 
 let authToken = null;
 let testTaskId = null;

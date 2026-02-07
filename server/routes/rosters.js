@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
-const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
@@ -630,25 +630,22 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
   try {
     const { memberId } = req.params;
     
-    // Get camp ID (supports both camp owners and Camp Leads)
-    let campId;
-    
-    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
-      campId = await getUserCampId(req);
-      if (!campId) {
-        return res.status(404).json({ message: 'Camp not found' });
-      }
+    // Resolve camp from member record to avoid relying on JWT campLead fields
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found' });
     }
-    // For Camp Leads: get from their delegated camp
-    else if (req.user.isCampLead && req.user.campLeadCampId) {
-      campId = req.user.campLeadCampId;
-    } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
-    }
-    
+
+    const campId = member.camp;
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Permission check (camp owner/admin or Camp Lead)
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Find the active roster
@@ -658,7 +655,6 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
     }
 
     // Find member before removal for logging
-    const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
     const memberName = memberUser ? `${memberUser.firstName} ${memberUser.lastName}` : 'Unknown';
     
@@ -741,35 +737,21 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid email address' });
     }
 
-    // Get camp ID (supports both camp owners and Camp Leads)
-    let campId;
-    
-    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
-      campId = await getUserCampId(req);
-      if (!campId) {
-        return res.status(404).json({ message: 'Camp not found' });
-      }
-    }
-    // For Camp Leads: get from their delegated camp
-    else if (req.user.isCampLead && req.user.campLeadCampId) {
-      campId = req.user.campLeadCampId;
-    } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
-    }
-    
-    // Verify roster belongs to this camp
+    // Resolve roster and camp to avoid relying on JWT campLead fields
     const roster = await db.findRoster({ _id: rosterId });
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
     }
     
-    if (roster.camp.toString() !== campId.toString()) {
-      return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
-    }
-
+    const campId = roster.camp;
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Check if user with this email already exists
@@ -943,42 +925,33 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
       return res.status(400).json({ message: 'Invalid dues status' });
     }
 
-    // Get camp ID (supports both camp owners and Camp Leads)
-    let campId;
-    
-    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
-      campId = await getUserCampId(req);
-      if (!campId) {
-        return res.status(404).json({ message: 'Camp not found' });
-      }
+    // Resolve roster and camp to avoid relying on JWT campLead fields
+    let roster;
+    roster = await db.findRoster({ _id: rosterId });
+    if (!roster) {
+      console.log('⚠️ [Dues Update] Trying integer roster ID...');
+      roster = await db.findRoster({ _id: parseInt(rosterId) });
     }
-    // For Camp Leads: get from their delegated camp
-    else if (req.user.isCampLead && req.user.campLeadCampId) {
-      campId = req.user.campLeadCampId;
-    } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    if (!roster) {
+      return res.status(404).json({ message: 'Roster not found' });
     }
-    
+
+    const campId = roster.camp;
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
     console.log('🔄 [Dues Update] Looking for roster:', { rosterId, campId: camp._id });
 
-    // Find roster - try as ObjectId first, then as integer
-    let roster;
-    roster = await db.findRoster({ _id: rosterId, camp: camp._id });
-    
-    if (!roster) {
-      // Fallback: try parsing as integer for legacy numeric IDs
-      console.log('⚠️ [Dues Update] Trying integer roster ID...');
-      roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
-    }
-    
-    if (!roster) {
-      console.error('❌ [Dues Update] Roster not found:', { rosterId, campId: camp._id });
-      return res.status(404).json({ message: 'Roster not found' });
+    // Verify roster belongs to this camp (defensive)
+    if (roster.camp.toString() !== camp._id.toString()) {
+      return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
     }
 
     console.log('✅ [Dues Update] Roster found:', { rosterId: roster._id });
@@ -1095,25 +1068,22 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
 
-    // Get camp ID (supports both camp owners and Camp Leads)
-    let campId;
+    // Resolve roster and camp to avoid relying on JWT campLead fields
+    let roster;
+    roster = await db.findRoster({ _id: rosterId });
     
-    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
-      campId = await getUserCampId(req);
-      if (!campId) {
-        console.log('❌ [Roster Override] Camp ID not found for camp owner');
-        return res.status(404).json({ message: 'Camp not found' });
-      }
-    }
-    // For Camp Leads: get from their delegated camp
-    else if (req.user.isCampLead && req.user.campLeadCampId) {
-      campId = req.user.campLeadCampId;
-      console.log('✅ [Roster Override] Using Camp Lead campId:', campId);
-    } else {
-      console.log('❌ [Roster Override] User is not camp owner or Camp Lead');
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    if (!roster) {
+      // Fallback: try parsing as integer for legacy numeric IDs
+      console.log('⚠️ [Roster Override] Trying integer roster ID...');
+      roster = await db.findRoster({ _id: parseInt(rosterId) });
     }
     
+    if (!roster) {
+      console.error('❌ [Roster Override] Roster not found:', { rosterId });
+      return res.status(404).json({ message: 'Roster not found' });
+    }
+
+    const campId = roster.camp;
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       console.log('❌ [Roster Override] Camp not found in database');
@@ -1123,26 +1093,15 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
     console.log('✅ [Roster Override] Camp found:', { campId: camp._id, campName: camp.name });
 
     // Check if user has permission (camp owner OR Camp Lead)
-    const { canManageCamp } = require('../utils/permissionHelpers');
     const hasPermission = await canManageCamp(req, camp._id);
     if (!hasPermission) {
       console.log('❌ [Roster Override] Permission denied - not camp owner or Camp Lead');
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
-    // Find roster - try as ObjectId first, then as integer
-    let roster;
-    roster = await db.findRoster({ _id: rosterId, camp: camp._id });
-    
-    if (!roster) {
-      // Fallback: try parsing as integer for legacy numeric IDs
-      console.log('⚠️ [Roster Override] Trying integer roster ID...');
-      roster = await db.findRoster({ _id: parseInt(rosterId), camp: camp._id });
-    }
-    
-    if (!roster) {
-      console.error('❌ [Roster Override] Roster not found:', { rosterId, campId: camp._id });
-      return res.status(404).json({ message: 'Roster not found' });
+    // Verify roster belongs to this camp (defensive)
+    if (roster.camp.toString() !== camp._id.toString()) {
+      return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
     }
 
     console.log('✅ [Roster Override] Roster found:', { rosterId: roster._id, membersCount: roster.members?.length });
@@ -1489,35 +1448,18 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Request body is required' });
     }
 
-    // Get camp ID from user context
-    let campId;
-    console.log('🔍 [DUES UPDATE] Looking up camp...');
-    
-    try {
-      if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
-        // Use getUserCampId helper for camp owners
-        campId = await getUserCampId(req);
-        console.log('📝 [DUES UPDATE] Camp ID from getUserCampId:', campId);
-      }
-      // For Camp Leads: use their delegated camp
-      else if (req.user.isCampLead && req.user.campLeadCampId) {
-        campId = req.user.campLeadCampId;
-        console.log('📝 [DUES UPDATE] Camp ID from Camp Lead:', campId);
-      }
-    } catch (campLookupError) {
-      console.error('❌ [DUES UPDATE] Error during camp lookup:', campLookupError);
-      return res.status(500).json({ message: 'Error looking up camp', error: campLookupError.message });
+    // Resolve camp from member record to avoid relying on JWT campLead fields
+    console.log('🔍 [DUES UPDATE] Looking up camp via member...');
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      console.log('❌ [DUES UPDATE] Member not found');
+      return res.status(404).json({ message: 'Member not found' });
     }
 
-    if (!campId) {
-      console.log('❌ [DUES UPDATE] Camp not found');
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-
+    const campId = member.camp;
     console.log('🏕️ [DUES UPDATE] Camp ID resolved:', campId);
 
     // Check if user has permission (camp owner OR Camp Lead)
-    const { canManageCamp } = require('../utils/permissionHelpers');
     const hasPermission = await canManageCamp(req, campId);
     if (!hasPermission) {
       console.log('❌ [DUES UPDATE] Permission denied - not camp owner or Camp Lead');

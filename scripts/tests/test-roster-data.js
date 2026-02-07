@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load mock data directly
-const mockDataPath = path.join(__dirname, 'server/database/mockData.json');
+const mockDataPath = path.join(__dirname, '..', '..', 'server', 'database', 'mockData.json');
 const mockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
 
 console.log('🔍 Testing Roster Data Structure\n');

@@ -1,4 +1,4 @@
-const db = require('./server/database/databaseAdapter');
+const db = require('../../server/database/databaseAdapter');
 
 async function checkFAQs() {
   try {

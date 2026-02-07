@@ -2243,7 +2243,7 @@ const MemberRoster: React.FC = () => {
         <AddMemberModal
           isOpen={addMemberModalOpen}
           onClose={() => setAddMemberModalOpen(false)}
-          rosterId={parseInt(rosterId)}
+          rosterId={rosterId}
           onMemberAdded={fetchMembers}
         />
       )}

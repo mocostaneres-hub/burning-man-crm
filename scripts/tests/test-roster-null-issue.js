@@ -1,4 +1,4 @@
-const mockDB = require('./server/database/mockDatabase');
+const mockDB = require('../../server/database/mockDatabase');
 
 async function testRosterNullIssue() {
   console.log('🧪 TESTING ROSTER NULL ISSUE');

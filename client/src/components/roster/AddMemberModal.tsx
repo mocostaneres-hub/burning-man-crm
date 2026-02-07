@@ -7,7 +7,7 @@ import { useSkills } from '../../hooks/useSkills';
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  rosterId: number;
+  rosterId: string;
   onMemberAdded: () => void;
 }
 

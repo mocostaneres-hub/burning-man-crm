@@ -30,20 +30,28 @@ const InviteTrackingPage: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Get camp ID from user context
-  // For camp accounts, user._id is the camp ID
-  // For admin accounts, use user.campId
-  const campId = user?.accountType === 'admin' && user?.campId 
-    ? user.campId.toString() 
-    : user?._id?.toString();
+  // - Camp accounts: user._id is the camp ID
+  // - Admin accounts: use user.campId
+  // - Camp Leads: use user.campLeadCampId
+  const campId = user?.accountType === 'admin' && user?.campId
+    ? user.campId.toString()
+    : user?.accountType === 'camp'
+      ? user?._id?.toString()
+      : user?.campLeadCampId
+        ? user.campLeadCampId.toString()
+        : null;
 
-  // Check if user is camp lead
-  const isCampLead = user?.accountType === 'admin' || user?.accountType === 'camp';
+  // Check if user can manage invites (camp admin or Camp Lead)
+  const canManageInvites = user?.accountType === 'admin'
+    || user?.accountType === 'camp'
+    || user?.isCampLead === true
+    || !!user?.campLeadCampId;
 
   useEffect(() => {
-    if (campId && isCampLead) {
+    if (campId && canManageInvites) {
       loadInvites();
     }
-  }, [campId, isCampLead, statusFilter]);
+  }, [campId, canManageInvites, statusFilter]);
 
   const loadInvites = async () => {
     try {
@@ -117,14 +125,14 @@ const InviteTrackingPage: React.FC = () => {
     expired: invites.filter(i => i.status === 'expired').length,
   };
 
-  if (!isCampLead) {
+  if (!canManageInvites) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card>
           <div className="p-6 text-center">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600">Only Camp Leads can view invite tracking.</p>
+            <p className="text-gray-600">Only camp admins and Camp Leads can view invite tracking.</p>
           </div>
         </Card>
       </div>

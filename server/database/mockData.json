@@ -2792,7 +2792,7 @@
         "_id": "68d08cdefea5a5dc098bd057",
         "user": 1000009,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:51.935Z",
         "reviewedAt": "2025-09-21T23:18:51.935Z",
         "reviewedBy": 1000005
@@ -2804,7 +2804,7 @@
         "_id": "68d08ce5fea5a5dc098bd058",
         "user": 1000014,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:58.355Z",
         "reviewedAt": "2025-09-21T23:18:58.355Z",
         "reviewedBy": 1000005
@@ -2816,7 +2816,7 @@
         "_id": "68d090df9656afa7651bbed7",
         "user": 1000015,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:59.720Z",
         "reviewedAt": "2025-09-21T23:18:59.720Z",
         "reviewedBy": 1000005
@@ -2828,7 +2828,7 @@
         "_id": "68d1e3233c2974835a70afd0",
         "user": 1000013,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:57.137Z",
         "reviewedAt": "2025-09-21T23:18:57.137Z",
         "reviewedBy": 1000005
@@ -2840,7 +2840,7 @@
         "_id": "68d1e32a3c2974835a70afd1",
         "user": 1000012,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:55.893Z",
         "reviewedAt": "2025-09-21T23:18:55.893Z",
         "reviewedBy": 1000005
@@ -2852,7 +2852,7 @@
         "_id": "68d1e79b09e48192914b467b",
         "user": 1000010,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:18:53.226Z",
         "reviewedAt": "2025-09-21T23:18:53.226Z",
         "reviewedBy": 1000005
@@ -2864,7 +2864,7 @@
         "_id": "68d1ebfdcfea78ca2a278dd3",
         "user": 1000011,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-03T20:19:38.470Z",
         "reviewedAt": "2025-09-23T00:38:21.601Z",
         "reviewedBy": 1000005
@@ -2876,7 +2876,7 @@
         "_id": "68d1ec046b28b9ab5a0828c7",
         "user": 1000019,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-21T23:19:04.268Z",
         "reviewedAt": "2025-09-21T23:19:04.268Z",
         "reviewedBy": 1000005
@@ -2888,7 +2888,7 @@
         "_id": "test_1758595898678",
         "user": 1000021,
         "camp": 2000022,
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-23T02:51:38.678Z",
         "reviewedAt": "2025-09-23T02:51:38.690Z",
         "reviewedBy": 1000005
@@ -2917,7 +2917,7 @@
         "camp": 2000022,
         "user": 1000006,
         "role": "member",
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-23T03:00:03.180Z",
         "reviewedAt": "2025-09-23T03:00:27.126Z",
         "reviewedBy": 1000005,
@@ -2932,7 +2932,7 @@
         "camp": 2000022,
         "user": 1000024,
         "role": "member",
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-23T02:51:03.199Z",
         "reviewedAt": "2025-09-23T03:05:32.102Z",
         "reviewedBy": 1000005,
@@ -2947,7 +2947,7 @@
         "camp": 2000022,
         "user": 1000024,
         "role": "member",
-        "status": "active",
+        "status": "pending",
         "appliedAt": "2025-09-23T02:51:03.199Z",
         "reviewedAt": "2025-09-23T03:08:05.847Z",
         "reviewedBy": 1000005,

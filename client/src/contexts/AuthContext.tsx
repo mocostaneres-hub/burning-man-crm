@@ -56,6 +56,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(userData);
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+
+      // Refresh user to capture camp-lead fields (/auth/me)
+      try {
+        const refreshed = await apiService.getCurrentUser();
+        if (refreshed?.user) {
+          setUser(refreshed.user);
+          localStorage.setItem('user', JSON.stringify(refreshed.user));
+        }
+      } catch (refreshError) {
+        console.warn('⚠️ [AuthContext] Failed to refresh user after login:', refreshError);
+      }
       
       return { 
         isFirstLogin,

@@ -120,16 +120,16 @@ async function isActiveRosterMember(req, targetCampId) {
     const currentUserId = req.user._id.toString();
     console.log('🔍 [Permission] Checking roster membership for user:', currentUserId);
     
-    // CRITICAL: First find the Member record for this user
+    // CRITICAL: Find all Member records for this user
     const Member = require('../models/Member');
-    const member = await Member.findOne({ user: currentUserId });
+    const members = await Member.find({ user: currentUserId });
     
-    if (!member) {
-      console.log('❌ [Permission] No member record found for user');
+    if (!members || members.length === 0) {
+      console.log('❌ [Permission] No member records found for user');
       return false;
     }
     
-    console.log('🔍 [Permission] Found member record:', member._id);
+    console.log('🔍 [Permission] Found member records:', members.map(m => m._id));
     
     // Get the active roster for the camp
     const activeRoster = await db.findActiveRoster({ camp: targetCampId });
@@ -142,6 +142,7 @@ async function isActiveRosterMember(req, targetCampId) {
     console.log('🔍 [Permission] Roster has', activeRoster.members.length, 'members');
 
     // Check if member is in the active roster using Member ID
+    const memberIds = new Set(members.map(m => m._id.toString()));
     const isMember = activeRoster.members.some(rosterEntry => {
       if (!rosterEntry.member) return false;
       
@@ -152,12 +153,12 @@ async function isActiveRosterMember(req, targetCampId) {
         ? rosterEntry.member._id.toString() 
         : rosterEntry.member.toString();
       
-      return memberId === member._id.toString();
+      return memberIds.has(memberId);
     });
 
     console.log(`${isMember ? '✅' : '❌'} [Permission] Roster member check:`, {
       userId: currentUserId,
-      memberId: member._id.toString(),
+      memberIds: Array.from(memberIds),
       campId: targetCampId.toString(),
       isMember
     });
@@ -187,37 +188,56 @@ async function isCampLeadForCamp(req, targetCampId) {
     const currentUserId = req.user._id.toString();
     console.log('🔍 [Permission] Checking Camp Lead status for user:', currentUserId);
     
-    // CRITICAL: First find the Member record for this user
+    // CRITICAL: Find all Member records for this user
     const Member = require('../models/Member');
-    const member = await Member.findOne({ user: currentUserId });
+    const members = await Member.find({ user: currentUserId });
     
-    if (!member) {
-      console.log('❌ [Permission] No member record found for user');
+    if (!members || members.length === 0) {
+      console.log('❌ [Permission] No member records found for user');
       return false;
     }
     
-    console.log('🔍 [Permission] Found member record:', member._id);
+    console.log('🔍 [Permission] Found member records:', members.map(m => m._id));
     
-    // Get the active roster for the camp
+    const memberIds = members.map(m => m._id);
+    const memberIdsSet = new Set(memberIds.map(id => id.toString()));
+
+    // Primary: Query roster directly (matches /auth/me behavior)
+    const Roster = require('../models/Roster');
+    const roster = await Roster.findOne({
+      camp: targetCampId,
+      isActive: true,
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          member: { $in: memberIds },
+          isCampLead: true,
+          $or: [
+            { status: { $in: ['approved', 'active'] } },
+            { status: { $exists: false } }
+          ]
+        }
+      }
+    }).select('_id');
+
+    if (roster) {
+      console.log('✅ [Permission] Camp Lead access granted via roster query');
+      return true;
+    }
+
+    // Fallback: Use active roster data if roster query didn't match
     const activeRoster = await db.findActiveRoster({ camp: targetCampId });
-    
     if (!activeRoster || !activeRoster.members || activeRoster.members.length === 0) {
       console.log('❌ [Permission] No active roster found for camp:', targetCampId);
       return false;
     }
 
-    // Find the member in the roster using Member ID (not User ID!)
     const rosterEntry = activeRoster.members.find(entry => {
       if (!entry.member) return false;
-      
-      // entry.member could be:
-      // 1. Populated Member object with _id
-      // 2. Member ObjectId string
-      const memberId = typeof entry.member === 'object' && entry.member._id 
-        ? entry.member._id.toString() 
+      const memberId = typeof entry.member === 'object' && entry.member._id
+        ? entry.member._id.toString()
         : entry.member.toString();
-      
-      return memberId === member._id.toString();
+      return memberIdsSet.has(memberId);
     });
 
     if (!rosterEntry) {
@@ -225,17 +245,14 @@ async function isCampLeadForCamp(req, targetCampId) {
       return false;
     }
 
-    // Check if user has Camp Lead role
     const isCampLead = rosterEntry.isCampLead === true;
-    
-    // Also verify status is 'approved' (Camp Leads must be approved roster members)
-    const isApproved = rosterEntry.status === 'approved';
-
+    const rosterStatus = rosterEntry.status || 'approved';
+    const isApproved = rosterStatus === 'approved' || rosterStatus === 'active';
     const hasAccess = isCampLead && isApproved;
-    
-    console.log(`${hasAccess ? '✅' : '❌'} [Permission] Camp Lead check:`, {
+
+    console.log(`${hasAccess ? '✅' : '❌'} [Permission] Camp Lead check (fallback):`, {
       userId: currentUserId,
-      memberId: member._id.toString(),
+      memberIds: Array.from(memberIdsSet),
       campId: targetCampId.toString(),
       isCampLead,
       isApproved,

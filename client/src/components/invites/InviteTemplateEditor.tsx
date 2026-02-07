@@ -25,8 +25,8 @@ const InviteTemplateEditor: React.FC<InviteTemplateEditorProps> = ({ campId }) =
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  // Check if user is camp lead
-  const isCampLead = user?.accountType === 'admin' || user?.accountType === 'camp';
+  // Check if user can manage invites (camp admin or Camp Lead)
+  const isCampLead = user?.accountType === 'admin' || user?.accountType === 'camp' || user?.isCampLead === true;
 
   useEffect(() => {
     if (campId && isCampLead) {
