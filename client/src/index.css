@@ -157,3 +157,23 @@
     display: none;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: #111827;
+  }
+
+  .no-print,
+  nav,
+  header,
+  .modal-overlay,
+  .sidebar {
+    display: none !important;
+  }
+
+  .print-page-break {
+    break-after: page;
+    page-break-after: always;
+  }
+}

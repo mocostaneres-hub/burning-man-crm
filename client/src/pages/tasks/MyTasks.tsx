@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 import { Card, Table, TableColumn, Modal, Badge, Button } from '../../components/ui';
-import { formatDate, formatEventDate, formatTime } from '../../utils/dateFormatters';
+import { formatDate, formatEventDate, formatShiftDate, formatShiftTime } from '../../utils/dateFormatters';
 import {
   ClipboardList as Assignment,
   CheckCircle as CheckCircleIcon,
@@ -276,6 +276,12 @@ const MyTasks: React.FC = () => {
     return shift.memberIds && shift.memberIds.length >= shift.maxSignUps;
   };
 
+  const getRemainingSpots = (shift: any) => {
+    const signedUp = shift.memberIds?.length || 0;
+    const max = shift.maxSignUps || 0;
+    return Math.max(max - signedUp, 0);
+  };
+
   const columns: TableColumn<Task>[] = [
     {
       key: 'title',
@@ -491,16 +497,37 @@ const MyTasks: React.FC = () => {
                       {eventData.description && (
                         <p className="text-sm text-blue-700">{eventData.description}</p>
                       )}
+                      <p className="text-xs text-blue-700 mt-2">All shift times are shown in PT.</p>
                     </div>
                     
                     <div className="space-y-3">
-                      {eventData.shifts?.map((shift: any) => {
-                        const signedUp = isUserSignedUp(shift);
-                        const isFull = isShiftFull(shift);
-                        const isTaskCompleted = selectedTask.status === 'closed';
-                        
-                        return (
-                          <div key={shift._id} className="border rounded-lg p-4">
+                      {(() => {
+                        const now = new Date();
+                        const upcomingShifts = (eventData.shifts || [])
+                          .filter((shift: any) => {
+                            const endTime = shift.endTime ? new Date(shift.endTime) : new Date(shift.date);
+                            return endTime >= now;
+                          })
+                          .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+                        if (upcomingShifts.length === 0) {
+                          return (
+                            <div className="text-sm text-gray-500">
+                              No upcoming shifts available.
+                            </div>
+                          );
+                        }
+
+                        return upcomingShifts.map((shift: any) => {
+                          const signedUp = isUserSignedUp(shift);
+                          const isFull = isShiftFull(shift);
+                          const isTaskCompleted = selectedTask.status === 'closed';
+                          const maxSignUps = shift.maxSignUps || 0;
+                          const currentSignUps = shift.memberIds?.length || 0;
+                          const remainingSpots = Math.max(maxSignUps - currentSignUps, 0);
+
+                          return (
+                            <div key={shift._id} className="border rounded-lg p-4">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <h5 className="font-medium text-gray-900 mb-2">{shift.title}</h5>
@@ -508,18 +535,25 @@ const MyTasks: React.FC = () => {
                                   <p className="text-sm text-gray-600 mb-3">{shift.description}</p>
                                 )}
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
                                   <div className="flex items-center gap-1">
                                     <Calendar size={14} className="text-gray-500" />
-                                    <span>{formatEventDate(shift.date)}</span>
+                                    <span>{formatShiftDate(shift.date)}</span>
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <Clock size={14} className="text-gray-500" />
-                                    <span>{formatTime(shift.startTime)} - {formatTime(shift.endTime)}</span>
+                                    <span>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</span>
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <Users size={14} className="text-gray-500" />
-                                    <span>{shift.memberIds?.length || 0}/{shift.maxSignUps} signed up</span>
+                                    <span>{currentSignUps}/{maxSignUps} signed up</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-gray-600">
+                                    <span>
+                                      {remainingSpots === 0
+                                        ? 'Full'
+                                        : `${remainingSpots} spot${remainingSpots === 1 ? '' : 's'} remaining`}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -572,9 +606,11 @@ const MyTasks: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                            </div>
+                          );
+                        });
+                      });
+                      })()}
                     </div>
                     
                     {selectedTask.status === 'closed' && (

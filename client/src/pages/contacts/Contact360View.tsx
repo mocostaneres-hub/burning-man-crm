@@ -137,38 +137,7 @@ const Contact360View: React.FC = () => {
                   <strong>Motivation:</strong> {application.applicationData?.motivation || '-'}
                 </p>
                 
-                {/* Action History */}
-                <div className="border-t pt-3">
-                  <h4 className="font-medium text-custom-text mb-2">Action History</h4>
-                  {application.actionHistory && application.actionHistory.length > 0 ? (
-                    <div className="space-y-2">
-                      {application.actionHistory.map((action: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="neutral" className="text-xs">
-                              {action?.action ? action.action.replace('_', ' ') : 'Unknown action'}
-                            </Badge>
-                            {action.fromStatus && action.toStatus && (
-                              <span className="text-custom-text-secondary">
-                                {action.fromStatus} → {action.toStatus}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-custom-text-secondary">
-                              {action.performedBy?.firstName} {action.performedBy?.lastName}
-                            </div>
-                            <div className="text-xs text-custom-text-secondary">
-                              {new Date(action.timestamp).toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-custom-text-secondary">No action history available</p>
-                  )}
-                </div>
+                {/* Action History deprecated in favor of Activity Log */}
               </div>
             ))}
           </div>

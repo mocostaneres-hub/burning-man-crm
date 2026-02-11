@@ -99,6 +99,54 @@ export const formatTime = (timeString: string | Date): string => {
 };
 
 /**
+ * Formats date for shifts in Pacific Time
+ * Output: "Sun, 06/15 (PT)"
+ */
+export const formatShiftDate = (dateString: string | Date): string => {
+  if (!dateString) return 'Not specified';
+
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    if (isNaN(date.getTime())) return 'Not specified';
+
+    const dateStr = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'America/Los_Angeles'
+    }).replace(/(\w+),\s*(\d+)\/(\d+)/, '$1, $2/$3');
+
+    return `${dateStr} (PT)`;
+  } catch (error) {
+    return 'Not specified';
+  }
+};
+
+/**
+ * Formats time for shifts in Pacific Time
+ * Output: "2:30 PM PT"
+ */
+export const formatShiftTime = (timeString: string | Date): string => {
+  if (!timeString) return 'Not specified';
+
+  try {
+    const date = typeof timeString === 'string' ? new Date(timeString) : timeString;
+    if (isNaN(date.getTime())) return 'Not specified';
+
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'America/Los_Angeles'
+    });
+
+    return `${timeStr} PT`;
+  } catch (error) {
+    return 'Not specified';
+  }
+};
+
+/**
  * Formats date and time together
  * Output: "Sun, 06/15 at 2:30 PM"
  */

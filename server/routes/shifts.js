@@ -1,13 +1,33 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const Event = require('../models/Event');
 
 // Test route to verify this file is being loaded
 router.get('/debug-test', (req, res) => {
   res.json({ message: 'Shifts router loaded successfully', timestamp: new Date().toISOString() });
 });
+
+const useMongo = !!process.env.MONGODB_URI || !!process.env.MONGO_URI;
+
+const resolveEventAndShift = async (shiftId) => {
+  if (useMongo) {
+    const event = await Event.findOne({ 'shifts._id': shiftId });
+    if (!event) return { event: null, shift: null };
+    const shift = event.shifts.id(shiftId) || event.shifts.find(s => s._id.toString() === shiftId.toString());
+    return { event, shift };
+  }
+
+  const shift = await db.findShift({ _id: shiftId });
+  if (!shift) return { event: null, shift: null };
+  const event = await db.findEvent({ _id: shift.eventId });
+  if (!event) return { event: null, shift: null };
+  const eventShift = event.shifts.find(s => s._id.toString() === shiftId.toString()) || shift;
+  return { event, shift: eventShift };
+};
 
 // @route   GET /api/shifts/events
 // @desc    Get all events for a camp
@@ -215,12 +235,6 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     console.log('📝 [TASK ASSIGNMENT] Request params:', { eventId: req.params.eventId });
     console.log('📝 [TASK ASSIGNMENT] Request body:', req.body);
     
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [TASK ASSIGNMENT] Permission denied - user not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { eventId } = req.params;
     const { memberIds, sendToAllMembers } = req.body;
 
@@ -233,19 +247,18 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
     }
     console.log('✅ [TASK ASSIGNMENT] Event found:', { id: event._id, name: event.eventName, shiftsCount: event.shifts?.length });
 
-    // Get camp ID and verify access
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-
-    console.log('🏕️ [TASK ASSIGNMENT] Camp ID resolved:', campId);
-    const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
-    console.log('🔒 [TASK ASSIGNMENT] Event camp ID:', eventCampIdStr);
-
-    const isCampAccount = req.user.accountType === 'camp';
-    if (!isCampAccount && eventCampIdStr !== campId.toString()) {
-      console.log('❌ [TASK ASSIGNMENT] Access denied - camp ID mismatch');
-      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
+    // Verify access for camp admins/leads
+    const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
+    if (!hasAccess) {
+      console.log('❌ [TASK ASSIGNMENT] Permission denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
+
+    const campId = eventCampId;
+    console.log('🏕️ [TASK ASSIGNMENT] Camp ID resolved:', campId);
+    console.log('🔒 [TASK ASSIGNMENT] Event camp ID:', eventCampId);
 
     let targetMembers = [];
     
@@ -530,23 +543,42 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
     const { shiftId } = req.params;
     const memberId = req.user._id;
 
-    // Find the shift
-    const shift = await db.findShift({ _id: shiftId });
-    if (!shift) {
+    const { event, shift } = await resolveEventAndShift(shiftId);
+    if (!event || !shift) {
       return res.status(404).json({ message: 'Shift not found' });
     }
 
-    // Check if member is signed up
-    if (!shift.memberIds.includes(memberId)) {
+    const isSignedUp = shift.memberIds?.some(id => id.toString() === memberId.toString());
+    if (!isSignedUp) {
       return res.status(400).json({ message: 'Not signed up for this shift' });
     }
 
-    // Remove member from shift
-    await db.updateShift(shiftId, {
-      memberIds: shift.memberIds.filter(id => id !== memberId)
-    });
+    if (useMongo) {
+      const shiftObjectId = mongoose.Types.ObjectId.isValid(shiftId)
+        ? new mongoose.Types.ObjectId(shiftId)
+        : shiftId;
+      const memberObjectId = mongoose.Types.ObjectId.isValid(memberId)
+        ? new mongoose.Types.ObjectId(memberId)
+        : memberId;
 
-    res.json({ 
+      await Event.updateOne(
+        { _id: event._id, 'shifts._id': shiftObjectId },
+        { $pull: { 'shifts.$.memberIds': memberObjectId } }
+      );
+    } else {
+      await db.updateEvent(event._id, {
+        ...event,
+        shifts: event.shifts.map(existingShift => {
+          if (existingShift._id.toString() !== shiftId.toString()) return existingShift;
+          return {
+            ...existingShift,
+            memberIds: (existingShift.memberIds || []).filter(id => id.toString() !== memberId.toString())
+          };
+        })
+      });
+    }
+
+    res.json({
       message: 'Successfully cancelled shift signup',
       shiftId,
       memberId
@@ -586,15 +618,28 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
     // Get all events for this camp
     const events = await db.findEvents({ campId });
     
-    // Build per-person report
+    // Build per-person report (bulk user lookup to avoid N+1)
     const report = [];
+    const memberIds = new Set();
     for (const event of events) {
       for (const shift of event.shifts) {
-        for (const memberId of shift.memberIds) {
-          const user = await db.findUser({ _id: memberId });
+        (shift.memberIds || []).forEach(memberId => memberIds.add(memberId.toString()));
+      }
+    }
+
+    const users = memberIds.size > 0
+      ? await db.findUsers({ _id: { $in: Array.from(memberIds) } })
+      : [];
+    const userMap = new Map((users || []).map(user => [user._id.toString(), user]));
+
+    for (const event of events) {
+      for (const shift of event.shifts) {
+        for (const memberId of shift.memberIds || []) {
+          const user = userMap.get(memberId.toString());
           if (user) {
             report.push({
               personName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+              email: user.email,
               date: shift.date,
               eventName: event.eventName,
               shiftTime: `${shift.startTime.toTimeString().slice(0, 5)} – ${shift.endTime.toTimeString().slice(0, 5)}`,
@@ -646,26 +691,42 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
     // Get all events for this camp
     const events = await db.findEvents({ campId });
     
-    // Build per-day report for the specified date
+    // Build per-day report for the specified date (bulk user lookup)
     const report = [];
     const targetDate = new Date(date);
-    
+
+    const shiftsForDay = [];
     for (const event of events) {
       for (const shift of event.shifts) {
         const shiftDate = new Date(shift.date);
         if (shiftDate.toDateString() === targetDate.toDateString()) {
-          for (const memberId of shift.memberIds) {
-            const user = await db.findUser({ _id: memberId });
-            if (user) {
-              report.push({
-                personName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
-                date: shift.date,
-                eventName: event.eventName,
-                shiftTime: `${shift.startTime.toTimeString().slice(0, 5)} – ${shift.endTime.toTimeString().slice(0, 5)}`,
-                description: shift.description
-              });
-            }
-          }
+          shiftsForDay.push({ event, shift });
+        }
+      }
+    }
+
+    const memberIds = new Set();
+    shiftsForDay.forEach(({ shift }) => {
+      (shift.memberIds || []).forEach(memberId => memberIds.add(memberId.toString()));
+    });
+
+    const users = memberIds.size > 0
+      ? await db.findUsers({ _id: { $in: Array.from(memberIds) } })
+      : [];
+    const userMap = new Map((users || []).map(user => [user._id.toString(), user]));
+
+    for (const { event, shift } of shiftsForDay) {
+      for (const memberId of shift.memberIds || []) {
+        const user = userMap.get(memberId.toString());
+        if (user) {
+          report.push({
+            personName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+            email: user.email,
+            date: shift.date,
+            eventName: event.eventName,
+            shiftTime: `${shift.startTime.toTimeString().slice(0, 5)} – ${shift.endTime.toTimeString().slice(0, 5)}`,
+            description: shift.description
+          });
         }
       }
     }
@@ -783,29 +844,7 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
 
     console.log('✅ [EVENT DELETION] Permission check passed');
     
-    // Get camp ID
-    const campId = eventCampId;
-    console.log('🔒 [EVENT DELETION] Event camp ID:', event.campId);
-
-    // Verify event belongs to this camp (unless user created it)
-    if (!isEventCreator) {
-      if (!campId) {
-        console.log('❌ [EVENT DELETION] Could not determine camp ID for user');
-        return res.status(403).json({ message: 'Camp association not found' });
-      }
-
-      const eventCampId = event.campId._id ? event.campId._id.toString() : event.campId.toString();
-      if (eventCampId !== campId) {
-        console.log('❌ [EVENT DELETION] Access denied - event belongs to different camp');
-        console.log('📝 [EVENT DELETION] User camp:', campId);
-        console.log('📝 [EVENT DELETION] Event camp:', eventCampId);
-        return res.status(403).json({ message: 'You can only delete events from your own camp' });
-      }
-    } else {
-      console.log('✅ [EVENT DELETION] User created this event - deletion allowed');
-    }
-
-    console.log('✅ [EVENT DELETION] Permission granted');
+    console.log('✅ [EVENT DELETION] Camp scope confirmed');
 
     // Step 1: Delete all tasks related to this event
     console.log('🔍 [EVENT DELETION] Searching for tasks to delete');
@@ -888,12 +927,6 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
     console.log('🗑️ [TASK DELETION] Starting task deletion process');
     console.log('📝 [TASK DELETION] Event ID:', req.params.eventId);
     
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [TASK DELETION] Permission denied - user not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { eventId } = req.params;
 
     // Check if event exists and user has access
@@ -905,23 +938,17 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
     }
     console.log('✅ [TASK DELETION] Event found:', { id: event._id, name: event.eventName });
 
-    // Get camp ID and verify access
-    let campId;
-    if (req.user.accountType === 'camp') {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
-    } else if (req.user.accountType === 'admin' && req.user.campId) {
-      const camp = await db.findCamp({ contactEmail: req.user.email });
-      campId = camp ? camp._id : null;
+    // Verify access for camp admins/leads
+    const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
+    if (!hasAccess) {
+      console.log('❌ [TASK DELETION] Access denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
+    const campId = eventCampId;
     console.log('🏕️ [TASK DELETION] Camp ID resolved:', campId);
-    console.log('🔒 [TASK DELETION] Event camp ID:', event.campId);
-
-    if (!campId || event.campId.toString() !== campId.toString()) {
-      console.log('❌ [TASK DELETION] Access denied - camp ID mismatch');
-      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
-    }
 
     // Find and delete all tasks related to this event
     console.log('🔍 [TASK DELETION] Searching for tasks to delete');
@@ -983,12 +1010,6 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
     console.log('📝 [TASK SYNC] Request params:', { eventId: req.params.eventId });
     console.log('📝 [TASK SYNC] Request body:', req.body);
     
-    // Check if user is camp admin/lead
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [TASK SYNC] Permission denied - user not camp admin/lead');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
-
     const { eventId } = req.params;
     const { assignmentType, memberIds, sendToAllMembers } = req.body;
 
@@ -1001,17 +1022,17 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
     }
     console.log('✅ [TASK SYNC] Event found:', { id: event._id, name: event.eventName });
 
-    // Get camp ID and verify access
-    // Get camp ID using helper (immutable campId)
-    const campId = await getUserCampId(req);
-
-    console.log('🏕️ [TASK SYNC] Camp ID resolved:', campId);
+    // Verify access for camp admins/leads
     const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
-    const isCampAccount = req.user.accountType === 'camp';
-    if (!isCampAccount && eventCampIdStr !== campId.toString()) {
-      console.log('❌ [TASK SYNC] Access denied - camp ID mismatch');
-      return res.status(403).json({ message: 'Access denied. Event belongs to different camp.' });
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampIdStr);
+    if (!hasAccess) {
+      console.log('❌ [TASK SYNC] Access denied - not camp owner or Camp Lead');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
+
+    const campId = eventCampIdStr;
+    console.log('🏕️ [TASK SYNC] Camp ID resolved:', campId);
 
     // Get current tasks for this event
     console.log('🔍 [TASK SYNC] Finding existing tasks for event');
@@ -1225,18 +1246,7 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
 
     // Find the shift and event
     console.log('🔍 [SHIFT SIGNUP] Looking for shift:', shiftId);
-    const events = await db.findEvents({});
-    let targetEvent = null;
-    let targetShift = null;
-
-    for (const event of events) {
-      const shift = event.shifts.find(s => s._id.toString() === shiftId);
-      if (shift) {
-        targetEvent = event;
-        targetShift = shift;
-        break;
-      }
-    }
+    const { event: targetEvent, shift: targetShift } = await resolveEventAndShift(shiftId);
 
     if (!targetEvent || !targetShift) {
       console.log('❌ [SHIFT SIGNUP] Shift not found:', shiftId);
@@ -1286,7 +1296,7 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
     });
 
     // Check if user is already signed up
-    if (targetShift.memberIds && targetShift.memberIds.includes(userId)) {
+    if (targetShift.memberIds && targetShift.memberIds.some(id => id.toString() === userId.toString())) {
       console.log('⚠️ [SHIFT SIGNUP] User already signed up for this shift');
       return res.status(400).json({ message: 'You are already signed up for this shift' });
     }
@@ -1308,16 +1318,97 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       });
     }
 
-    // Add user to shift memberIds
+    // Add user to shift memberIds with capacity enforcement
     console.log('📝 [SHIFT SIGNUP] Adding user to shift memberIds');
-    if (!targetShift.memberIds) {
-      targetShift.memberIds = [];
-    }
-    targetShift.memberIds.push(userId);
+    let updatedShift = targetShift;
+    let currentSignUps = targetShift.memberIds ? targetShift.memberIds.length : 0;
 
-    // Update the event with the modified shift
-    console.log('💾 [SHIFT SIGNUP] Updating event with new shift data');
-    await db.updateEvent(targetEvent._id, targetEvent);
+    if (useMongo) {
+      const shiftObjectId = mongoose.Types.ObjectId.isValid(shiftId)
+        ? new mongoose.Types.ObjectId(shiftId)
+        : shiftId;
+      const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+
+      await Event.updateOne(
+        { _id: targetEvent._id, 'shifts._id': shiftObjectId },
+        [
+          {
+            $set: {
+              shifts: {
+                $map: {
+                  input: '$shifts',
+                  as: 'shift',
+                  in: {
+                    $cond: [
+                      { $eq: ['$$shift._id', shiftObjectId] },
+                      {
+                        $let: {
+                          vars: {
+                            alreadySignedUp: { $in: [userObjectId, '$$shift.memberIds'] },
+                            remaining: { $subtract: ['$$shift.maxSignUps', { $size: '$$shift.memberIds' }] }
+                          },
+                          in: {
+                            $cond: [
+                              { $and: [{ $not: ['$$alreadySignedUp'] }, { $gt: ['$$remaining', 0] }] },
+                              {
+                                $mergeObjects: [
+                                  '$$shift',
+                                  { memberIds: { $concatArrays: ['$$shift.memberIds', [userObjectId]] } }
+                                ]
+                              },
+                              '$$shift'
+                            ]
+                          }
+                        }
+                      },
+                      '$$shift'
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      );
+
+      const refreshedEvent = await Event.findById(targetEvent._id);
+      updatedShift = refreshedEvent?.shifts?.id(shiftObjectId)
+        || refreshedEvent?.shifts?.find(s => s._id.toString() === shiftId.toString());
+
+      if (!updatedShift) {
+        console.error('❌ [SHIFT SIGNUP] Updated shift not found after save');
+        return res.status(500).json({ message: 'Failed to update shift signup' });
+      }
+
+      currentSignUps = updatedShift.memberIds ? updatedShift.memberIds.length : 0;
+      const isSignedUp = updatedShift.memberIds?.some(id => id.toString() === userId.toString());
+
+      if (!isSignedUp) {
+        if (currentSignUps >= updatedShift.maxSignUps) {
+          console.log('❌ [SHIFT SIGNUP] Shift is at capacity after update attempt');
+          return res.status(409).json({
+            message: 'This shift is now full. Please try a different shift.',
+            currentSignUps,
+            maxSignUps: updatedShift.maxSignUps
+          });
+        }
+
+        return res.status(500).json({ message: 'Failed to sign up for shift' });
+      }
+    } else {
+      if (!targetShift.memberIds) {
+        targetShift.memberIds = [];
+      }
+      targetShift.memberIds.push(userId);
+
+      // Update the event with the modified shift
+      console.log('💾 [SHIFT SIGNUP] Updating event with new shift data');
+      await db.updateEvent(targetEvent._id, targetEvent);
+      updatedShift = targetShift;
+      currentSignUps = updatedShift.memberIds.length;
+    }
 
     // Mark the user's volunteer shift task as completed (first sign-up only)
     console.log('🎯 [SHIFT SIGNUP] Looking for user\'s volunteer shift task');
@@ -1352,10 +1443,11 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
 
     res.json({
       message: 'Successfully signed up for shift',
-      shiftId: targetShift._id,
+      shiftId: updatedShift._id,
       eventId: targetEvent._id,
-      currentSignUps: targetShift.memberIds.length,
-      maxSignUps: targetShift.maxSignUps
+      currentSignUps,
+      maxSignUps: updatedShift.maxSignUps,
+      remainingSpots: Math.max(updatedShift.maxSignUps - currentSignUps, 0)
     });
   } catch (error) {
     console.error('❌ [SHIFT SIGNUP] Critical error during sign-up:', error);

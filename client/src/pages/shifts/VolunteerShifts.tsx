@@ -5,7 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
-import { formatEventDate, formatTime, formatDate } from '../../utils/dateFormatters';
+import { formatEventDate, formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
 
 // Helper function for retrying API calls with exponential backoff
 const retryApiCall = async (
@@ -50,23 +50,31 @@ const VolunteerShifts: React.FC = () => {
   
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
-    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
-      const userCampId = user.campId?.toString() || user._id?.toString();
-      const identifierMatches = campIdentifier === userCampId || 
-                                campIdentifier === user.urlSlug ||
-                                (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
-      
-      if (!identifierMatches) {
-        console.error('❌ [VolunteerShifts] Camp identifier mismatch. Redirecting...');
-        navigate('/dashboard', { replace: true });
-        return;
+    if (campIdentifier && user) {
+      if (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId)) {
+        const userCampId = user.campId?.toString() || user._id?.toString();
+        const identifierMatches = campIdentifier === userCampId || 
+                                  campIdentifier === user.urlSlug ||
+                                  (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+        
+        if (!identifierMatches) {
+          console.error('❌ [VolunteerShifts] Camp identifier mismatch. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      } else if (user.isCampLead && user.campLeadCampId) {
+        const identifierMatches = campIdentifier === user.campLeadCampId ||
+                                  campIdentifier === user.campLeadCampSlug;
+        if (!identifierMatches) {
+          console.error('❌ [VolunteerShifts] Camp Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+        }
       }
     }
   }, [campIdentifier, user, navigate]);
   const [activeTab, setActiveTab] = useState<'main' | 'reports'>('main');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
-  const [showReportsModal, setShowReportsModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
@@ -74,7 +82,11 @@ const VolunteerShifts: React.FC = () => {
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTime' | 'description'>('date');
+  const [personSortDir, setPersonSortDir] = useState<'asc' | 'desc'>('asc');
+  const [eventShiftSortKey, setEventShiftSortKey] = useState<'title' | 'date' | 'filled' | 'capacity' | 'remaining'>('date');
+  const [eventShiftSortDir, setEventShiftSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Form state for creating events
   const [eventForm, setEventForm] = useState({
@@ -112,6 +124,37 @@ const VolunteerShifts: React.FC = () => {
   
   const canAccessShifts = isCampContext && isAdminOrLead;
 
+  const togglePersonSort = (key: typeof personSortKey) => {
+    if (key === personSortKey) {
+      setPersonSortDir(personSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPersonSortKey(key);
+      setPersonSortDir('asc');
+    }
+  };
+
+  const toggleEventShiftSort = (key: typeof eventShiftSortKey) => {
+    if (key === eventShiftSortKey) {
+      setEventShiftSortDir(eventShiftSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setEventShiftSortKey(key);
+      setEventShiftSortDir('asc');
+    }
+  };
+
+  const getShiftStats = (shift: any) => {
+    const current = shift.memberIds?.length || 0;
+    const max = shift.maxSignUps || 0;
+    const remaining = Math.max(max - current, 0);
+    const filledPercent = max > 0 ? Math.round((current / max) * 100) : 0;
+    return { current, max, remaining, filledPercent };
+  };
+
+  const getSortIndicator = (activeKey: string, key: string, direction: 'asc' | 'desc') => {
+    if (activeKey !== key) return '';
+    return direction === 'asc' ? '▲' : '▼';
+  };
+
   useEffect(() => {
     if (canAccessShifts) {
       loadEvents();
@@ -123,15 +166,17 @@ const VolunteerShifts: React.FC = () => {
     try {
       setLoadingMembers(true);
       
-      // Get camp ID from user context  
-      let campId;
-      if (user?.accountType === 'camp') {
-        const camp = await api.get('/camps/my-camp');
-        campId = camp?._id;
-      } else if (user?.accountType === 'admin' && user?.campId) {
-        const camp = await api.get('/camps/my-camp');
-        campId = camp?._id;
-      }
+    // Get camp ID from user context  
+    let campId;
+    if (user?.accountType === 'camp') {
+      const camp = await api.get('/camps/my-camp');
+      campId = camp?._id;
+    } else if (user?.accountType === 'admin' && user?.campId) {
+      const camp = await api.get('/camps/my-camp');
+      campId = camp?._id;
+    } else if (user?.isCampLead && user?.campLeadCampId) {
+      campId = user.campLeadCampId;
+    }
 
       if (!campId) {
         setRosterMembers([]);
@@ -210,6 +255,9 @@ const VolunteerShifts: React.FC = () => {
         const camp = await api.get('/camps/my-camp');
         console.log('🔍 [Event Creation] Camp response:', camp);
         campId = camp?._id;
+      } else if (user?.isCampLead && user?.campLeadCampId) {
+        console.log('🔍 [Event Creation] Detected Camp Lead account, using campLeadCampId...');
+        campId = user.campLeadCampId;
       }
 
       console.log('🔍 [Event Creation] Final campId:', campId);
@@ -223,6 +271,7 @@ const VolunteerShifts: React.FC = () => {
       const eventData = {
         eventName: eventForm.eventName,
         description: eventForm.description,
+        ...(campId ? { campId } : {}),
         shifts: eventForm.shifts.map(shift => ({
           title: shift.title,
           description: shift.description,
@@ -635,13 +684,20 @@ const VolunteerShifts: React.FC = () => {
                         <div key={shift._id} className="bg-gray-50 rounded p-2 text-sm">
                           <div className="font-medium">{shift.title}</div>
                           <div className="text-gray-600">
-                            {formatEventDate(shift.date)}
+                            {formatShiftDate(shift.date)}
                           </div>
                           <div className="text-gray-600">
-                            {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
+                            {formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}
                           </div>
                           <div className="text-gray-500">
                             {shift.memberIds.length}/{shift.maxSignUps} signed up
+                            {shift.memberIds.length >= shift.maxSignUps ? (
+                              <span className="ml-2 text-red-600 font-medium">Full</span>
+                            ) : (
+                              <span className="ml-2 text-green-700">
+                                {Math.max(shift.maxSignUps - shift.memberIds.length, 0)} spots remaining
+                              </span>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -659,54 +715,6 @@ const VolunteerShifts: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'reports' && (
-        <div className="space-y-6">
-          <Card className="p-6">
-            <h2 className="text-xl font-lato-bold text-custom-text mb-4">
-              Shift Reports
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <Button
-                variant={reportType === 'per-person' ? 'primary' : 'outline'}
-                onClick={() => setReportType('per-person')}
-                className="flex items-center gap-2"
-              >
-                <Users className="w-4 h-4" />
-                Per-Person Report
-              </Button>
-              <Button
-                variant={reportType === 'per-day' ? 'primary' : 'outline'}
-                onClick={() => setReportType('per-day')}
-                className="flex items-center gap-2"
-              >
-                <Calendar className="w-4 h-4" />
-                Per-Day Report
-              </Button>
-            </div>
-            {reportType === 'per-day' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Date
-                </label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-48"
-                />
-              </div>
-            )}
-            <Button
-              variant="primary"
-              onClick={() => setShowReportsModal(true)}
-              disabled={reportType === 'per-day' && !selectedDate}
-            >
-              Generate Report
-            </Button>
-          </Card>
-        </div>
-      )}
-
       {/* Reports Tab */}
       {activeTab === 'reports' && (
         <div className="space-y-6">
@@ -720,6 +728,42 @@ const VolunteerShifts: React.FC = () => {
               </p>
             </div>
 
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6 no-print">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={reportType === 'per-person' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setReportType('per-person')}
+                >
+                  Per-Person
+                </Button>
+                <Button
+                  variant={reportType === 'per-day' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setReportType('per-day')}
+                >
+                  Per-Day
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                {reportType === 'per-day' && (
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-40"
+                  />
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.print()}
+                >
+                  Print
+                </Button>
+              </div>
+            </div>
+
             {events.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar size={64} className="text-gray-400 mx-auto mb-4" />
@@ -728,8 +772,112 @@ const VolunteerShifts: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-8">
-                {/* Per-Person View */}
+                {/* Per-Event View */}
                 <div>
+                  <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    Per-Event View
+                  </h3>
+                  <div className="text-sm text-gray-500 mb-3">
+                    Click a column header to sort.
+                  </div>
+                  <div className="space-y-6">
+                    {events.map(event => {
+                      const sortedShifts = [...event.shifts].sort((a, b) => {
+                        const statsA = getShiftStats(a);
+                        const statsB = getShiftStats(b);
+                        const direction = eventShiftSortDir === 'asc' ? 1 : -1;
+                        if (eventShiftSortKey === 'title') {
+                          return a.title.localeCompare(b.title) * direction;
+                        }
+                        if (eventShiftSortKey === 'capacity') {
+                          return (statsA.max - statsB.max) * direction;
+                        }
+                        if (eventShiftSortKey === 'remaining') {
+                          return (statsA.remaining - statsB.remaining) * direction;
+                        }
+                        if (eventShiftSortKey === 'filled') {
+                          return (statsA.filledPercent - statsB.filledPercent) * direction;
+                        }
+                        const aTime = new Date(a.startTime).getTime();
+                        const bTime = new Date(b.startTime).getTime();
+                        return (aTime - bTime) * direction;
+                      });
+
+                      return (
+                        <div key={event._id} className="print-page-break">
+                          <div className="mb-3">
+                            <h4 className="text-base font-medium text-gray-900">{event.eventName}</h4>
+                            {event.description && (
+                              <p className="text-sm text-gray-600">{event.description}</p>
+                            )}
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse border border-gray-300">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  <th
+                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                                    onClick={() => toggleEventShiftSort('title')}
+                                  >
+                                    Shift {getSortIndicator(eventShiftSortKey, 'title', eventShiftSortDir)}
+                                  </th>
+                                  <th
+                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                                    onClick={() => toggleEventShiftSort('date')}
+                                  >
+                                    Date {getSortIndicator(eventShiftSortKey, 'date', eventShiftSortDir)}
+                                  </th>
+                                  <th className="border border-gray-300 px-4 py-2 text-left">Time (PT)</th>
+                                  <th
+                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                                    onClick={() => toggleEventShiftSort('filled')}
+                                  >
+                                    % Filled {getSortIndicator(eventShiftSortKey, 'filled', eventShiftSortDir)}
+                                  </th>
+                                  <th
+                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                                    onClick={() => toggleEventShiftSort('capacity')}
+                                  >
+                                    Capacity {getSortIndicator(eventShiftSortKey, 'capacity', eventShiftSortDir)}
+                                  </th>
+                                  <th
+                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                                    onClick={() => toggleEventShiftSort('remaining')}
+                                  >
+                                    Remaining {getSortIndicator(eventShiftSortKey, 'remaining', eventShiftSortDir)}
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sortedShifts.map(shift => {
+                                  const stats = getShiftStats(shift);
+                                  return (
+                                    <tr key={shift._id} className="hover:bg-gray-50">
+                                      <td className="border border-gray-300 px-4 py-2">{shift.title}</td>
+                                      <td className="border border-gray-300 px-4 py-2">{formatShiftDate(shift.date)}</td>
+                                      <td className="border border-gray-300 px-4 py-2">
+                                        {formatShiftTime(shift.startTime)} – {formatShiftTime(shift.endTime)}
+                                      </td>
+                                      <td className="border border-gray-300 px-4 py-2">{stats.filledPercent}%</td>
+                                      <td className="border border-gray-300 px-4 py-2">{stats.current}/{stats.max}</td>
+                                      <td className="border border-gray-300 px-4 py-2">{stats.remaining}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                )}
+
+                {/* Per-Person View */}
+                {reportType === 'per-person' && (
+                  <div>
                   <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5" />
                     Per-Person View
@@ -738,11 +886,36 @@ const VolunteerShifts: React.FC = () => {
                     <table className="w-full border-collapse border border-gray-300">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-4 py-2 text-left">Person Name</th>
-                          <th className="border border-gray-300 px-4 py-2 text-left">Date</th>
-                          <th className="border border-gray-300 px-4 py-2 text-left">Event Name</th>
-                          <th className="border border-gray-300 px-4 py-2 text-left">Shift Time</th>
-                          <th className="border border-gray-300 px-4 py-2 text-left">Description</th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('personName')}
+                          >
+                            Person Name {getSortIndicator(personSortKey, 'personName', personSortDir)}
+                          </th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('date')}
+                          >
+                            Date {getSortIndicator(personSortKey, 'date', personSortDir)}
+                          </th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('eventName')}
+                          >
+                            Event Name {getSortIndicator(personSortKey, 'eventName', personSortDir)}
+                          </th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('shiftTime')}
+                          >
+                            Shift Time {getSortIndicator(personSortKey, 'shiftTime', personSortDir)}
+                          </th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('description')}
+                          >
+                            Description {getSortIndicator(personSortKey, 'description', personSortDir)}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -767,9 +940,9 @@ const VolunteerShifts: React.FC = () => {
 
                                   signUps.push({
                                     personName: memberName,
-                                    date: formatEventDate(shift.date),
+                                    date: formatShiftDate(shift.date),
                                     eventName: event.eventName,
-                                    shiftTime: `${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
+                                    shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
                                     description: shift.description || shift.title
                                   });
                                 });
@@ -787,7 +960,15 @@ const VolunteerShifts: React.FC = () => {
                             );
                           }
 
-                          return signUps.map((signUp, index) => (
+                          const sorted = [...signUps].sort((a, b) => {
+                            const direction = personSortDir === 'asc' ? 1 : -1;
+                            if (personSortKey === 'date') {
+                              return a.date.localeCompare(b.date) * direction;
+                            }
+                            return (a[personSortKey] || '').toString().localeCompare((b[personSortKey] || '').toString()) * direction;
+                          });
+
+                          return sorted.map((signUp, index) => (
                             <tr key={index} className="hover:bg-gray-50">
                               <td className="border border-gray-300 px-4 py-2">{signUp.personName}</td>
                               <td className="border border-gray-300 px-4 py-2">{signUp.date}</td>
@@ -801,8 +982,10 @@ const VolunteerShifts: React.FC = () => {
                     </table>
                   </div>
                 </div>
+                )}
 
                 {/* Per-Day View */}
+                {reportType === 'per-day' && (
                 <div>
                   <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
                     <Calendar className="w-5 h-5" />
@@ -819,16 +1002,22 @@ const VolunteerShifts: React.FC = () => {
 
                       events.forEach(event => {
                         event.shifts.forEach(shift => {
-                          const dateKey = formatEventDate(shift.date);
+                          const dateKey = formatShiftDate(shift.date);
+                          if (selectedDate) {
+                            const selectedKey = formatShiftDate(new Date(selectedDate));
+                            if (dateKey !== selectedKey) {
+                              return;
+                            }
+                          }
                           if (!shiftsByDate[dateKey]) {
                             shiftsByDate[dateKey] = [];
                           }
 
                           const signedUpMembers = shift.memberIds?.map((memberId: any) => {
                             const member = rosterMembers.find(m => m._id === memberId);
-                            return member ? 
-                              `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member' : 
-                              'Unknown Member';
+                            if (!member) return 'Unknown Member';
+                            const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member';
+                            return member.email ? `${name} (${member.email})` : name;
                           }) || [];
 
                           shiftsByDate[dateKey].push({
@@ -840,9 +1029,9 @@ const VolunteerShifts: React.FC = () => {
                       });
 
                       const sortedDates = Object.keys(shiftsByDate).sort((a, b) => {
-                        const dateA = new Date(a.split(', ')[1] + '/2024');
-                        const dateB = new Date(b.split(', ')[1] + '/2024');
-                        return dateA.getTime() - dateB.getTime();
+                        const shiftA = shiftsByDate[a]?.[0]?.shift?.date;
+                        const shiftB = shiftsByDate[b]?.[0]?.shift?.date;
+                        return new Date(shiftA).getTime() - new Date(shiftB).getTime();
                       });
 
                       if (sortedDates.length === 0) {
@@ -865,7 +1054,7 @@ const VolunteerShifts: React.FC = () => {
                                 <thead>
                                   <tr className="border-b border-gray-200">
                                     <th className="text-left py-2">Event Name</th>
-                                    <th className="text-left py-2">Shift Time</th>
+                                    <th className="text-left py-2">Shift Time (PT)</th>
                                     <th className="text-left py-2">Description</th>
                                     <th className="text-left py-2">Signed Up Members</th>
                                   </tr>
@@ -875,7 +1064,7 @@ const VolunteerShifts: React.FC = () => {
                                     <tr key={index} className="border-b border-gray-100 last:border-b-0">
                                       <td className="py-2">{item.event.eventName}</td>
                                       <td className="py-2">
-                                        {formatTime(item.shift.startTime)} – {formatTime(item.shift.endTime)}
+                                        {formatShiftTime(item.shift.startTime)} – {formatShiftTime(item.shift.endTime)}
                                       </td>
                                       <td className="py-2">{item.shift.description || item.shift.title}</td>
                                       <td className="py-2">
@@ -1204,7 +1393,7 @@ const VolunteerShifts: React.FC = () => {
                       <p className="text-sm text-gray-600 mb-2">{shift.description}</p>
                       <div className="text-sm text-gray-500">
                         <div>{formatDate(shift.date)}</div>
-                        <div>{formatTime(shift.startTime)} - {formatTime(shift.endTime)}</div>
+                        <div>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</div>
                       </div>
                     </div>
                   ))}
@@ -1222,67 +1411,6 @@ const VolunteerShifts: React.FC = () => {
           >
             Close
           </Button>
-        </div>
-      </Modal>
-
-      {/* Reports Modal */}
-      <Modal
-        isOpen={showReportsModal}
-        onClose={() => setShowReportsModal(false)}
-        title={`${reportType === 'per-person' ? 'Per-Person' : 'Per-Day'} Report`}
-        size="lg"
-      >
-        <div className="space-y-6">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-medium mb-2">Report Configuration</h3>
-            <p className="text-sm text-gray-600">
-              {reportType === 'per-person' 
-                ? 'This report shows each member and all shifts they are working.'
-                : `This report shows all shifts scheduled for ${selectedDate ? formatDate(selectedDate) : 'the selected date'} and all members signed up for each shift.`
-              }
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Person Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Event Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Shift Time
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                    No data available. Create events and have members sign up to generate reports.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setShowReportsModal(false)}
-              className="flex-1"
-            >
-              Close
-            </Button>
-          </div>
         </div>
       </Modal>
 

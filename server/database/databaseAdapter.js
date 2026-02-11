@@ -609,6 +609,44 @@ class DatabaseAdapter {
     }
   }
 
+  // Shift operations
+  async findShift(query) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      const event = await Event.findOne({ 'shifts._id': query._id }, { shifts: 1, campId: 1, eventName: 1 }).lean();
+      if (!event || !event.shifts || event.shifts.length === 0) {
+        return null;
+      }
+      const shift = event.shifts.find(s => s._id.toString() === query._id.toString());
+      if (!shift) return null;
+      return {
+        ...shift,
+        eventId: event._id,
+        campId: event.campId,
+        eventName: event.eventName
+      };
+    } else {
+      return await this.mockDB.findShift(query);
+    }
+  }
+
+  async updateShift(shiftId, updateData) {
+    if (this.useMongoDB) {
+      const Event = require('../models/Event');
+      const updates = {};
+      for (const [key, value] of Object.entries(updateData || {})) {
+        updates[`shifts.$.${key}`] = value;
+      }
+      return await Event.findOneAndUpdate(
+        { 'shifts._id': shiftId },
+        { $set: updates },
+        { new: true }
+      );
+    } else {
+      return await this.mockDB.updateShift(shiftId, updateData);
+    }
+  }
+
 
   // Invite operations
   async findInvite(query) {
