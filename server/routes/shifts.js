@@ -1302,7 +1302,7 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
     }
 
     // Check capacity limits (transactional check)
-    const currentSignUps = targetShift.memberIds ? targetShift.memberIds.length : 0;
+    let currentSignUps = targetShift.memberIds ? targetShift.memberIds.length : 0;
     console.log('📊 [SHIFT SIGNUP] Capacity check:', {
       currentSignUps,
       maxSignUps: targetShift.maxSignUps,
@@ -1321,7 +1321,6 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
     // Add user to shift memberIds with capacity enforcement
     console.log('📝 [SHIFT SIGNUP] Adding user to shift memberIds');
     let updatedShift = targetShift;
-    let currentSignUps = targetShift.memberIds ? targetShift.memberIds.length : 0;
 
     if (useMongo) {
       const shiftObjectId = mongoose.Types.ObjectId.isValid(shiftId)
