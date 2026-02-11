@@ -141,7 +141,7 @@ const Contact360View: React.FC = () => {
                         <div key={index} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
                           <div className="flex items-center space-x-2">
                             <Badge variant="neutral" className="text-xs">
-                              {action.action.replace('_', ' ')}
+                              {action?.action ? action.action.replace('_', ' ') : 'Unknown action'}
                             </Badge>
                             {action.fromStatus && action.toStatus && (
                               <span className="text-custom-text-secondary">
