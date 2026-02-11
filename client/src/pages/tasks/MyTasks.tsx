@@ -606,6 +606,7 @@ const MyTasks: React.FC = () => {
                                 )}
                               </div>
                             </div>
+                          </div>
                           );
                         });
                       })()}

@@ -873,7 +873,6 @@ const VolunteerShifts: React.FC = () => {
                     })}
                   </div>
                 </div>
-                )}
 
                 {/* Per-Person View */}
                 {reportType === 'per-person' && (
