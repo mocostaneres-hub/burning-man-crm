@@ -10,6 +10,7 @@ interface AggregatedData {
   applications: any[];
   tasks: any[];
   volunteerShifts: any[];
+  activityLog: any[];
 }
 
 const Contact360View: React.FC = () => {
@@ -51,7 +52,7 @@ const Contact360View: React.FC = () => {
 
   if (!data) return null;
 
-  const { user, rosterHistory, applications, tasks, volunteerShifts } = data;
+  const { user, rosterHistory, applications, tasks, volunteerShifts, activityLog } = data;
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -223,6 +224,46 @@ const Contact360View: React.FC = () => {
                     <td className="px-4 py-2 text-sm">{s.title}</td>
                     <td className="px-4 py-2 text-sm">{s.date ? new Date(s.date).toLocaleDateString() : '-'}</td>
                     <td className="px-4 py-2 text-sm">{s.startTime || '-'}{s.endTime ? ` - ${s.endTime}` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Activity Log */}
+      <Card className="p-6">
+        <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Activity Log</h2>
+        {activityLog.length === 0 ? (
+          <p className="text-custom-text-secondary">No activity logged for this member.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">When</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Activity</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">By</th>
+                  <th className="px-4 py-2 text-left text-sm text-custom-text-secondary">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activityLog.map((log) => (
+                  <tr key={log._id} className="border-t">
+                    <td className="px-4 py-2 text-sm">
+                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}
+                    </td>
+                    <td className="px-4 py-2 text-sm">{log.activityType || '-'}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {log.actingUserId?.firstName || log.actingUserId?.lastName
+                        ? `${log.actingUserId?.firstName || ''} ${log.actingUserId?.lastName || ''}`.trim()
+                        : log.actingUserId?.email || '-'}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-custom-text-secondary">
+                      {log.details?.field ? `${log.details.field}: ` : ''}
+                      {log.details?.newValueDisplay || log.details?.newValue || log.details?.message || ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>

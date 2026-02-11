@@ -159,21 +159,30 @@ router.get('/', optionalAuth, async (req, res) => {
 // 360 Contact Aggregation
 // @route   GET /api/camps/:campId/contacts/:userId
 // @desc    Aggregate a user's profile, roster history, applications, tasks, and volunteer shifts for a camp
-// @access  Private (camp_lead only)
-router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, async (req, res) => {
+// @access  Private (camp_admin or camp_lead)
+router.get('/:campId/contacts/:userId', authenticateToken, async (req, res) => {
   try {
     const { campId, userId } = req.params;
 
-    const hasAccess = await canAccessCamp(req, campId);
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, campId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+      return res.status(403).json({ message: 'Access denied - camp admin or Camp Lead required' });
     }
 
     const user = await db.findUser({ _id: userId });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     // Resolve the Member document(s) for this user within this camp
-    const memberDocs = await db.findMembers({ camp: campId, user: userId });
+    let memberDocs = [];
+    try {
+      memberDocs = await db.findMembers({ camp: campId, user: userId });
+    } catch (memberError) {
+      console.error('❌ [360 Contact] Error loading member docs:', memberError);
+      memberDocs = [];
+    }
     const memberIds = (memberDocs || []).map(m => m._id?.toString());
 
     console.log('🔍 [360 Contact] User ID:', userId);
@@ -184,76 +193,119 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
     let rosterEntries = [];
     if (memberIds.length > 0) {
       // Find rosters that contain these member IDs
-      const rosters = await db.findRosters({ camp: campId, 'members.member': { $in: memberIds } });
-      console.log('🔍 [360 Contact] Rosters found:', rosters?.length || 0);
-      
-      for (const roster of rosters || []) {
-        const entry = (roster.members || []).find(m => memberIds.includes(m?.member?.toString?.()));
-        if (entry) {
-          // Check if there's a related application
-          const relatedApp = await db.findMemberApplication({ applicant: userId, camp: campId, status: 'approved' });
-          
-          rosterEntries.push({
-            rosterId: roster._id,
-            name: roster.name,
-            joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
-            addedAt: entry.addedAt,
-            duesStatus: entry.duesStatus || 'Unpaid',
-            overrides: entry.overrides || null,
-            addedVia: relatedApp ? 'application' : 'manual',
-            addedBy: entry.addedBy
-          });
+      try {
+        const rosters = await db.findRosters({ camp: campId, 'members.member': { $in: memberIds } });
+        console.log('🔍 [360 Contact] Rosters found:', rosters?.length || 0);
+        
+        for (const roster of rosters || []) {
+          const entry = (roster.members || []).find(m => memberIds.includes(m?.member?.toString?.()));
+          if (entry) {
+            // Check if there's a related application
+            const relatedApp = await db.findMemberApplication({ applicant: userId, camp: campId, status: 'approved' });
+            
+            rosterEntries.push({
+              rosterId: roster._id,
+              name: roster.name,
+              joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
+              addedAt: entry.addedAt,
+              duesStatus: entry.duesStatus || 'Unpaid',
+              overrides: entry.overrides || null,
+              addedVia: relatedApp ? 'application' : 'manual',
+              addedBy: entry.addedBy
+            });
+          }
         }
+      } catch (rosterError) {
+        console.error('❌ [360 Contact] Error loading rosters:', rosterError);
+        rosterEntries = [];
       }
     }
 
     // Get all applications with populated action history
-    const applications = await db.findMemberApplications({ applicant: userId, camp: campId });
-    console.log('🔍 [360 Contact] Applications found:', applications?.length || 0);
-    if (applications && applications.length > 0) {
-      console.log('🔍 [360 Contact] First application structure:', {
-        hasDoc: !!applications[0]._doc,
-        hasActionHistory: !!applications[0].actionHistory,
-        actionHistoryLength: applications[0].actionHistory?.length || 0,
-        status: applications[0].status || applications[0]._doc?.status
-      });
+    let applications = [];
+    try {
+      applications = await db.findMemberApplications({ applicant: userId, camp: campId });
+      console.log('🔍 [360 Contact] Applications found:', applications?.length || 0);
+      if (applications && applications.length > 0) {
+        console.log('🔍 [360 Contact] First application structure:', {
+          hasDoc: !!applications[0]._doc,
+          hasActionHistory: !!applications[0].actionHistory,
+          actionHistoryLength: applications[0].actionHistory?.length || 0,
+          status: applications[0].status || applications[0]._doc?.status
+        });
+      }
+    } catch (applicationError) {
+      console.error('❌ [360 Contact] Error loading applications:', applicationError);
+      applications = [];
     }
     
     // Convert Mongoose documents to plain objects and populate action history with user details
-    const applicationsWithHistory = await Promise.all((applications || []).map(async (app) => {
-      // Convert Mongoose document to plain object
-      const plainApp = app._doc ? {
-        ...app._doc,
-        applicant: app.applicant,
-        applicationData: app.applicationData
-      } : app;
-      
-      const populatedHistory = await Promise.all((plainApp.actionHistory || []).map(async (action) => {
-        const performer = await db.findUser({ _id: action.performedBy });
-        return {
-          ...action,
-          performedBy: {
-            _id: action.performedBy,
-            firstName: performer?.firstName,
-            lastName: performer?.lastName,
-            email: performer?.email
+    let applicationsWithHistory = [];
+    try {
+      applicationsWithHistory = await Promise.all((applications || []).map(async (app) => {
+        // Convert Mongoose document to plain object
+        const plainApp = app._doc ? {
+          ...app._doc,
+          applicant: app.applicant,
+          applicationData: app.applicationData
+        } : app;
+        
+        const populatedHistory = await Promise.all((plainApp.actionHistory || []).map(async (action) => {
+          if (!action?.performedBy) {
+            return {
+              ...action,
+              performedBy: null
+            };
           }
+          let performer = null;
+          try {
+            performer = await db.findUser({ _id: action.performedBy });
+          } catch (performerError) {
+            console.warn('⚠️ [360 Contact] Unable to resolve performer:', performerError);
+          }
+          return {
+            ...action,
+            performedBy: performer ? {
+              _id: action.performedBy,
+              firstName: performer.firstName,
+              lastName: performer.lastName,
+              email: performer.email
+            } : null
+          };
+        }));
+        
+        return {
+          ...plainApp,
+          actionHistory: populatedHistory
+            .filter(Boolean)
+            .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0))
         };
       }));
-      
-      return {
-        ...plainApp,
-        actionHistory: populatedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-      };
-    }));
-    const tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
+    } catch (historyError) {
+      console.error('❌ [360 Contact] Error populating application history:', historyError);
+      applicationsWithHistory = (applications || []).map(app => (app._doc ? app._doc : app));
+    }
 
-    const events = await db.findEvents({ camp: campId });
+    let tasks = [];
+    try {
+      tasks = await db.findTasks({ campId: campId, assignedTo: { $in: [userId] } });
+    } catch (taskError) {
+      console.error('❌ [360 Contact] Error loading tasks:', taskError);
+      tasks = [];
+    }
+
+    let events = [];
+    try {
+      events = await db.findEvents({ camp: campId });
+    } catch (eventError) {
+      console.error('❌ [360 Contact] Error loading events:', eventError);
+      events = [];
+    }
     const volunteerShifts = [];
     for (const ev of events || []) {
       for (const shift of ev.shifts || []) {
-        const memberIds = shift.memberIds || [];
-        if (memberIds.map(id => id.toString()).includes(userId.toString())) {
+        const shiftMemberIds = shift.memberIds || [];
+        if (shiftMemberIds.map(id => id.toString()).includes(userId.toString())) {
           volunteerShifts.push({
             eventId: ev._id,
             eventName: ev.name,
@@ -267,6 +319,29 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
       }
     }
 
+    // Defensive: ensure user is associated with this camp before returning data
+    const hasCampHistory = memberDocs.length > 0
+      || applicationsWithHistory.length > 0
+      || tasks.length > 0
+      || volunteerShifts.length > 0;
+
+    if (!hasCampHistory) {
+      return res.status(404).json({ message: 'No history found for this member in this camp' });
+    }
+
+    let activityLog = [];
+    try {
+      const { getActivityLog } = require('../services/activityLogger');
+      const rawLogs = await getActivityLog('MEMBER', userId, { limit: null });
+      activityLog = (rawLogs || []).filter(log => {
+        const logCampId = log?.details?.campId;
+        return logCampId && logCampId.toString() === campId.toString();
+      });
+    } catch (logError) {
+      console.error('❌ [360 Contact] Error loading activity log:', logError);
+      activityLog = [];
+    }
+
     res.json({
       user,
       rosterHistory: rosterEntries
@@ -274,7 +349,8 @@ router.get('/:campId/contacts/:userId', authenticateToken, requireCampLead, asyn
         .map(e => ({ ...e, year: e.joinedAt ? new Date(e.joinedAt).getFullYear() : null })),
       applications: applicationsWithHistory || [],
       tasks: tasks || [],
-      volunteerShifts
+      volunteerShifts,
+      activityLog
     });
   } catch (error) {
     console.error('Contact aggregation error:', error);

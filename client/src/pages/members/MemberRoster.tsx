@@ -1087,8 +1087,8 @@ const MemberRoster: React.FC = () => {
                         <div className="ml-4">
                           <div className="flex items-center gap-2">
                             <div className="text-sm font-medium text-gray-900">
-                              {(authUser?.accountType === 'admin' || authUser?.accountType === 'camp') && authUser?.campId && (user?._id) ? (
-                                <Link to={`/camp/${authUser.campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
+                              {canAccessRoster && campId && (user?._id) ? (
+                                <Link to={`/camp/${campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
                                   {userName}
                                 </Link>
                               ) : (
