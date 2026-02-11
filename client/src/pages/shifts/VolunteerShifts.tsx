@@ -1091,6 +1091,7 @@ const VolunteerShifts: React.FC = () => {
                     })()}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </Card>
