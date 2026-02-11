@@ -1692,16 +1692,18 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
     });
     console.log('🔍 [GRANT CAMP LEAD] Verified isCampLead after save:', verifyMember?.isCampLead);
 
-    // Record activity
-    await recordActivity({
-      userId: req.user._id,
-      action: 'grant_camp_lead',
-      details: {
-        memberId,
-        memberName: `${user.firstName} ${user.lastName}`,
-        memberEmail: user.email,
-        campId
-      }
+    // Record activity (member + camp)
+    await recordActivity('MEMBER', user._id, req.user._id, 'CAMP_LEAD_GRANTED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+    await recordActivity('CAMP', campId, req.user._id, 'CAMP_LEAD_GRANTED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
     });
 
     // Send email notification
@@ -1818,16 +1820,18 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
     });
     console.log('🔍 [REVOKE CAMP LEAD] Verified isCampLead after save:', verifyMember?.isCampLead);
 
-    // Record activity
-    await recordActivity({
-      userId: req.user._id,
-      action: 'revoke_camp_lead',
-      details: {
-        memberId,
-        memberName: `${user.firstName} ${user.lastName}`,
-        memberEmail: user.email,
-        campId
-      }
+    // Record activity (member + camp)
+    await recordActivity('MEMBER', user._id, req.user._id, 'CAMP_LEAD_REVOKED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+    await recordActivity('CAMP', campId, req.user._id, 'CAMP_LEAD_REVOKED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
     });
 
     // Note: Do NOT send email notification on revocation (per requirements)

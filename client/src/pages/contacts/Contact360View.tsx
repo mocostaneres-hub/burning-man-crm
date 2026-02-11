@@ -119,13 +119,18 @@ const Contact360View: React.FC = () => {
                       Submitted: {application.appliedAt ? new Date(application.appliedAt).toLocaleDateString() : '-'}
                     </p>
                   </div>
-                  <Badge variant={
-                    application.status === 'approved' ? 'success' : 
-                    application.status === 'rejected' ? 'error' : 
-                    'warning'
-                  }>
-                    {application.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {application.inviteToken && (
+                      <Badge variant="success">Link</Badge>
+                    )}
+                    <Badge variant={
+                      application.status === 'approved' ? 'success' : 
+                      application.status === 'rejected' ? 'error' : 
+                      'warning'
+                    }>
+                      {application.status}
+                    </Badge>
+                  </div>
                 </div>
                 
                 <p className="text-sm text-custom-text-secondary mb-3">
