@@ -11,15 +11,21 @@ const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 // @access  Private
 router.post('/select-role', [
   authenticateToken,
-  body('role').isIn(['member', 'camp_lead']).withMessage('Role must be either member or camp_lead')
+  body('role').isIn(['member', 'camp_lead']).withMessage('Role must be either member or camp_lead'),
+  body('campName')
+    .if(body('role').equals('camp_lead'))
+    .trim()
+    .notEmpty().withMessage('Camp name is required when leading a camp')
+    .isLength({ min: 1, max: 120 }).withMessage('Camp name must be 1–120 characters')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      const firstError = errors.array()[0];
+      return res.status(400).json({ message: firstError.msg, errors: errors.array() });
     }
 
-    const { role } = req.body;
+    const { role, campName: bodyCampName } = req.body;
     const userId = req.user._id;
 
     // Get current user
@@ -108,9 +114,13 @@ router.post('/select-role', [
 
         // Create camp ONLY if user doesn't have one
         if (!user.campId) {
-          // Generate camp name from user's name
-          const campName = user.campName || `${user.firstName} ${user.lastName}`.trim() || 'My Camp';
-          
+          // Camp name is required for camp_lead (validated above). Never use user's personal name.
+          const campName = (bodyCampName && String(bodyCampName).trim()) ||
+            (user.campName && String(user.campName).trim());
+          if (!campName) {
+            return res.status(400).json({ message: 'Camp name is required when leading a camp' });
+          }
+
           // Generate unique slug using utility (prevents collisions)
           const slug = await generateUniqueCampSlug(campName);
 

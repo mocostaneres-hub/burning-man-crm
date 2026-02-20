@@ -249,7 +249,7 @@ const FAQ: React.FC = () => {
           ) : (
             faqData.map((faq, index) => (
             <div
-              key={index}
+              key={faq._id ?? `faq-${index}`}
               className="mb-4 bg-white border border-gray-200 rounded-lg overflow-hidden"
             >
               <button

@@ -13,7 +13,7 @@ interface FAQ {
   category: string;
   order: number;
   isActive: boolean;
-  audience?: 'camps' | 'members' | 'both';
+  audience?: 'camps' | 'members' | 'both' | 'homepage';
 }
 
 interface SupportMessage {
@@ -93,7 +93,7 @@ const Help: React.FC = () => {
       } else if (targetAudience === 'members') {
         filteredFaqs = allFaqs.filter(faq => faq.audience === 'members' || faq.audience === 'both');
       } else if (targetAudience === 'both') {
-        filteredFaqs = allFaqs.filter(faq => faq.audience === 'both');
+        filteredFaqs = allFaqs.filter(faq => faq.audience === 'both' || faq.audience === 'homepage');
       }
       // For 'all' (admin), show all FAQs
       

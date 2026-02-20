@@ -1,23 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card } from '../../components/ui';
+import { Button, Card, Input } from '../../components/ui';
 import Footer from '../../components/layout/Footer';
-import { Users, Building, Loader2 } from 'lucide-react';
+import { Users, Building, Loader2, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+
+type CampLeadStep = 'choose' | 'enter_name';
 
 const SelectRole: React.FC = () => {
   const navigate = useNavigate();
   const { updateUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [campName, setCampName] = useState('');
+  const [campLeadStep, setCampLeadStep] = useState<CampLeadStep>('choose');
+  const campNameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (campLeadStep === 'enter_name') {
+      campNameInputRef.current?.focus();
+    }
+  }, [campLeadStep]);
+
+  const handleCampLeadContinue = () => {
+    if (!campName.trim()) {
+      setError('Please enter your camp name to continue.');
+      return;
+    }
+    handleRoleSelection('camp_lead');
+  };
 
   const handleRoleSelection = async (role: 'member' | 'camp_lead') => {
+    if (role === 'camp_lead' && !campName.trim()) {
+      setError('Please enter your camp name to continue.');
+      return;
+    }
     try {
       setLoading(true);
       setError('');
 
-      const response = await api.post('/onboarding/select-role', { role });
+      const payload: { role: 'member' | 'camp_lead'; campName?: string } = { role };
+      if (role === 'camp_lead') {
+        payload.campName = campName.trim();
+      }
+      const response = await api.post('/onboarding/select-role', payload);
       
       if (response.message === 'Role selected successfully') {
         // Update the user in AuthContext with the new data from backend
@@ -57,8 +84,7 @@ const SelectRole: React.FC = () => {
           <Card 
             hover 
             padding="lg" 
-            className="text-center cursor-pointer transition-all duration-300 hover:shadow-xl hover:border-custom-primary group"
-            onClick={() => !loading && handleRoleSelection('camp_lead')}
+            className={`text-center transition-all duration-300 hover:shadow-xl group ${campLeadStep === 'enter_name' ? 'border-custom-primary ring-2 ring-custom-primary/20' : 'hover:border-custom-primary'}`}
           >
             <div className="flex flex-col items-center space-y-6">
               <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center group-hover:bg-orange-200 transition-colors">
@@ -75,33 +101,92 @@ const SelectRole: React.FC = () => {
                 </p>
               </div>
 
-              <div className="space-y-3 text-sm text-gray-500">
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                  <span>Create and manage your camp</span>
-                </div>
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                  <span>Recruit and manage members</span>
-                </div>
-                <div className="flex items-center justify-center space-x-2">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                  <span>Organize shifts and tasks</span>
-                </div>
-              </div>
+              {campLeadStep === 'choose' ? (
+                <>
+                  <div className="space-y-3 text-sm text-gray-500">
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      <span>Create and manage your camp</span>
+                    </div>
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      <span>Recruit and manage members</span>
+                    </div>
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      <span>Organize shifts and tasks</span>
+                    </div>
+                  </div>
 
-              <Button
-                variant="primary"
-                size="lg"
-                disabled={loading}
-                className="w-full"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Sign up as Camp Lead'
-                )}
-              </Button>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={loading}
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setError('');
+                      setCampLeadStep('enter_name');
+                    }}
+                  >
+                    Sign up as Camp Lead
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="w-full space-y-2 text-left">
+                    <label htmlFor="camp-name" className="block text-sm font-medium text-gray-700">
+                      Camp name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      ref={campNameInputRef}
+                      id="camp-name"
+                      type="text"
+                      placeholder="e.g. Mudskippers"
+                      value={campName}
+                      onChange={(e) => { setCampName(e.target.value); setError(''); }}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleCampLeadContinue())}
+                      className="w-full"
+                      maxLength={120}
+                      required
+                      aria-required="true"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Your camp URL will be based on this name (e.g. g8road.com/camps/mudskippers). It will be carried over to the next page and can only be changed by a system admin.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 w-full">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      disabled={loading}
+                      className="flex-1"
+                      onClick={() => {
+                        setCampLeadStep('choose');
+                        setCampName('');
+                        setError('');
+                      }}
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-1" />
+                      Back
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      disabled={loading || !campName.trim()}
+                      className="flex-1"
+                      onClick={(e) => { e.stopPropagation(); handleCampLeadContinue(); }}
+                    >
+                      {loading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        'Continue'
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
 
@@ -109,8 +194,7 @@ const SelectRole: React.FC = () => {
           <Card 
             hover 
             padding="lg" 
-            className="text-center cursor-pointer transition-all duration-300 hover:shadow-xl hover:border-custom-primary group"
-            onClick={() => !loading && handleRoleSelection('member')}
+            className="text-center transition-all duration-300 hover:shadow-xl hover:border-custom-primary group"
           >
             <div className="flex flex-col items-center space-y-6">
               <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
@@ -147,6 +231,7 @@ const SelectRole: React.FC = () => {
                 size="lg"
                 disabled={loading}
                 className="w-full"
+                onClick={() => handleRoleSelection('member')}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

@@ -567,11 +567,25 @@ const CampProfile: React.FC = () => {
                 Camp Name
               </label>
               {isEditing ? (
-                <Input
-                  value={campData.campName}
-                  onChange={(e) => handleInputChange('campName', e.target.value)}
-                  placeholder="Enter camp name"
-                />
+                (user?.accountType === 'admin' && !user?.campId) ? (
+                  <Input
+                    value={campData.campName}
+                    onChange={(e) => handleInputChange('campName', e.target.value)}
+                    placeholder="Enter camp name"
+                  />
+                ) : (
+                  <>
+                    <Input
+                      value={campData.campName}
+                      readOnly
+                      disabled
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Camp name sets your camp URL and can only be changed by a system admin.
+                    </p>
+                  </>
+                )
               ) : (
                 <p className="text-body text-custom-text">{campData.campName}</p>
               )}

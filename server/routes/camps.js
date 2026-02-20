@@ -360,30 +360,29 @@ router.get('/:campId/contacts/:userId', authenticateToken, async (req, res) => {
 
 // @route   GET /api/camps/public/:slug
 // @desc    Get public camp profile by slug or ID
-// @access  Public (but camp admins can always view their own camp)
+// @access  Public (but camp admins and system admins can always view their own / any camp)
 router.get('/public/:slug', optionalAuth, async (req, res) => {
   try {
     const { slug } = req.params;
-    
-    // Find camp by slug first, then by ID (fallback)
-    let camp = await db.findCamp({ slug });
-    if (!camp) {
-      // If not found by slug, try by ID (fallback for null slugs)
-      camp = await db.findCamp({ _id: slug });
+    if (!slug || typeof slug !== 'string' || !slug.trim()) {
+      return res.status(400).json({ message: 'Invalid camp identifier' });
     }
-    
-    console.log('🔍 [GET /api/camps/public/:slug] Raw camp from DB:', JSON.stringify(camp, null, 2));
-    console.log('🔍 [GET /api/camps/public/:slug] Camp name field:', camp?.name);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp photos field:', camp?.photos);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp heroPhoto field:', camp?.heroPhoto);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp isPublic field:', camp?.isPublic);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp slug:', camp?.slug);
-    console.log('🔍 [GET /api/camps/public/:slug] Camp acceptingApplications field:', camp?.acceptingApplications);
-    
+
+    // Find camp by slug first, then by ID (fallback)
+    let camp = await db.findCamp({ slug: slug.trim() });
+    if (!camp) {
+      camp = await db.findCamp({ _id: slug.trim() });
+    }
+
     if (!camp) {
       console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);
-      return res.status(404).json({ message: 'Camp not found or not public' });
+      return res.status(404).json({ message: 'Camp not found' });
     }
+
+    // Safe logging (avoid JSON.stringify on Mongoose docs - can throw on circular refs)
+    const campId = camp._id?.toString?.() || camp._id;
+    const campName = camp.name || camp.campName;
+    console.log('🔍 [GET /api/camps/public/:slug] Camp found:', campId, campName);
     
     // Check if the authenticated user is the camp admin
     // Camp admin can be:
@@ -450,24 +449,24 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       }
     }
     
-    console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin);
-    console.log('🔍 [GET /api/camps/public/:slug] Is system admin?', isSystemAdmin);
-    console.log('🔍 [GET /api/camps/public/:slug] User:', req.user?._id, 'Camp userId:', camp.userId);
-    
-    // Check if camp is publicly visible (allow camp admin and system admin to view even if private)
-    if (camp.isPubliclyVisible === false && !isCampAdmin && !isSystemAdmin) {
-      console.log('❌ [GET /api/camps/public/:slug] Camp profile is not publicly visible:', camp.name);
-      return res.status(404).json({ message: 'Camp profile not found or not public' });
-    }
-    
-    // Check if camp is public (or make it public if it's the owner's camp)
-    if (!camp.isPublic && !isCampAdmin) {
-      console.log('❌ [GET /api/camps/public/:slug] Camp is not public:', camp.name, 'isPublic:', camp.isPublic);
-      return res.status(404).json({ message: 'Camp not found or not public' });
+    console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin, 'Is system admin?', isSystemAdmin);
+
+    // Visibility: Camp Lead (owner) and System Admin can always view. Others need public visibility.
+    const canViewAsAdmin = isCampAdmin || isSystemAdmin;
+    const isPrivate = camp.isPubliclyVisible === false || camp.isPublic === false;
+    if (isPrivate && !canViewAsAdmin) {
+      // Camp exists but is private and user is not authorized - return 403 (not 500, not 404)
+      console.log('❌ [GET /api/camps/public/:slug] Camp is private and user not authorized');
+      return res.status(403).json({ message: 'This camp profile is not publicly visible' });
     }
 
     // Get camp members (only basic info for public view)
-    const members = await db.findManyMembers({ camp: camp._id, status: 'active' });
+    let members = [];
+    try {
+      members = await db.findManyMembers({ camp: camp._id, status: 'active' }) || [];
+    } catch (memberErr) {
+      console.warn('⚠️ [GET /api/camps/public/:slug] Error fetching members:', memberErr.message);
+    }
     
     // Process photos array
     const processedPhotos = camp.photos && camp.photos.length > 0 
@@ -518,13 +517,13 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
       isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
       isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin (includes impersonated system admins)
-      members: members.map(member => ({
+      members: (members || []).map(member => ({
         _id: member._id,
-        firstName: member.firstName,
-        lastName: member.lastName,
-        profilePhoto: member.profilePhoto,
-        bio: member.bio,
-        skills: member.skills
+        firstName: member.firstName ?? member.user?.firstName ?? '',
+        lastName: member.lastName ?? member.user?.lastName ?? '',
+        profilePhoto: member.profilePhoto ?? member.user?.profilePhoto,
+        bio: member.bio ?? member.user?.bio,
+        skills: member.skills ?? member.user?.skills ?? []
       }))
     };
 

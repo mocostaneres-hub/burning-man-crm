@@ -710,7 +710,11 @@ class DatabaseAdapter {
   async findFAQs(query = {}) {
     if (this.useMongoDB) {
       const FAQ = require('../models/FAQ');
-      return await FAQ.find(query).sort({ category: 1, order: 1 });
+      const mongoQuery = { ...query };
+      if (Array.isArray(mongoQuery.audience)) {
+        mongoQuery.audience = { $in: mongoQuery.audience };
+      }
+      return await FAQ.find(mongoQuery).sort({ category: 1, order: 1 });
     } else {
       return await this.mockDB.findFAQs(query);
     }

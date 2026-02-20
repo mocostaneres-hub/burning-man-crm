@@ -395,10 +395,11 @@ const AdminDashboard: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const response = await apiService.get('/admin/users');
+      // Request full list for System Admin (backend defaults to page=1, limit=20 otherwise)
+      const response = await apiService.get('/admin/users?limit=1000');
       console.log('🔍 [AdminDashboard] Users response:', response);
-      // Backend returns { users: users[], totalPages, currentPage, total }
-      const userData = response.users || response.data?.users || response.data;
+      // Backend returns { data: users[], totalPages, currentPage, total }
+      const userData = response.data ?? response.users;
       setUsers(Array.isArray(userData) ? userData : []);
     } catch (err) {
       console.error('Error loading users:', err);

@@ -232,13 +232,18 @@ router.post('/restore', authenticateToken, requireAdmin, async (req, res) => {
       },
     ];
 
-    // Clear existing FAQs
-    await FAQ.deleteMany({});
-    
-    // Insert the original FAQs
-    const insertedFAQs = await FAQ.insertMany(originalFAQs);
-    
-    res.json({ 
+    // Clear existing FAQs and re-insert using adapter (works for both MongoDB and mock)
+    const existing = await db.findFAQs({});
+    for (const faq of existing) {
+      await db.deleteFAQ(faq._id);
+    }
+    const insertedFAQs = [];
+    for (const data of originalFAQs) {
+      const faq = await db.createFAQ(data);
+      insertedFAQs.push(faq);
+    }
+
+    res.json({
       message: 'FAQs restored successfully',
       count: insertedFAQs.length,
       faqs: insertedFAQs

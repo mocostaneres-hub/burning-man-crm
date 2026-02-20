@@ -200,12 +200,9 @@ const PublicCampProfile: React.FC = () => {
       setCamp(response);
     } catch (err: any) {
       console.error('❌ [PublicCampProfile] Error fetching camp:', err);
-      
-      // Check if it's a 404 error (camp not found or not publicly visible)
       if (err.response?.status === 404) {
         setIsNotFound(true);
       }
-      
       setError(err.response?.data?.message || 'Failed to load camp profile');
     } finally {
       setLoading(false);

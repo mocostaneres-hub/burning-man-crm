@@ -214,8 +214,59 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     
     const total = filteredUsers.length;
 
+    // Enrich users with camp name when possible
+    const usersWithCamp = await Promise.all(users.map(async (user) => {
+      const userObj = user?.toObject ? user.toObject() : user;
+
+      if (userObj?.campName) {
+        return userObj;
+      }
+
+      try {
+        // Primary: resolve via campId
+        if (userObj?.campId) {
+          const camp = await db.findCamp({ _id: userObj.campId });
+          if (camp) {
+            const campObj = camp?.toObject ? camp.toObject() : camp;
+            return { ...userObj, campName: campObj?.name || campObj?.campName };
+          }
+        }
+
+        // Secondary: resolve camp lead association (Mongo only)
+        if (db.useMongoDB) {
+          const Roster = require('../models/Roster');
+          const member = await Member.findOne({ user: userObj?._id });
+          if (member) {
+            const roster = await Roster.findOne({
+              members: {
+                $elemMatch: {
+                  member: member._id,
+                  isCampLead: true,
+                  status: 'approved'
+                }
+              },
+              isActive: true
+            }).populate('camp', 'name');
+
+            if (roster?.camp?.name) {
+              return {
+                ...userObj,
+                campName: roster.camp.name,
+                campLeadCampName: roster.camp.name,
+                isCampLead: true
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [GET /api/admin/users] Unable to resolve camp for user:', userObj?._id, error);
+      }
+
+      return userObj;
+    }));
+
     res.json({
-      data: users,
+      data: usersWithCamp,
       totalPages: Math.ceil(total / limit),
       currentPage: parseInt(page),
       total

@@ -25,7 +25,9 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [campSlug, setCampSlug] = useState<string | null>(null);
+  const [campIdFromCamp, setCampIdFromCamp] = useState<string | null>(null);
   const [campSlugLoading, setCampSlugLoading] = useState(false);
+  const [campLookupAttempted, setCampLookupAttempted] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -63,13 +65,18 @@ const Navbar: React.FC = () => {
   // ============================================================================
   useEffect(() => {
     const fetchCampSlug = async () => {
-      // Only fetch for camp and admin users with a camp
-      if ((user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) && !campSlug && !campSlugLoading) {
+      if (!user || campLookupAttempted || campSlugLoading) return;
+
+      // Only fetch for camp/admin accounts (Camp Leads use campLeadCampSlug)
+      if (user?.accountType === 'camp' || user?.accountType === 'admin') {
         setCampSlugLoading(true);
         try {
-          // Fetch the ACTUAL camp entity to get its slug
+          // Fetch the ACTUAL camp entity to get its slug/id
           const response = await api.get('/camps/my-camp');
-          if (response.slug) {
+          if (response?._id) {
+            setCampIdFromCamp(response._id.toString());
+          }
+          if (response?.slug) {
             console.log('✅ [Navbar] Fetched camp slug:', response.slug);
             setCampSlug(response.slug);
           } else {
@@ -79,11 +86,12 @@ const Navbar: React.FC = () => {
           console.error('❌ [Navbar] Error fetching camp slug:', error);
         } finally {
           setCampSlugLoading(false);
+          setCampLookupAttempted(true);
         }
       }
     };
     fetchCampSlug();
-  }, [user, campSlug, campSlugLoading]);
+  }, [user, campSlugLoading, campLookupAttempted]);
 
   // Define navigation items based on user type
   const getNavItems = () => {
@@ -122,9 +130,16 @@ const Navbar: React.FC = () => {
 
     // Camp/Admin accounts navigation (ordered as requested)
     // Note: Camp Leads are handled separately above
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+    const hasCampAdminAccess = user?.accountType === 'camp'
+      || !!user?.campId
+      || !!campIdFromCamp;
+
+    if (hasCampAdminAccess) {
       // Get camp identifier for profile edit URL
-      const campIdentifier = user?.campId?.toString() || user?._id?.toString() || '';
+      const campIdentifier = campIdFromCamp
+        || user?.campId?.toString()
+        || (user?.accountType === 'camp' ? user?._id?.toString() : '')
+        || '';
       
       // ============================================================================
       // CRITICAL: Camp Public Profile Path Must Use Camp Slug, Not User Data
