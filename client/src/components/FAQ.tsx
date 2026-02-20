@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 
 interface FAQItem {
+  _id?: string;
   question: string;
   answer: string;
 }
