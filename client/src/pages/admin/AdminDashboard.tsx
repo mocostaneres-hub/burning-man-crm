@@ -2655,6 +2655,7 @@ const CampEditModal: React.FC<{
   onClose: () => void;
   onSave: (camp: Camp) => void;
 }> = ({ camp, onClose, onSave }) => {
+  const { user: currentUser } = useAuth();
   const [formData, setFormData] = useState<Camp>(camp);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -2662,6 +2663,8 @@ const CampEditModal: React.FC<{
   const [globalPerks, setGlobalPerks] = useState<{_id: string, name: string, icon: string, color: string}[]>([]);
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
+  const [promoteLoading, setPromoteLoading] = useState(false);
+  const [promoteMessage, setPromoteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadCategoriesAndPerks();
@@ -2691,6 +2694,29 @@ const CampEditModal: React.FC<{
       setGlobalPerks(perksRes.perks || []);
     } catch (err) {
       console.error('Failed to load categories and perks:', err);
+    }
+  };
+
+  const ownerUserId = camp.owner && typeof camp.owner === 'object'
+    ? camp.owner._id
+    : (typeof camp.owner === 'string' ? camp.owner : null);
+  const ownerIsSystemAdmin = camp.owner && typeof camp.owner === 'object'
+    ? ((camp.owner as any).isSystemAdmin || (camp.owner.accountType === 'admin' && !(camp.owner as any).campId))
+    : false;
+  const canPromoteOwner = currentUser?.isSystemAdmin && ownerUserId && ownerUserId !== 'camp-repair-needed' && !ownerIsSystemAdmin;
+
+  const handlePromoteOwner = async () => {
+    if (!ownerUserId || ownerUserId === 'camp-repair-needed') return;
+    if (!window.confirm('Grant this camp owner full system admin access? They will be able to access the admin dashboard and manage all camps and users.')) return;
+    setPromoteMessage(null);
+    setPromoteLoading(true);
+    try {
+      const response = await apiService.post(`/admin/users/${ownerUserId}/promote-to-system-admin`);
+      setPromoteMessage({ type: 'success', text: response?.message || 'Camp owner promoted to System Admin.' });
+    } catch (err: any) {
+      setPromoteMessage({ type: 'error', text: err.response?.data?.message || 'Failed to promote. They may already be a system admin.' });
+    } finally {
+      setPromoteLoading(false);
     }
   };
 
@@ -2779,6 +2805,51 @@ const CampEditModal: React.FC<{
                 </div>
               </div>
             </div>
+
+            {/* Camp owner: Promote to System Admin */}
+            {currentUser?.isSystemAdmin && (ownerUserId || camp.contactEmail) && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-custom-text mb-2">Camp owner: Promote to System Admin</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Grant the camp account owner full system admin access so they can manage all camps and users.
+                </p>
+                {ownerUserId && ownerUserId !== 'camp-repair-needed' ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3 mb-3">
+                      <span className="text-sm text-gray-700">
+                        Owner: {camp.owner && typeof camp.owner === 'object'
+                          ? `${(camp.owner as any).firstName || ''} ${(camp.owner as any).lastName || ''}`.trim() || (camp.owner as any).email
+                          : 'Camp account'}
+                        {(camp.owner && typeof camp.owner === 'object' && (camp.owner as any).email) && (
+                          <span className="text-gray-500"> ({(camp.owner as any).email})</span>
+                        )}
+                      </span>
+                      {ownerIsSystemAdmin && (
+                        <span className="text-sm font-medium text-green-700">Already a System Admin</span>
+                      )}
+                    </div>
+                    {promoteMessage && (
+                      <div className={`mb-3 p-2 rounded text-sm ${promoteMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {promoteMessage.text}
+                      </div>
+                    )}
+                    {canPromoteOwner && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePromoteOwner}
+                        disabled={promoteLoading}
+                        className="border-purple-600 text-purple-700 hover:bg-purple-100"
+                      >
+                        {promoteLoading ? 'Promoting...' : 'Promote to System Admin'}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-amber-700">Repair the camp owner link first (use Impersonate below to fix), then you can promote from here or from the Users tab.</p>
+                )}
+              </div>
+            )}
 
             {/* Basic Information */}
             <div className="bg-gray-50 border rounded-lg p-4">
