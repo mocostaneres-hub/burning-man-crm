@@ -194,7 +194,7 @@ const Navbar: React.FC = () => {
         { label: 'Help', path: '/camp/help', icon: <Help size={18} /> }
       );
       
-      if (user?.accountType === 'admin') {
+      if (user?.accountType === 'admin' || user?.isSystemAdmin) {
         navItems.push({ label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> });
       }
       
@@ -203,7 +203,7 @@ const Navbar: React.FC = () => {
 
     // Personal accounts navigation
     if (user?.accountType === 'personal') {
-      return [
+      const items = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
         { label: 'My Applications', path: '/applications', icon: <Assignment size={18} /> },
         { label: 'My Tasks', path: '/tasks', icon: <Task size={18} /> },
@@ -211,10 +211,14 @@ const Navbar: React.FC = () => {
         { label: 'Principles', path: '/principles', icon: <Book size={18} /> },
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
       ];
+      if (user?.isSystemAdmin) {
+        items.push({ label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> });
+      }
+      return items;
     }
 
-    // System admin accounts (without camp)
-    if (user?.accountType === 'admin') {
+    // System admin accounts (accountType admin with no camp, or promoted isSystemAdmin)
+    if (user?.accountType === 'admin' || user?.isSystemAdmin) {
       return [
         { label: 'Dashboard', path: '/dashboard', icon: <Dashboard size={18} /> },
         { label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> },

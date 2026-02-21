@@ -54,7 +54,7 @@ const Dashboard: React.FC = () => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        if (user?.accountType === 'admin') {
+        if (user?.accountType === 'admin' || user?.isSystemAdmin) {
           const response = await apiService.get('/admin/stats');
           setStats(response.data);
         } else if (user?.accountType === 'camp') {
@@ -181,7 +181,7 @@ const Dashboard: React.FC = () => {
       ];
     }
 
-    if (user?.accountType === 'admin') {
+    if (user?.accountType === 'admin' || user?.isSystemAdmin) {
       return [
         ...commonTiles,
         {
@@ -281,7 +281,7 @@ const Dashboard: React.FC = () => {
         </h1>
         <p className="text-body text-custom-text-secondary">
           {user?.accountType === 'camp' ? 'Manage your camp and members' : 
-           user?.accountType === 'admin' ? 'System administration dashboard' :
+           (user?.accountType === 'admin' || user?.isSystemAdmin) ? 'System administration dashboard' :
            'Your personal dashboard'}
         </p>
       </div>

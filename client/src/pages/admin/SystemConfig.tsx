@@ -45,7 +45,7 @@ const SystemConfig: React.FC = () => {
   const [perkLoading, setPerkLoading] = useState(false);
 
   useEffect(() => {
-    if (user?.accountType === 'admin') {
+    if (user?.accountType === 'admin' || user?.isSystemAdmin) {
       loadCategories();
       loadPerks();
     }
@@ -180,7 +180,7 @@ const SystemConfig: React.FC = () => {
     setShowPerkModal(true);
   };
 
-  if (user?.accountType !== 'admin') {
+  if (user?.accountType !== 'admin' && !user?.isSystemAdmin) {
     return (
       <Card className="p-8 text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>

@@ -34,7 +34,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requireAdmin && user?.accountType !== 'admin') {
+  const hasAdminAccess = user?.accountType === 'admin' || user?.isSystemAdmin === true;
+  if (requireAdmin && !hasAdminAccess) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center">
         <h1 className="text-h1 text-red-600">

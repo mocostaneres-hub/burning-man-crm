@@ -45,7 +45,7 @@ const Help: React.FC = () => {
   const getTargetAudience = () => {
     if (location.pathname === '/camp/help') return 'camps';
     if (location.pathname === '/member/help') return 'members';
-    if (user?.accountType === 'admin') return 'all';
+    if (user?.accountType === 'admin' || user?.isSystemAdmin) return 'all';
     return 'both'; // Default for non-authenticated users on /help
   };
 
