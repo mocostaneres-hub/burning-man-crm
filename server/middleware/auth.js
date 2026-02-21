@@ -41,16 +41,30 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// Check if user is admin
+// Check if user is system admin (global role: accountType admin with no camp, or promoted via isSystemAdmin)
+const isSystemAdminUser = (user) => {
+  if (!user) return false;
+  return (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin;
+};
+
+// Check if user is admin (dashboard access)
 const requireAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
+    // System admin (promoted) has full admin access
+    if (req.user.isSystemAdmin) {
+      req.admin = { user: req.user._id, role: 'admin' };
+      req.isSystemAdmin = true;
+      return next();
+    }
+
     // Check if user has admin account type
     if (req.user.accountType === 'admin') {
       req.admin = { user: req.user._id, role: 'admin' };
+      req.isSystemAdmin = !req.user.campId;
       return next();
     }
 
@@ -62,9 +76,27 @@ const requireAdmin = async (req, res, next) => {
     }
 
     req.admin = admin;
+    req.isSystemAdmin = admin.role === 'super-admin';
     next();
   } catch (error) {
     console.error('Admin middleware error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Restrict to system admin only (e.g. promote, impersonate)
+const requireSystemAdmin = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    if (!isSystemAdminUser(req.user)) {
+      return res.status(403).json({ message: 'System admin access required' });
+    }
+    req.isSystemAdmin = true;
+    next();
+  } catch (error) {
+    console.error('System admin middleware error:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 };
@@ -324,6 +356,8 @@ const optionalAuth = async (req, res, next) => {
 module.exports = {
   authenticateToken,
   requireAdmin,
+  requireSystemAdmin,
+  isSystemAdminUser,
   requirePermission,
   requireCampLead,
   requireProjectLead,

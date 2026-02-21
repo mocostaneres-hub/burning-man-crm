@@ -275,8 +275,9 @@ async function isCampLeadForCamp(req, targetCampId) {
  * @returns {Promise<boolean>} - true if user has admin-level access
  */
 async function canManageCamp(req, targetCampId) {
-  // System admins have access to everything
-  if (req.user.accountType === 'admin' && !req.user.campId) {
+  // System admins have access to everything (accountType admin with no camp, or promoted isSystemAdmin)
+  const isSystemAdmin = (req.user.accountType === 'admin' && !req.user.campId) || !!req.user.isSystemAdmin;
+  if (isSystemAdmin) {
     console.log('✅ [Permission] System admin access granted');
     return true;
   }

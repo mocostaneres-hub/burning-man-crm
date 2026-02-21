@@ -397,12 +397,12 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       (req.user.email && camp.contactEmail && req.user.email.toLowerCase() === camp.contactEmail.toLowerCase())
     );
     
-    // Check if the authenticated user is a system admin (admin without campId, or in Admin collection)
+    // Check if the authenticated user is a system admin (admin without campId, promoted isSystemAdmin, or in Admin collection)
     // Also check if user is currently being impersonated by a system admin
     let isSystemAdmin = false;
     if (req.user) {
-      // System admin: accountType is 'admin' but no campId (not assigned to a specific camp)
-      if (req.user.accountType === 'admin' && !req.user.campId) {
+      // System admin: accountType is 'admin' with no campId, or promoted via isSystemAdmin
+      if ((req.user.accountType === 'admin' && !req.user.campId) || req.user.isSystemAdmin) {
         isSystemAdmin = true;
       } else {
         // Fallback: check Admin collection for system admin status

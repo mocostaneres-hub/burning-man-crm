@@ -155,22 +155,29 @@ const sendApplicationStatusEmail = async (user, camp, status) => {
 
 /**
  * Send password reset email
+ * @param {Object} user - { email, firstName }
+ * @param {string} resetUrl - Full URL to reset page including token (e.g. https://www.g8road.com/reset-password?token=...)
+ * @param {number} expiryHours - Token validity in hours (e.g. 1)
  */
-const sendPasswordResetEmail = async (user, resetToken) => {
-  const resetUrl = `${process.env.CLIENT_URL || 'https://g8road.com'}/reset-password/${resetToken}`;
+const sendPasswordResetEmail = async (user, resetUrl, expiryHours = 1) => {
+  const supportContact = process.env.SUPPORT_EMAIL || 'support@g8road.com';
 
   return sendEmail({
     to: user.email,
-    subject: 'Password Reset Request - G8Road',
+    subject: 'Reset Your G8Road Password',
     html: `
-      <h2>Password Reset Request</h2>
-      <p>Hi ${user.firstName || 'there'},</p>
-      <p>You requested to reset your password for your G8Road account.</p>
-      <p>Click the button below to reset your password. This link will expire in 1 hour.</p>
-      <p><a href="${resetUrl}" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
-      <p>If you didn't request this, please ignore this email.</p>
-      <p style="color: #666; font-size: 12px;">Link: ${resetUrl}</p>
-    `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Reset Your Password</h2>
+        <p>Hi ${user.firstName || 'there'},</p>
+        <p>You requested a password reset for your G8Road account. Click the link below to choose a new password:</p>
+        <p><a href="${resetUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+        <p style="color: #666; font-size: 14px;">This link expires in ${expiryHours} hour${expiryHours !== 1 ? 's' : ''}. If it has expired, request a new reset from the login page.</p>
+        <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email. Your password will not be changed.</p>
+        <p style="color: #666; font-size: 14px;">Need help? Contact us at <a href="mailto:${supportContact}">${supportContact}</a>.</p>
+        <p style="color: #999; font-size: 12px; margin-top: 24px;">— The G8Road Team</p>
+      </div>
+    `,
+    text: `Reset Your G8Road Password\n\nHi ${user.firstName || 'there'},\n\nYou requested a password reset. Open this link to set a new password (expires in ${expiryHours} hour(s)):\n${resetUrl}\n\nIf you didn't request this, ignore this email.\nNeed help? Contact ${supportContact}\n\n— The G8Road Team`
   });
 };
 

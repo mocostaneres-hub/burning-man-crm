@@ -1,14 +1,30 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const db = require('../database/databaseAdapter');
+const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
-const { sendWelcomeEmail } = require('../services/emailService');
+const { sendWelcomeEmail, sendPasswordResetEmail } = require('../services/emailService');
 const ImpersonationToken = require('../models/ImpersonationToken');
 const { recordActivity } = require('../services/activityLogger');
 const { normalizeEmail } = require('../utils/emailUtils');
 
 const router = express.Router();
+
+const PASSWORD_RESET_EXPIRY_HOURS = parseInt(process.env.PASSWORD_RESET_EXPIRY_HOURS || '1', 10);
+const PASSWORD_MIN_LENGTH = 6;
+
+// Stricter rate limit for forgot-password (per IP)
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: 'Too many reset requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Generate JWT token with rich claims
 const generateToken = (user) => {
@@ -248,9 +264,11 @@ router.get('/me', authenticateToken, async (req, res) => {
           
           console.log('✅ [Auth /me] User is Camp Lead for camp:', campLeadCamp.name);
           
+          const userObj = user.toObject ? user.toObject() : { ...user };
           return res.json({
             user: {
-              ...(user.toObject ? user.toObject() : user),
+              ...userObj,
+              isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin,
               isCampLead: true,
               campLeadCampId: campLeadCamp._id.toString(),
               campLeadCampSlug: campLeadCamp.slug,
@@ -265,12 +283,22 @@ router.get('/me', authenticateToken, async (req, res) => {
       }
     }
     
-    // Not a Camp Lead, return normal user data
-    res.json({ user: req.user });
+    // Not a Camp Lead, return normal user data (include isSystemAdmin for frontend)
+    const user = req.user;
+    const userObj = user.toObject ? user.toObject() : { ...user };
+    res.json({
+      user: {
+        ...userObj,
+        isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin
+      }
+    });
   } catch (error) {
     console.error('❌ [Auth /me] Error fetching Camp Lead status:', error);
-    // Fallback to basic user data if query fails
-    res.json({ user: req.user });
+    const user = req.user;
+    const userObj = user?.toObject ? user.toObject() : (user ? { ...user } : {});
+    res.json({
+      user: user ? { ...userObj, isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin } : null
+    });
   }
 });
 
@@ -289,9 +317,9 @@ router.post('/logout', (req, res) => {
 });
 
 // @route   POST /api/auth/forgot-password
-// @desc    Request password reset
+// @desc    Request password reset (sends email with link; rate limited)
 // @access  Public
-router.post('/forgot-password', [
+router.post('/forgot-password', forgotPasswordLimiter, [
   body('email').isEmail().normalizeEmail()
 ], async (req, res) => {
   try {
@@ -301,32 +329,48 @@ router.post('/forgot-password', [
     }
 
     const { email } = req.body;
-
-    // Normalize email for consistency
     const normalizedEmail = normalizeEmail(email);
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email: normalizedEmail }).select('_id email firstName authProviders');
     if (!user) {
-      // Don't reveal if email exists or not
-      return res.json({ message: 'If email exists, reset instructions sent' });
+      return res.status(404).json({ message: 'No account found with that email address.' });
     }
 
-    // TODO: Implement email sending for password reset
-    // For now, just return success
-    res.json({ message: 'If email exists, reset instructions sent' });
+    if (!user.authProviders || !user.authProviders.includes('password')) {
+      return res.status(404).json({ message: 'No account found with that email address.' });
+    }
 
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = await bcrypt.hash(rawToken, 12);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_HOURS * 60 * 60 * 1000);
+
+    await User.findByIdAndUpdate(user._id, {
+      passwordResetToken: hashedToken,
+      passwordResetTokenExpiry: expiresAt
+    });
+
+    const baseUrl = process.env.CLIENT_URL || 'https://www.g8road.com';
+    const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
+
+    await sendPasswordResetEmail(
+      { email: user.email, firstName: user.firstName },
+      resetUrl,
+      PASSWORD_RESET_EXPIRY_HOURS
+    );
+
+    res.json({ message: 'We sent a reset link to that email address. Check your inbox and spam folder.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('Forgot password error:', error.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 // @route   POST /api/auth/reset-password
-// @desc    Reset password with token
+// @desc    Reset password with token (single-use, expiry enforced)
 // @access  Public
 router.post('/reset-password', [
-  body('token').exists(),
-  body('password').isLength({ min: 6 })
+  body('token').notEmpty().withMessage('Token is required'),
+  body('newPassword').isLength({ min: PASSWORD_MIN_LENGTH }).withMessage(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -334,14 +378,34 @@ router.post('/reset-password', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { token, password } = req.body;
+    const { token, newPassword } = req.body;
 
-    // TODO: Implement password reset with token verification
-    // For now, return not implemented
-    res.status(501).json({ message: 'Password reset not yet implemented' });
+    const candidates = await User.find({
+      passwordResetToken: { $ne: null },
+      passwordResetTokenExpiry: { $gt: new Date() }
+    }).select('+passwordResetToken +passwordResetTokenExpiry _id');
 
+    let userDoc = null;
+    for (const u of candidates) {
+      const match = await bcrypt.compare(token, u.passwordResetToken);
+      if (match) {
+        userDoc = await User.findById(u._id);
+        break;
+      }
+    }
+
+    if (!userDoc) {
+      return res.status(400).json({ message: 'Invalid or expired reset link. Request a new password reset.' });
+    }
+
+    userDoc.password = newPassword;
+    userDoc.passwordResetToken = undefined;
+    userDoc.passwordResetTokenExpiry = undefined;
+    await userDoc.save();
+
+    res.json({ message: 'Password has been reset. You can now sign in with your new password.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('Reset password error:', error.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

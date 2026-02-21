@@ -57,6 +57,8 @@ export interface User {
   campLeadCampName?: string;
   isActive: boolean;
   isVerified: boolean;
+  /** True if user has been promoted to system admin (or is accountType admin with no camp) */
+  isSystemAdmin?: boolean;
   lastLogin?: string;
   preferences: {
     notifications: {

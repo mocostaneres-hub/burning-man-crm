@@ -199,6 +199,12 @@ const userSchema = new mongoose.Schema({
     type: String
   },
   
+  // System admin: granted by another system admin (global role, independent of camps)
+  isSystemAdmin: {
+    type: Boolean,
+    default: false
+  },
+
   // Common fields
   isActive: {
     type: Boolean,
@@ -210,6 +216,17 @@ const userSchema = new mongoose.Schema({
   },
   lastLogin: {
     type: Date
+  },
+  // Password reset: hashed token and expiry (single-use, configurable TTL)
+  passwordResetToken: {
+    type: String,
+    default: null,
+    select: false
+  },
+  passwordResetTokenExpiry: {
+    type: Date,
+    default: null,
+    select: false
   },
   preferences: {
     notifications: {

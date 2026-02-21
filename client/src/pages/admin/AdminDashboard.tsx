@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, ShieldCheck } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
 import UserProfileHistory from '../../components/admin/UserProfileHistory';
 import EmailTemplateEditor from '../../components/admin/EmailTemplateEditor';
 import { useSkills } from '../../hooks/useSkills';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Extended User interface for admin editing with all fields
 interface ExtendedUser extends UserType {
@@ -147,6 +148,7 @@ interface Camp {
 }
 
 const AdminDashboard: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     activeUsers: 0,
@@ -195,6 +197,8 @@ const AdminDashboard: React.FC = () => {
   const [showActivityHistory, setShowActivityHistory] = useState(false);
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [promoteTargetUser, setPromoteTargetUser] = useState<UserType | null>(null);
+  const [promoteLoading, setPromoteLoading] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -354,6 +358,22 @@ const AdminDashboard: React.FC = () => {
 
   const clearCampSelection = () => {
     setSelectedCamps([]);
+  };
+
+  const handlePromoteToSystemAdmin = async () => {
+    if (!promoteTargetUser) return;
+    try {
+      setPromoteLoading(true);
+      const response = await apiService.post(`/admin/users/${promoteTargetUser._id}/promote-to-system-admin`);
+      const updated = response.user || { ...promoteTargetUser, isSystemAdmin: true };
+      setUsers(prev => prev.map(u => u._id === promoteTargetUser._id ? updated : u));
+      setPromoteTargetUser(null);
+      alert(response.message || 'User has been promoted to System Admin.');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to promote user. Only system admins can perform this action.');
+    } finally {
+      setPromoteLoading(false);
+    }
   };
 
   const loadStats = async () => {
@@ -943,9 +963,16 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={user.accountType === 'admin' ? 'success' : user.accountType === 'camp' ? 'info' : 'neutral'}>
-                          {user.accountType}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant={user.accountType === 'admin' ? 'success' : user.accountType === 'camp' ? 'info' : 'neutral'}>
+                            {user.accountType}
+                          </Badge>
+                          {(user.isSystemAdmin || (user.accountType === 'admin' && !user.campId)) && (
+                            <Badge variant="success" className="bg-purple-600 text-white">
+                              System Admin
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -980,7 +1007,7 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -999,6 +1026,18 @@ const AdminDashboard: React.FC = () => {
                             <Edit className="w-3 h-3" />
                             Edit
                           </Button>
+                          {currentUser?.isSystemAdmin && !((user.accountType === 'admin' && !user.campId) || user.isSystemAdmin) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPromoteTargetUser(user)}
+                              className="flex items-center gap-1 text-purple-600 border-purple-600 hover:bg-purple-50"
+                              title="Grant full system admin access"
+                            >
+                              <ShieldCheck className="w-3 h-3" />
+                              Promote
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1695,6 +1734,49 @@ const AdminDashboard: React.FC = () => {
                 className="flex-1"
               >
                 Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Promote to System Admin Confirmation Modal */}
+      <Modal
+        isOpen={!!promoteTargetUser}
+        onClose={() => !promoteLoading && setPromoteTargetUser(null)}
+        title="Promote to System Admin"
+        size="md"
+      >
+        {promoteTargetUser && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm text-amber-800 font-medium mb-2">
+                Are you sure you want to grant full system access?
+              </p>
+              <p className="text-sm text-gray-700">
+                <strong>{promoteTargetUser.firstName} {promoteTargetUser.lastName}</strong> ({promoteTargetUser.email})
+                will be able to access the admin dashboard, manage all camps and users, and impersonate accounts.
+              </p>
+            </div>
+            <p className="text-sm text-gray-600">
+              This action is audited. Existing roles (Camp Lead, Roster Member) and camp associations are preserved.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setPromoteTargetUser(null)}
+                className="flex-1"
+                disabled={promoteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handlePromoteToSystemAdmin}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+                disabled={promoteLoading}
+              >
+                {promoteLoading ? 'Promoting...' : 'Promote to System Admin'}
               </Button>
             </div>
           </div>

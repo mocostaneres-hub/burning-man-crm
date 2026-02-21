@@ -8,7 +8,7 @@ const Camp = require('../models/Camp');
 const Member = require('../models/Member');
 const Admin = require('../models/Admin');
 const ImpersonationToken = require('../models/ImpersonationToken');
-const { authenticateToken, requireAdmin, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireSystemAdmin, requirePermission } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { getFieldDisplayName, formatFieldValue } = require('../utils/fieldNameMapper');
@@ -1073,6 +1073,58 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
   }
 });
 
+// @route   POST /api/admin/users/:id/promote-to-system-admin
+// @desc    Promote a user to System Admin (system admin only)
+// @access  Private (System Admin only)
+router.post('/users/:id/promote-to-system-admin', authenticateToken, requireSystemAdmin, async (req, res) => {
+  try {
+    const { id: targetUserId } = req.params;
+    const performerId = req.user._id;
+
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const targetUser = await db.findUser({ _id: targetUserId });
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const alreadySystemAdmin = (targetUser.accountType === 'admin' && !targetUser.campId) || !!targetUser.isSystemAdmin;
+    if (alreadySystemAdmin) {
+      return res.status(200).json({
+        message: 'User is already a system admin',
+        user: targetUser
+      });
+    }
+
+    if (!targetUser.isActive) {
+      return res.status(400).json({ message: 'Cannot promote an inactive user. Activate the account first.' });
+    }
+
+    const updatedUser = await db.updateUserById(targetUserId, { isSystemAdmin: true });
+    if (!updatedUser) {
+      return res.status(500).json({ message: 'Failed to update user' });
+    }
+
+    await recordActivity('MEMBER', targetUserId, performerId, 'PROMOTE_TO_SYSTEM_ADMIN', {
+      action: 'PROMOTE_TO_SYSTEM_ADMIN',
+      performedBy: performerId.toString(),
+      targetUserId: targetUserId.toString(),
+      timestamp: new Date().toISOString()
+    });
+
+    console.log('✅ [Promote] User promoted to system admin:', targetUser.email, 'by', req.user.email);
+    res.status(200).json({
+      message: 'User has been promoted to System Admin. They now have full system access.',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('❌ [POST /api/admin/users/:id/promote-to-system-admin] Error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // @route   PUT /api/admin/camps/:id
 // @desc    Update camp by admin
 // @access  Private (Admin only)
@@ -2056,11 +2108,11 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
     }
 
     // Verify requester is a system admin (not a camp admin)
-    const isSystemAdmin = req.user.accountType === 'admin' && !req.user.campId;
+    const isSystemAdmin = (req.user.accountType === 'admin' && !req.user.campId) || !!req.user.isSystemAdmin;
     if (!isSystemAdmin) {
-      // Fallback: check Admin collection
+      // Fallback: check Admin collection (super-admin)
       const adminRecord = await Admin.findOne({ user: req.user._id, isActive: true });
-      if (!adminRecord) {
+      if (!adminRecord || adminRecord.role !== 'super-admin') {
         return res.status(403).json({ message: 'System admin access required' });
       }
     }
@@ -2129,13 +2181,10 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
       return res.status(400).json({ message: 'Cannot impersonate deactivated user' });
     }
 
-    // Validate account type (must be personal or camp, not another admin)
-    if (targetUser.accountType === 'admin' && !targetUser.campId) {
-      // Allow impersonating camp admins (admin with campId), but not system admins
-      const isSystemAdmin = targetUser.accountType === 'admin' && !targetUser.campId;
-      if (isSystemAdmin) {
-        return res.status(403).json({ message: 'Cannot impersonate system admin accounts' });
-      }
+    // Validate account type (must be personal or camp, not another system admin)
+    const targetIsSystemAdmin = (targetUser.accountType === 'admin' && !targetUser.campId) || !!targetUser.isSystemAdmin;
+    if (targetIsSystemAdmin) {
+      return res.status(403).json({ message: 'Cannot impersonate system admin accounts' });
     }
 
     // Generate secure one-time token
