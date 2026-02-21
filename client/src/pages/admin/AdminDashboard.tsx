@@ -2806,50 +2806,50 @@ const CampEditModal: React.FC<{
               </div>
             </div>
 
-            {/* Camp owner: Promote to System Admin */}
-            {currentUser?.isSystemAdmin && (ownerUserId || camp.contactEmail) && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                <h3 className="text-lg font-medium text-custom-text mb-2">Camp owner: Promote to System Admin</h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  Grant the camp account owner full system admin access so they can manage all camps and users.
-                </p>
-                {ownerUserId && ownerUserId !== 'camp-repair-needed' ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-3 mb-3">
-                      <span className="text-sm text-gray-700">
-                        Owner: {camp.owner && typeof camp.owner === 'object'
-                          ? `${(camp.owner as any).firstName || ''} ${(camp.owner as any).lastName || ''}`.trim() || (camp.owner as any).email
-                          : 'Camp account'}
-                        {(camp.owner && typeof camp.owner === 'object' && (camp.owner as any).email) && (
-                          <span className="text-gray-500"> ({(camp.owner as any).email})</span>
-                        )}
-                      </span>
-                      {ownerIsSystemAdmin && (
-                        <span className="text-sm font-medium text-green-700">Already a System Admin</span>
+            {/* Camp owner: Promote to System Admin - always show in camp edit so system admins can promote */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h3 className="text-lg font-medium text-custom-text mb-2">Camp owner: Promote to System Admin</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Grant the camp account owner full system admin access so they can manage all camps and users.
+              </p>
+              {!currentUser?.isSystemAdmin ? (
+                <p className="text-sm text-gray-600">Only system admins can promote camp owners. You are signed in as an admin; if you need system admin rights, ask an existing system admin to promote you from the Users tab.</p>
+              ) : ownerUserId && ownerUserId !== 'camp-repair-needed' ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3 mb-3">
+                    <span className="text-sm text-gray-700">
+                      Owner: {camp.owner && typeof camp.owner === 'object'
+                        ? `${(camp.owner as any).firstName || ''} ${(camp.owner as any).lastName || ''}`.trim() || (camp.owner as any).email
+                        : 'Camp account'}
+                      {(camp.owner && typeof camp.owner === 'object' && (camp.owner as any).email) && (
+                        <span className="text-gray-500"> ({(camp.owner as any).email})</span>
                       )}
+                    </span>
+                    {ownerIsSystemAdmin && (
+                      <span className="text-sm font-medium text-green-700">Already a System Admin</span>
+                    )}
+                  </div>
+                  {promoteMessage && (
+                    <div className={`mb-3 p-2 rounded text-sm ${promoteMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {promoteMessage.text}
                     </div>
-                    {promoteMessage && (
-                      <div className={`mb-3 p-2 rounded text-sm ${promoteMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {promoteMessage.text}
-                      </div>
-                    )}
-                    {canPromoteOwner && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handlePromoteOwner}
-                        disabled={promoteLoading}
-                        className="border-purple-600 text-purple-700 hover:bg-purple-100"
-                      >
-                        {promoteLoading ? 'Promoting...' : 'Promote to System Admin'}
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-amber-700">Repair the camp owner link first (use Impersonate below to fix), then you can promote from here or from the Users tab.</p>
-                )}
-              </div>
-            )}
+                  )}
+                  {canPromoteOwner && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePromoteOwner}
+                      disabled={promoteLoading}
+                      className="border-purple-600 text-purple-700 hover:bg-purple-100"
+                    >
+                      {promoteLoading ? 'Promoting...' : 'Promote to System Admin'}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-amber-700">No camp owner linked to this camp yet. Use &quot;Log in as this user&quot; below to repair the owner link (if you have a contact email), or promote the user from the Users tab after they have an account.</p>
+              )}
+            </div>
 
             {/* Basic Information */}
             <div className="bg-gray-50 border rounded-lg p-4">

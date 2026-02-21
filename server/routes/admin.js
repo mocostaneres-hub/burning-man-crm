@@ -541,7 +541,8 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
             firstName: owner.firstName,
             lastName: owner.lastName,
             email: owner.email,
-            accountType: owner.accountType
+            accountType: owner.accountType,
+            isSystemAdmin: (owner.accountType === 'admin' && !owner.campId) || !!owner.isSystemAdmin
           } : null,
           needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
           // New compact columns
