@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
-import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X, ShieldCheck } from 'lucide-react';
+import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
 import apiService from '../../services/api';
 import { User as UserType } from '../../types';
 import SystemConfig from './SystemConfig';
@@ -1034,7 +1034,7 @@ const AdminDashboard: React.FC = () => {
                               className="flex items-center gap-1 text-purple-600 border-purple-600 hover:bg-purple-50"
                               title="Grant full system admin access"
                             >
-                              <ShieldCheck className="w-3 h-3" />
+                              <Shield className="w-3 h-3" />
                               Promote
                             </Button>
                           )}
