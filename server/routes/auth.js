@@ -284,7 +284,6 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
     
     // Not a Camp Lead, return normal user data (include isSystemAdmin for frontend)
-    const user = req.user;
     const userObj = user.toObject ? user.toObject() : { ...user };
     res.json({
       user: {
