@@ -90,11 +90,17 @@ const requireSystemAdmin = async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-    if (!isSystemAdminUser(req.user)) {
-      return res.status(403).json({ message: 'System admin access required' });
+    if (isSystemAdminUser(req.user)) {
+      req.isSystemAdmin = true;
+      return next();
     }
-    req.isSystemAdmin = true;
-    next();
+    // Also allow Admin collection super-admin (same as requireAdmin)
+    const admin = await db.findAdmin({ user: req.user._id, isActive: true });
+    if (admin && admin.role === 'super-admin') {
+      req.isSystemAdmin = true;
+      return next();
+    }
+    return res.status(403).json({ message: 'System admin access required' });
   } catch (error) {
     console.error('System admin middleware error:', error);
     return res.status(500).json({ message: 'Server error' });

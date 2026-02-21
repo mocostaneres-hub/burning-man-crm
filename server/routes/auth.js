@@ -231,6 +231,14 @@ router.post('/login', [
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = req.user;
+
+    // Compute isSystemAdmin: User flag, accountType admin with no camp, OR Admin collection super-admin
+    let isSystemAdmin = (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin;
+    if (!isSystemAdmin) {
+      const Admin = require('../models/Admin');
+      const adminRecord = await Admin.findOne({ user: user._id, isActive: true });
+      if (adminRecord && adminRecord.role === 'super-admin') isSystemAdmin = true;
+    }
     
     // Check if user is a Camp Lead in any roster
     // Camp Leads are personal/member accounts with delegated admin permissions
@@ -268,7 +276,7 @@ router.get('/me', authenticateToken, async (req, res) => {
           return res.json({
             user: {
               ...userObj,
-              isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin,
+              isSystemAdmin,
               isCampLead: true,
               campLeadCampId: campLeadCamp._id.toString(),
               campLeadCampSlug: campLeadCamp.slug,
@@ -288,15 +296,25 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.json({
       user: {
         ...userObj,
-        isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin
+        isSystemAdmin
       }
     });
   } catch (error) {
     console.error('❌ [Auth /me] Error fetching Camp Lead status:', error);
     const user = req.user;
     const userObj = user?.toObject ? user.toObject() : (user ? { ...user } : {});
+    let fallbackSystemAdmin = user && ((user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin);
+    if (user && !fallbackSystemAdmin) {
+      try {
+        const Admin = require('../models/Admin');
+        const adminRecord = await Admin.findOne({ user: user._id, isActive: true });
+        fallbackSystemAdmin = !!(adminRecord && adminRecord.role === 'super-admin');
+      } catch (e) {
+        // ignore
+      }
+    }
     res.json({
-      user: user ? { ...userObj, isSystemAdmin: (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin } : null
+      user: user ? { ...userObj, isSystemAdmin: fallbackSystemAdmin } : null
     });
   }
 });
