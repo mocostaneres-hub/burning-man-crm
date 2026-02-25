@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '../ui';
 import { Filter, X } from 'lucide-react';
 
-export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
+export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
 
 interface RosterFiltersProps {
   activeFilters: FilterType[];
@@ -109,6 +109,13 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({ activeFilters, onFilterCh
             isActive={activeFilters.includes('dues-unpaid')}
             onClick={() => toggleFilter('dues-unpaid')}
             variant="warning"
+          />
+          <FilterButton
+            label="Instructed"
+            filterType="dues-instructed"
+            isActive={activeFilters.includes('dues-instructed')}
+            onClick={() => toggleFilter('dues-instructed')}
+            variant="primary"
           />
         </div>
 

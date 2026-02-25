@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeDuesStatus, DUES_STATUS } = require('../utils/duesStateMachine');
 
 const rosterSchema = new mongoose.Schema({
   camp: {
@@ -93,10 +94,31 @@ const rosterSchema = new mongoose.Schema({
       // Can only be assigned by Main Camp Admin (camp owner)
       // User must be on roster with status='approved' to be eligible
     },
+    // Legacy boolean field kept for migration safety.
+    paid: {
+      type: Boolean
+    },
     duesStatus: {
       type: String,
-      enum: ['Paid', 'Unpaid'],
-      default: 'Unpaid'
+      enum: Object.values(DUES_STATUS),
+      default: DUES_STATUS.UNPAID
+    },
+    duesInstructedAt: {
+      type: Date,
+      default: null
+    },
+    duesPaidAt: {
+      type: Date,
+      default: null
+    },
+    duesReceiptSentAt: {
+      type: Date,
+      default: null
+    },
+    duesPaidByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
     }
   }],
   createdBy: {
@@ -117,5 +139,17 @@ const rosterSchema = new mongoose.Schema({
 
 // Ensure only one active roster per camp
 rosterSchema.index({ camp: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
+
+rosterSchema.pre('validate', function(next) {
+  if (Array.isArray(this.members)) {
+    this.members.forEach((memberEntry) => {
+      memberEntry.duesStatus = normalizeDuesStatus(memberEntry.duesStatus);
+      if (memberEntry.paid === undefined || memberEntry.paid === null) {
+        memberEntry.paid = memberEntry.duesStatus === DUES_STATUS.PAID;
+      }
+    });
+  }
+  next();
+});
 
 module.exports = mongoose.model('Roster', rosterSchema);

@@ -208,7 +208,7 @@ router.get('/:campId/contacts/:userId', authenticateToken, async (req, res) => {
               name: roster.name,
               joinedAt: entry.joinedAt || entry.addedAt || roster.createdAt,
               addedAt: entry.addedAt,
-              duesStatus: entry.duesStatus || 'Unpaid',
+              duesStatus: entry.duesStatus || 'UNPAID',
               overrides: entry.overrides || null,
               addedVia: relatedApp ? 'application' : 'manual',
               addedBy: entry.addedBy

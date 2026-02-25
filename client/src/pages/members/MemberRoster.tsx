@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, Card, Modal } from '../../components/ui';
+import { Button, Card, Modal, Input } from '../../components/ui';
 import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -70,11 +70,28 @@ const MemberRoster: React.FC = () => {
   const [hasActiveRoster, setHasActiveRoster] = useState(false); // Will be set to true if active roster is found
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
-  const [duesConfirmModal, setDuesConfirmModal] = useState<{
+  const [duesActionModal, setDuesActionModal] = useState<{
     isOpen: boolean;
     member: any;
-    currentStatus: boolean;
-  }>({ isOpen: false, member: null, currentStatus: false });
+  }>({ isOpen: false, member: null });
+  const [emailPreviewModal, setEmailPreviewModal] = useState<{
+    isOpen: boolean;
+    member: any;
+    actionType: 'instructions' | 'receipt' | null;
+    nextStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID';
+    subject: string;
+    body: string;
+    saveAsCampDefault: boolean;
+    sending: boolean;
+  }>({
+    isOpen: false,
+    member: null,
+    actionType: null,
+    subject: '',
+    body: '',
+    saveAsCampDefault: false,
+    sending: false
+  });
   const [duesLoading, setDuesLoading] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<RosterMember | null>(null);
@@ -96,6 +113,14 @@ const MemberRoster: React.FC = () => {
     action: 'grant' | 'revoke';
   }>({ isOpen: false, member: null, action: 'grant' });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
+  const [showDuesTemplatesModal, setShowDuesTemplatesModal] = useState(false);
+  const [duesTemplatesLoading, setDuesTemplatesLoading] = useState(false);
+  const [duesTemplatesForm, setDuesTemplatesForm] = useState({
+    instructionsSubject: '',
+    instructionsBody: '',
+    receiptSubject: '',
+    receiptBody: ''
+  });
 
   // Check if current user can access roster features
   // Allow access for:
@@ -408,9 +433,8 @@ const MemberRoster: React.FC = () => {
           console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
           console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
           
-          // Map duesStatus string to duesPaid boolean for frontend compatibility
-          // duesStatus is stored at the top level of memberEntry (roster.members[].duesStatus)
-          const duesPaid = memberEntry.duesStatus === 'Paid' || memberEntry.duesPaid === true;
+          const normalizedDuesStatus = memberEntry.duesStatus || (memberEntry.paid ? 'PAID' : 'UNPAID');
+          const duesPaid = normalizedDuesStatus === 'PAID';
           
           // Extract member ID safely
           let memberId;
@@ -427,7 +451,10 @@ const MemberRoster: React.FC = () => {
             member: memberEntry.member, // The full member object with nested user data
             user: memberEntry.member?.user,  // The populated user data from the backend
             duesPaid: duesPaid,
-            duesStatus: memberEntry.duesStatus || 'Unpaid', // Ensure we always have a duesStatus
+            duesStatus: normalizedDuesStatus,
+            duesInstructedAt: memberEntry.duesInstructedAt || null,
+            duesPaidAt: memberEntry.duesPaidAt || null,
+            duesReceiptSentAt: memberEntry.duesReceiptSentAt || null,
             isCampLead: memberEntry.isCampLead || false, // Camp Lead role
             addedAt: memberEntry.addedAt,
             addedBy: memberEntry.addedBy,
@@ -580,57 +607,88 @@ const MemberRoster: React.FC = () => {
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
-    
-    const currentStatus = member.duesPaid || false;
-    setDuesConfirmModal({
+
+    setDuesActionModal({
       isOpen: true,
-      member,
-      currentStatus
+      member
     });
   };
 
-  const handleDuesConfirm = async () => {
-    const { member, currentStatus } = duesConfirmModal;
-    const newStatus = !currentStatus;
-    
-    try {
-      if (!rosterId) {
-        alert('Roster ID not found');
-        setDuesConfirmModal({ isOpen: false, member: null, currentStatus: false });
-        return;
-      }
+  const closeDuesActionModal = () => {
+    setDuesActionModal({ isOpen: false, member: null });
+  };
 
-      setDuesLoading(member._id.toString());
-      
-      // Call API to update dues status (using correct endpoint and format)
-      const duesStatus = newStatus ? 'Paid' : 'Unpaid';
-      await api.put(`/rosters/${rosterId}/members/${member._id}/dues`, { duesStatus });
-      
-      // Update local state immediately for better UX
-      setMembers(prevMembers => 
-        prevMembers.map(m => 
-          m._id === member._id 
-            ? { ...m, duesPaid: newStatus }
-            : m
-        )
-      );
-      
-      // Optionally refresh the data to ensure consistency with backend
-      // fetchMembers();
-      
-      // Close modal
-      setDuesConfirmModal({ isOpen: false, member: null, currentStatus: false });
-      
+  const openEmailPreview = async (member: any, actionType: 'instructions' | 'receipt', nextStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID') => {
+    if (!rosterId) return;
+
+    try {
+      const response = await api.previewDuesEmail(rosterId, member._id.toString(), {
+        actionType,
+        targetStatus: nextStatus
+      });
+
+      setEmailPreviewModal({
+        isOpen: true,
+        member,
+        actionType,
+        nextStatus,
+        subject: response.preview?.subject || '',
+        body: response.preview?.body || '',
+        saveAsCampDefault: false,
+        sending: false
+      });
     } catch (error) {
-      console.error('❌ Error updating dues status:', error);
-      alert('Failed to update dues status. Please try again.');
+      console.error('Failed to build email preview:', error);
+      alert('Failed to load email preview.');
+    }
+  };
+
+  const handleDuesStatusChange = async (member: any, nextStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID') => {
+    if (!rosterId) return;
+    setDuesLoading(member._id.toString());
+    try {
+      await api.updateMemberDuesStatus(rosterId, member._id.toString(), { duesStatus: nextStatus });
+      await fetchMembers();
+      closeDuesActionModal();
+    } catch (error: any) {
+      console.error('Failed to update dues status:', error);
+      alert(error?.response?.data?.message || 'Failed to update dues status.');
     } finally {
       setDuesLoading(null);
     }
   };
 
-  const handleDuesCancel = () => {
-    setDuesConfirmModal({ isOpen: false, member: null, currentStatus: false });
+  const handleSendPreviewEmail = async () => {
+    if (!rosterId || !emailPreviewModal.member || !emailPreviewModal.actionType) return;
+
+    setEmailPreviewModal(prev => ({ ...prev, sending: true }));
+    try {
+      if (emailPreviewModal.nextStatus) {
+        await api.updateMemberDuesStatus(rosterId, emailPreviewModal.member._id.toString(), {
+          duesStatus: emailPreviewModal.nextStatus,
+          emailPreview: {
+            subject: emailPreviewModal.subject,
+            body: emailPreviewModal.body
+          },
+          saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+        });
+      } else {
+        await api.sendDuesEmail(rosterId, emailPreviewModal.member._id.toString(), {
+          actionType: emailPreviewModal.actionType,
+          subject: emailPreviewModal.subject,
+          body: emailPreviewModal.body,
+          saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+        });
+      }
+
+      await fetchMembers();
+      setEmailPreviewModal(prev => ({ ...prev, isOpen: false, sending: false }));
+      closeDuesActionModal();
+    } catch (error: any) {
+      console.error('Failed to send dues email:', error);
+      setEmailPreviewModal(prev => ({ ...prev, sending: false }));
+      alert(error?.response?.data?.message || 'Failed to send dues email.');
+    }
   };
 
   // Camp Lead role management handlers
@@ -753,6 +811,50 @@ const MemberRoster: React.FC = () => {
     }
   };
 
+  const handleOpenDuesTemplates = async () => {
+    if (!rosterId) return;
+    setDuesTemplatesLoading(true);
+    try {
+      const response = await api.getDuesTemplates(rosterId);
+      setDuesTemplatesForm({
+        instructionsSubject: response?.templates?.instructions?.subject || '',
+        instructionsBody: response?.templates?.instructions?.body || '',
+        receiptSubject: response?.templates?.receipt?.subject || '',
+        receiptBody: response?.templates?.receipt?.body || ''
+      });
+      setShowDuesTemplatesModal(true);
+    } catch (error) {
+      console.error('Failed to load dues templates:', error);
+      alert('Failed to load dues template defaults.');
+    } finally {
+      setDuesTemplatesLoading(false);
+    }
+  };
+
+  const handleSaveDuesTemplates = async () => {
+    if (!rosterId) return;
+    setDuesTemplatesLoading(true);
+    try {
+      await api.updateDuesTemplates(rosterId, {
+        instructions: {
+          subject: duesTemplatesForm.instructionsSubject,
+          body: duesTemplatesForm.instructionsBody
+        },
+        receipt: {
+          subject: duesTemplatesForm.receiptSubject,
+          body: duesTemplatesForm.receiptBody
+        }
+      });
+      setShowDuesTemplatesModal(false);
+      alert('Dues template defaults saved.');
+    } catch (error) {
+      console.error('Failed to save dues templates:', error);
+      alert('Failed to save dues template defaults.');
+    } finally {
+      setDuesTemplatesLoading(false);
+    }
+  };
+
   // Using shared date formatting utility
 
   const formatArrivalDepartureDate = (dateString: string | Date) => {
@@ -806,10 +908,13 @@ const MemberRoster: React.FC = () => {
       for (const filter of activeFilters) {
         switch (filter) {
           case 'dues-paid':
-            if (!member.duesPaid) return false;
+            if (member.duesStatus !== 'PAID') return false;
             break;
           case 'dues-unpaid':
-            if (member.duesPaid) return false;
+            if (member.duesStatus !== 'UNPAID') return false;
+            break;
+          case 'dues-instructed':
+            if (member.duesStatus !== 'INSTRUCTED') return false;
             break;
           case 'without-tickets':
             if (user?.hasTicket) return false;
@@ -931,6 +1036,17 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
           
+          {canEdit && rosterId && (
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={handleOpenDuesTemplates}
+              disabled={duesTemplatesLoading}
+            >
+              Email Defaults
+            </Button>
+          )}
+
           {canEdit && rosterId && (
             <Button
               variant="primary"
@@ -1120,13 +1236,26 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Dues */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {(() => {
+                        const duesStatus = (member.duesStatus || 'UNPAID') as 'UNPAID' | 'INSTRUCTED' | 'PAID';
+                        const duesColorClass = duesStatus === 'PAID'
+                          ? 'text-green-600 font-bold'
+                          : duesStatus === 'INSTRUCTED'
+                            ? 'text-orange-500 font-bold'
+                            : 'text-gray-400';
+                        const tooltipDetails = duesStatus === 'PAID'
+                          ? `Paid on: ${member.duesPaidAt ? formatDate(member.duesPaidAt as string) : 'N/A'}\nReceipt sent: ${member.duesReceiptSentAt ? formatDate(member.duesReceiptSentAt as string) : 'N/A'}`
+                          : duesStatus === 'INSTRUCTED'
+                            ? 'Payment instructions sent'
+                            : 'Unpaid';
+                        return (
                       <button
                         onClick={() => handleDuesClick(member)}
                         disabled={!canEdit || duesLoading === member._id.toString()}
                         className={`text-xl ${canEdit ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
-                          member.duesPaid ? 'text-green-600 font-bold' : 'text-gray-400'
+                          duesColorClass
                         }`}
-                        title={canEdit ? (member.duesPaid ? 'Mark dues as unpaid' : 'Mark dues as paid') : 'View only'}
+                        title={tooltipDetails}
                       >
                         {duesLoading === member._id.toString() ? (
                           <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
@@ -1134,6 +1263,8 @@ const MemberRoster: React.FC = () => {
                           '$'
                         )}
                       </button>
+                        );
+                      })()}
                     </td>
                     {/* Ticket/VP */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -2115,46 +2246,107 @@ const MemberRoster: React.FC = () => {
         )}
       </Modal>
 
-      {/* Dues Confirmation Modal */}
+      {/* Dues Action Modal */}
       <Modal
-        isOpen={duesConfirmModal.isOpen}
-        onClose={handleDuesCancel}
-        title="Confirm Dues Status Change"
+        isOpen={duesActionModal.isOpen}
+        onClose={closeDuesActionModal}
+        title="Dues Actions"
         size="sm"
       >
+        <div className="space-y-3">
+          {duesActionModal.member && (() => {
+            const duesStatus = (duesActionModal.member.duesStatus || 'UNPAID') as 'UNPAID' | 'INSTRUCTED' | 'PAID';
+            const canMarkUnpaid = user?.accountType === 'camp' || user?.accountType === 'admin';
+            return (
+              <>
+                {duesStatus === 'UNPAID' && (
+                  <>
+                    <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'instructions', 'INSTRUCTED')} className="w-full">
+                      Send Payment Instructions
+                    </Button>
+                    <Button variant="primary" onClick={() => openEmailPreview(duesActionModal.member, 'receipt', 'PAID')} className="w-full">
+                      Mark as Paid
+                    </Button>
+                  </>
+                )}
+                {duesStatus === 'INSTRUCTED' && (
+                  <>
+                    <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'instructions')} className="w-full">
+                      Resend Instructions
+                    </Button>
+                    <Button variant="primary" onClick={() => openEmailPreview(duesActionModal.member, 'receipt', 'PAID')} className="w-full">
+                      Mark as Paid
+                    </Button>
+                  </>
+                )}
+                {duesStatus === 'PAID' && (
+                  <>
+                    <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'receipt')} className="w-full">
+                      Resend Receipt
+                    </Button>
+                    {canMarkUnpaid && (
+                      <Button variant="outline" onClick={() => handleDuesStatusChange(duesActionModal.member, 'UNPAID')} className="w-full">
+                        Mark as Unpaid (Admin Correction)
+                      </Button>
+                    )}
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </Modal>
+
+      {/* Dues Email Preview Modal */}
+      <Modal
+        isOpen={emailPreviewModal.isOpen}
+        onClose={() => !emailPreviewModal.sending && setEmailPreviewModal(prev => ({ ...prev, isOpen: false }))}
+        title="Email Preview"
+        size="lg"
+      >
         <div className="space-y-4">
-          <div className="text-center">
-            <p className="text-gray-700">
-              {duesConfirmModal.member && (
-                duesConfirmModal.currentStatus
-                  ? `Mark ${duesConfirmModal.member.user?.firstName || 'Unknown'} ${duesConfirmModal.member.user?.lastName || 'Member'}'s dues as unpaid?`
-                  : `Mark ${duesConfirmModal.member.user?.firstName || 'Unknown'} ${duesConfirmModal.member.user?.lastName || 'Member'}'s dues as paid?`
-              )}
-            </p>
+          <Input
+            label="Subject"
+            value={emailPreviewModal.subject}
+            onChange={(e) => setEmailPreviewModal(prev => ({ ...prev, subject: e.target.value }))}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Body</label>
+            <textarea
+              className="w-full min-h-[220px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={emailPreviewModal.body}
+              onChange={(e) => setEmailPreviewModal(prev => ({ ...prev, body: e.target.value }))}
+            />
           </div>
-          
-          <div className="flex gap-3 justify-end">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={emailPreviewModal.saveAsCampDefault}
+              onChange={(e) => setEmailPreviewModal(prev => ({ ...prev, saveAsCampDefault: e.target.checked }))}
+            />
+            Save as camp default
+          </label>
+
+          <div className="rounded-md border border-gray-200 p-3 bg-gray-50">
+            <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+            <p className="font-semibold text-sm mb-2">{emailPreviewModal.subject}</p>
+            <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{emailPreviewModal.body}</pre>
+          </div>
+
+          <div className="flex justify-end gap-3">
             <Button
               variant="outline"
-              onClick={handleDuesCancel}
-              disabled={duesLoading !== null}
+              onClick={() => setEmailPreviewModal(prev => ({ ...prev, isOpen: false }))}
+              disabled={emailPreviewModal.sending}
             >
               Cancel
             </Button>
             <Button
               variant="primary"
-              onClick={handleDuesConfirm}
-              disabled={duesLoading !== null}
-              className="flex items-center gap-2"
+              onClick={handleSendPreviewEmail}
+              disabled={emailPreviewModal.sending || !emailPreviewModal.subject.trim() || !emailPreviewModal.body.trim()}
             >
-              {duesLoading !== null ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Updating...
-                </>
-              ) : (
-                'Confirm'
-              )}
+              {emailPreviewModal.sending ? 'Sending...' : 'Send'}
             </Button>
           </div>
         </div>
@@ -2247,6 +2439,71 @@ const MemberRoster: React.FC = () => {
           onMemberAdded={fetchMembers}
         />
       )}
+
+      {/* Camp-level Dues Template Defaults */}
+      <Modal
+        isOpen={showDuesTemplatesModal}
+        onClose={() => !duesTemplatesLoading && setShowDuesTemplatesModal(false)}
+        title="Dues Email Template Defaults"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            These defaults are used for payment instructions and receipts when sending dues emails.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Subject</label>
+            <Input
+              value={duesTemplatesForm.instructionsSubject}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsSubject: e.target.value }))}
+              placeholder="Payment Instructions for {{camp_name}} Dues"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={duesTemplatesForm.instructionsBody}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsBody: e.target.value }))}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Subject</label>
+            <Input
+              value={duesTemplatesForm.receiptSubject}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptSubject: e.target.value }))}
+              placeholder="Payment Received - {{camp_name}}"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={duesTemplatesForm.receiptBody}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptBody: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDuesTemplatesModal(false)}
+              disabled={duesTemplatesLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveDuesTemplates}
+              disabled={duesTemplatesLoading}
+            >
+              {duesTemplatesLoading ? 'Saving...' : 'Save Defaults'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

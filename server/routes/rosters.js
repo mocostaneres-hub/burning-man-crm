@@ -3,8 +3,140 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
+const { renderTemplate } = require('../utils/renderTemplate');
+const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
+const { sendDuesEmail } = require('../services/emailService');
+const {
+  DUES_STATUS,
+  normalizeDuesStatus,
+  isAllowedTransition,
+  getEmailTrigger
+} = require('../utils/duesStateMachine');
 
 const router = express.Router();
+
+function getMemberEntryIndex(roster, memberId) {
+  return roster.members.findIndex((entry) => {
+    if (!entry.member) return false;
+    if (typeof entry.member === 'object' && entry.member._id) {
+      return entry.member._id.toString() === memberId.toString();
+    }
+    return entry.member.toString() === memberId.toString();
+  });
+}
+
+function resolveDuesVariables({ memberUser, camp, campDues, paymentDate }) {
+  return {
+    member_name: `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim() || 'Member',
+    camp_name: camp?.name || camp?.campName || 'Your Camp',
+    dues_amount: campDues?.amount ? `${campDues.currency || 'USD'} ${campDues.amount}` : 'TBD',
+    due_date: campDues?.dueDate ? new Date(campDues.dueDate).toLocaleDateString('en-US') : 'TBD',
+    payment_link: campDues?.paymentLink || camp?.website || process.env.CLIENT_URL || 'https://www.g8road.com',
+    payment_date: paymentDate ? new Date(paymentDate).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US')
+  };
+}
+
+async function buildDuesEmailPreview({ camp, memberUser, type, paymentDate, overrideSubject, overrideBody }) {
+  const template = getCampTemplate(camp, type);
+  const variables = resolveDuesVariables({
+    memberUser,
+    camp,
+    campDues: camp?.requirements?.dues,
+    paymentDate
+  });
+
+  const rawSubject = overrideSubject || template.subject;
+  const rawBody = overrideBody || template.body;
+
+  return {
+    type,
+    variables,
+    subject: renderTemplate(rawSubject, variables),
+    body: renderTemplate(rawBody, variables)
+  };
+}
+
+// @route   GET /api/rosters/:rosterId/dues/templates
+// @desc    Get camp-level dues template defaults for roster's camp
+// @access  Private (Camp admins/leads)
+router.get('/:rosterId/dues/templates', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    res.json({
+      templates: {
+        instructions: {
+          subject: camp.duesInstructionsSubject || '',
+          body: camp.duesInstructionsBody || '',
+          effectiveSubject: camp.duesInstructionsSubject || SYSTEM_DEFAULT_TEMPLATES.instructions.subject,
+          effectiveBody: camp.duesInstructionsBody || SYSTEM_DEFAULT_TEMPLATES.instructions.body
+        },
+        receipt: {
+          subject: camp.duesReceiptSubject || '',
+          body: camp.duesReceiptBody || '',
+          effectiveSubject: camp.duesReceiptSubject || SYSTEM_DEFAULT_TEMPLATES.receipt.subject,
+          effectiveBody: camp.duesReceiptBody || SYSTEM_DEFAULT_TEMPLATES.receipt.body
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get dues templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/rosters/:rosterId/dues/templates
+// @desc    Update camp-level dues template defaults for roster's camp
+// @access  Private (Camp admins/leads)
+router.put('/:rosterId/dues/templates', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+    const { instructions, receipt } = req.body || {};
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const normalizeField = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const updateData = {
+      duesInstructionsSubject: normalizeField(instructions?.subject),
+      duesInstructionsBody: normalizeField(instructions?.body),
+      duesReceiptSubject: normalizeField(receipt?.subject),
+      duesReceiptBody: normalizeField(receipt?.body)
+    };
+
+    await db.updateCamp({ _id: camp._id }, updateData);
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+      field: 'duesTemplates',
+      rosterId: roster._id
+    });
+
+    res.json({ message: 'Dues templates updated successfully' });
+  } catch (error) {
+    console.error('Update dues templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // @route   POST /api/rosters/reload-data
 // @desc    Force reload mock database data (development only)
@@ -444,7 +576,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           
           // Get dues status from roster member entry first (most accurate), 
           // then member record, then application, then default to Unpaid
-          const duesStatus = memberEntry.duesStatus || member.duesStatus || application?.duesStatus || 'Unpaid';
+          const duesStatus = normalizeDuesStatus(memberEntry.duesStatus || member.duesStatus || application?.duesStatus || DUES_STATUS.UNPAID);
           
           populatedMembers.push({
             ...memberEntry,
@@ -590,7 +722,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         user.interestedInStrike ? 'Yes' : 'No',
         `"${(user.bio || '').replace(/"/g, '""')}"`,
         `"${formatSocialMedia(user.socialMedia).replace(/"/g, '""')}"`,
-        user.duesStatus || 'Unpaid',
+        normalizeDuesStatus(user.duesStatus || DUES_STATUS.UNPAID),
         new Date(memberEntry.addedAt).toLocaleDateString()
       ];
     });
@@ -798,13 +930,21 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       addedAt: new Date(),
       addedBy: req.user._id,
       status: 'approved',
-      duesPaid: memberData.duesPaid || false
+      dues: {
+        paid: memberData.duesPaid === true,
+        paidAt: memberData.duesPaid === true ? new Date() : null
+      }
     };
 
     const createdMember = await db.createMember(newMember);
 
     // Add member to roster
-    await db.addMemberToRoster(rosterId, createdMember._id, req.user._id);
+    await db.addMemberToRoster(
+      rosterId,
+      createdMember._id,
+      req.user._id,
+      { duesStatus: memberData.duesPaid === true ? DUES_STATUS.PAID : DUES_STATUS.UNPAID }
+    );
     
     // Log member addition for both MEMBER and CAMP
     await recordActivity('MEMBER', user._id, req.user._id, 'RESOURCE_ASSIGNED', {
@@ -892,7 +1032,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 departureDate: user.departureDate,
                 interestedInEAP: user.interestedInEAP,
                 interestedInStrike: user.interestedInStrike,
-                duesStatus: memberEntry.duesStatus || 'Unpaid'
+                duesStatus: normalizeDuesStatus(memberEntry.duesStatus || DUES_STATUS.UNPAID)
               }
             }
           });
@@ -912,133 +1052,275 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   POST /api/rosters/:rosterId/members/:memberId/dues/preview
+// @desc    Build editable dues email preview before sending
+// @access  Private (Camp admins/leads)
+router.post('/:rosterId/members/:memberId/dues/preview', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { actionType, targetStatus, subject, body } = req.body;
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+
+    let previewType = actionType;
+    if (!previewType && targetStatus) {
+      const previousStatus = normalizeDuesStatus(roster.members[memberIndex].duesStatus || DUES_STATUS.UNPAID);
+      previewType = getEmailTrigger(previousStatus, targetStatus);
+    }
+
+    if (!previewType || !['instructions', 'receipt'].includes(previewType)) {
+      return res.status(400).json({ message: 'Preview type must be instructions or receipt' });
+    }
+
+    const paymentDate = previewType === 'receipt' ? new Date() : null;
+    const preview = await buildDuesEmailPreview({
+      camp,
+      memberUser,
+      type: previewType,
+      paymentDate,
+      overrideSubject: subject,
+      overrideBody: body
+    });
+
+    res.json({
+      preview,
+      recipient: memberUser.email
+    });
+  } catch (error) {
+    console.error('Preview dues email error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/rosters/:rosterId/members/:memberId/dues/send-email
+// @desc    Send dues instruction/receipt without changing status
+// @access  Private (Camp admins/leads)
+router.post('/:rosterId/members/:memberId/dues/send-email', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { actionType, subject, body, saveAsCampDefault } = req.body;
+
+    if (!actionType || !['instructions', 'receipt'].includes(actionType)) {
+      return res.status(400).json({ message: 'actionType must be instructions or receipt' });
+    }
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+
+    const preview = await buildDuesEmailPreview({
+      camp,
+      memberUser,
+      type: actionType,
+      paymentDate: actionType === 'receipt' ? (roster.members[memberIndex].duesPaidAt || new Date()) : null,
+      overrideSubject: subject,
+      overrideBody: body
+    });
+
+    await sendDuesEmail({
+      to: memberUser.email,
+      subject: preview.subject,
+      body: preview.body
+    });
+
+    if (saveAsCampDefault === true) {
+      const updateData = actionType === 'instructions'
+        ? {
+            duesInstructionsSubject: subject || null,
+            duesInstructionsBody: body || null
+          }
+        : {
+            duesReceiptSubject: subject || null,
+            duesReceiptBody: body || null
+          };
+      await db.updateCamp({ _id: camp._id }, updateData);
+    }
+
+    if (actionType === 'receipt') {
+      roster.members[memberIndex].duesReceiptSentAt = new Date();
+      roster.markModified('members');
+      await roster.save();
+    }
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+      field: 'duesEmail',
+      action: actionType,
+      memberId,
+      memberEmail: memberUser.email,
+      rosterId: roster._id
+    });
+
+    res.json({ message: 'Email sent successfully' });
+  } catch (error) {
+    console.error('Send dues email error:', error);
+    res.status(500).json({ message: 'Failed to send email' });
+  }
+});
+
 // @route   PUT /api/rosters/:rosterId/members/:memberId/dues
-// @desc    Update dues status for a roster member
-// @access  Private (Camp owners only)
+// @desc    Update structured dues status for a roster member
+// @access  Private (Camp admins/leads)
 router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
-    const { duesStatus } = req.body;
+    const { duesStatus, emailPreview, saveAsCampDefault } = req.body;
 
-    // Validate dues status
-    if (!duesStatus || !['Paid', 'Unpaid'].includes(duesStatus)) {
+    const nextStatus = normalizeDuesStatus(duesStatus);
+    if (!Object.values(DUES_STATUS).includes(nextStatus)) {
       return res.status(400).json({ message: 'Invalid dues status' });
     }
 
-    // Resolve roster and camp to avoid relying on JWT campLead fields
-    let roster;
-    roster = await db.findRoster({ _id: rosterId });
-    if (!roster) {
-      console.log('⚠️ [Dues Update] Trying integer roster ID...');
-      roster = await db.findRoster({ _id: parseInt(rosterId) });
-    }
-    if (!roster) {
-      return res.status(404).json({ message: 'Roster not found' });
-    }
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
 
-    const campId = roster.camp;
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
     const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const previousStatus = normalizeDuesStatus(roster.members[memberIndex].duesStatus || DUES_STATUS.UNPAID);
+    if (previousStatus === nextStatus) {
+      return res.status(200).json({ message: 'No dues status change', duesStatus: previousStatus, memberId });
     }
 
-    console.log('🔄 [Dues Update] Looking for roster:', { rosterId, campId: camp._id });
-
-    // Verify roster belongs to this camp (defensive)
-    if (roster.camp.toString() !== camp._id.toString()) {
-      return res.status(403).json({ message: 'Access denied - roster belongs to different camp' });
+    if (!isAllowedTransition(previousStatus, nextStatus)) {
+      return res.status(400).json({ message: `Invalid transition from ${previousStatus} to ${nextStatus}` });
     }
 
-    console.log('✅ [Dues Update] Roster found:', { rosterId: roster._id });
-    console.log('🔍 [Dues Update] Roster type check:', { 
-      hasMarkModified: typeof roster.markModified === 'function',
-      hasSave: typeof roster.save === 'function',
-      isMongooseDoc: roster.constructor.name 
-    });
-
-    // Find the member in the roster
-    // Handle both populated member objects and member ID strings
-    const memberIndex = roster.members.findIndex(m => {
-      if (!m.member) return false;
-      
-      // If member is populated (object), compare by _id
-      if (typeof m.member === 'object' && m.member._id) {
-        return m.member._id.toString() === memberId.toString();
-      }
-      
-      // If member is just an ID (string/ObjectId)
-      return m.member.toString() === memberId.toString();
-    });
-    
-    if (memberIndex === -1) {
-      console.error('❌ [Dues Update] Member not found in roster:', memberId);
-      return res.status(404).json({ message: 'Member not found in roster' });
-    }
-
-    console.log('✅ [Dues Update] Member found at index:', memberIndex);
-
-    // Get member info for logging
+    const emailTriggerType = getEmailTrigger(previousStatus, nextStatus);
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
-    const oldDuesStatus = roster.members[memberIndex].duesStatus || 'Unpaid';
-    
-    // Update the dues status
-    roster.members[memberIndex].duesStatus = duesStatus;
-    console.log('📝 [Dues Update] Updated duesStatus to:', duesStatus);
-    console.log('📝 [Dues Update] Member before save:', JSON.stringify(roster.members[memberIndex], null, 2));
-    
-    // CRITICAL: Mark the members array as modified for Mongoose to save it
-    roster.markModified('members');
-    roster.updatedAt = new Date();
 
-    // Save the updated roster directly (must use .save() for markModified to work)
-    const savedRoster = await roster.save();
-    console.log('✅ [Dues Update] Saved successfully');
-    
-    // Log dues status change for both MEMBER and CAMP
+    if (emailTriggerType) {
+      if (!memberUser?.email) {
+        return res.status(400).json({ message: 'Cannot send dues email: member has no email' });
+      }
+      if (!emailPreview?.subject || !emailPreview?.body) {
+        return res.status(400).json({ message: 'Email preview subject and body are required before sending' });
+      }
+    }
+
+    let renderedEmail = null;
+    if (emailTriggerType) {
+      renderedEmail = await buildDuesEmailPreview({
+        camp,
+        memberUser,
+        type: emailTriggerType,
+        paymentDate: nextStatus === DUES_STATUS.PAID ? new Date() : null,
+        overrideSubject: emailPreview.subject,
+        overrideBody: emailPreview.body
+      });
+
+      try {
+        await sendDuesEmail({
+          to: memberUser.email,
+          subject: renderedEmail.subject,
+          body: renderedEmail.body
+        });
+      } catch (emailError) {
+        await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+          field: 'duesEmail',
+          action: 'failed',
+          memberId,
+          memberEmail: memberUser.email,
+          trigger: emailTriggerType,
+          error: emailError.message
+        });
+        return res.status(502).json({ message: 'Failed to send dues email; status not updated' });
+      }
+
+      if (saveAsCampDefault === true) {
+        const updateData = emailTriggerType === 'instructions'
+          ? {
+              duesInstructionsSubject: emailPreview.subject,
+              duesInstructionsBody: emailPreview.body
+            }
+          : {
+              duesReceiptSubject: emailPreview.subject,
+              duesReceiptBody: emailPreview.body
+            };
+        await db.updateCamp({ _id: camp._id }, updateData);
+      }
+    }
+
+    const now = new Date();
+    roster.members[memberIndex].duesStatus = nextStatus;
+    roster.members[memberIndex].paid = nextStatus === DUES_STATUS.PAID;
+
+    if (nextStatus === DUES_STATUS.INSTRUCTED) {
+      roster.members[memberIndex].duesInstructedAt = now;
+    }
+    if (nextStatus === DUES_STATUS.PAID) {
+      roster.members[memberIndex].duesPaidAt = now;
+      roster.members[memberIndex].duesPaidByUserId = req.user._id;
+      roster.members[memberIndex].duesReceiptSentAt = now;
+    }
+    if (previousStatus === DUES_STATUS.PAID && nextStatus === DUES_STATUS.UNPAID) {
+      roster.members[memberIndex].duesPaidAt = null;
+      roster.members[memberIndex].duesPaidByUserId = null;
+      // Keep duesReceiptSentAt for historical audit.
+    }
+
+    roster.markModified('members');
+    roster.updatedAt = now;
+    await roster.save();
+
     if (member && memberUser) {
       await recordActivity('MEMBER', member.user, req.user._id, 'SETTING_TOGGLED', {
         field: 'duesStatus',
-        oldValue: oldDuesStatus,
-        newValue: duesStatus,
+        oldValue: previousStatus,
+        newValue: nextStatus,
         rosterId: roster._id,
-        rosterName: roster.name,
         campId: camp._id,
-        campName: camp.name || camp.campName
+        emailTriggerType: emailTriggerType || null
       });
-      
+
       await recordActivity('CAMP', camp._id, req.user._id, 'SETTING_TOGGLED', {
         field: 'duesStatus',
-        oldValue: oldDuesStatus,
-        newValue: duesStatus,
+        oldValue: previousStatus,
+        newValue: nextStatus,
         rosterId: roster._id,
-        rosterName: roster.name,
-        memberId: memberId,
+        memberId,
         memberName: `${memberUser.firstName} ${memberUser.lastName}`,
-        memberEmail: memberUser.email
+        memberEmail: memberUser.email,
+        emailTriggerType: emailTriggerType || null
       });
     }
-    
-    // Verify the save
-    const verifyRoster = await db.findRoster({ _id: roster._id });
-    const verifyMember = verifyRoster.members.find(m => {
-      if (!m.member) return false;
-      if (typeof m.member === 'object' && m.member._id) {
-        return m.member._id.toString() === memberId.toString();
-      }
-      return m.member.toString() === memberId.toString();
-    });
-    console.log('🔍 [Dues Update] Verified after save - duesStatus:', verifyMember?.duesStatus);
 
-    res.json({ 
+    res.json({
       message: 'Dues status updated successfully',
-      duesStatus: duesStatus,
-      memberId: memberId
+      duesStatus: nextStatus,
+      memberId
     });
   } catch (error) {
     console.error('Error updating dues status:', error);
@@ -1438,6 +1720,9 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 // @access  Private (Camp owners and Camp Leads)
 router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
   try {
+    const { memberId } = req.params;
+    const isPaid = req.body?.isPaid === true || req.body?.duesStatus === DUES_STATUS.PAID || req.body?.duesStatus === 'Paid';
+
     console.log('🔄 [DUES UPDATE] Starting dues status update');
     console.log('📝 [DUES UPDATE] Request params:', { memberId: req.params.memberId });
     console.log('📝 [DUES UPDATE] Request body:', req.body);
@@ -1526,11 +1811,11 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
 
     // Update the dues status with explicit database mapping
     console.log('💾 [DUES UPDATE] Current member entry:', targetMemberEntry);
-    console.log('💾 [DUES UPDATE] Updating dues status from', targetMemberEntry.duesStatus, 'to', isPaid ? 'Paid' : 'Unpaid');
+    console.log('💾 [DUES UPDATE] Updating dues status from', targetMemberEntry.duesStatus, 'to', isPaid ? DUES_STATUS.PAID : DUES_STATUS.UNPAID);
     const originalDuesStatus = targetMemberEntry.duesStatus;
     
     // Create explicit update payload to match database schema (duesStatus as string)
-    const updatePayload = { duesStatus: isPaid ? 'Paid' : 'Unpaid' };
+    const updatePayload = { duesStatus: isPaid ? DUES_STATUS.PAID : DUES_STATUS.UNPAID, paid: isPaid };
     console.log('📝 [DUES UPDATE] Update payload:', updatePayload);
     
     // Find the index of the member entry in the roster for targeted update
@@ -1577,7 +1862,7 @@ router.patch('/member/:memberId/dues', authenticateToken, async (req, res) => {
       message: 'Dues status updated successfully',
       memberId,
       duesPaid: isPaid, // Keep this for frontend compatibility
-      duesStatus: isPaid ? 'Paid' : 'Unpaid', // Add the actual database value
+      duesStatus: isPaid ? DUES_STATUS.PAID : DUES_STATUS.UNPAID, // Add the actual database value
       previousValue: originalDuesStatus
     });
   } catch (error) {

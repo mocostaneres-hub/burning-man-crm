@@ -638,6 +638,49 @@ class ApiService {
     const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> = await this.api.post(`/rosters/member/${memberId}/revoke-camp-lead`);
     return response.data;
   }
+
+  async previewDuesEmail(
+    rosterId: string,
+    memberId: string,
+    payload: { actionType?: 'instructions' | 'receipt'; targetStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID'; subject?: string; body?: string }
+  ): Promise<any> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/dues/preview`, payload);
+    return response.data;
+  }
+
+  async sendDuesEmail(
+    rosterId: string,
+    memberId: string,
+    payload: { actionType: 'instructions' | 'receipt'; subject?: string; body?: string; saveAsCampDefault?: boolean }
+  ): Promise<any> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/dues/send-email`, payload);
+    return response.data;
+  }
+
+  async updateMemberDuesStatus(
+    rosterId: string,
+    memberId: string,
+    payload: { duesStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID'; emailPreview?: { subject: string; body: string }; saveAsCampDefault?: boolean }
+  ): Promise<any> {
+    const response = await this.api.put(`/rosters/${rosterId}/members/${memberId}/dues`, payload);
+    return response.data;
+  }
+
+  async getDuesTemplates(rosterId: string): Promise<any> {
+    const response = await this.api.get(`/rosters/${rosterId}/dues/templates`);
+    return response.data;
+  }
+
+  async updateDuesTemplates(
+    rosterId: string,
+    payload: {
+      instructions: { subject?: string; body?: string };
+      receipt: { subject?: string; body?: string };
+    }
+  ): Promise<any> {
+    const response = await this.api.put(`/rosters/${rosterId}/dues/templates`, payload);
+    return response.data;
+  }
 }
 
 const apiService = new ApiService();

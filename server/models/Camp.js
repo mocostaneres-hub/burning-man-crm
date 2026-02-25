@@ -318,6 +318,24 @@ const campSchema = new mongoose.Schema({
   inviteTemplateSMS: {
     type: String,
     default: "You're invited to {{campName}}! Apply here: {{link}}"
+  },
+
+  // Dues email templates (camp-level overrides over system defaults)
+  duesInstructionsSubject: {
+    type: String,
+    default: null
+  },
+  duesInstructionsBody: {
+    type: String,
+    default: null
+  },
+  duesReceiptSubject: {
+    type: String,
+    default: null
+  },
+  duesReceiptBody: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

@@ -1177,7 +1177,7 @@ class MockDatabase {
     return updatedRoster;
   }
 
-  async addMemberToRoster(rosterId, memberId, addedBy) {
+  async addMemberToRoster(rosterId, memberId, addedBy, options = {}) {
     await this.ensureLoaded();
     const roster = this.collections.rosters.get(rosterId.toString());
     if (!roster) {
@@ -1192,10 +1192,19 @@ class MockDatabase {
       return roster; // Member already exists
     }
     
+    const duesStatus = options.duesStatus || 'UNPAID';
+    const paid = duesStatus === 'PAID';
+
     const memberEntry = {
       member: memberId,
       addedAt: new Date(),
-      addedBy
+      addedBy,
+      paid,
+      duesStatus,
+      duesInstructedAt: duesStatus === 'INSTRUCTED' ? new Date() : null,
+      duesPaidAt: duesStatus === 'PAID' ? new Date() : null,
+      duesReceiptSentAt: null,
+      duesPaidByUserId: null
     };
     
     // Clean up any null/undefined members and add the new member

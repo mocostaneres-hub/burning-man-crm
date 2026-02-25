@@ -370,7 +370,10 @@ class DatabaseAdapter {
     }
   }
 
-  async addMemberToRoster(rosterId, memberId, addedBy) {
+  async addMemberToRoster(rosterId, memberId, addedBy, options = {}) {
+    const duesStatus = options.duesStatus || 'UNPAID';
+    const paid = duesStatus === 'PAID';
+
     if (this.useMongoDB) {
       const Roster = require('../models/Roster');
       return await Roster.findByIdAndUpdate(
@@ -381,14 +384,17 @@ class DatabaseAdapter {
               member: memberId, 
               addedAt: new Date(), 
               addedBy,
-              duesStatus: 'Unpaid'
+              paid,
+              duesStatus,
+              duesInstructedAt: duesStatus === 'INSTRUCTED' ? new Date() : null,
+              duesPaidAt: duesStatus === 'PAID' ? new Date() : null
             } 
           } 
         },
         { new: true }
       );
     } else {
-      return await this.mockDB.addMemberToRoster(rosterId, memberId, addedBy);
+      return await this.mockDB.addMemberToRoster(rosterId, memberId, addedBy, options);
     }
   }
 

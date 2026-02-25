@@ -543,6 +543,36 @@ Questions about your new role? Reach out to your Main Camp Admin or check the He
 };
 
 /**
+ * Send dues-related email using pre-rendered content.
+ */
+const sendDuesEmail = async ({ to, subject, body }) => {
+  const safeSubject = (subject || '').trim();
+  const safeBody = body || '';
+
+  if (!to) {
+    throw new Error('Recipient email is required');
+  }
+  if (!safeSubject) {
+    throw new Error('Email subject is required');
+  }
+  if (!safeBody.trim()) {
+    throw new Error('Email body is required');
+  }
+
+  const htmlBody = safeBody
+    .split('\n')
+    .map((line) => `<p style="margin: 0 0 12px 0;">${line || '&nbsp;'}</p>`)
+    .join('');
+
+  return sendEmail({
+    to,
+    subject: safeSubject,
+    text: safeBody,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${htmlBody}</div>`
+  });
+};
+
+/**
  * Send test email (for Resend verification)
  */
 const sendTestEmail = async (to) => {
@@ -567,5 +597,6 @@ module.exports = {
   sendRosterInviteEmail,
   sendInviteEmail,
   sendTestEmail,
-  sendCampLeadGrantedEmail
+  sendCampLeadGrantedEmail,
+  sendDuesEmail
 };

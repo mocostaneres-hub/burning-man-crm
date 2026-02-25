@@ -103,6 +103,10 @@ export interface Camp {
   videos?: CampVideo[];
   socialMedia: SocialMediaLink[];
   contactEmail: string;
+  duesInstructionsSubject?: string | null;
+  duesInstructionsBody?: string | null;
+  duesReceiptSubject?: string | null;
+  duesReceiptBody?: string | null;
   website?: string;
   phone?: string;
   offerings: string[];
@@ -174,6 +178,11 @@ export interface Member {
   skills?: string[];
   interests?: string[];
   duesPaid?: boolean;
+  duesStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID';
+  duesInstructedAt?: string | Date | null;
+  duesPaidAt?: string | Date | null;
+  duesReceiptSentAt?: string | Date | null;
+  duesPaidByUserId?: string | null;
   emergencyContact?: {
     name?: string;
     phone?: string;
