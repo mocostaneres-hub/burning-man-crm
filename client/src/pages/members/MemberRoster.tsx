@@ -212,9 +212,9 @@ const MemberRoster: React.FC = () => {
     receiptSubject: '',
     receiptBody: ''
   });
-  const rosterTopScrollRef = useRef<HTMLDivElement | null>(null);
   const rosterTableScrollRef = useRef<HTMLDivElement | null>(null);
-  const [rosterTopScrollWidth, setRosterTopScrollWidth] = useState(0);
+  const [rosterMaxScrollLeft, setRosterMaxScrollLeft] = useState(0);
+  const [rosterScrollLeft, setRosterScrollLeft] = useState(0);
   const [showRosterTopScrollbar, setShowRosterTopScrollbar] = useState(false);
 
   // Check if current user can access roster features
@@ -251,11 +251,18 @@ const MemberRoster: React.FC = () => {
     if (!container) return;
 
     const updateTopScrollbar = () => {
-      setRosterTopScrollWidth(container.scrollWidth);
-      setShowRosterTopScrollbar(container.scrollWidth > container.clientWidth);
+      const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+      setRosterMaxScrollLeft(maxScroll);
+      setShowRosterTopScrollbar(maxScroll > 0);
+      setRosterScrollLeft(container.scrollLeft);
+    };
+
+    const handleContainerScroll = () => {
+      setRosterScrollLeft(container.scrollLeft);
     };
 
     updateTopScrollbar();
+    container.addEventListener('scroll', handleContainerScroll);
 
     const observer = new ResizeObserver(updateTopScrollbar);
     observer.observe(container);
@@ -265,37 +272,11 @@ const MemberRoster: React.FC = () => {
     window.addEventListener('resize', updateTopScrollbar);
 
     return () => {
+      container.removeEventListener('scroll', handleContainerScroll);
       observer.disconnect();
       window.removeEventListener('resize', updateTopScrollbar);
     };
   }, [members.length, activeFilters.length, canEdit]);
-
-  useEffect(() => {
-    const top = rosterTopScrollRef.current;
-    const bottom = rosterTableScrollRef.current;
-    if (!top || !bottom) return;
-
-    let syncing = false;
-    const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => {
-      if (syncing) return;
-      syncing = true;
-      target.scrollLeft = source.scrollLeft;
-      requestAnimationFrame(() => {
-        syncing = false;
-      });
-    };
-
-    const handleTopScroll = () => syncScroll(top, bottom);
-    const handleBottomScroll = () => syncScroll(bottom, top);
-
-    top.addEventListener('scroll', handleTopScroll);
-    bottom.addEventListener('scroll', handleBottomScroll);
-
-    return () => {
-      top.removeEventListener('scroll', handleTopScroll);
-      bottom.removeEventListener('scroll', handleBottomScroll);
-    };
-  }, [showRosterTopScrollbar, rosterTopScrollWidth]);
 
   // Start editing a member
   const handleStartEdit = (memberId: string) => {
@@ -1284,8 +1265,22 @@ const MemberRoster: React.FC = () => {
       {/* Members List */}
       <Card>
         {showRosterTopScrollbar && (
-          <div ref={rosterTopScrollRef} className="sticky top-16 z-20 overflow-x-auto overflow-y-hidden h-4 mb-2 bg-white border-b border-gray-100">
-            <div style={{ width: `${rosterTopScrollWidth}px`, height: '1px' }} />
+          <div className="sticky top-16 z-20 mb-2 bg-white border-b border-gray-100 px-1 py-1">
+            <input
+              type="range"
+              min={0}
+              max={rosterMaxScrollLeft}
+              value={Math.min(rosterScrollLeft, rosterMaxScrollLeft)}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setRosterScrollLeft(next);
+                if (rosterTableScrollRef.current) {
+                  rosterTableScrollRef.current.scrollLeft = next;
+                }
+              }}
+              className="w-full h-2 cursor-ew-resize accent-gray-500"
+              aria-label="Horizontal scroll for roster table"
+            />
           </div>
         )}
         <div ref={rosterTableScrollRef} className="overflow-x-auto">

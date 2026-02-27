@@ -96,9 +96,9 @@ const ApplicationManagementTable: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
-  const applicationsTopScrollRef = useRef<HTMLDivElement | null>(null);
   const applicationsTableScrollRef = useRef<HTMLDivElement | null>(null);
-  const [applicationsTopScrollWidth, setApplicationsTopScrollWidth] = useState(0);
+  const [applicationsMaxScrollLeft, setApplicationsMaxScrollLeft] = useState(0);
+  const [applicationsScrollLeft, setApplicationsScrollLeft] = useState(0);
   const [showApplicationsTopScrollbar, setShowApplicationsTopScrollbar] = useState(false);
 
   const fetchApplications = async () => {
@@ -164,11 +164,18 @@ const ApplicationManagementTable: React.FC = () => {
     if (!container) return;
 
     const updateTopScrollbar = () => {
-      setApplicationsTopScrollWidth(container.scrollWidth);
-      setShowApplicationsTopScrollbar(container.scrollWidth > container.clientWidth);
+      const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+      setApplicationsMaxScrollLeft(maxScroll);
+      setShowApplicationsTopScrollbar(maxScroll > 0);
+      setApplicationsScrollLeft(container.scrollLeft);
+    };
+
+    const handleContainerScroll = () => {
+      setApplicationsScrollLeft(container.scrollLeft);
     };
 
     updateTopScrollbar();
+    container.addEventListener('scroll', handleContainerScroll);
 
     const observer = new ResizeObserver(updateTopScrollbar);
     observer.observe(container);
@@ -178,37 +185,11 @@ const ApplicationManagementTable: React.FC = () => {
     window.addEventListener('resize', updateTopScrollbar);
 
     return () => {
+      container.removeEventListener('scroll', handleContainerScroll);
       observer.disconnect();
       window.removeEventListener('resize', updateTopScrollbar);
     };
   }, [filteredApplications.length]);
-
-  useEffect(() => {
-    const top = applicationsTopScrollRef.current;
-    const bottom = applicationsTableScrollRef.current;
-    if (!top || !bottom) return;
-
-    let syncing = false;
-    const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => {
-      if (syncing) return;
-      syncing = true;
-      target.scrollLeft = source.scrollLeft;
-      requestAnimationFrame(() => {
-        syncing = false;
-      });
-    };
-
-    const handleTopScroll = () => syncScroll(top, bottom);
-    const handleBottomScroll = () => syncScroll(bottom, top);
-
-    top.addEventListener('scroll', handleTopScroll);
-    bottom.addEventListener('scroll', handleBottomScroll);
-
-    return () => {
-      top.removeEventListener('scroll', handleTopScroll);
-      bottom.removeEventListener('scroll', handleBottomScroll);
-    };
-  }, [showApplicationsTopScrollbar, applicationsTopScrollWidth]);
 
   const handleStatusChange = async (applicationId: string, newStatus: 'approved' | 'rejected') => {
     try {
@@ -393,8 +374,22 @@ const ApplicationManagementTable: React.FC = () => {
       {/* Applications Table */}
       <Card>
         {showApplicationsTopScrollbar && (
-          <div ref={applicationsTopScrollRef} className="sticky top-16 z-20 overflow-x-auto overflow-y-hidden h-4 mb-2 bg-white border-b border-gray-100">
-            <div style={{ width: `${applicationsTopScrollWidth}px`, height: '1px' }} />
+          <div className="sticky top-16 z-20 mb-2 bg-white border-b border-gray-100 px-1 py-1">
+            <input
+              type="range"
+              min={0}
+              max={applicationsMaxScrollLeft}
+              value={Math.min(applicationsScrollLeft, applicationsMaxScrollLeft)}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setApplicationsScrollLeft(next);
+                if (applicationsTableScrollRef.current) {
+                  applicationsTableScrollRef.current.scrollLeft = next;
+                }
+              }}
+              className="w-full h-2 cursor-ew-resize accent-gray-500"
+              aria-label="Horizontal scroll for applications table"
+            />
           </div>
         )}
         <div ref={applicationsTableScrollRef} className="overflow-x-auto">
