@@ -2355,6 +2355,12 @@ const MemberRoster: React.FC = () => {
               value={emailPreviewModal.body}
               onChange={(e) => setEmailPreviewModal(prev => ({ ...prev, body: e.target.value }))}
             />
+            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
+              <p className="font-medium text-gray-700">Formatting help</p>
+              <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
+              <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
+              <p>Lists: <code>- item</code> or <code>• item</code></p>
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
