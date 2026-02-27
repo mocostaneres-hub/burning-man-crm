@@ -410,11 +410,11 @@ const PublicCampProfile: React.FC = () => {
       return isOwner;
     }
     
-    // Camp users: compare user's _id or campId with camp's _id
-    // (Camp user account IS the camp, so user._id === camp._id OR user.campId === camp._id)
+    // Camp users: compare canonical user.campId with camp _id.
+    // user._id is the user identity, not camp ownership identity.
     if (user.accountType === 'camp') {
-      const isOwner = camp._id === user._id || camp._id === user.campId;
-      console.log('🔍 [PublicCampProfile] Camp ownership check:', { campId: camp._id, userId: user._id, userCampId: user.campId, isOwner });
+      const isOwner = camp._id === user.campId;
+      console.log('🔍 [PublicCampProfile] Camp ownership check:', { campId: camp._id, userCampId: user.campId, isOwner });
       return isOwner;
     }
     

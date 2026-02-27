@@ -36,6 +36,83 @@ const normalizeDuesStatus = (status?: string | null): DuesStatus => {
   return 'UNPAID';
 };
 
+const escapeHtml = (value: string = '') => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const applyInlineFormatting = (value: string = '') => {
+  let formatted = escapeHtml(value);
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
+  return formatted;
+};
+
+const renderRichTextPreview = (body: string = '') => {
+  const lines = body.split('\n');
+  const htmlParts: string[] = [];
+  let inList = false;
+
+  const closeListIfOpen = () => {
+    if (inList) {
+      htmlParts.push('</ul>');
+      inList = false;
+    }
+  };
+
+  lines.forEach((rawLine) => {
+    const line = rawLine || '';
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      closeListIfOpen();
+      htmlParts.push('<p style="margin: 0 0 12px 0;">&nbsp;</p>');
+      return;
+    }
+
+    const markdownHeading = trimmed.match(/^(#{1,3})\s*(.+)$/);
+    if (markdownHeading) {
+      closeListIfOpen();
+      const level = markdownHeading[1].length;
+      const tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
+      const size = level === 1 ? '24px' : level === 2 ? '20px' : '16px';
+      htmlParts.push(`<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(markdownHeading[2])}</${tag}>`);
+      return;
+    }
+
+    const labeledHeading = trimmed.match(/^(title|subtitle|section)\s*:\s*(.+)$/i);
+    if (labeledHeading) {
+      closeListIfOpen();
+      const label = labeledHeading[1].toLowerCase();
+      const level = label === 'title' ? 1 : label === 'subtitle' ? 2 : 3;
+      const tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
+      const size = level === 1 ? '24px' : level === 2 ? '20px' : '16px';
+      htmlParts.push(`<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(labeledHeading[2])}</${tag}>`);
+      return;
+    }
+
+    const listMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+    if (listMatch) {
+      if (!inList) {
+        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding: 0;">');
+        inList = true;
+      }
+      htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
+      return;
+    }
+
+    closeListIfOpen();
+    htmlParts.push(`<p style="margin: 0 0 12px 0;">${applyInlineFormatting(line)}</p>`);
+  });
+
+  closeListIfOpen();
+  return htmlParts.join('');
+};
+
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -2400,7 +2477,7 @@ const MemberRoster: React.FC = () => {
       <InviteMembersModal
         isOpen={inviteModalOpen}
         onClose={() => setInviteModalOpen(false)}
-        campId={campId || user?._id?.toString() || ''}
+        campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
       />
 
       {/* Camp Lead Confirmation Modal */}
@@ -2517,6 +2594,13 @@ const MemberRoster: React.FC = () => {
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
               <p>Lists: <code>- item</code> or <code>• item</code></p>
             </div>
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.instructionsBody) }}
+              />
+            </div>
           </div>
 
           <div className="pt-2 border-t border-gray-200">
@@ -2539,6 +2623,13 @@ const MemberRoster: React.FC = () => {
               <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
               <p>Lists: <code>- item</code> or <code>• item</code></p>
+            </div>
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.receiptBody) }}
+              />
             </div>
           </div>
 
