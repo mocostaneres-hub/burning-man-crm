@@ -95,10 +95,10 @@ const renderRichTextPreview = (body: string = '') => {
       return;
     }
 
-    const listMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+    const listMatch = trimmed.match(/^[-*•]\s*(.+)$/);
     if (listMatch) {
       if (!inList) {
-        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding: 0;">');
+        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding-left: 20px; list-style-type: disc; list-style-position: outside;">');
         inList = true;
       }
       htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
@@ -2491,7 +2491,7 @@ const MemberRoster: React.FC = () => {
               <p className="font-medium text-gray-700">Formatting help</p>
               <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
-              <p>Lists: <code>- item</code> or <code>• item</code></p>
+              <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -2650,7 +2650,7 @@ const MemberRoster: React.FC = () => {
               <p className="font-medium text-gray-700">Rich text formatting help</p>
               <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
-              <p>Lists: <code>- item</code> or <code>• item</code></p>
+              <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
             </div>
             <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
               <p className="text-xs text-gray-500 mb-1">Live Preview</p>
@@ -2680,7 +2680,7 @@ const MemberRoster: React.FC = () => {
               <p className="font-medium text-gray-700">Rich text formatting help</p>
               <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
-              <p>Lists: <code>- item</code> or <code>• item</code></p>
+              <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
             </div>
             <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
               <p className="text-xs text-gray-500 mb-1">Live Preview</p>

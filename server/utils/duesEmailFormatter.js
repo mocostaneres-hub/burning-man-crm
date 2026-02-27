@@ -69,10 +69,10 @@ const renderDuesBodyHtml = (body = '') => {
       return;
     }
 
-    const listMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+    const listMatch = trimmed.match(/^[-*•]\s*(.+)$/);
     if (listMatch) {
       if (!inList) {
-        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding: 0;">');
+        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding-left: 20px; list-style-type: disc; list-style-position: outside;">');
         inList = true;
       }
       htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
