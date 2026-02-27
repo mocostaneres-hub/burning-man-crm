@@ -2511,6 +2511,12 @@ const MemberRoster: React.FC = () => {
               value={duesTemplatesForm.instructionsBody}
               onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsBody: e.target.value }))}
             />
+            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
+              <p className="font-medium text-gray-700">Rich text formatting help</p>
+              <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
+              <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
+              <p>Lists: <code>- item</code> or <code>• item</code></p>
+            </div>
           </div>
 
           <div className="pt-2 border-t border-gray-200">
@@ -2528,6 +2534,12 @@ const MemberRoster: React.FC = () => {
               value={duesTemplatesForm.receiptBody}
               onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptBody: e.target.value }))}
             />
+            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
+              <p className="font-medium text-gray-700">Rich text formatting help</p>
+              <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
+              <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
+              <p>Lists: <code>- item</code> or <code>• item</code></p>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3">
