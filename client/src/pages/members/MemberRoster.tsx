@@ -22,6 +22,20 @@ interface RosterMember extends Member {
   rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
 }
 
+type DuesStatus = 'UNPAID' | 'INSTRUCTED' | 'PAID';
+
+const normalizeDuesStatus = (status?: string | null): DuesStatus => {
+  if (!status) return 'UNPAID';
+
+  const normalized = status.toString().trim().toUpperCase();
+  if (normalized === 'UNPAID' || normalized === 'INSTRUCTED' || normalized === 'PAID') {
+    return normalized;
+  }
+
+  console.warn('[MemberRoster] Unknown dues status received:', status, '-> defaulting to UNPAID');
+  return 'UNPAID';
+};
+
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -139,6 +153,17 @@ const MemberRoster: React.FC = () => {
   const canEdit = canAccessRoster;
   const canViewMetrics = canAccessRoster;
   const canUseFilters = canAccessRoster;
+
+  useEffect(() => {
+    if (duesActionModal.isOpen) {
+      console.log('[DuesActionsModal] opened with payload:', {
+        memberId: duesActionModal.member?._id,
+        duesStatus: duesActionModal.member?.duesStatus,
+        normalizedDuesStatus: normalizeDuesStatus(duesActionModal.member?.duesStatus),
+        hasMember: Boolean(duesActionModal.member)
+      });
+    }
+  }, [duesActionModal]);
 
   // Start editing a member
   const handleStartEdit = (memberId: string) => {
@@ -433,7 +458,9 @@ const MemberRoster: React.FC = () => {
           console.log('🔍 [MemberRoster] Member entry overrides:', memberEntry.overrides);
           console.log('🔍 [MemberRoster] Member entry keys:', Object.keys(memberEntry));
           
-          const normalizedDuesStatus = memberEntry.duesStatus || (memberEntry.paid ? 'PAID' : 'UNPAID');
+          const normalizedDuesStatus = normalizeDuesStatus(
+            memberEntry.duesStatus || (memberEntry.paid ? 'PAID' : 'UNPAID')
+          );
           const duesPaid = normalizedDuesStatus === 'PAID';
           
           // Extract member ID safely
@@ -607,6 +634,13 @@ const MemberRoster: React.FC = () => {
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
+
+    console.log('[DuesActionsModal] dues icon click:', {
+      memberId: member?._id,
+      duesStatus: member?.duesStatus,
+      normalizedDuesStatus: normalizeDuesStatus(member?.duesStatus),
+      member
+    });
 
     setDuesActionModal({
       isOpen: true,
@@ -903,18 +937,19 @@ const MemberRoster: React.FC = () => {
 
     return members.filter(member => {
       const user = typeof member.user === 'object' ? member.user : null;
+      const duesStatus = normalizeDuesStatus(member.duesStatus);
       
       // Check each active filter
       for (const filter of activeFilters) {
         switch (filter) {
           case 'dues-paid':
-            if (member.duesStatus !== 'PAID') return false;
+            if (duesStatus !== 'PAID') return false;
             break;
           case 'dues-unpaid':
-            if (member.duesStatus !== 'UNPAID') return false;
+            if (duesStatus !== 'UNPAID') return false;
             break;
           case 'dues-instructed':
-            if (member.duesStatus !== 'INSTRUCTED') return false;
+            if (duesStatus !== 'INSTRUCTED') return false;
             break;
           case 'without-tickets':
             if (user?.hasTicket) return false;
@@ -1237,7 +1272,7 @@ const MemberRoster: React.FC = () => {
                     {/* Dues */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {(() => {
-                        const duesStatus = (member.duesStatus || 'UNPAID') as 'UNPAID' | 'INSTRUCTED' | 'PAID';
+                        const duesStatus = normalizeDuesStatus(member.duesStatus);
                         const duesColorClass = duesStatus === 'PAID'
                           ? 'text-green-600 font-bold'
                           : duesStatus === 'INSTRUCTED'
@@ -2254,8 +2289,11 @@ const MemberRoster: React.FC = () => {
         size="sm"
       >
         <div className="space-y-3">
+          {!duesActionModal.member && (
+            <p className="text-sm text-gray-500">Loading member dues actions...</p>
+          )}
           {duesActionModal.member && (() => {
-            const duesStatus = (duesActionModal.member.duesStatus || 'UNPAID') as 'UNPAID' | 'INSTRUCTED' | 'PAID';
+            const duesStatus = normalizeDuesStatus(duesActionModal.member.duesStatus);
             const canMarkUnpaid = user?.accountType === 'camp' || user?.accountType === 'admin';
             return (
               <>
