@@ -545,6 +545,73 @@ Questions about your new role? Reach out to your Main Camp Admin or check the He
 /**
  * Send dues-related email using pre-rendered content.
  */
+const escapeHtml = (value = '') => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const applyInlineFormatting = (value = '') => {
+  // First escape user-entered content, then allow a small safe subset of markdown-like formatting.
+  let formatted = escapeHtml(value);
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
+  return formatted;
+};
+
+const renderDuesBodyHtml = (body = '') => {
+  const lines = body.split('\n');
+  const htmlParts = [];
+  let inList = false;
+
+  const closeListIfOpen = () => {
+    if (inList) {
+      htmlParts.push('</ul>');
+      inList = false;
+    }
+  };
+
+  lines.forEach((rawLine) => {
+    const line = rawLine || '';
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      closeListIfOpen();
+      htmlParts.push('<p style="margin: 0 0 12px 0;">&nbsp;</p>');
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      closeListIfOpen();
+      const level = headingMatch[1].length;
+      const tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
+      const size = level === 1 ? '24px' : level === 2 ? '20px' : '16px';
+      htmlParts.push(`<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(headingMatch[2])}</${tag}>`);
+      return;
+    }
+
+    const listMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (listMatch) {
+      if (!inList) {
+        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding: 0;">');
+        inList = true;
+      }
+      htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
+      return;
+    }
+
+    closeListIfOpen();
+    htmlParts.push(`<p style="margin: 0 0 12px 0;">${applyInlineFormatting(line)}</p>`);
+  });
+
+  closeListIfOpen();
+  return htmlParts.join('');
+};
+
 const sendDuesEmail = async ({ to, subject, body }) => {
   const safeSubject = (subject || '').trim();
   const safeBody = body || '';
@@ -559,10 +626,7 @@ const sendDuesEmail = async ({ to, subject, body }) => {
     throw new Error('Email body is required');
   }
 
-  const htmlBody = safeBody
-    .split('\n')
-    .map((line) => `<p style="margin: 0 0 12px 0;">${line || '&nbsp;'}</p>`)
-    .join('');
+  const htmlBody = renderDuesBodyHtml(safeBody);
 
   return sendEmail({
     to,
