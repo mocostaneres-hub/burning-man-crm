@@ -2506,7 +2506,10 @@ const MemberRoster: React.FC = () => {
           <div className="rounded-md border border-gray-200 p-3 bg-gray-50">
             <p className="text-xs text-gray-500 mb-1">Live Preview</p>
             <p className="font-semibold text-sm mb-2">{emailPreviewModal.subject}</p>
-            <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{emailPreviewModal.body}</pre>
+            <div
+              className="text-sm text-gray-700"
+              dangerouslySetInnerHTML={{ __html: renderRichTextPreview(emailPreviewModal.body) }}
+            />
           </div>
 
           <div className="flex justify-end gap-3">
