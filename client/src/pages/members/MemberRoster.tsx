@@ -268,7 +268,7 @@ const MemberRoster: React.FC = () => {
       observer.disconnect();
       window.removeEventListener('resize', updateTopScrollbar);
     };
-  }, [filteredMembers.length, canEdit]);
+  }, [members.length, activeFilters.length, canEdit]);
 
   useEffect(() => {
     const top = rosterTopScrollRef.current;
