@@ -393,7 +393,7 @@ const ApplicationManagementTable: React.FC = () => {
       {/* Applications Table */}
       <Card>
         {showApplicationsTopScrollbar && (
-          <div ref={applicationsTopScrollRef} className="overflow-x-auto overflow-y-hidden h-4 mb-2">
+          <div ref={applicationsTopScrollRef} className="sticky top-16 z-20 overflow-x-auto overflow-y-hidden h-4 mb-2 bg-white border-b border-gray-100">
             <div style={{ width: `${applicationsTopScrollWidth}px`, height: '1px' }} />
           </div>
         )}
