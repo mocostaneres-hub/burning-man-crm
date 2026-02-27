@@ -452,8 +452,12 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin, 'Is system admin?', isSystemAdmin);
 
     // Visibility: Camp Lead (owner) and System Admin can always view. Others need public visibility.
+    // Canonical field is isPubliclyVisible; fall back to legacy isPublic for older records.
     const canViewAsAdmin = isCampAdmin || isSystemAdmin;
-    const isPrivate = camp.isPubliclyVisible === false || camp.isPublic === false;
+    const isPubliclyVisible = camp.isPubliclyVisible !== undefined
+      ? camp.isPubliclyVisible
+      : camp.isPublic === true;
+    const isPrivate = !isPubliclyVisible;
     if (isPrivate && !canViewAsAdmin) {
       // Camp exists but is private and user is not authorized - return 403 (not 500, not 404)
       console.log('❌ [GET /api/camps/public/:slug] Camp is private and user not authorized');
@@ -513,7 +517,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
       categories: populatedCategories, // Use manually populated categories
-      isPubliclyVisible: campData.isPubliclyVisible !== undefined ? campData.isPubliclyVisible : false,
+      isPubliclyVisible: isPubliclyVisible,
       acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
       isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
       isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin (includes impersonated system admins)
