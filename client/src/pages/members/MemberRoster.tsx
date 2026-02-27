@@ -1284,7 +1284,7 @@ const MemberRoster: React.FC = () => {
       {/* Members List */}
       <Card>
         {showRosterTopScrollbar && (
-          <div ref={rosterTopScrollRef} className="overflow-x-auto">
+          <div ref={rosterTopScrollRef} className="overflow-x-auto overflow-y-hidden h-4 mb-2">
             <div style={{ width: `${rosterTopScrollWidth}px`, height: '1px' }} />
           </div>
         )}
