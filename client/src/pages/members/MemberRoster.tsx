@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
@@ -212,6 +212,10 @@ const MemberRoster: React.FC = () => {
     receiptSubject: '',
     receiptBody: ''
   });
+  const rosterTopScrollRef = useRef<HTMLDivElement | null>(null);
+  const rosterTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const [rosterTopScrollWidth, setRosterTopScrollWidth] = useState(0);
+  const [showRosterTopScrollbar, setShowRosterTopScrollbar] = useState(false);
 
   // Check if current user can access roster features
   // Allow access for:
@@ -241,6 +245,57 @@ const MemberRoster: React.FC = () => {
       });
     }
   }, [duesActionModal]);
+
+  useEffect(() => {
+    const container = rosterTableScrollRef.current;
+    if (!container) return;
+
+    const updateTopScrollbar = () => {
+      setRosterTopScrollWidth(container.scrollWidth);
+      setShowRosterTopScrollbar(container.scrollWidth > container.clientWidth);
+    };
+
+    updateTopScrollbar();
+
+    const observer = new ResizeObserver(updateTopScrollbar);
+    observer.observe(container);
+    if (container.firstElementChild) {
+      observer.observe(container.firstElementChild);
+    }
+    window.addEventListener('resize', updateTopScrollbar);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateTopScrollbar);
+    };
+  }, [filteredMembers.length, canEdit]);
+
+  useEffect(() => {
+    const top = rosterTopScrollRef.current;
+    const bottom = rosterTableScrollRef.current;
+    if (!top || !bottom) return;
+
+    let syncing = false;
+    const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => {
+      if (syncing) return;
+      syncing = true;
+      target.scrollLeft = source.scrollLeft;
+      requestAnimationFrame(() => {
+        syncing = false;
+      });
+    };
+
+    const handleTopScroll = () => syncScroll(top, bottom);
+    const handleBottomScroll = () => syncScroll(bottom, top);
+
+    top.addEventListener('scroll', handleTopScroll);
+    bottom.addEventListener('scroll', handleBottomScroll);
+
+    return () => {
+      top.removeEventListener('scroll', handleTopScroll);
+      bottom.removeEventListener('scroll', handleBottomScroll);
+    };
+  }, [showRosterTopScrollbar, rosterTopScrollWidth]);
 
   // Start editing a member
   const handleStartEdit = (memberId: string) => {
@@ -1228,7 +1283,12 @@ const MemberRoster: React.FC = () => {
 
       {/* Members List */}
       <Card>
-        <div className="overflow-x-auto">
+        {showRosterTopScrollbar && (
+          <div ref={rosterTopScrollRef} className="overflow-x-auto">
+            <div style={{ width: `${rosterTopScrollWidth}px`, height: '1px' }} />
+          </div>
+        )}
+        <div ref={rosterTableScrollRef} className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>

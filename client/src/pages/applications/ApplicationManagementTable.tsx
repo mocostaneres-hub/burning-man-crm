@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Badge } from '../../components/ui';
 import { CheckCircle as CheckCircleIcon, X, Eye, Filter as FilterIcon, Loader2, RefreshCw, Linkedin, Instagram, Facebook, MapPin, Calendar, Clock } from 'lucide-react';
@@ -96,6 +96,10 @@ const ApplicationManagementTable: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const applicationsTopScrollRef = useRef<HTMLDivElement | null>(null);
+  const applicationsTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const [applicationsTopScrollWidth, setApplicationsTopScrollWidth] = useState(0);
+  const [showApplicationsTopScrollbar, setShowApplicationsTopScrollbar] = useState(false);
 
   const fetchApplications = async () => {
     try {
@@ -154,6 +158,57 @@ const ApplicationManagementTable: React.FC = () => {
   useEffect(() => {
     filterApplications();
   }, [filterApplications]);
+
+  useEffect(() => {
+    const container = applicationsTableScrollRef.current;
+    if (!container) return;
+
+    const updateTopScrollbar = () => {
+      setApplicationsTopScrollWidth(container.scrollWidth);
+      setShowApplicationsTopScrollbar(container.scrollWidth > container.clientWidth);
+    };
+
+    updateTopScrollbar();
+
+    const observer = new ResizeObserver(updateTopScrollbar);
+    observer.observe(container);
+    if (container.firstElementChild) {
+      observer.observe(container.firstElementChild);
+    }
+    window.addEventListener('resize', updateTopScrollbar);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateTopScrollbar);
+    };
+  }, [filteredApplications.length]);
+
+  useEffect(() => {
+    const top = applicationsTopScrollRef.current;
+    const bottom = applicationsTableScrollRef.current;
+    if (!top || !bottom) return;
+
+    let syncing = false;
+    const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => {
+      if (syncing) return;
+      syncing = true;
+      target.scrollLeft = source.scrollLeft;
+      requestAnimationFrame(() => {
+        syncing = false;
+      });
+    };
+
+    const handleTopScroll = () => syncScroll(top, bottom);
+    const handleBottomScroll = () => syncScroll(bottom, top);
+
+    top.addEventListener('scroll', handleTopScroll);
+    bottom.addEventListener('scroll', handleBottomScroll);
+
+    return () => {
+      top.removeEventListener('scroll', handleTopScroll);
+      bottom.removeEventListener('scroll', handleBottomScroll);
+    };
+  }, [showApplicationsTopScrollbar, applicationsTopScrollWidth]);
 
   const handleStatusChange = async (applicationId: string, newStatus: 'approved' | 'rejected') => {
     try {
@@ -337,7 +392,12 @@ const ApplicationManagementTable: React.FC = () => {
 
       {/* Applications Table */}
       <Card>
-        <div className="overflow-x-auto">
+        {showApplicationsTopScrollbar && (
+          <div ref={applicationsTopScrollRef} className="overflow-x-auto">
+            <div style={{ width: `${applicationsTopScrollWidth}px`, height: '1px' }} />
+          </div>
+        )}
+        <div ref={applicationsTableScrollRef} className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
