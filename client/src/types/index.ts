@@ -334,6 +334,7 @@ export interface RegisterData {
   accountType: 'personal' | 'camp';
   firstName: string;
   lastName: string;
+  inviteToken?: string;
 }
 
 export interface CallSlot {

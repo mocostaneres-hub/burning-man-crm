@@ -1,11 +1,15 @@
 // Notification service for sending email and SMS notifications
 const { sendEmail } = require('./emailService');
 const twilio = require('twilio');
+const db = require('../database/databaseAdapter');
 
 // Twilio configuration for SMS
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
   ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
   : null;
+
+const getCampDisplayName = (camp = {}) => camp?.name || camp?.campName || 'Your Camp';
+const getCampSenderName = (camp = {}) => `${getCampDisplayName(camp)} via G8Road Camp CRM`;
 
 /**
  * Send notification when a new application is submitted
@@ -15,23 +19,15 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_T
  */
 async function sendApplicationNotification(camp, applicant, application) {
   try {
-    // Determine recipient email: use contactEmail or fall back to owner email
-    let recipientEmail = camp.contactEmail;
-    
-    if (!recipientEmail && camp.owner) {
-      // If owner is populated, use owner's email
-      recipientEmail = camp.owner.email || camp.owner.campEmail;
-      console.log(`⚠️  Camp ${camp.name || camp.campName} has no contactEmail, using owner email: ${recipientEmail}`);
-    }
+    const recipients = await resolveApplicationNotificationRecipients(camp, applicant);
 
-    // Send email notification to camp lead if we have a recipient
-    if (recipientEmail) {
-      // Ensure camp has contactEmail for the email function
-      const campWithEmail = { ...camp, contactEmail: recipientEmail };
-      await sendEmailNotification(campWithEmail, applicant, application);
-      console.log(`✅ Email notification sent to ${recipientEmail}`);
+    if (recipients.length > 0) {
+      for (const recipient of recipients) {
+        await sendEmailNotification(camp, applicant, application, recipient.email);
+        console.log(`✅ Email notification sent to ${recipient.email}`);
+      }
     } else {
-      console.warn(`⚠️  Cannot send email notification for camp ${camp.name || camp.campName} - no email found`);
+      console.warn(`⚠️  Cannot send email notification for camp ${getCampDisplayName(camp)} - no email found`);
       console.warn(`⚠️  Camp contactEmail: ${camp.contactEmail}, Owner populated: ${!!camp.owner}`);
     }
 
@@ -53,17 +49,93 @@ async function sendApplicationNotification(camp, applicant, application) {
     console.error('❌ Error sending application notifications:', error);
     console.error('Camp data:', {
       id: camp._id,
-      name: camp.name || camp.campName,
+      name: getCampDisplayName(camp),
       contactEmail: camp.contactEmail,
       hasOwner: !!camp.owner
     });
   }
 }
 
+function shouldReceiveEmail(user) {
+  if (!user) return false;
+  if (user.isActive === false) return false;
+  const emailPreference = user.preferences?.notifications?.email;
+  return emailPreference !== false;
+}
+
+function recipientFromUser(user) {
+  if (!user) return null;
+  const email = user.email || user.campEmail;
+  if (!email) return null;
+  return {
+    key: user._id ? `user:${user._id.toString()}` : `email:${String(email).toLowerCase()}`,
+    userId: user._id ? user._id.toString() : null,
+    email: String(email).trim()
+  };
+}
+
+function addRecipient(recipients, seenUserIds, seenEmails, recipient, applicantId) {
+  if (!recipient || !recipient.email) return;
+  if (applicantId && recipient.userId && applicantId === recipient.userId) return;
+  const normalizedEmail = recipient.email.toLowerCase();
+  if (recipient.userId && seenUserIds.has(recipient.userId)) return;
+  if (seenEmails.has(normalizedEmail)) return;
+  if (recipient.userId) {
+    seenUserIds.add(recipient.userId);
+  }
+  seenEmails.add(normalizedEmail);
+  recipients.push(recipient);
+}
+
+/**
+ * Resolve all recipients for "new application" notifications.
+ * Includes the existing primary camp admin recipient and roster Camp Leads.
+ */
+async function resolveApplicationNotificationRecipients(camp, applicant, deps = {}) {
+  const recipients = [];
+  const seenUserIds = new Set();
+  const seenEmails = new Set();
+  const applicantId = applicant?._id ? applicant._id.toString() : null;
+  const getActiveRoster = deps.getActiveRoster || ((query) => db.findActiveRoster(query));
+
+  // Preserve existing primary recipient behavior: contactEmail first, then owner email.
+  let primaryRecipient = null;
+  if (camp.contactEmail) {
+    primaryRecipient = {
+      key: `email:${String(camp.contactEmail).toLowerCase()}`,
+      userId: null,
+      email: String(camp.contactEmail).trim()
+    };
+  } else if (camp.owner) {
+    const ownerRecipient = recipientFromUser(camp.owner);
+    if (ownerRecipient) {
+      primaryRecipient = ownerRecipient;
+      console.log(`⚠️  Camp ${getCampDisplayName(camp)} has no contactEmail, using owner email: ${ownerRecipient.email}`);
+    }
+  }
+  addRecipient(recipients, seenUserIds, seenEmails, primaryRecipient, applicantId);
+
+  // Fetch Camp Leads from active roster using a single roster query.
+  // This avoids per-member DB lookups and keeps recipient resolution server-authoritative.
+  const activeRoster = await getActiveRoster({ camp: camp._id });
+  const campLeadUsers = (activeRoster?.members || [])
+    .filter((entry) => entry?.isCampLead === true && entry?.status === 'approved')
+    .map((entry) => entry?.member?.user)
+    .filter(Boolean);
+
+  for (const leadUser of campLeadUsers) {
+    if (!shouldReceiveEmail(leadUser)) continue;
+    addRecipient(recipients, seenUserIds, seenEmails, recipientFromUser(leadUser), applicantId);
+  }
+
+  return recipients;
+}
+
 /**
  * Send email notification to camp administrators
  */
-async function sendEmailNotification(camp, applicant, application) {
+async function sendEmailNotification(camp, applicant, application, recipientEmail = camp.contactEmail) {
+  const campName = getCampDisplayName(camp);
   // Check if this is an "undecided" application
   const isUndecided = application.status === 'undecided' || application.applicationData?.burningPlans === 'undecided';
   const statusNote = isUndecided ? ' as "Maybe" joining' : '';
@@ -81,14 +153,14 @@ async function sendEmailNotification(camp, applicant, application) {
           ${isUndecided ? `
           <div style="background: #FFF3E0; border-left: 4px solid #FF9800; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
             <p style="margin: 0; color: #F57C00;">
-              <strong>Note:</strong> ${applicant.firstName} submitted their info as "Maybe" joining ${camp.name || camp.campName}. 
+              <strong>Note:</strong> ${applicant.firstName} submitted their info as "Maybe" joining ${campName}. 
               They're not sure if they'll make it to Burning Man yet.
             </p>
           </div>
           ` : ''}
           
           <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h3 style="color: #FF6B35; margin-top: 0;">Camp: ${camp.name || camp.campName}</h3>
+            <h3 style="color: #FF6B35; margin-top: 0;">Camp: ${campName}</h3>
             
             <div style="margin-bottom: 15px;">
               <strong>Applicant:</strong> ${applicant.firstName} ${applicant.lastName}<br>
@@ -132,7 +204,7 @@ async function sendEmailNotification(camp, applicant, application) {
       </div>
     `;
 
-  const textContent = `New Application to ${camp.campName || camp.name}\n\nApplicant: ${applicant.firstName} ${applicant.lastName}\nEmail: ${applicant.email}\n\nPlease log in to your camp dashboard to review this application.\n\n${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
+  const textContent = `New Application to ${campName}\n\nApplicant: ${applicant.firstName} ${applicant.lastName}\nEmail: ${applicant.email}\n\nPlease log in to your camp dashboard to review this application.\n\n${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
 
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -141,13 +213,14 @@ async function sendEmailNotification(camp, applicant, application) {
     }
     
     await sendEmail({
-      to: camp.contactEmail,
-      subject: `New Application to ${camp.name || camp.campName}${statusNote}`,
+      to: recipientEmail,
+      subject: `New Application to ${campName}${statusNote}`,
       html: htmlContent,
-      text: textContent
+      text: textContent,
+      fromName: 'G8Road Camp CRM'
     });
     
-    console.log(`✅ Email notification sent to ${camp.contactEmail} via Resend`);
+    console.log(`✅ Email notification sent to ${recipientEmail} via Resend`);
   } catch (error) {
     console.error('❌ Error sending email notification:', error);
     if (error.response) {
@@ -165,7 +238,7 @@ async function sendSMSNotification(camp, applicant, application) {
     return;
   }
 
-  const message = `🏕️ New application to ${camp.name || camp.campName}!\n\n` +
+  const message = `🏕️ New application to ${getCampDisplayName(camp)}!\n\n` +
     `Applicant: ${applicant.firstName} ${applicant.lastName}\n` +
     `Applied: ${new Date(application.appliedAt).toLocaleDateString()}\n\n` +
     `Review at: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camp/applications/${application._id}`;
@@ -201,6 +274,7 @@ async function sendApplicationStatusNotification(application, applicant, camp, n
  * Send approval notification to applicant
  */
 async function sendApprovalNotification(applicant, camp) {
+  const campName = getCampDisplayName(camp);
   const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; text-align: center;">
@@ -209,11 +283,11 @@ async function sendApprovalNotification(applicant, camp) {
         </div>
         
         <div style="padding: 20px; background: #f9f9f9;">
-          <h2 style="color: #333; margin-top: 0;">Welcome to ${camp.name || camp.campName}!</h2>
+          <h2 style="color: #333; margin-top: 0;">Welcome to ${campName}!</h2>
           
           <p>Dear ${applicant.firstName},</p>
           
-          <p>Great news! Your application to join <strong>${camp.name || camp.campName}</strong> has been approved! 
+          <p>Great news! Your application to join <strong>${campName}</strong> has been approved! 
           We're excited to have you as part of our camp community.</p>
           
           <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -236,7 +310,7 @@ async function sendApprovalNotification(applicant, camp) {
       </div>
     `;
 
-  const textContent = `Congratulations ${applicant.firstName}! You've been accepted to ${camp.campName || camp.name}. Go to your dashboard to learn more: ${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
+  const textContent = `Congratulations ${applicant.firstName}! You've been accepted to ${campName}. Go to your dashboard to learn more: ${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard`;
 
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -246,9 +320,10 @@ async function sendApprovalNotification(applicant, camp) {
     
     await sendEmail({
       to: applicant.email,
-      subject: `🎉 Welcome to ${camp.name || camp.campName}!`,
+      subject: `🎉 Welcome to ${campName}!`,
       html: htmlContent,
-      text: textContent
+      text: textContent,
+      fromName: getCampSenderName(camp)
     });
     
     console.log(`✅ Approval notification sent to ${applicant.email} via Resend`);
@@ -264,6 +339,7 @@ async function sendApprovalNotification(applicant, camp) {
  * Send rejection notification to applicant
  */
 async function sendRejectionNotification(applicant, camp) {
+  const campName = getCampDisplayName(camp);
   const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
@@ -276,7 +352,7 @@ async function sendRejectionNotification(applicant, camp) {
           
           <p>Dear ${applicant.firstName},</p>
           
-          <p>Thank you for your interest in joining <strong>${camp.name || camp.campName}</strong>. 
+          <p>Thank you for your interest in joining <strong>${campName}</strong>. 
           After careful consideration, we have decided not to move forward with your application at this time.</p>
           
           <p>This decision was not easy, as we received many qualified applications. 
@@ -292,12 +368,12 @@ async function sendRejectionNotification(applicant, camp) {
           <p>Thank you again for your interest, and we wish you the best in finding your perfect camp!</p>
           
           <p>Best regards,<br>
-          The ${camp.campName || camp.name} Team</p>
+          The ${campName} Team</p>
         </div>
       </div>
     `;
 
-  const textContent = `Thank you for your application to ${camp.campName || camp.name}. After careful consideration, we have decided not to move forward at this time. We encourage you to explore other camps: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camps`;
+  const textContent = `Thank you for your application to ${campName}. After careful consideration, we have decided not to move forward at this time. We encourage you to explore other camps: ${process.env.CLIENT_URL || 'http://localhost:3000'}/camps`;
 
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -307,9 +383,10 @@ async function sendRejectionNotification(applicant, camp) {
     
     await sendEmail({
       to: applicant.email,
-      subject: `Application Update - ${camp.name || camp.campName}`,
+      subject: `Application Update - ${campName}`,
       html: htmlContent,
-      text: textContent
+      text: textContent,
+      fromName: getCampSenderName(camp)
     });
     
     console.log(`✅ Rejection notification sent to ${applicant.email} via Resend`);
@@ -464,5 +541,6 @@ The G8Road Team
 
 module.exports = {
   sendApplicationNotification,
-  sendApplicationStatusNotification
+  sendApplicationStatusNotification,
+  resolveApplicationNotificationRecipients
 };

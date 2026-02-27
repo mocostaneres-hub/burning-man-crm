@@ -1146,7 +1146,8 @@ router.post('/:rosterId/members/:memberId/dues/send-email', authenticateToken, a
     await sendDuesEmail({
       to: memberUser.email,
       subject: preview.subject,
-      body: preview.body
+      body: preview.body,
+      camp
     });
 
     if (saveAsCampDefault === true) {
@@ -1245,7 +1246,8 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
         await sendDuesEmail({
           to: memberUser.email,
           subject: renderedEmail.subject,
-          body: renderedEmail.body
+          body: renderedEmail.body,
+          camp
         });
       } catch (emailError) {
         await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {

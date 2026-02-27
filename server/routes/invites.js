@@ -11,6 +11,49 @@ const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
+// @route   GET /api/invites/validate/:token
+// @desc    Validate an invitation token for signup/apply flows
+// @access  Public
+router.get('/invites/validate/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token) {
+      return res.status(400).json({ valid: false, message: 'Invitation token is required' });
+    }
+
+    const invite = await db.findInvite({ token });
+    if (!invite) {
+      return res.status(404).json({ valid: false, message: 'Invitation link is invalid' });
+    }
+
+    if (invite.status === 'applied') {
+      return res.status(400).json({ valid: false, message: 'This invitation has already been used' });
+    }
+
+    const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
+    if (isExpired || invite.status === 'expired') {
+      return res.status(400).json({ valid: false, message: 'This invitation link has expired' });
+    }
+
+    const camp = await db.findCamp({ _id: invite.campId });
+    if (!camp) {
+      return res.status(404).json({ valid: false, message: 'Camp not found for this invitation' });
+    }
+
+    const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    return res.json({
+      valid: true,
+      campId: invite.campId,
+      campSlug,
+      inviteToken: token
+    });
+  } catch (error) {
+    console.error('Validate invite token error:', error);
+    res.status(500).json({ valid: false, message: 'Server error validating invitation token' });
+  }
+});
+
 // @route   GET /api/camps/:campId/invites/template
 // @desc    Get invite templates for a camp
 // @access  Private (Any authenticated camp member can read)

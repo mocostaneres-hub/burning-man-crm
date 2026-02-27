@@ -31,6 +31,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 console.log('✅ Resend initialized successfully');
 console.log('📧 Sending emails from:', process.env.RESEND_FROM_EMAIL);
 
+const getCampDisplayName = (camp = {}) => camp?.name || camp?.campName || 'Your Camp';
+const getCampSenderName = (camp = {}) => `${getCampDisplayName(camp)} via G8Road Camp CRM`;
+
 /**
  * Send an email using Resend
  * @param {Object} options - Email options
@@ -48,7 +51,7 @@ const sendEmail = async ({
   text = '',
   html = '',
   from = process.env.RESEND_FROM_EMAIL || 'noreply@g8road.com',
-  fromName = process.env.RESEND_FROM_NAME || 'G8Road'
+  fromName = process.env.RESEND_FROM_NAME || 'G8Road Camp CRM'
 }) => {
   try {
     // This check is now redundant (init throws if missing) but kept for safety
@@ -109,35 +112,36 @@ const sendEmail = async ({
  * Send application status notification
  */
 const sendApplicationStatusEmail = async (user, camp, status) => {
+  const campName = getCampDisplayName(camp);
   const statusMessages = {
     approved: {
-      subject: `🎉 Your application to ${camp.name} has been approved!`,
+      subject: `🎉 Your application to ${campName} has been approved!`,
       html: `
         <h2>Congratulations!</h2>
         <p>Hi ${user.firstName},</p>
-        <p>Great news! Your application to join <strong>${camp.name}</strong> has been approved.</p>
+        <p>Great news! Your application to join <strong>${campName}</strong> has been approved.</p>
         <p>You can now access your camp roster and participate in all camp activities.</p>
         <p><a href="${process.env.CLIENT_URL || 'https://g8road.com'}/camps/${camp.slug}" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Camp Profile</a></p>
         <p>See you on the playa! 🔥</p>
       `
     },
     rejected: {
-      subject: `Application Update: ${camp.name}`,
+      subject: `Application Update: ${campName}`,
       html: `
         <h2>Application Status Update</h2>
         <p>Hi ${user.firstName},</p>
-        <p>Thank you for your interest in <strong>${camp.name}</strong>.</p>
+        <p>Thank you for your interest in <strong>${campName}</strong>.</p>
         <p>Unfortunately, your application was not approved at this time. This may be due to capacity limits or specific camp requirements.</p>
         <p>We encourage you to explore other camps on G8Road!</p>
         <p><a href="${process.env.CLIENT_URL || 'https://g8road.com'}/camps" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Explore Camps</a></p>
       `
     },
     pending: {
-      subject: `Application Received: ${camp.name}`,
+      subject: `Application Received: ${campName}`,
       html: `
         <h2>Application Received</h2>
         <p>Hi ${user.firstName},</p>
-        <p>Thank you for applying to <strong>${camp.name}</strong>!</p>
+        <p>Thank you for applying to <strong>${campName}</strong>!</p>
         <p>Your application is currently under review. The camp leads will get back to you soon.</p>
         <p>You can check your application status anytime in your dashboard.</p>
         <p><a href="${process.env.CLIENT_URL || 'https://g8road.com'}/applications" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View My Applications</a></p>
@@ -150,7 +154,8 @@ const sendApplicationStatusEmail = async (user, camp, status) => {
   return sendEmail({
     to: user.email,
     subject: emailContent.subject,
-    html: emailContent.html
+    html: emailContent.html,
+    fromName: getCampSenderName(camp)
   });
 };
 
@@ -307,17 +312,19 @@ The G8Road Team
  * Send roster invitation email
  */
 const sendRosterInviteEmail = async (user, camp, invitedBy) => {
+  const campName = getCampDisplayName(camp);
   return sendEmail({
     to: user.email,
-    subject: `You've been invited to join ${camp.name}!`,
+    subject: `You've been invited to join ${campName}!`,
     html: `
       <h2>Camp Invitation</h2>
       <p>Hi ${user.firstName},</p>
-      <p><strong>${invitedBy.firstName} ${invitedBy.lastName}</strong> has invited you to join the roster for <strong>${camp.name}</strong>!</p>
+      <p><strong>${invitedBy.firstName} ${invitedBy.lastName}</strong> has invited you to join the roster for <strong>${campName}</strong>!</p>
       <p>Accept this invitation to become part of the camp family and access all camp features.</p>
       <p><a href="${process.env.CLIENT_URL || 'https://g8road.com'}/camps/${camp.slug}" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Invitation</a></p>
       <p>Excited to have you with us! 🎪</p>
-    `
+    `,
+    fromName: getCampSenderName(camp)
   });
 };
 
@@ -340,7 +347,7 @@ const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customM
     throw new Error('CLIENT_URL environment variable is required for invitation emails');
   }
   
-  const campName = camp.name || camp.campName || 'a camp';
+  const campName = getCampDisplayName(camp);
   const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() : 'Camp Lead';
   
   // Use custom message if provided (placeholders already replaced), otherwise use default
@@ -349,6 +356,7 @@ const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customM
   return sendEmail({
     to: recipientEmail,
     subject: `🏕️ You're Invited to Join ${campName}`,
+    fromName: getCampSenderName(camp),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
         <!-- Header -->
@@ -420,12 +428,13 @@ The G8Road Team`
  * @param {Object} camp - Camp object
  */
 const sendCampLeadGrantedEmail = async (user, camp) => {
-  const campName = camp.name || camp.campName || 'the camp';
+  const campName = getCampDisplayName(camp);
   const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
   
   return sendEmail({
     to: user.email,
     subject: `🎖️ You've been made a Camp Lead for ${campName}`,
+    fromName: getCampSenderName(camp),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
         <!-- Header -->
@@ -546,7 +555,7 @@ Questions about your new role? Reach out to your Main Camp Admin or check the He
 /**
  * Send dues-related email using pre-rendered content.
  */
-const sendDuesEmail = async ({ to, subject, body }) => {
+const sendDuesEmail = async ({ to, subject, body, camp }) => {
   const safeSubject = (subject || '').trim();
   const safeBody = body || '';
 
@@ -566,7 +575,8 @@ const sendDuesEmail = async ({ to, subject, body }) => {
     to,
     subject: safeSubject,
     text: safeBody,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${htmlBody}</div>`
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${htmlBody}</div>`,
+    fromName: camp ? getCampSenderName(camp) : undefined
   });
 };
 

@@ -53,7 +53,8 @@ router.post('/register', [
   body('accountType').isIn(['personal', 'camp']),
   body('firstName').optional().trim(),
   body('lastName').optional().trim(),
-  body('campName').optional().trim()
+  body('campName').optional().trim(),
+  body('inviteToken').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -61,7 +62,7 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password, accountType, firstName, lastName, campName } = req.body;
+    const { email, password, accountType, firstName, lastName, campName, inviteToken } = req.body;
 
     // Normalize email for consistency
     const normalizedEmail = normalizeEmail(email);
@@ -72,12 +73,49 @@ router.post('/register', [
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    // Validate required fields based on account type
-    if (accountType === 'personal' && (!firstName || !lastName)) {
+    let effectiveAccountType = accountType;
+    let effectiveRole = 'unassigned';
+    let inviteContext = null;
+
+    // Invitation-based signup is always a member-style personal account.
+    // Backend enforces this so role/accountType cannot be escalated by client payloads.
+    if (inviteToken) {
+      const invite = await db.findInvite({ token: inviteToken });
+      if (!invite) {
+        return res.status(400).json({ message: 'Invitation link is invalid' });
+      }
+
+      if (invite.status === 'applied') {
+        return res.status(400).json({ message: 'This invitation has already been used' });
+      }
+
+      const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
+      if (isExpired || invite.status === 'expired') {
+        return res.status(400).json({ message: 'This invitation link has expired' });
+      }
+
+      const camp = await db.findCamp({ _id: invite.campId });
+      if (!camp) {
+        return res.status(400).json({ message: 'Camp not found for this invitation' });
+      }
+
+      const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      inviteContext = {
+        token: inviteToken,
+        campId: invite.campId,
+        campSlug
+      };
+
+      effectiveAccountType = 'personal';
+      effectiveRole = 'member';
+    }
+
+    // Validate required fields based on effective account type
+    if (effectiveAccountType === 'personal' && (!firstName || !lastName)) {
       return res.status(400).json({ message: 'First name and last name required for personal accounts' });
     }
 
-    if (accountType === 'camp' && !campName) {
+    if (effectiveAccountType === 'camp' && !campName) {
       return res.status(400).json({ message: 'Camp name required for camp accounts' });
     }
 
@@ -85,12 +123,12 @@ router.post('/register', [
     const userData = {
       email: normalizedEmail,
       password,
-      accountType,
-      role: 'unassigned', // New users start with unassigned role
+      accountType: effectiveAccountType,
+      role: effectiveRole, // Invite signups are pre-assigned member role
       authProviders: ['password'] // Track that this user uses password authentication
     };
 
-    if (accountType === 'personal') {
+    if (effectiveAccountType === 'personal') {
       userData.firstName = firstName;
       userData.lastName = lastName;
     } else {
@@ -130,6 +168,7 @@ router.post('/register', [
       message: 'User registered successfully',
       token,
       user: userResponse,
+      inviteContext,
       isNewAccount: true // Flag to indicate this is a new account
     });
 

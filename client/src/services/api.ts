@@ -43,6 +43,7 @@ class ApiService {
           '/auth/apple',
           '/auth/forgot-password',
           '/auth/reset-password',
+          '/invites/validate',
           '/oauth/config',
           '/help/faqs',
           '/health'

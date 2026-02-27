@@ -4,6 +4,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import AppleOAuth from '../../components/auth/AppleOAuth';
 import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
@@ -57,13 +58,42 @@ const Register: React.FC = () => {
     defaultValues: {},
   });
 
-  // Store invite context on component mount
+  // Validate and store invitation context when token is present.
+  // Invalid/expired tokens fall back to normal signup.
   useEffect(() => {
-    if (inviteToken && campSlug) {
-      console.log('🎟️ [Register] Storing invitation context:', { inviteToken, campSlug });
-      localStorage.setItem('pendingInvite', JSON.stringify({ token: inviteToken, campSlug }));
-    }
-  }, [inviteToken, campSlug]);
+    let isActive = true;
+
+    const validateInvite = async () => {
+      if (!inviteToken) return;
+
+      try {
+        const response = await api.get(`/invites/validate/${inviteToken}`);
+        const resolvedCampSlug = response.campSlug || campSlug;
+
+        if (!resolvedCampSlug) {
+          throw new Error('Invalid invitation link');
+        }
+
+        if (!isActive) return;
+
+        localStorage.setItem(
+          'pendingInvite',
+          JSON.stringify({ token: inviteToken, campSlug: resolvedCampSlug })
+        );
+        setError('');
+      } catch (err: any) {
+        if (!isActive) return;
+        localStorage.removeItem('pendingInvite');
+        setError(err?.response?.data?.message || 'Invitation link is invalid or expired. Please sign up normally.');
+        navigate('/register', { replace: true });
+      }
+    };
+
+    validateInvite();
+    return () => {
+      isActive = false;
+    };
+  }, [inviteToken, campSlug, navigate]);
 
   // Redirect authenticated users away from register page
   useEffect(() => {
@@ -77,6 +107,21 @@ const Register: React.FC = () => {
     
     if (user) {
       console.log('🔍 [Register] User already authenticated, redirecting...');
+
+      // If user arrived via invite while already authenticated, skip onboarding
+      // and continue directly to the camp application flow.
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        try {
+          const { campSlug, token } = JSON.parse(pendingInvite);
+          if (campSlug && token) {
+            navigate(`/camps/${campSlug}?invite=${token}`, { replace: true });
+            return;
+          }
+        } catch (err) {
+          localStorage.removeItem('pendingInvite');
+        }
+      }
       
       // Check if user needs onboarding
       if (user.role === 'unassigned' || !user.role) {
@@ -118,11 +163,22 @@ const Register: React.FC = () => {
       }
 
       const { confirmPassword, ...registerData } = data;
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      let inviteTokenForSignup: string | undefined;
+      if (pendingInvite) {
+        try {
+          const { token } = JSON.parse(pendingInvite);
+          inviteTokenForSignup = token;
+        } catch (err) {
+          localStorage.removeItem('pendingInvite');
+        }
+      }
       
       // Always create personal account - role will be selected during onboarding
       const userData = {
         ...registerData,
-        accountType: 'personal' as const
+        accountType: 'personal' as const,
+        inviteToken: inviteTokenForSignup
       };
       
       const result = await registerUser(userData);
@@ -131,10 +187,10 @@ const Register: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Check for pending invitation
-      const pendingInvite = localStorage.getItem('pendingInvite');
-      if (pendingInvite) {
+      const pendingInviteAfterSignup = localStorage.getItem('pendingInvite');
+      if (pendingInviteAfterSignup) {
         try {
-          const { campSlug, token } = JSON.parse(pendingInvite);
+          const { campSlug, token } = JSON.parse(pendingInviteAfterSignup);
           console.log('🎟️ [Register] Redirecting to camp profile with invite:', { campSlug, token });
           // Don't clear the invite yet - we'll need it for the profile completion modal
           navigate(`/camps/${campSlug}?invite=${token}`, { replace: true });
@@ -182,6 +238,19 @@ const Register: React.FC = () => {
     // Small delay to ensure localStorage write completes
     setTimeout(() => {
       console.log('🔄 [Register] Reloading to update AuthContext...');
+
+      const pendingInvite = localStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        try {
+          const { campSlug, token } = JSON.parse(pendingInvite);
+          if (campSlug && token) {
+            window.location.href = `/camps/${campSlug}?invite=${token}`;
+            return;
+          }
+        } catch (err) {
+          localStorage.removeItem('pendingInvite');
+        }
+      }
       
       // TRUST THE BACKEND: Use isNewUser flag
       if (isNewUser) {
