@@ -245,6 +245,12 @@ const campSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  applicationInstructions: {
+    type: String,
+    trim: true,
+    maxlength: 2000,
+    default: ''
+  },
   // DEPRECATED - kept temporarily for migration
   acceptingNewMembers: {
     type: Boolean,

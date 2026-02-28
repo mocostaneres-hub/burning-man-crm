@@ -912,36 +912,47 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       user = await db.createUser(newUser);
     }
 
-    // Check if user is already in this roster
-    const isAlreadyMember = roster.members.some(m => 
-      m.user?.toString() === user._id.toString() || 
-      m.user?._id?.toString() === user._id.toString()
+    // Reuse existing Member record if one already exists for this user+camp.
+    // Prevents duplicate-key failures from unique index { camp, user }.
+    let memberRecord = await db.findMember({ user: user._id, camp: camp._id });
+    if (!memberRecord) {
+      const newMember = {
+        user: user._id,
+        camp: camp._id,
+        roster: rosterId,
+        addedAt: new Date(),
+        addedBy: req.user._id,
+        status: 'approved',
+        dues: {
+          paid: memberData.duesPaid === true,
+          paidAt: memberData.duesPaid === true ? new Date() : null
+        }
+      };
+      memberRecord = await db.createMember(newMember);
+    } else {
+      // Ensure reused record is active/approved when manually re-added.
+      await db.updateMember(memberRecord._id, {
+        status: 'approved',
+        dues: {
+          paid: memberData.duesPaid === true,
+          paidAt: memberData.duesPaid === true ? new Date() : null
+        }
+      });
+    }
+
+    // Check if this member record is already in this roster
+    const isAlreadyMember = roster.members.some(m =>
+      m.member?.toString() === memberRecord._id.toString() ||
+      m.member?._id?.toString() === memberRecord._id.toString()
     );
-    
     if (isAlreadyMember) {
       return res.status(400).json({ message: 'User is already a member of this roster' });
     }
 
-    // Create member record
-    const newMember = {
-      user: user._id,
-      camp: camp._id,
-      roster: rosterId,
-      addedAt: new Date(),
-      addedBy: req.user._id,
-      status: 'approved',
-      dues: {
-        paid: memberData.duesPaid === true,
-        paidAt: memberData.duesPaid === true ? new Date() : null
-      }
-    };
-
-    const createdMember = await db.createMember(newMember);
-
     // Add member to roster
     await db.addMemberToRoster(
       rosterId,
-      createdMember._id,
+      memberRecord._id,
       req.user._id,
       { duesStatus: memberData.duesPaid === true ? DUES_STATUS.PAID : DUES_STATUS.UNPAID }
     );
@@ -953,21 +964,21 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       rosterName: roster.name,
       campId: camp._id,
       campName: camp.name || camp.campName,
-      memberId: createdMember._id
+      memberId: memberRecord._id
     });
     
     await recordActivity('CAMP', camp._id, req.user._id, 'RESOURCE_ASSIGNED', {
       field: 'roster',
       rosterId: rosterId,
       rosterName: roster.name,
-      memberId: createdMember._id,
+      memberId: memberRecord._id,
       memberName: `${user.firstName} ${user.lastName}`,
       memberEmail: user.email
     });
 
     res.status(201).json({
       message: 'Member added successfully',
-      member: createdMember,
+      member: memberRecord,
       user: user
     });
   } catch (error) {

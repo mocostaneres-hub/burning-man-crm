@@ -50,6 +50,7 @@ interface Camp {
   website?: string;
   isPubliclyVisible?: boolean;
   acceptingApplications?: boolean;
+  applicationInstructions?: string;
   isCampAdmin?: boolean; // Flag from backend indicating user is camp admin
   isSystemAdmin?: boolean; // Flag from backend indicating user is system admin
   categories?: CampCategory[]; // Updated to include full category objects
@@ -749,6 +750,15 @@ const PublicCampProfile: React.FC = () => {
             )}
 
             {/* Motivation */}
+            {camp.applicationInstructions && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <h4 className="font-medium text-custom-text mb-2">Application Instructions</h4>
+                <p className="text-sm text-custom-text-secondary whitespace-pre-wrap">
+                  {camp.applicationInstructions}
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
                 Why do you want to join {camp.campName}? (Optional)

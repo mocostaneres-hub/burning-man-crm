@@ -804,6 +804,7 @@ router.put('/my-camp', authenticateToken, [
   body('approximateSize').optional().isInt({ min: 1, max: 1000 }).withMessage('Approximate size must be between 1 and 1000'),
   body('hometown').optional().trim(),
   body('website').optional().trim(), // Accept raw website string without validation to preserve user input exactly
+  body('applicationInstructions').optional().trim().isLength({ max: 2000 }).withMessage('Application instructions must be less than 2000 characters'),
   body('theme').optional().trim().isLength({ max: 100 }).withMessage('Theme must be less than 100 characters'),
   body('socialMedia.facebook').optional().isURL(),
   body('socialMedia.instagram').optional().isURL()
@@ -930,7 +931,8 @@ router.put('/my-camp', authenticateToken, [
 router.put('/:id', authenticateToken, [
   body('name').optional().trim().isLength({ min: 2, max: 100 }),
   body('description').optional().trim().isLength({ min: 10, max: 2000 }),
-  body('contactEmail').optional().isEmail().normalizeEmail()
+  body('contactEmail').optional().isEmail().normalizeEmail(),
+  body('applicationInstructions').optional().trim().isLength({ max: 2000 }).withMessage('Application instructions must be less than 2000 characters')
 ], async (req, res) => {
   try {
     console.log('🔍 [PUT /api/camps/:id] Update camp request');

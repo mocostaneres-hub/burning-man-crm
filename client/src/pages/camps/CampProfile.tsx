@@ -42,6 +42,7 @@ interface CampProfileData {
   selectedPerks: SelectedPerk[]; // Array of selected perks
   isPubliclyVisible: boolean;
   acceptingApplications: boolean;
+  applicationInstructions: string;
   // Legacy offerings object for backward compatibility
   offerings: {
     water: boolean;
@@ -119,6 +120,7 @@ const CampProfile: React.FC = () => {
     selectedPerks: [],
     isPubliclyVisible: false, // New camps default to private
     acceptingApplications: true,
+    applicationInstructions: '',
     offerings: {
       // Infrastructure
       water: false,
@@ -230,6 +232,7 @@ const CampProfile: React.FC = () => {
         selectedPerks: campResponse.selectedPerks || [],
         isPubliclyVisible: campResponse.isPubliclyVisible ?? false,
         acceptingApplications: campResponse.acceptingApplications ?? true,
+        applicationInstructions: campResponse.applicationInstructions || '',
         offerings: campResponse.offerings || {
           // Infrastructure
           water: false,
@@ -298,6 +301,7 @@ const CampProfile: React.FC = () => {
           selectedPerks: [],
           isPubliclyVisible: false, // New camps default to private
           acceptingApplications: true,
+          applicationInstructions: '',
           offerings: {
             // Infrastructure
             water: false,
@@ -510,6 +514,20 @@ const CampProfile: React.FC = () => {
         ...prev,
         [field]: value
       }));
+    }
+  };
+
+  // Refresh only photos after upload/delete to avoid wiping unsaved form edits.
+  const syncCampPhotosOnly = async () => {
+    try {
+      const freshCamp: any = await api.getMyCamp();
+      setCampId(freshCamp?._id?.toString() || campId);
+      setCampData((prev) => ({
+        ...prev,
+        photos: freshCamp?.photos || []
+      }));
+    } catch (refreshError) {
+      console.error('Failed to refresh camp photos:', refreshError);
     }
   };
 
@@ -923,6 +941,29 @@ const CampProfile: React.FC = () => {
                 </Badge>
               )}
             </div>
+
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-1">
+                Application Instructions
+              </label>
+              <p className="text-sm text-gray-600 mb-2">
+                Optional text shown in the public application modal before people submit.
+              </p>
+              {isEditing ? (
+                <textarea
+                  value={campData.applicationInstructions}
+                  onChange={(e) => handleInputChange('applicationInstructions', e.target.value)}
+                  placeholder="Example: Please share your relevant camp skills, arrival plan, and any prior build/strike experience."
+                  rows={4}
+                  maxLength={2000}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+                />
+              ) : (
+                <p className="text-body text-custom-text">
+                  {campData.applicationInstructions || 'No custom instructions'}
+                </p>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -988,7 +1029,7 @@ const CampProfile: React.FC = () => {
                 isEditing={isEditing}
                 context="camp"
                 campId={campId}
-                onUploadComplete={fetchCampProfile}
+                onUploadComplete={syncCampPhotosOnly}
               />
               <p className="text-sm text-gray-600 mt-2">
                 Upload a photo to represent your camp. This will be displayed on your camp profile and in camp discovery.
