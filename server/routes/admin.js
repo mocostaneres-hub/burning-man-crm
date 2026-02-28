@@ -544,6 +544,8 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
             accountType: owner.accountType,
             isSystemAdmin: (owner.accountType === 'admin' && !owner.campId) || !!owner.isSystemAdmin
           } : null,
+          ownerRef: campData.owner ? campData.owner.toString() : null,
+          ownerLookupFailed: !!campData.owner && !owner,
           needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
           // New compact columns
           rosterInfo,
@@ -564,6 +566,8 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
           enrichmentError: enrichmentError.message,
           memberCount: 0,
           owner: null,
+          ownerRef: campData.owner ? campData.owner.toString() : null,
+          ownerLookupFailed: false,
           rosterInfo: { hasActive: false, memberCount: 0 },
           lastLogin: null,
           activeApps: 0,

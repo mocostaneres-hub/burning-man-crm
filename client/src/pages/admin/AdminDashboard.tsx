@@ -139,6 +139,8 @@ interface Camp {
   activeShifts?: number;
   activeTasks?: number;
   owner?: string | { _id: string; firstName?: string; lastName?: string; email?: string; accountType?: 'personal' | 'camp' | 'admin' }; // Camp owner user ID
+  ownerRef?: string | null;
+  ownerLookupFailed?: boolean;
   socialMedia?: {
     facebook?: string;
     instagram?: string;
@@ -1170,7 +1172,7 @@ const AdminDashboard: React.FC = () => {
                       : '';
                     const ownerUserId = camp.owner && typeof camp.owner === 'object' 
                       ? camp.owner._id 
-                      : (typeof camp.owner === 'string' ? camp.owner : '');
+                      : (typeof camp.owner === 'string' ? camp.owner : (camp.ownerRef || ''));
                     
                     return (
                       <tr key={camp._id} className="hover:bg-gray-50">
@@ -1190,7 +1192,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="text-sm text-gray-500">
                               {ownerFirstName && ownerLastName 
                                 ? `${ownerFirstName} ${ownerLastName}` 
-                                : 'No owner'}
+                                : (camp.ownerLookupFailed ? 'Owner lookup failed' : 'Unassigned')}
                             </div>
                             <div className="text-sm text-gray-500">{ownerEmail}</div>
                             <div className="text-xs text-gray-400 font-mono">

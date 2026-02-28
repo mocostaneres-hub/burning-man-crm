@@ -1244,6 +1244,16 @@ const MemberRoster: React.FC = () => {
         </div>
       </div>
 
+      {!hasActiveRoster && canEdit && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4" role="status" aria-live="polite">
+          <h2 className="text-lg font-semibold text-custom-text">No roster yet</h2>
+          <p className="text-sm text-custom-text-secondary mt-1">
+            To start adding people to this camp, you&apos;ll need to create a roster first. Click
+            <span className="font-semibold"> Create New Roster</span> to get started.
+          </p>
+        </div>
+      )}
+
       {error && (
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert">
           <span className="block sm:inline">{error}</span>
@@ -1750,10 +1760,10 @@ const MemberRoster: React.FC = () => {
           <div className="text-center py-12 bg-blue-50 rounded-lg border-2 border-blue-200">
             <Users className="w-16 h-16 mx-auto text-blue-500 mb-4" />
             <h3 className="text-h3 font-lato-bold text-custom-text mb-2">
-              No Active Roster
+              No roster yet
             </h3>
             <p className="text-body text-custom-text-secondary mb-4">
-              Your camp doesn't have an active roster yet. Create a new roster to start managing your members.
+              To start adding people to this camp, you&apos;ll need to create a roster first.
             </p>
             {canEdit && (
               <Button
