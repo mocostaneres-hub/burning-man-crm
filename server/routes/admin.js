@@ -232,16 +232,16 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
           }
         }
 
-        // Secondary: resolve camp lead association (Mongo only)
+        // Secondary: resolve roster association (Mongo only)
         if (db.useMongoDB) {
           const Roster = require('../models/Roster');
-          const member = await Member.findOne({ user: userObj?._id });
-          if (member) {
+          const memberRecords = await Member.find({ user: userObj?._id }).select('_id');
+          if (memberRecords.length > 0) {
+            const memberIds = memberRecords.map((m) => m._id);
             const roster = await Roster.findOne({
               members: {
                 $elemMatch: {
-                  member: member._id,
-                  isCampLead: true,
+                  member: { $in: memberIds },
                   status: 'approved'
                 }
               },
@@ -249,11 +249,14 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
             }).populate('camp', 'name');
 
             if (roster?.camp?.name) {
+              const matchedEntry = (roster.members || []).find((entry) =>
+                entry?.member && memberIds.some((id) => id.toString() === entry.member.toString())
+              );
               return {
                 ...userObj,
                 campName: roster.camp.name,
-                campLeadCampName: roster.camp.name,
-                isCampLead: true
+                campLeadCampName: matchedEntry?.isCampLead ? roster.camp.name : undefined,
+                isCampLead: matchedEntry?.isCampLead === true
               };
             }
           }
