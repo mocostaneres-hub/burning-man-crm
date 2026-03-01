@@ -36,7 +36,19 @@ const MyCampCard: React.FC = () => {
         setLoading(true);
         const response = await api.getMyApplications();
         if (!isMounted) return;
-        setMemberships((response.applications || []) as unknown as MembershipSummary[]);
+        const normalized = (response.applications || []).map((item: any) => {
+          const plain = item?._doc ? { ...item._doc } : { ...item };
+          return {
+            ...plain,
+            _id: plain._id || item?._id,
+            status: plain.status || item?.status,
+            role: plain.role || item?.role,
+            isPrimary: plain.isPrimary ?? item?.isPrimary,
+            camp: item?.camp || plain.camp || null
+          } as MembershipSummary;
+        });
+
+        setMemberships(normalized);
         setError('');
       } catch (err: any) {
         if (!isMounted) return;
