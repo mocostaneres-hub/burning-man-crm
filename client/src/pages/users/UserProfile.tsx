@@ -6,6 +6,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import PhotoUpload from '../../components/profile/PhotoUpload';
 import { useSkills } from '../../hooks/useSkills';
+import MyCampCard from '../../components/profile/MyCampCard';
+import MyTasksList from '../../components/profile/MyTasksList';
+import MyShiftsList from '../../components/profile/MyShiftsList';
 
 interface UserProfileData {
   firstName: string;
@@ -231,181 +234,225 @@ const UserProfile: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header Section - Profile Photo + Basic Info */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
-        {/* Cover/Banner Area */}
-        <div className="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-        
-        {/* Profile Header Content */}
-        <div className="px-8 pb-8">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between -mt-16 mb-6">
-            {/* Profile Photo Section */}
-            <div className="flex flex-col md:flex-row md:items-end gap-6">
+      {/* Consolidated Profile Section */}
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-h2 font-lato-bold text-custom-text">My Profile</h1>
+          {!isEditing && (
+            <Button
+              variant="primary"
+              onClick={() => setIsEditing(true)}
+              className="flex items-center gap-2"
+            >
+              <Edit className="w-4 h-4" />
+              Edit Profile
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div>
+            <div className="flex items-start gap-4">
               <div className="relative flex-shrink-0">
                 {profileData.profilePhoto ? (
                   <img
                     src={profileData.profilePhoto}
                     alt={`${profileData.firstName} ${profileData.lastName}`}
-                    className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white"
+                    className="w-24 h-24 rounded-full shadow object-cover bg-white"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg bg-gray-200 flex items-center justify-center">
-                    <UserIcon className="w-16 h-16 text-gray-400" />
-                  </div>
-                )}
-                {isEditing && (
-                  <div className="mt-4 max-w-[180px]">
-                    <PhotoUpload
-                      profilePhoto={profileData.profilePhoto}
-                      onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
-                      isEditing={isEditing}
-                    />
+                  <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
+                    <UserIcon className="w-10 h-10 text-gray-400" />
                   </div>
                 )}
               </div>
-              
-              {/* Name and Basic Info */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1">
                 {isEditing ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-                    <div className="min-w-0">
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
-                        First Name
-                      </label>
-                      <Input
-                        value={profileData.firstName}
-                        onChange={(e) => handleInputChange('firstName', e.target.value)}
-                        placeholder="First name"
-                        className="bg-white w-full"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
-                        Last Name
-                      </label>
-                      <Input
-                        value={profileData.lastName}
-                        onChange={(e) => handleInputChange('lastName', e.target.value)}
-                        placeholder="Last name"
-                        className="bg-white w-full"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      value={profileData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
+                      placeholder="First name"
+                    />
+                    <Input
+                      value={profileData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
+                      placeholder="Last name"
+                    />
                   </div>
                 ) : (
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900">
-                      {profileData.firstName} {profileData.lastName}
-                    </h1>
-                    <div className="flex flex-wrap items-center gap-4 mt-2 text-gray-600">
-                      {profileData.city && (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span>{profileData.city}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>
-                          {profileData.yearsBurned === 0 
-                            ? '🔥 Virgin (First Burn!)' 
-                            : `${profileData.yearsBurned} ${profileData.yearsBurned === 1 ? 'Burn' : 'Burns'}`
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {profileData.firstName} {profileData.lastName}
+                  </h2>
                 )}
+
+                <div className="mt-3 space-y-2 text-sm text-custom-text-secondary">
+                  <div>
+                    <span className="font-medium text-custom-text">Playa Name: </span>
+                    {isEditing ? (
+                      <Input
+                        value={profileData.playaName || ''}
+                        onChange={(e) => handleInputChange('playaName', e.target.value)}
+                        placeholder="Enter your playa name"
+                        className="mt-1"
+                      />
+                    ) : (
+                      <span>{profileData.playaName || 'Not set'}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {isEditing ? (
+                      <Input
+                        value={profileData.city}
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        placeholder="Enter city"
+                        className="max-w-sm"
+                      />
+                    ) : (
+                      <span>{profileData.city || 'Location not set'}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        min="0"
+                        value={profileData.yearsBurned}
+                        onChange={(e) => handleInputChange('yearsBurned', parseInt(e.target.value) || 0)}
+                        placeholder="Years burned"
+                        className="max-w-sm"
+                      />
+                    ) : (
+                      <span>
+                        {profileData.yearsBurned === 0
+                          ? 'Virgin (First Burn)'
+                          : `${profileData.yearsBurned} ${profileData.yearsBurned === 1 ? 'Burn' : 'Burns'}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Edit Button */}
-            {!isEditing && (
-              <Button
-                variant="primary"
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 mt-4 md:mt-0"
-              >
-                <Edit className="w-4 h-4" />
-                Edit Profile
-              </Button>
+            {isEditing && (
+              <div className="mt-4 max-w-[240px]">
+                <PhotoUpload
+                  profilePhoto={profileData.profilePhoto}
+                  onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
+                  isEditing={isEditing}
+                />
+              </div>
             )}
           </div>
 
-          {/* Contact Info Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                Email
-              </label>
-              {isEditing ? (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Mail className="w-4 h-4" />
-                  <span>{profileData.email}</span>
-                  <span className="text-xs text-gray-400">(cannot be changed)</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-gray-900">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</p>
+                <p className="text-sm text-custom-text mt-1 flex items-center gap-1">
                   <Mail className="w-4 h-4 text-gray-400" />
-                  <span>{profileData.email}</span>
-                </div>
-              )}
+                  {profileData.email}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</p>
+                {isEditing ? (
+                  <Input
+                    value={profileData.phoneNumber}
+                    onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                    placeholder="Enter phone number"
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm text-custom-text mt-1 flex items-center gap-1">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    {profileData.phoneNumber || 'Not provided'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ticket</p>
+                {isEditing ? (
+                  <div className="flex gap-4 mt-1">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="hasTicket"
+                        checked={profileData.hasTicket === true}
+                        onChange={() => handleInputChange('hasTicket', true)}
+                      />
+                      Yes
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="hasTicket"
+                        checked={profileData.hasTicket === false}
+                        onChange={() => handleInputChange('hasTicket', false)}
+                      />
+                      No
+                    </label>
+                  </div>
+                ) : (
+                  <p className={`text-sm mt-1 font-medium ${profileData.hasTicket ? 'text-green-600' : 'text-red-600'}`}>
+                    {profileData.hasTicket ? 'Yes' : 'No'}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Vehicle Pass</p>
+                {isEditing ? (
+                  <div className="flex gap-4 mt-1">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="hasVehiclePass"
+                        checked={profileData.hasVehiclePass === true}
+                        onChange={() => handleInputChange('hasVehiclePass', true)}
+                      />
+                      Yes
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="hasVehiclePass"
+                        checked={profileData.hasVehiclePass === false}
+                        onChange={() => handleInputChange('hasVehiclePass', false)}
+                      />
+                      No
+                    </label>
+                  </div>
+                ) : (
+                  <p className={`text-sm mt-1 font-medium ${profileData.hasVehiclePass ? 'text-green-600' : 'text-red-600'}`}>
+                    {profileData.hasVehiclePass ? 'Yes' : 'No'}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                Phone Number
-              </label>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bio</p>
               {isEditing ? (
-                <Input
-                  value={profileData.phoneNumber}
-                  onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                  placeholder="Enter phone number"
-                  className="bg-white"
+                <textarea
+                  value={profileData.bio}
+                  onChange={(e) => handleInputChange('bio', e.target.value)}
+                  placeholder="Tell us about yourself..."
+                  className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[110px]"
                 />
               ) : (
-                <div className="flex items-center gap-2 text-sm text-gray-900">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  <span>{profileData.phoneNumber || 'Not provided'}</span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                City
-              </label>
-              {isEditing ? (
-                <Input
-                  value={profileData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  placeholder="Enter city"
-                  className="bg-white"
-                />
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-gray-900">
-                  <MapPin className="w-4 h-4 text-gray-400" />
-                  <span>{profileData.city || 'Not provided'}</span>
-                </div>
+                <p className="text-sm text-custom-text-secondary mt-1 whitespace-pre-wrap">
+                  {profileData.bio || 'No bio provided yet.'}
+                </p>
               )}
             </div>
           </div>
-
-          {/* Burning Man Experience */}
-          {isEditing && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Years Burned
-              </label>
-              <Input
-                type="number"
-                min="0"
-                value={profileData.yearsBurned}
-                onChange={(e) => handleInputChange('yearsBurned', parseInt(e.target.value) || 0)}
-                placeholder="0"
-                className="bg-white max-w-xs"
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -422,145 +469,11 @@ const UserProfile: React.FC = () => {
         </div>
       )}
 
-      {/* About Me Section */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <UserIcon className="w-5 h-5 text-blue-600" />
-          About Me
-        </h2>
-        
-        {isEditing ? (
-          <textarea
-            value={profileData.bio}
-            onChange={(e) => handleInputChange('bio', e.target.value)}
-            placeholder="Tell us about yourself, your Burning Man experience, what you're passionate about..."
-            className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical min-h-[150px] text-gray-900"
-          />
-        ) : (
-          <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {profileData.bio || (
-              <span className="text-gray-400 italic">No bio provided yet. Click "Edit Profile" to add one!</span>
-            )}
-          </p>
-        )}
-      </div>
-
-      {/* Playa Name Section */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <UserIcon className="w-5 h-5 text-orange-600" />
-          Playa Name
-        </h2>
-        
-        {isEditing ? (
-          <div className="max-w-md">
-            <Input
-              value={profileData.playaName || ''}
-              onChange={(e) => handleInputChange('playaName', e.target.value)}
-              placeholder="Enter your playa name (optional)"
-              className="bg-white"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Your playa name is the name you go by at Burning Man events.
-            </p>
-          </div>
-        ) : (
-          <div className="text-gray-700">
-            {profileData.playaName ? (
-              <span className="text-xl font-semibold text-orange-600">
-                "{profileData.playaName}"
-              </span>
-            ) : (
-              <span className="text-gray-400 italic">No playa name set. Click "Edit Profile" to add one!</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Ticket & Vehicle Pass Section */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-blue-600" />
-          Ticket & Vehicle Pass
-        </h2>
-        
-        {isEditing ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-3">
-                Do you have a Burning Man ticket?
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasTicket"
-                    checked={profileData.hasTicket === true}
-                    onChange={() => handleInputChange('hasTicket', true)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">Yes</span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasTicket"
-                    checked={profileData.hasTicket === false}
-                    onChange={() => handleInputChange('hasTicket', false)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">No</span>
-                </label>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-3">
-                Do you have a Vehicle Pass?
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasVehiclePass"
-                    checked={profileData.hasVehiclePass === true}
-                    onChange={() => handleInputChange('hasVehiclePass', true)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">Yes</span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="hasVehiclePass"
-                    checked={profileData.hasVehiclePass === false}
-                    onChange={() => handleInputChange('hasVehiclePass', false)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-900">No</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <span className="text-sm text-gray-600">Ticket: </span>
-              <span className={`font-medium ${
-                profileData.hasTicket === true ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {profileData.hasTicket === true ? '✓ Yes' : '✗ No'}
-              </span>
-            </div>
-            <div>
-              <span className="text-sm text-gray-600">Has VP: </span>
-              <span className={`font-medium ${
-                profileData.hasVehiclePass === true ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {profileData.hasVehiclePass === true ? '✓ Yes' : '✗ No'}
-              </span>
-            </div>
-          </div>
-        )}
+      {/* Profile activity sections */}
+      <div className="space-y-6 mb-6">
+        <MyCampCard />
+        <MyTasksList />
+        <MyShiftsList />
       </div>
 
       {/* Travel Dates Section */}
