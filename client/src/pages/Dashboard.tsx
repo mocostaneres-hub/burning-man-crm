@@ -14,7 +14,6 @@ import {
   UserCheck,
   Eye,
   User,
-  Phone,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -23,6 +22,7 @@ interface DashboardStats {
   totalTasks?: number;
   openTasks?: number;
   completedTasks?: number;
+  totalMembers?: number;
   totalCamps?: number;
   activeCamps?: number;
 }
@@ -33,6 +33,9 @@ const Dashboard: React.FC = () => {
   const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [stats, setStats] = useState<DashboardStats>({});
   const [loading, setLoading] = useState(true);
+  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId);
+  const currentCampId = user?.campId?.toString() || user?._id?.toString() || '';
+  const campBasePath = currentCampId ? `/camp/${currentCampId}` : '';
 
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
@@ -54,29 +57,37 @@ const Dashboard: React.FC = () => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        if (user?.accountType === 'admin' || user?.isSystemAdmin) {
-          const response = await apiService.get('/admin/stats');
-          setStats(response.data);
-        } else if (user?.accountType === 'camp') {
-          // Get camp data first
+        if (isCampContext) {
           const campData = await apiService.getMyCamp();
           const campId = campData._id;
 
-          const [applicationsRes, tasksRes] = await Promise.all([
+          const [applicationsRes, tasksRes, membersRes] = await Promise.all([
             apiService.get(`/applications/camp/${campId}`),
-            apiService.get('/tasks')
+            apiService.get('/tasks'),
+            apiService.getCampMembers(campId.toString())
           ]);
-          
-          // applicationsRes is an array of applications
-          const applications = applicationsRes || [];
-          
+
+          const applications = applicationsRes?.applications || [];
+          const tasks = Array.isArray(tasksRes) ? tasksRes : [];
+          const members = membersRes?.members || [];
+
+          const openApplicationStatuses = new Set(['pending', 'call-scheduled', 'pending-orientation', 'under-review']);
+
           setStats({
-            pendingApplications: applications.filter((app: { status: string }) => app.status === 'pending').length || 0,
-            approvedApplications: applications.filter((app: { status: string }) => app.status === 'approved').length || 0,
-            totalTasks: tasksRes.data?.length || 0,
-            openTasks: tasksRes.data?.filter((task: { status: string }) => task.status === 'open').length || 0,
-            completedTasks: tasksRes.data?.filter((task: { status: string }) => task.status === 'completed').length || 0,
+            pendingApplications: applications.filter((app: { status?: string }) =>
+              openApplicationStatuses.has(String(app.status || '').toLowerCase())
+            ).length,
+            approvedApplications: applications.filter((app: { status?: string }) =>
+              String(app.status || '').toLowerCase() === 'approved'
+            ).length,
+            totalTasks: tasks.length,
+            openTasks: tasks.filter((task: { status?: string }) => String(task.status || '').toLowerCase() === 'open').length,
+            completedTasks: tasks.filter((task: { status?: string }) => String(task.status || '').toLowerCase() === 'closed').length,
+            totalMembers: members.length
           });
+        } else if (user?.accountType === 'admin' || user?.isSystemAdmin) {
+          const response = await apiService.get('/admin/stats');
+          setStats(response.data);
         } else {
           // Personal account stats
           const [applicationsRes, tasksRes] = await Promise.all([
@@ -102,7 +113,7 @@ const Dashboard: React.FC = () => {
     if (user) {
       fetchStats();
     }
-  }, [user]);
+  }, [user, isCampContext]);
 
   const getDashboardTiles = () => {
     // Debug logging
@@ -117,8 +128,7 @@ const Dashboard: React.FC = () => {
         icon: <User size={24} />,
         onClick: () => {
           if (user?.accountType === 'camp') {
-            const campId = user?.campId?.toString() || user?._id?.toString() || '';
-            navigate(campId ? `/camp/${campId}/profile` : '/camp/profile');
+            navigate(campBasePath ? `${campBasePath}/profile` : '/camp/profile');
           } else {
             navigate('/profile/edit');
           }
@@ -129,33 +139,33 @@ const Dashboard: React.FC = () => {
         title: 'My Tasks',
         description: `${stats.openTasks || 0} open tasks`,
         icon: <Assignment size={24} />,
-        onClick: () => navigate(user?.accountType === 'camp' ? '/camp/tasks' : '/tasks'),
+        onClick: () => navigate(isCampContext ? (campBasePath ? `${campBasePath}/tasks` : '/camp/tasks') : '/tasks'),
         color: 'bg-green-500'
       }
     ];
 
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+    if (isCampContext) {
       return [
         ...commonTiles,
         {
           title: 'Applications',
-          description: `${stats.pendingApplications || 0} pending applications`,
+          description: `${stats.pendingApplications || 0} open applications`,
           icon: <Assignment size={24} />,
-          onClick: () => navigate('/camp/applications'),
+          onClick: () => navigate(campBasePath ? `${campBasePath}/applications` : '/camp/applications'),
           color: 'bg-purple-500'
         },
         {
           title: 'Members',
-          description: 'View camp roster',
+          description: `${stats.totalMembers || 0} roster members`,
           icon: <People size={24} />,
-          onClick: () => navigate('/camp/rosters'),
+          onClick: () => navigate(campBasePath ? `${campBasePath}/roster` : '/camp/rosters'),
           color: 'bg-orange-500'
         },
         {
-          title: 'Call Times',
-          description: 'Manage orientation calls',
-          icon: <Phone size={24} />,
-          onClick: () => navigate('/camp/call-slots'),
+          title: 'Shifts',
+          description: 'Manage events & shifts',
+          icon: <TrendingUpIcon size={24} />,
+          onClick: () => navigate(campBasePath ? `${campBasePath}/events` : '/camp/shifts'),
           color: 'bg-teal-500'
         }
       ];
@@ -207,37 +217,31 @@ const Dashboard: React.FC = () => {
   const getQuickActions = () => {
     const commonActions = [];
 
-    if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+    if (isCampContext) {
       return [
         {
           title: 'Create Task',
           icon: <Plus size={24} />,
-          onClick: () => navigate('/camp/tasks?action=create'),
+          onClick: () => navigate(campBasePath ? `${campBasePath}/tasks?action=create` : '/camp/tasks?action=create'),
           description: 'Assign a new task'
         },
         {
           title: 'Review Applications',
           icon: <Eye size={24} />,
-          onClick: () => navigate('/camp/applications'),
+          onClick: () => navigate(campBasePath ? `${campBasePath}/applications` : '/camp/applications'),
           description: 'Review pending applications'
         },
         {
           title: 'Manage Roster',
           icon: <People size={24} />,
-          onClick: () => navigate('/camp/rosters'),
+          onClick: () => navigate(campBasePath ? `${campBasePath}/roster` : '/camp/rosters'),
           description: 'View and manage members'
         },
         {
-          title: 'Call Times',
-          icon: <Phone size={24} />,
-          onClick: () => navigate('/camp/call-slots'),
-          description: 'Manage orientation calls'
-        },
-        {
-          title: 'Role Management',
-          icon: <UserCheck size={24} />,
-          onClick: () => navigate('/camp/roles'),
-          description: 'Manage member roles'
+          title: 'Manage Shifts',
+          icon: <TrendingUpIcon size={24} />,
+          onClick: () => navigate(campBasePath ? `${campBasePath}/events` : '/camp/shifts'),
+          description: 'Create and manage shifts'
         }
       ];
     }
@@ -294,7 +298,7 @@ const Dashboard: React.FC = () => {
             {stats.pendingApplications || 0}
           </h3>
           <p className="text-body text-custom-text-secondary">
-            Pending Applications
+            {isCampContext ? 'Open Applications' : 'Pending Applications'}
           </p>
         </Card>
 
@@ -314,7 +318,7 @@ const Dashboard: React.FC = () => {
             {stats.completedTasks || 0}
           </h3>
           <p className="text-body text-custom-text-secondary">
-            Completed Tasks
+            {isCampContext ? 'Closed Tasks' : 'Completed Tasks'}
           </p>
         </Card>
       </div>

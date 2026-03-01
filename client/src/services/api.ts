@@ -45,7 +45,6 @@ class ApiService {
           '/auth/reset-password',
           '/invites/validate',
           '/oauth/config',
-          '/help/faqs',
           '/health'
         ];
 

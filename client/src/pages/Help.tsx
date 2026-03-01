@@ -89,9 +89,13 @@ const Help: React.FC = () => {
       let filteredFaqs = allFaqs;
       
       if (targetAudience === 'camps') {
-        filteredFaqs = allFaqs.filter(faq => faq.audience === 'camps' || faq.audience === 'both');
+        filteredFaqs = allFaqs.filter(
+          faq => faq.audience === 'camps' || faq.audience === 'both' || faq.audience === 'homepage'
+        );
       } else if (targetAudience === 'members') {
-        filteredFaqs = allFaqs.filter(faq => faq.audience === 'members' || faq.audience === 'both');
+        filteredFaqs = allFaqs.filter(
+          faq => faq.audience === 'members' || faq.audience === 'both' || faq.audience === 'homepage'
+        );
       } else if (targetAudience === 'both') {
         filteredFaqs = allFaqs.filter(faq => faq.audience === 'both' || faq.audience === 'homepage');
       }
