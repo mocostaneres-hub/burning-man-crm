@@ -254,6 +254,7 @@ export interface Member {
     departureDate?: string | Date;
     city?: string;
     state?: string;
+    location?: StructuredLocation;
   };
   createdAt: string;
   updatedAt: string;

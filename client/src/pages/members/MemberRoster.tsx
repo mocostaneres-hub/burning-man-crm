@@ -4,12 +4,13 @@ import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import { Member } from '../../types';
+import { Member, StructuredLocation } from '../../types';
 import { formatDate } from '../../utils/dateFormatters';
 import MetricsPanel from '../../components/roster/MetricsPanel';
 import RosterFilters, { FilterType } from '../../components/roster/RosterFilters';
 import { InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
+import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { useSkills } from '../../hooks/useSkills';
 import CampLeadBadge from '../../components/badges/CampLeadBadge';
 import CampLeadConfirmModal from '../../components/modals/CampLeadConfirmModal';
@@ -111,6 +112,21 @@ const renderRichTextPreview = (body: string = '') => {
 
   closeListIfOpen();
   return htmlParts.join('');
+};
+
+const toStructuredLocationOrNull = (location?: Partial<StructuredLocation> | null): StructuredLocation | null => {
+  if (!location) return null;
+  if (!location.city || !location.country || !location.countryCode) return null;
+  if (location.lat === undefined || location.lng === undefined) return null;
+  return {
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    countryCode: location.countryCode,
+    lat: Number(location.lat),
+    lng: Number(location.lng),
+    placeId: location.placeId
+  };
 };
 
 const MemberRoster: React.FC = () => {
@@ -339,6 +355,16 @@ const MemberRoster: React.FC = () => {
       if (allEdits.departureDate !== undefined) overridesData.departureDate = allEdits.departureDate;
       if (allEdits.city !== undefined) overridesData.city = allEdits.city;
       if (allEdits.state !== undefined) overridesData.state = allEdits.state;
+      if (allEdits.location !== undefined) {
+        overridesData.location = allEdits.location;
+        if (allEdits.location) {
+          overridesData.city = allEdits.location.city;
+          overridesData.state = allEdits.location.state || '';
+        } else {
+          overridesData.city = '';
+          overridesData.state = '';
+        }
+      }
 
       console.log('💾 [MemberRoster] Saving overrides:', overridesData);
 
@@ -481,24 +507,24 @@ const MemberRoster: React.FC = () => {
     const currentEdits = localEdits[memberId] || {};
     const member = members.find(m => m._id.toString() === memberId);
     const overrides = member?.overrides || {};
-    const city = currentEdits?.city || overrides?.city || user?.city || user?.location?.city || '';
-    const state = currentEdits?.state || overrides?.state || user?.location?.state || '';
+    const selectedLocation =
+      toStructuredLocationOrNull(currentEdits?.location) ||
+      toStructuredLocationOrNull(overrides?.location) ||
+      toStructuredLocationOrNull(user?.location);
+    const legacyCity = currentEdits?.city || overrides?.city || user?.city || '';
 
     return (
       <div className="flex flex-col space-y-1">
-        <input
-          type="text"
-          placeholder="City"
-          value={city}
-          onChange={(e) => handleFieldChange(memberId, 'city', e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-xs"
-        />
-        <input
-          type="text"
-          placeholder="State"
-          value={state}
-          onChange={(e) => handleFieldChange(memberId, 'state', e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-xs"
+        <CityAutocomplete
+          label=""
+          placeholder="Search city..."
+          value={selectedLocation}
+          onChange={(location) => {
+            handleFieldChange(memberId, 'location', location);
+            handleFieldChange(memberId, 'city', location?.city || '');
+            handleFieldChange(memberId, 'state', location?.state || '');
+          }}
+          legacyValue={!selectedLocation ? legacyCity : undefined}
         />
       </div>
     );
@@ -1346,13 +1372,6 @@ const MemberRoster: React.FC = () => {
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
                 
-                // Get location data - try user.city first, then user.location.city
-                const userCity = user?.city || user?.location?.city;
-                const userState = user?.location?.state;
-                const location = userCity && userState 
-                  ? `${userCity}, ${userState}` 
-                  : userCity || 'Not specified';
-                
                 return (
                   <tr key={member._id} className={`${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                     {/* Row Number */}
@@ -1510,9 +1529,14 @@ const MemberRoster: React.FC = () => {
                         <EditableLocation user={user} memberId={member._id.toString()} />
                       ) : (
                         (() => {
-                          const city = (member as any).overrides?.city || user?.city || user?.location?.city;
-                          const state = (member as any).overrides?.state || user?.location?.state;
-                          return city && state ? `${city}, ${state}` : city || 'Not specified';
+                          const overrideLocation = toStructuredLocationOrNull((member as any).overrides?.location);
+                          const userLocation = toStructuredLocationOrNull(user?.location);
+                          const city = overrideLocation?.city || (member as any).overrides?.city || userLocation?.city || user?.city;
+                          const state = overrideLocation?.state || (member as any).overrides?.state || userLocation?.state;
+                          const country = overrideLocation?.country || userLocation?.country;
+
+                          if (!city) return 'Not specified';
+                          return [city, state, country].filter(Boolean).join(', ');
                         })()
                       )}
                     </td>

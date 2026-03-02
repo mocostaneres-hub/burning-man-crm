@@ -74,6 +74,32 @@ const rosterSchema = new mongoose.Schema({
       state: {
         type: String,
         trim: true
+      },
+      // Structured location for standardized city selection in roster overrides.
+      location: {
+        city: {
+          type: String,
+          trim: true
+        },
+        state: {
+          type: String,
+          trim: true
+        },
+        country: {
+          type: String,
+          trim: true
+        },
+        countryCode: {
+          type: String,
+          trim: true,
+          uppercase: true
+        },
+        lat: Number,
+        lng: Number,
+        placeId: {
+          type: String,
+          trim: true
+        }
       }
     },
     status: {

@@ -1368,7 +1368,8 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       arrivalDate,
       departureDate,
       city,
-      state
+      state,
+      location
     } = req.body;
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
@@ -1544,6 +1545,54 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       }
       roster.members[memberIndex].overrides.state = state;
       console.log('📝 [Roster Override] Updated state:', state);
+    }
+    if (location !== undefined) {
+      if (location !== null && (typeof location !== 'object' || Array.isArray(location))) {
+        return res.status(400).json({ message: 'Location must be a valid object or null' });
+      }
+
+      let normalizedLocation = null;
+      if (location) {
+        if (
+          !location.city ||
+          !location.country ||
+          !location.countryCode ||
+          location.lat === undefined ||
+          location.lng === undefined
+        ) {
+          return res.status(400).json({ message: 'Invalid structured location payload' });
+        }
+
+        normalizedLocation = {
+          city: String(location.city).trim(),
+          state: location.state ? String(location.state).trim() : undefined,
+          country: String(location.country).trim(),
+          countryCode: String(location.countryCode).trim().toUpperCase(),
+          lat: Number(location.lat),
+          lng: Number(location.lng),
+          placeId: location.placeId ? String(location.placeId).trim() : undefined
+        };
+      }
+
+      const oldValue = oldOverrides.location;
+      const oldValueSerialized = JSON.stringify(oldValue || null);
+      const newValueSerialized = JSON.stringify(normalizedLocation || null);
+      if (oldValueSerialized !== newValueSerialized) {
+        changedFields.push({ field: 'location', oldValue: oldValue || null, newValue: normalizedLocation || null });
+      }
+
+      if (normalizedLocation) {
+        roster.members[memberIndex].overrides.location = normalizedLocation;
+        // Keep legacy override fields in sync for backward compatibility.
+        roster.members[memberIndex].overrides.city = normalizedLocation.city;
+        roster.members[memberIndex].overrides.state = normalizedLocation.state || '';
+      } else {
+        roster.members[memberIndex].overrides.location = undefined;
+        roster.members[memberIndex].overrides.city = '';
+        roster.members[memberIndex].overrides.state = '';
+      }
+
+      console.log('📝 [Roster Override] Updated structured location:', normalizedLocation);
     }
     
     console.log(`🔍 [Roster Override] Detected ${changedFields.length} field changes:`, changedFields.map(f => f.field).join(', '));
