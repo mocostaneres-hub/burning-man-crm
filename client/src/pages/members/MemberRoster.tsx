@@ -1175,29 +1175,6 @@ const MemberRoster: React.FC = () => {
           </h1>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={fetchMembers}
-            disabled={loading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          
-          {/* Archive and Create buttons - Only for admins/leads */}
-          {canEdit && hasActiveRoster && (
-            <Button
-              variant="outline"
-              onClick={handleArchiveRoster}
-              disabled={archiveLoading}
-              className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
-            >
-              <Users className={`w-4 h-4 ${archiveLoading ? 'animate-pulse' : ''}`} />
-              Archive Current Roster
-            </Button>
-          )}
-          
           {canEdit && !hasActiveRoster && (
             <Button
               variant="primary"
@@ -1209,42 +1186,8 @@ const MemberRoster: React.FC = () => {
               Create New Roster
             </Button>
           )}
-          
-          {canEdit && rosterId && (
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={handleOpenDuesTemplates}
-              disabled={duesTemplatesLoading}
-            >
-              Email Defaults
-            </Button>
-          )}
 
-          {canEdit && rosterId && (
-            <Button
-              variant="primary"
-              className="flex items-center gap-2"
-              onClick={() => setAddMemberModalOpen(true)}
-            >
-              <User className="w-4 h-4" />
-              Add Member
-            </Button>
-          )}
-          
-            {/* Export Roster button - Available for all users with roster access */}
-            {rosterId && (
-              <Button
-                variant="outline"
-                onClick={handleExportRoster}
-                className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
-              >
-                <span className="text-lg">↓</span>
-                Export Roster
-            </Button>
-          )}
-          
-          {/* Invite Members functionality - Only for camp leads */}
+          {/* Invite Member + View Invites - camp admins/leads */}
           {canEdit && (
             <>
               <Button
@@ -1253,9 +1196,9 @@ const MemberRoster: React.FC = () => {
                 className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
               >
                 <Mail className="w-4 h-4" />
-                Invite Members
+                Invite Member
               </Button>
-              
+
               <Link to={`/camp/invites`}>
                 <Button
                   variant="outline"
@@ -1266,6 +1209,63 @@ const MemberRoster: React.FC = () => {
                 </Button>
               </Link>
             </>
+          )}
+
+          {/* Export Roster button - Available for all users with roster access */}
+          {rosterId && (
+            <Button
+              variant="outline"
+              onClick={handleExportRoster}
+              className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+            >
+              <span className="text-lg">↓</span>
+              Export Roster
+            </Button>
+          )}
+
+          {canEdit && rosterId && (
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={handleOpenDuesTemplates}
+              disabled={duesTemplatesLoading}
+            >
+              Dues Emails
+            </Button>
+          )}
+
+          {/* Archive button - Only for admins/leads */}
+          {canEdit && hasActiveRoster && (
+            <Button
+              variant="outline"
+              onClick={handleArchiveRoster}
+              disabled={archiveLoading}
+              className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+            >
+              <Users className={`w-4 h-4 ${archiveLoading ? 'animate-pulse' : ''}`} />
+              Archive Roster
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={fetchMembers}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+
+          {canEdit && rosterId && (
+            <Button
+              variant="primary"
+              className="flex items-center gap-2"
+              onClick={() => setAddMemberModalOpen(true)}
+            >
+              <User className="w-4 h-4" />
+              Add Member
+            </Button>
           )}
         </div>
       </div>

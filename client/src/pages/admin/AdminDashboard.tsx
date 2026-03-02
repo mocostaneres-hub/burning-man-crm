@@ -325,8 +325,8 @@ const AdminDashboard: React.FC = () => {
         `You are about to PERMANENTLY DELETE ${totalSelected} account(s).\n\n` +
         `This action is IRREVERSIBLE and will:\n` +
         `• Delete user accounts permanently\n` +
-        `• For CAMP accounts: Preserve all camp data (roster, events, tasks)\n` +
-        `• For MEMBER accounts: Transfer tasks to camps and replace name with "Unknown User"\n` +
+        `• Remove user references from roster/tasks/invites/applications\n` +
+        `• Delete owned camp entities (rosters, events, tasks, applications, invites)\n` +
         `• Allow the email to be used for new signups\n\n` +
         `Are you ABSOLUTELY SURE you want to proceed?`
       );
@@ -345,6 +345,10 @@ const AdminDashboard: React.FC = () => {
       });
 
       console.log('Bulk action completed:', response);
+      if (response?.errors?.length) {
+        const failedIds = response.errors.map((item: any) => item.userId).join(', ');
+        alert(`Bulk action partially completed.\nFailed ${response.errors.length} account(s): ${failedIds}`);
+      }
       
       // Refresh data
       await loadUsers();
