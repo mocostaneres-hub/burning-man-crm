@@ -205,7 +205,6 @@ const Navbar: React.FC = () => {
     if (user?.accountType === 'personal') {
       const items = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
-        { label: 'My Applications', path: '/applications', icon: <Assignment size={18} /> },
         { label: 'My Tasks', path: '/tasks', icon: <Task size={18} /> },
         { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> },
         { label: 'Principles', path: '/principles', icon: <Book size={18} /> },

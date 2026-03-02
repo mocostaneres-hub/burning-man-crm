@@ -348,28 +348,30 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <Card className="p-6">
-        <h2 className="text-h2 font-lato-bold text-custom-text mb-6">
-          Quick Actions
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {getQuickActions().map((action, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              className="h-auto p-4 flex flex-col items-center space-y-2"
-              onClick={action.onClick}
-            >
-              {action.icon}
-              <span className="font-medium">{action.title}</span>
-              <span className="text-xs text-center opacity-70">
-                {action.description}
-              </span>
-            </Button>
-          ))}
-        </div>
-      </Card>
+      {/* Quick Actions (deprecated for camp dashboards) */}
+      {!isCampContext && (
+        <Card className="p-6">
+          <h2 className="text-h2 font-lato-bold text-custom-text mb-6">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {getQuickActions().map((action, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                className="h-auto p-4 flex flex-col items-center space-y-2"
+                onClick={action.onClick}
+              >
+                {action.icon}
+                <span className="font-medium">{action.title}</span>
+                <span className="text-xs text-center opacity-70">
+                  {action.description}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </Card>
+      )}
       
       {/* Footer */}
       <Footer />
