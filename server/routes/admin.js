@@ -13,6 +13,7 @@ const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { getFieldDisplayName, formatFieldValue } = require('../utils/fieldNameMapper');
 const { permanentlyDeleteAccount } = require('../services/permanentDeletionService');
+const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 
 // Configure multer for photo uploads
 const storage = multer.memoryStorage();
@@ -964,6 +965,21 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     const { id } = req.params;
     const updateData = req.body;
 
+    if (typeof updateData.city === 'string' && !updateData.location) {
+      return res.status(400).json({
+        message: 'City must be submitted as a structured location object.'
+      });
+    }
+
+    if (updateData.location && hasStructuredLocationFields(updateData.location)) {
+      const validation = validateStructuredLocation(updateData.location);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updateData.location = validation.normalized;
+      updateData.city = validation.normalized.city;
+    }
+
     // Log the admin action
     const adminUser = await db.findUser({ _id: req.user._id });
     if (!adminUser) {
@@ -1149,6 +1165,24 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    if (typeof updateData.hometown === 'string' && updateData.hometown.trim() && !updateData.location) {
+      return res.status(400).json({
+        message: 'Hometown must be submitted as a structured location object.'
+      });
+    }
+
+    if (updateData.location && hasStructuredLocationFields(updateData.location)) {
+      const validation = validateStructuredLocation(updateData.location);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updateData.location = {
+        ...(updateData.location || {}),
+        ...validation.normalized
+      };
+      updateData.hometown = validation.normalized.city;
+    }
 
     // Log the admin action
     const adminUser = await db.findUser({ _id: req.user._id });

@@ -3,6 +3,12 @@ import { Button, Card, Badge } from '../../components/ui';
 import { Edit, Phone as PhoneIcon, MapPin, Calendar, Instagram, Facebook, Linkedin as LinkedinIcon, Mail, Loader2, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { StructuredLocation } from '../../types';
+
+const formatLocationLabel = (location?: StructuredLocation): string => {
+  if (!location) return '';
+  return [location.city, location.state, location.country].filter(Boolean).join(', ');
+};
 
 const MemberProfile: React.FC = () => {
   const { user } = useAuth();
@@ -92,10 +98,10 @@ const MemberProfile: React.FC = () => {
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
                 <MapPin className="w-4 h-4 inline mr-2" />
-                City
+                Location
               </label>
               <p className="text-body text-custom-text">
-                {user.city || 'Not provided'}
+                {formatLocationLabel(user.location) || (user.city ? `${user.city} (unverified)` : 'Not provided')}
               </p>
             </div>
 

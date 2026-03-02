@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Button, Card, Badge, Modal, Input } from '../../components/ui';
 import { Users, Building as BuildingIcon, Shield, RefreshCw, Edit, Ban as BanIcon, CheckCircle as CheckCircleIcon, Search as SearchIcon, Loader2, User as UserIcon, Clock, Eye, Trash2, X } from 'lucide-react';
 import apiService from '../../services/api';
-import { User as UserType } from '../../types';
+import { User as UserType, StructuredLocation } from '../../types';
 import SystemConfig from './SystemConfig';
 import UserProfileHistory from '../../components/admin/UserProfileHistory';
 import EmailTemplateEditor from '../../components/admin/EmailTemplateEditor';
 import { useSkills } from '../../hooks/useSkills';
 import { useAuth } from '../../contexts/AuthContext';
+import CityAutocomplete from '../../components/location/CityAutocomplete';
 
 // Extended User interface for admin editing with all fields
 interface ExtendedUser extends UserType {
@@ -114,7 +115,17 @@ interface Camp {
   slug?: string;
   hometown?: string;
   location?: {
+    city?: string;
+    state?: string;
+    country?: string;
+    countryCode?: string;
+    lat?: number;
+    lng?: number;
+    placeId?: string;
     street?: string;
+    crossStreet?: string;
+    time?: string;
+    description?: string;
   };
   memberCount?: number;
   members?: any[];
@@ -148,6 +159,23 @@ interface Camp {
     tiktok?: string;
   };
 }
+
+const toStructuredLocationOrNull = (
+  location?: Partial<StructuredLocation> | null
+): StructuredLocation | null => {
+  if (!location) return null;
+  if (!location.city || !location.country || !location.countryCode) return null;
+  if (location.lat === undefined || location.lng === undefined) return null;
+  return {
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    countryCode: location.countryCode,
+    lat: Number(location.lat),
+    lng: Number(location.lng),
+    placeId: location.placeId
+  };
+};
 
 const AdminDashboard: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -500,7 +528,17 @@ const AdminDashboard: React.FC = () => {
 
   const handleUserSave = async (updatedUser: UserType) => {
     try {
-      const response = await apiService.put(`/users/${updatedUser._id}`, updatedUser);
+      const structuredLocation = toStructuredLocationOrNull(updatedUser.location);
+      const payload: any = { ...updatedUser };
+      if (structuredLocation) {
+        payload.location = structuredLocation;
+        payload.city = structuredLocation.city;
+      } else {
+        delete payload.city;
+        delete payload.location;
+      }
+
+      const response = await apiService.put(`/users/${updatedUser._id}`, payload);
       // Update the user in the local state with the response from the server
       const savedUser = response.user || response.data?.user || updatedUser;
       setUsers(users.map(u => u._id === updatedUser._id ? savedUser : u));
@@ -609,7 +647,19 @@ const AdminDashboard: React.FC = () => {
 
   const handleCampSave = async (updatedCamp: Camp) => {
     try {
-      const response = await apiService.put(`/admin/camps/${updatedCamp._id}`, updatedCamp);
+      const structuredLocation = toStructuredLocationOrNull(updatedCamp.location as StructuredLocation | null | undefined);
+      const payload: any = { ...updatedCamp };
+      if (structuredLocation) {
+        payload.location = {
+          ...(updatedCamp.location || {}),
+          ...structuredLocation
+        };
+        payload.hometown = structuredLocation.city;
+      } else {
+        delete payload.hometown;
+      }
+
+      const response = await apiService.put(`/admin/camps/${updatedCamp._id}`, payload);
       const savedCamp = response.camp || response.data?.camp || updatedCamp;
       setCamps(camps.map(c => c._id === updatedCamp._id ? savedCamp : c));
       setShowCampModal(false);
@@ -635,7 +685,8 @@ const AdminDashboard: React.FC = () => {
 
   const filteredCamps = (camps || []).filter(camp =>
     (camp.name || camp.campName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase()))
+    (camp.hometown && camp.hometown.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (camp.location?.city && camp.location.city.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (loading) {
@@ -1902,10 +1953,9 @@ const UserEditModal: React.FC<{
   const [formData, setFormData] = useState<ExtendedUser>({
     ...user,
     skills: user.skills || [],
-    location: typeof user.location === 'string' 
-      ? { city: user.location, state: '', country: '' }
-      : user.location || { city: '', state: '', country: '' }
+    location: toStructuredLocationOrNull(user.location) || undefined
   } as ExtendedUser);
+  const [legacyCity] = useState<string>(user.city || '');
   const [photoPreview, setPhotoPreview] = useState<string | null>(user.profilePhoto || null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -2157,15 +2207,18 @@ const UserEditModal: React.FC<{
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
               />
             </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    City
-                  </label>
-                  <Input
-                    value={formData.city || ''}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  />
-                </div>
+            <div>
+              <CityAutocomplete
+                value={toStructuredLocationOrNull(formData.location)}
+                onChange={(location) => setFormData({
+                  ...formData,
+                  location: location || undefined
+                })}
+                label="Location"
+                placeholder="Search and select city"
+                legacyValue={legacyCity}
+              />
+            </div>
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
                 Playa Name
@@ -2195,32 +2248,28 @@ const UserEditModal: React.FC<{
                 onChange={(e) => setFormData({ ...formData, previousCamps: e.target.value })}
               />
             </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Location (State)
-                  </label>
-                  <Input
-                    value={formData.location?.state || ''}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      location: { ...formData.location, state: e.target.value }
-                    })}
-                    placeholder="State/Province"
-                  />
-                </div>
-                <div>
-                  <label className="block text-label font-medium text-custom-text mb-2">
-                    Location (Country)
-                  </label>
-                  <Input
-                    value={formData.location?.country || ''}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      location: { ...formData.location, country: e.target.value }
-                    })}
-                    placeholder="Country"
-                  />
-                </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                State / Region
+              </label>
+              <Input
+                value={formData.location?.state || ''}
+                disabled
+                className="bg-gray-100"
+                placeholder="Auto-filled from selected city"
+              />
+            </div>
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Country
+              </label>
+              <Input
+                value={formData.location?.country || ''}
+                disabled
+                className="bg-gray-100"
+                placeholder="Auto-filled from selected city"
+              />
+            </div>
           </div>
           
           <div className="mt-4">
@@ -2659,6 +2708,7 @@ const CampEditModal: React.FC<{
 }> = ({ camp, onClose, onSave }) => {
   const { user: currentUser } = useAuth();
   const [formData, setFormData] = useState<Camp>(camp);
+  const [legacyHometown] = useState<string>(camp.hometown || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [campCategories, setCampCategories] = useState<{_id: string, name: string}[]>([]);
@@ -2880,13 +2930,30 @@ const CampEditModal: React.FC<{
                     />
                   </div>
                   <div>
-                    <label className="block text-label font-medium text-custom-text mb-2">
-                      Hometown
-                    </label>
-                    <Input
-                      value={formData.hometown || ''}
-                      onChange={(e) => setFormData({ ...formData, hometown: e.target.value })}
-                      placeholder="Enter hometown"
+                    <CityAutocomplete
+                      value={toStructuredLocationOrNull(formData.location as StructuredLocation | null | undefined)}
+                      onChange={(location) => setFormData({
+                        ...formData,
+                        location: location
+                          ? {
+                              ...(formData.location || {}),
+                              ...location
+                            }
+                          : {
+                              ...(formData.location || {}),
+                              city: undefined,
+                              state: undefined,
+                              country: undefined,
+                              countryCode: undefined,
+                              lat: undefined,
+                              lng: undefined,
+                              placeId: undefined
+                            },
+                        hometown: location?.city || ''
+                      })}
+                      label="Location"
+                      placeholder="Search and select camp city"
+                      legacyValue={legacyHometown}
                     />
                   </div>
                 </div>
