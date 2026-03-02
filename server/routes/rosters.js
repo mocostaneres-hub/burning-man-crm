@@ -541,29 +541,32 @@ router.put('/:id/archive', authenticateToken, async (req, res) => {
 
 // @route   GET /api/rosters/:id/export
 // @desc    Export roster as CSV
-// @access  Private (Camp owners only)
+// @access  Private (Camp admins/leads)
 router.get('/:id/export', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
+
+    // Find roster - try as ObjectId/string first, then as integer for legacy IDs
+    let roster = await db.findRoster({ _id: id });
+    if (!roster) {
+      const numericId = parseInt(id, 10);
+      if (!Number.isNaN(numericId)) {
+        roster = await db.findRoster({ _id: numericId });
+      }
+    }
+    if (!roster) {
+      return res.status(404).json({ message: 'Roster not found' });
     }
 
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-    const camp = await db.findCamp({ _id: campId });
+    const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    const roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
-    if (!roster) {
-      return res.status(404).json({ message: 'Roster not found' });
+    // Permission check (camp owner/admin or Camp Lead)
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     // Populate member details
@@ -928,7 +931,8 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         roster: rosterId,
         addedAt: new Date(),
         addedBy: req.user._id,
-        status: 'approved',
+        // Member model uses active/inactive lifecycle states.
+        status: 'active',
         dues: {
           paid: memberData.duesPaid === true,
           paidAt: memberData.duesPaid === true ? new Date() : null
@@ -938,7 +942,7 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     } else {
       // Ensure reused record is active/approved when manually re-added.
       await db.updateMember(memberRecord._id, {
-        status: 'approved',
+        status: 'active',
         dues: {
           paid: memberData.duesPaid === true,
           paidAt: memberData.duesPaid === true ? new Date() : null
