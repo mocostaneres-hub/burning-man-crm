@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import api from '../../services/api';
-import { Card, Badge, Button } from '../../components/ui';
+import { Card, Badge } from '../../components/ui';
 import { Loader2 } from 'lucide-react';
 
 interface AggregatedData {
@@ -53,6 +53,12 @@ const Contact360View: React.FC = () => {
   if (!data) return null;
 
   const { user, rosterHistory, applications, tasks, volunteerShifts, activityLog } = data;
+  const skillBadges = Array.isArray(user?.skills) ? user.skills.slice(0, 5) : [];
+  const rosterHistoryItems = Array.isArray(rosterHistory) ? rosterHistory : [];
+  const applicationItems = Array.isArray(applications) ? applications : [];
+  const taskItems = Array.isArray(tasks) ? tasks : [];
+  const volunteerShiftItems = Array.isArray(volunteerShifts) ? volunteerShifts : [];
+  const activityItems = Array.isArray(activityLog) ? activityLog : [];
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -66,7 +72,7 @@ const Contact360View: React.FC = () => {
             <p className="text-sm text-custom-text-secondary">{user.email}</p>
           </div>
           <div className="flex gap-2">
-            {user.skills?.slice(0, 5).map((s: string) => (
+            {skillBadges.map((s: string) => (
               <Badge key={s} variant="info">{s}</Badge>
             ))}
           </div>
@@ -76,11 +82,11 @@ const Contact360View: React.FC = () => {
       {/* Roster History */}
       <Card className="p-6">
         <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Roster History</h2>
-        {rosterHistory.length === 0 ? (
+        {rosterHistoryItems.length === 0 ? (
           <p className="text-custom-text-secondary">No roster entries found.</p>
         ) : (
           <ul className="space-y-3">
-            {rosterHistory.map((r) => (
+            {rosterHistoryItems.map((r) => (
               <li key={`${r.rosterId}-${r.joinedAt}`} className="border-b pb-2">
                 <div className="font-medium">{r.name || 'Roster'}</div>
                 <div className="text-sm text-custom-text-secondary">
@@ -104,11 +110,11 @@ const Contact360View: React.FC = () => {
           console.log('🔍 [Contact360View] Applications type:', typeof applications);
           return null;
         })()}
-        {applications.length === 0 ? (
+        {applicationItems.length === 0 ? (
           <p className="text-custom-text-secondary">No applications for this camp.</p>
         ) : (
           <div className="space-y-4">
-            {applications.map((application) => (
+            {applicationItems.map((application) => (
               <div key={application._id} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -147,7 +153,7 @@ const Contact360View: React.FC = () => {
       {/* Tasks */}
       <Card className="p-6">
         <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Tasks</h2>
-        {tasks.length === 0 ? (
+        {taskItems.length === 0 ? (
           <p className="text-custom-text-secondary">No tasks assigned.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -161,7 +167,7 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((t) => (
+                {taskItems.map((t) => (
                   <tr key={t._id} className="border-t">
                     <td className="px-4 py-2 text-sm">{t.title}</td>
                     <td className="px-4 py-2 text-sm"><Badge variant={t.status === 'completed' ? 'success' : t.status === 'in_progress' ? 'info' : 'warning'}>{t.status}</Badge></td>
@@ -178,7 +184,7 @@ const Contact360View: React.FC = () => {
       {/* Volunteer Shifts */}
       <Card className="p-6">
         <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Volunteer History</h2>
-        {volunteerShifts.length === 0 ? (
+        {volunteerShiftItems.length === 0 ? (
           <p className="text-custom-text-secondary">No volunteer shifts.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -192,7 +198,7 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {volunteerShifts.map((s) => (
+                {volunteerShiftItems.map((s) => (
                   <tr key={s.shiftId} className="border-t">
                     <td className="px-4 py-2 text-sm font-medium">{s.eventName}</td>
                     <td className="px-4 py-2 text-sm">{s.title}</td>
@@ -209,7 +215,7 @@ const Contact360View: React.FC = () => {
       {/* Activity Log */}
       <Card className="p-6">
         <h2 className="text-h2 font-lato-bold text-custom-text mb-4">Activity Log</h2>
-        {activityLog.length === 0 ? (
+        {activityItems.length === 0 ? (
           <p className="text-custom-text-secondary">No activity logged for this member.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -223,7 +229,7 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {activityLog.map((log) => (
+                {activityItems.map((log) => (
                   <tr key={log._id} className="border-t">
                     <td className="px-4 py-2 text-sm">
                       {log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}

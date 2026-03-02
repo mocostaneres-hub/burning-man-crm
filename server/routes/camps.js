@@ -347,16 +347,6 @@ router.get('/:campId/contacts/:userId', authenticateToken, async (req, res) => {
       }
     }
 
-    // Defensive: ensure user is associated with this camp before returning data
-    const hasCampHistory = memberDocs.length > 0
-      || applicationsWithHistory.length > 0
-      || tasks.length > 0
-      || volunteerShifts.length > 0;
-
-    if (!hasCampHistory) {
-      return res.status(404).json({ message: 'No history found for this member in this camp' });
-    }
-
     let activityLog = [];
     try {
       const { getActivityLog } = require('../services/activityLogger');
