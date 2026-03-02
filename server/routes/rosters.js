@@ -507,7 +507,13 @@ router.put('/:id/archive', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    const roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
+    let roster = await db.findRoster({ _id: id, camp: camp._id });
+    if (!roster) {
+      const numericId = parseInt(id, 10);
+      if (!Number.isNaN(numericId)) {
+        roster = await db.findRoster({ _id: numericId, camp: camp._id });
+      }
+    }
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
     }
