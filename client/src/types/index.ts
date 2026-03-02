@@ -1,3 +1,13 @@
+export interface StructuredLocation {
+  city: string;
+  state?: string;
+  country: string;
+  countryCode: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+}
+
 export interface User {
   _id: string;
   email: string;
@@ -6,7 +16,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
-  city?: string;
+  city?: string; // Deprecated legacy city field
   yearsBurned?: number;
   previousCamps?: string;
   bio?: string;
@@ -28,11 +38,7 @@ export interface User {
   interestedInEAP?: boolean;
   interestedInStrike?: boolean;
   burningPlans?: 'confirmed' | 'undecided';
-  location?: {
-    city?: string;
-    state?: string;
-    country?: string;
-  };
+  location?: StructuredLocation;
   campId?: string; // MongoDB ObjectId reference to Camp
   campName?: string;
   campBio?: string;
@@ -93,7 +99,15 @@ export interface Camp {
     city?: string;
     state?: string;
     country: string;
+    countryCode?: string;
+    lat?: number;
+    lng?: number;
+    placeId?: string;
     playaLocation?: string;
+    street?: string;
+    crossStreet?: string;
+    time?: string;
+    description?: string;
     coordinates?: {
       lat: number;
       lng: number;

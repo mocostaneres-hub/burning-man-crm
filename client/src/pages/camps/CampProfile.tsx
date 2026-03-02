@@ -7,6 +7,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import PhotoUpload from '../../components/profile/PhotoUpload';
 import { InviteTemplateEditor } from '../../components/invites';
+import CityAutocomplete from '../../components/location/CityAutocomplete';
+import { StructuredLocation } from '../../types';
 
 interface CampCategory {
   _id: string;
@@ -34,7 +36,6 @@ interface CampPhoto {
 interface CampProfileData {
   campName: string;
   burningSince: number;
-  hometown: string;
   contactEmail: string;
   website: string;
   description: string;
@@ -84,6 +85,13 @@ interface CampProfileData {
     tiktok?: string;
   };
   location: {
+    city?: string;
+    state?: string;
+    country?: string;
+    countryCode?: string;
+    lat?: number;
+    lng?: number;
+    placeId?: string;
     street: string;
     crossStreet: string;
     time: string;
@@ -92,6 +100,50 @@ interface CampProfileData {
   photos: (string | CampPhoto)[]; // Support both legacy string format and new object format
   visibility: 'public' | 'private';
 }
+
+const toStructuredLocationOrNull = (location: CampProfileData['location'] | any): StructuredLocation | null => {
+  if (!location) return null;
+  if (!location.city || !location.country || !location.countryCode) return null;
+  if (location.lat === undefined || location.lng === undefined) return null;
+  return {
+    city: location.city,
+    state: location.state,
+    country: location.country,
+    countryCode: location.countryCode,
+    lat: Number(location.lat),
+    lng: Number(location.lng),
+    placeId: location.placeId
+  };
+};
+
+const mergeStructuredLocation = (
+  existing: CampProfileData['location'],
+  selected: StructuredLocation | null
+): CampProfileData['location'] => {
+  if (!selected) {
+    return {
+      ...existing,
+      city: undefined,
+      state: undefined,
+      country: undefined,
+      countryCode: undefined,
+      lat: undefined,
+      lng: undefined,
+      placeId: undefined
+    };
+  }
+
+  return {
+    ...existing,
+    city: selected.city,
+    state: selected.state,
+    country: selected.country,
+    countryCode: selected.countryCode,
+    lat: selected.lat,
+    lng: selected.lng,
+    placeId: selected.placeId
+  };
+};
 
 // Helper function to dynamically render Lucide icons
 const renderIcon = (iconName: string) => {
@@ -112,7 +164,6 @@ const CampProfile: React.FC = () => {
   const [campData, setCampData] = useState<CampProfileData>({
     campName: '',
     burningSince: new Date().getFullYear(),
-    hometown: '',
     contactEmail: '',
     website: '',
     description: '',
@@ -175,6 +226,7 @@ const CampProfile: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [campId, setCampId] = useState<string>('');
+  const [legacyHometown, setLegacyHometown] = useState<string>('');
 
   useEffect(() => {
     if (user && campIdentifier) {
@@ -224,7 +276,6 @@ const CampProfile: React.FC = () => {
       setCampData({
         campName: campResponse.campName || campResponse.name || '',
         burningSince: campResponse.burningSince || campResponse.yearFounded || new Date().getFullYear(),
-        hometown: campResponse.hometown || campResponse.location?.city || '',
         contactEmail: campResponse.contactEmail || '',
         website: campResponse.website || '',
         description: campResponse.description || '',
@@ -273,6 +324,13 @@ const CampProfile: React.FC = () => {
         },
         socialMedia: campResponse.socialMedia || {},
         location: campResponse.location || {
+          city: '',
+          state: '',
+          country: '',
+          countryCode: '',
+          lat: undefined,
+          lng: undefined,
+          placeId: '',
           street: '',
           crossStreet: '',
           time: '',
@@ -281,6 +339,7 @@ const CampProfile: React.FC = () => {
         photos: campResponse.photos || [],
         visibility: campResponse.isPublic ? 'public' : 'private'
       });
+      setLegacyHometown(campResponse.hometown || '');
     } catch (err: any) {
       console.error('Error fetching camp profile:', err);
       
@@ -293,7 +352,6 @@ const CampProfile: React.FC = () => {
         setCampData({
           campName: user?.campName || '', // Use the camp name from user registration
           burningSince: new Date().getFullYear(),
-          hometown: '',
           contactEmail: user?.email || '',
           website: '',
           description: '',
@@ -342,6 +400,13 @@ const CampProfile: React.FC = () => {
           },
           socialMedia: {},
           location: {
+            city: '',
+            state: '',
+            country: '',
+            countryCode: '',
+            lat: undefined,
+            lng: undefined,
+            placeId: '',
             street: '',
             crossStreet: '',
             time: '',
@@ -442,6 +507,7 @@ const CampProfile: React.FC = () => {
       const saveData = {
         ...campDataWithoutPhotos,
         name: campData.campName, // Backend expects 'name' not 'campName'
+        hometown: campData.location.city || '',
         categories: campData.categories, // Array of category IDs
         selectedPerks: campData.selectedPerks, // Array of selected perks
         isPublic: campData.visibility === 'public'
@@ -630,13 +696,24 @@ const CampProfile: React.FC = () => {
                 Hometown
               </label>
               {isEditing ? (
-                <Input
-                  value={campData.hometown}
-                  onChange={(e) => handleInputChange('hometown', e.target.value)}
-                  placeholder="Enter hometown"
+                <CityAutocomplete
+                  value={toStructuredLocationOrNull(campData.location)}
+                  onChange={(selected) => {
+                    setCampData((prev) => ({
+                      ...prev,
+                      location: mergeStructuredLocation(prev.location, selected)
+                    }));
+                  }}
+                  label=""
+                  placeholder="Search and select camp city"
+                  legacyValue={legacyHometown}
                 />
               ) : (
-                <p className="text-body text-custom-text">{campData.hometown}</p>
+                <p className="text-body text-custom-text">
+                  {toStructuredLocationOrNull(campData.location)
+                    ? [campData.location.city, campData.location.state, campData.location.country].filter(Boolean).join(', ')
+                    : (legacyHometown ? `${legacyHometown} (unverified)` : '')}
+                </p>
               )}
             </div>
 

@@ -71,6 +71,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Deprecated: retained for backward compatibility during location migration.
   city: {
     type: String,
     trim: true
@@ -124,9 +125,29 @@ const userSchema = new mongoose.Schema({
     enum: ['first-timer', '1-2-years', '3-5-years', '5+ years', 'veteran']
   },
   location: {
-    city: String,
-    state: String,
-    country: String
+    city: {
+      type: String,
+      trim: true
+    },
+    state: {
+      type: String,
+      trim: true
+    },
+    country: {
+      type: String,
+      trim: true
+    },
+    countryCode: {
+      type: String,
+      trim: true,
+      uppercase: true
+    },
+    lat: Number,
+    lng: Number,
+    placeId: {
+      type: String,
+      trim: true
+    }
   },
   
   // G8Road specific fields
@@ -247,6 +268,7 @@ userSchema.index({ accountType: 1 });
 userSchema.index({ googleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup
 userSchema.index({ appleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup
 userSchema.index({ 'location.city': 1, 'location.state': 1 });
+userSchema.index({ 'location.countryCode': 1, 'location.city': 1 });
 userSchema.index({ 'campLocation.city': 1, 'campLocation.state': 1 });
 
 // Normalize email before saving (ensures consistency)

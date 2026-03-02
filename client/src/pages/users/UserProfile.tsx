@@ -9,13 +9,15 @@ import { useSkills } from '../../hooks/useSkills';
 import MyCampCard from '../../components/profile/MyCampCard';
 import MyTasksList from '../../components/profile/MyTasksList';
 import MyShiftsList from '../../components/profile/MyShiftsList';
+import CityAutocomplete from '../../components/location/CityAutocomplete';
+import { StructuredLocation } from '../../types';
 
 interface UserProfileData {
   firstName: string;
   lastName: string;
   email: string;
   phoneNumber: string;
-  city: string;
+  location: StructuredLocation | null;
   yearsBurned: number;
   bio: string;
   playaName?: string;
@@ -34,6 +36,11 @@ interface UserProfileData {
   };
 }
 
+const formatLocationLabel = (location: StructuredLocation | null | undefined): string => {
+  if (!location) return '';
+  return [location.city, location.state, location.country].filter(Boolean).join(', ');
+};
+
 const UserProfile: React.FC = () => {
   const { user, updateUser } = useAuth();
   const { skills: availableSkills, loading: skillsLoading } = useSkills();
@@ -42,7 +49,7 @@ const UserProfile: React.FC = () => {
     lastName: '',
     email: '',
     phoneNumber: '',
-    city: '',
+    location: null,
     yearsBurned: 0,
     bio: '',
     playaName: '',
@@ -65,6 +72,7 @@ const UserProfile: React.FC = () => {
   });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [legacyCity, setLegacyCity] = useState('');
 
   // Helper function to convert Date to string
   const dateToString = (date: string | Date | undefined): string | undefined => {
@@ -89,7 +97,10 @@ const UserProfile: React.FC = () => {
         lastName: user.lastName || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-        city: user.city || '',
+        location: user.location?.city && user.location?.country && user.location?.countryCode &&
+          user.location?.lat !== undefined && user.location?.lng !== undefined
+          ? user.location as StructuredLocation
+          : null,
         yearsBurned: user.yearsBurned || 0,
         bio: user.bio || '',
         playaName: user.playaName || '',
@@ -103,6 +114,7 @@ const UserProfile: React.FC = () => {
         skills: user.skills || [],
         socialMedia: user.socialMedia || {}
       });
+      setLegacyCity(user.city || '');
     }
     setLoading(false);
   }, [user]);
@@ -156,7 +168,10 @@ const UserProfile: React.FC = () => {
         lastName: user.lastName || '',
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
-        city: user.city || '',
+        location: user.location?.city && user.location?.country && user.location?.countryCode &&
+          user.location?.lat !== undefined && user.location?.lng !== undefined
+          ? user.location as StructuredLocation
+          : null,
         yearsBurned: user.yearsBurned || 0,
         bio: user.bio || '',
         playaName: user.playaName || '',
@@ -170,6 +185,7 @@ const UserProfile: React.FC = () => {
         skills: user.skills || [],
         socialMedia: user.socialMedia || {}
       });
+      setLegacyCity(user.city || '');
     }
     setIsEditing(false);
     setError('');
@@ -303,14 +319,19 @@ const UserProfile: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     {isEditing ? (
-                      <Input
-                        value={profileData.city}
-                        onChange={(e) => handleInputChange('city', e.target.value)}
-                        placeholder="Enter city"
-                        className="max-w-sm"
-                      />
+                      <div className="max-w-sm w-full">
+                        <CityAutocomplete
+                          value={profileData.location}
+                          onChange={(location) => handleInputChange('location', location)}
+                          label=""
+                          placeholder="Search and select your city"
+                          legacyValue={legacyCity}
+                        />
+                      </div>
                     ) : (
-                      <span>{profileData.city || 'Location not set'}</span>
+                      <span>
+                        {formatLocationLabel(profileData.location) || (legacyCity ? `${legacyCity} (unverified)` : 'Location not set')}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">

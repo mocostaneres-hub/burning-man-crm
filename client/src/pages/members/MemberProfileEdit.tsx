@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, Card } from '../../components/ui';
 import { Save as SaveIcon, X, Edit, Phone as PhoneIcon, MapPin, Calendar, Instagram, Facebook, Linkedin as LinkedinIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
 import PhotoUpload from '../../components/profile/PhotoUpload';
 import { useSkills } from '../../hooks/useSkills';
+import CityAutocomplete from '../../components/location/CityAutocomplete';
+import { StructuredLocation } from '../../types';
 
 interface MemberProfileData {
   firstName: string;
   lastName: string;
   phoneNumber: string;
-  city: string;
+  location: StructuredLocation | null;
   yearsBurned: number;
   isFirstBurn: boolean;
   previousCamps: string;
@@ -25,6 +26,11 @@ interface MemberProfileData {
     linkedin?: string;
   };
 }
+
+const formatLocationLabel = (location: StructuredLocation | null | undefined): string => {
+  if (!location) return '';
+  return [location.city, location.state, location.country].filter(Boolean).join(', ');
+};
 
 const INTERESTS_OPTIONS = [
   'Art & Music', 'Food & Drinks', 'Wellness & Healing', 'Technology & Innovation',
@@ -41,7 +47,7 @@ const MemberProfileEdit: React.FC = () => {
     firstName: '',
     lastName: '',
     phoneNumber: '',
-    city: '',
+    location: null,
     yearsBurned: 0,
     isFirstBurn: false,
     previousCamps: '',
@@ -55,6 +61,7 @@ const MemberProfileEdit: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [legacyCity, setLegacyCity] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -73,7 +80,10 @@ const MemberProfileEdit: React.FC = () => {
         firstName: userData.firstName || '',
         lastName: userData.lastName || '',
         phoneNumber: userData.phoneNumber || '',
-        city: userData.city || '',
+        location: userData.location?.city && userData.location?.country && userData.location?.countryCode &&
+          userData.location?.lat !== undefined && userData.location?.lng !== undefined
+          ? userData.location as StructuredLocation
+          : null,
         yearsBurned: userData.yearsBurned || 0,
         isFirstBurn: userData.yearsBurned === 0,
         previousCamps: userData.previousCamps || '',
@@ -83,6 +93,7 @@ const MemberProfileEdit: React.FC = () => {
         profilePhoto: userData.profilePhoto,
         socialMedia: userData.socialMedia || {}
       });
+      setLegacyCity(userData.city || '');
     } catch (err) {
       console.error('Error fetching profile:', err);
       setError('Failed to load profile');
@@ -262,13 +273,17 @@ const MemberProfileEdit: React.FC = () => {
                   City
                 </label>
                 {isEditing ? (
-                  <Input
-                    value={profileData.city}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    placeholder="Enter city"
+                  <CityAutocomplete
+                    value={profileData.location}
+                    onChange={(location) => handleInputChange('location', location)}
+                    label=""
+                    placeholder="Search and select city"
+                    legacyValue={legacyCity}
                   />
                 ) : (
-                  <p className="text-body text-custom-text">{profileData.city}</p>
+                  <p className="text-body text-custom-text">
+                    {formatLocationLabel(profileData.location) || (legacyCity ? `${legacyCity} (unverified)` : '')}
+                  </p>
                 )}
               </div>
 

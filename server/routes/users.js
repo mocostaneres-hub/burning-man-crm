@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
+const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
@@ -45,7 +46,10 @@ router.put('/profile', authenticateToken, [
   body('skills').optional().isArray(),
   body('interests').optional().isArray(),
   body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
-  body('location').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('location').optional().custom((value) => {
+    if (value === null) return true;
+    return typeof value === 'object' && !Array.isArray(value);
+  }).withMessage('location must be an object'),
   body('hasTicket').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
   body('hasVehiclePass').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
   body('arrivalDate').optional().custom((value) => {
@@ -66,6 +70,21 @@ router.put('/profile', authenticateToken, [
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
+    }
+
+    if (typeof req.body.city === 'string' && !req.body.location) {
+      return res.status(400).json({
+        message: 'City must be submitted as a structured location object.'
+      });
+    }
+
+    if (req.body.location && hasStructuredLocationFields(req.body.location)) {
+      const validation = validateStructuredLocation(req.body.location);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      req.body.location = validation.normalized;
+      req.body.city = validation.normalized.city;
     }
 
     const user = await db.findUser({ _id: req.user._id });
@@ -206,6 +225,7 @@ router.put('/profile', authenticateToken, [
                 bio: updatedUser.bio,
                 playaName: updatedUser.playaName,
                 city: updatedUser.city,
+                location: updatedUser.location,
                 yearsBurned: updatedUser.yearsBurned,
                 previousCamps: updatedUser.previousCamps,
                 socialMedia: updatedUser.socialMedia,
@@ -247,6 +267,7 @@ router.put('/profile', authenticateToken, [
                       bio: updatedUser.bio,
                       playaName: updatedUser.playaName,
                       city: updatedUser.city,
+                      location: updatedUser.location,
                       yearsBurned: updatedUser.yearsBurned,
                       previousCamps: updatedUser.previousCamps,
                       socialMedia: updatedUser.socialMedia,
@@ -732,7 +753,10 @@ router.put('/:id', authenticateToken, requireAdmin, [
   body('skills').optional().isArray(),
   body('interests').optional().isArray(),
   body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
-  body('location').optional().trim().custom((value) => value === '' || value.length <= 200),
+  body('location').optional().custom((value) => {
+    if (value === null) return true;
+    return typeof value === 'object' && !Array.isArray(value);
+  }).withMessage('location must be an object'),
   body('hasTicket').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
   body('hasVehiclePass').optional().custom((value) => value === null || value === undefined || typeof value === 'boolean'),
   body('arrivalDate').optional().custom((value) => {
@@ -755,6 +779,21 @@ router.put('/:id', authenticateToken, requireAdmin, [
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
+    }
+
+    if (typeof req.body.city === 'string' && !req.body.location) {
+      return res.status(400).json({
+        message: 'City must be submitted as a structured location object.'
+      });
+    }
+
+    if (req.body.location && hasStructuredLocationFields(req.body.location)) {
+      const validation = validateStructuredLocation(req.body.location);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      req.body.location = validation.normalized;
+      req.body.city = validation.normalized.city;
     }
 
     const { id } = req.params;
@@ -832,6 +871,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
                 bio: updatedUser.bio,
                 playaName: updatedUser.playaName,
                 city: updatedUser.city,
+                location: updatedUser.location,
                 yearsBurned: updatedUser.yearsBurned,
                 previousCamps: updatedUser.previousCamps,
                 socialMedia: updatedUser.socialMedia,
@@ -873,6 +913,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
                       bio: updatedUser.bio,
                       playaName: updatedUser.playaName,
                       city: updatedUser.city,
+                      location: updatedUser.location,
                       yearsBurned: updatedUser.yearsBurned,
                       previousCamps: updatedUser.previousCamps,
                       socialMedia: updatedUser.socialMedia,

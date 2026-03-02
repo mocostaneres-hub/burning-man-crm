@@ -6,6 +6,7 @@ const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
+const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 
 // (moved below after router initialization)
 
@@ -25,6 +26,33 @@ const upload = multer({
 });
 
 const router = express.Router();
+
+const applyStructuredLocationToCampPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  if (typeof payload.hometown === 'string' && payload.hometown.trim() && !hasStructuredLocationFields(payload.location)) {
+    const error = new Error('Hometown must be submitted as a structured location selection.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (payload.location && hasStructuredLocationFields(payload.location)) {
+    const validation = validateStructuredLocation(payload.location);
+    if (!validation.valid) {
+      const error = new Error(validation.message);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    payload.location = {
+      ...(payload.location || {}),
+      ...validation.normalized
+    };
+    payload.hometown = validation.normalized.city;
+  }
+
+  return payload;
+};
 
 // @route   GET /api/camps
 // @desc    Get all public camps (with optional filtering)
@@ -632,6 +660,7 @@ router.post('/', authenticateToken, [
   body('campName').optional().trim().isLength({ min: 2, max: 100 }),
   body('description').optional().trim().isLength({ max: 2000 }),
   body('theme').optional().trim(),
+  body('location').optional().custom((value) => value === null || (typeof value === 'object' && !Array.isArray(value))).withMessage('location must be an object'),
   body('location.city').optional().trim(),
   body('location.state').optional().trim(),
   body('contactEmail').optional().isEmail().normalizeEmail()
@@ -685,6 +714,8 @@ router.post('/', authenticateToken, [
       owner: req.user._id, // CRITICAL: Always set owner
       description: req.body.description || `Welcome to ${campName}! We're excited to share our camp experience with you.` // Provide default description if none given
     };
+
+    applyStructuredLocationToCampPayload(campData);
     
     // Defensive validation: Ensure owner is set
     if (!campData.owner) {
@@ -731,6 +762,9 @@ router.post('/', authenticateToken, [
 
   } catch (error) {
     console.error('Create camp error:', error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Camp name already exists' });
     }
@@ -803,6 +837,7 @@ router.put('/my-camp', authenticateToken, [
   body('burningSince').optional().isInt({ min: 1985, max: new Date().getFullYear() }).withMessage('Invalid burning since year'),
   body('approximateSize').optional().isInt({ min: 1, max: 1000 }).withMessage('Approximate size must be between 1 and 1000'),
   body('hometown').optional().trim(),
+  body('location').optional().custom((value) => value === null || (typeof value === 'object' && !Array.isArray(value))).withMessage('location must be an object'),
   body('website').optional().trim(), // Accept raw website string without validation to preserve user input exactly
   body('applicationInstructions').optional().trim().isLength({ max: 2000 }).withMessage('Application instructions must be less than 2000 characters'),
   body('theme').optional().trim().isLength({ max: 100 }).withMessage('Theme must be less than 100 characters'),
@@ -819,6 +854,7 @@ router.put('/my-camp', authenticateToken, [
       ...req.body,
       updatedAt: new Date()
     };
+    applyStructuredLocationToCampPayload(updateData);
 
     // Try to find existing camp first
     let camp = await db.findCamp({ owner: req.user._id });
@@ -921,6 +957,9 @@ router.put('/my-camp', authenticateToken, [
     }
   } catch (error) {
     console.error('Update camp profile error:', error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server error updating camp profile', error: error.message });
   }
 });
@@ -932,6 +971,7 @@ router.put('/:id', authenticateToken, [
   body('name').optional().trim().isLength({ min: 2, max: 100 }),
   body('description').optional().trim().isLength({ min: 10, max: 2000 }),
   body('contactEmail').optional().isEmail().normalizeEmail(),
+  body('location').optional().custom((value) => value === null || (typeof value === 'object' && !Array.isArray(value))).withMessage('location must be an object'),
   body('applicationInstructions').optional().trim().isLength({ max: 2000 }).withMessage('Application instructions must be less than 2000 characters')
 ], async (req, res) => {
   try {
@@ -974,6 +1014,7 @@ router.put('/:id', authenticateToken, [
 
     // Generate slug if campName or name is being updated
     const updateData = { ...req.body };
+    applyStructuredLocationToCampPayload(updateData);
     
     // Check if campName or name field is being updated
     const campNameToUse = updateData.campName || updateData.name;
@@ -1015,6 +1056,9 @@ router.put('/:id', authenticateToken, [
 
   } catch (error) {
     console.error('❌ [PUT /api/camps/:id] Update camp error:', error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -1087,7 +1131,7 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
           profilePhoto: userData.profilePhoto,
           accountType: userData.accountType,
           playaName: userData.playaName,
-          city: userData.city,
+          city: userData.location?.city || userData.city,
           location: userData.location,
           hasTicket: userData.hasTicket,
           hasVehiclePass: userData.hasVehiclePass,

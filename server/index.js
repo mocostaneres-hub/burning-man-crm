@@ -193,6 +193,7 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/perks', require('./routes/perks'));
 app.use('/api/admin/perks', require('./routes/adminPerks'));
 app.use('/api/skills', require('./routes/skills'));
+app.use('/api/cities', require('./routes/cities'));
 app.use('/api/mudskippers', require('./routes/mudskippers-applications'));
 app.use('/api/migrate', require('./routes/migrate-application-statuses'));
 app.use('/api/migrate', require('./routes/migrate-slugs'));

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task } from '../types';
+import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -44,6 +44,7 @@ class ApiService {
           '/auth/forgot-password',
           '/auth/reset-password',
           '/invites/validate',
+          '/cities',
           '/oauth/config',
           '/health'
         ];
@@ -250,6 +251,13 @@ class ApiService {
     experience?: string;
   }): Promise<{ users: User[] }> {
     const response: AxiosResponse<{ users: User[] }> = await this.api.get('/users/search', { params });
+    return response.data;
+  }
+
+  async searchCities(query: string): Promise<{ cities: StructuredLocation[] }> {
+    const response: AxiosResponse<{ cities: StructuredLocation[] }> = await this.api.get('/cities', {
+      params: { query }
+    });
     return response.data;
   }
 

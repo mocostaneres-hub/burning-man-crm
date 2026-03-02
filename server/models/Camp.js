@@ -65,11 +65,29 @@ const campSchema = new mongoose.Schema({
   
   // Location
   location: {
-    city: String,
-    state: String,
+    city: {
+      type: String,
+      trim: true
+    },
+    state: {
+      type: String,
+      trim: true
+    },
     country: {
       type: String,
+      trim: true,
       default: 'USA'
+    },
+    countryCode: {
+      type: String,
+      trim: true,
+      uppercase: true
+    },
+    lat: Number,
+    lng: Number,
+    placeId: {
+      type: String,
+      trim: true
     },
     street: String, // Playa location (e.g., "7:30 & C")
     playaLocation: String, // Alias for backward compatibility
@@ -233,6 +251,7 @@ const campSchema = new mongoose.Schema({
   },
   
   // Public profile features
+  // Deprecated: retained for backward compatibility during location migration.
   hometown: String,
   burningSince: Number, // Year they started burning
   // Public visibility control
@@ -351,6 +370,7 @@ const campSchema = new mongoose.Schema({
 campSchema.index({ slug: 1 });
 campSchema.index({ owner: 1 });
 campSchema.index({ 'location.city': 1, 'location.state': 1 });
+campSchema.index({ 'location.countryCode': 1, 'location.city': 1 });
 campSchema.index({ status: 1, isPublic: 1 });
 campSchema.index({ isRecruiting: 1, status: 1 });
 
