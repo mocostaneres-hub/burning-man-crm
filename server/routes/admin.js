@@ -584,7 +584,19 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     
     // Apply filters
     // Exclude orphaned camps (owner user was deleted but camp doc still exists) so deleted camps never reappear
-    let filteredCamps = enrichedCamps.filter(c => c.owner || !c.ownerRef);
+    const beforeFilterCount = enrichedCamps.length;
+    let filteredCamps = enrichedCamps.filter(c => {
+      const hasOwner = !!c.owner;
+      const hasOwnerRef = !!c.ownerRef;
+      // Keep camps that have an owner OR don't have ownerRef (prevent null.owner checks for camps without owner field)
+      const keep = hasOwner || !hasOwnerRef;
+      if (!keep) {
+        console.log(`🗑️ [Admin GET /camps] Filtering out orphaned camp: ${c.name} (${c._id}) - ownerRef: ${c.ownerRef}, hasOwner: ${hasOwner}`);
+      }
+      return keep;
+    });
+    const afterFilterCount = filteredCamps.length;
+    console.log(`📊 [Admin GET /camps] Filtered camps: ${beforeFilterCount} -> ${afterFilterCount} (removed ${beforeFilterCount - afterFilterCount} orphaned)`);
     
     // System Admins see all non-orphaned camps. Owner lookup issues (owner: null but contactEmail set) still shown for repair
 
@@ -1473,17 +1485,27 @@ router.post('/restore-camp-admin/:campId', authenticateToken, async (req, res) =
 router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`🗑️ [Admin DELETE /admin/camps/${id}] Starting camp deletion request`);
+    
     const adminUser = await db.findUser({ _id: req.user._id });
-    if (!adminUser) return res.status(401).json({ message: 'Admin user not found' });
+    if (!adminUser) {
+      console.log(`❌ [Admin DELETE] Admin user not found: ${req.user._id}`);
+      return res.status(401).json({ message: 'Admin user not found' });
+    }
 
+    console.log(`🗑️ [Admin DELETE] Admin ${adminUser.email} requesting deletion of camp ${id}`);
     const result = await permanentlyDeleteCamp(id, req.user._id);
+    console.log(`🗑️ [Admin DELETE] Deletion result:`, result);
 
     if (!result.success) {
       const status = result.message === 'Camp not found' ? 404 : 400;
+      console.log(`❌ [Admin DELETE] Deletion failed: ${result.message} (status: ${status})`);
       return res.status(status).json({ message: result.message });
     }
 
-    console.log(`Admin ${adminUser.email} permanently deleted camp: ${result.campName} (ID: ${id})`);
+    console.log(`✅ [Admin DELETE] Admin ${adminUser.email} permanently deleted camp: ${result.campName} (ID: ${id})`);
+    console.log(`🗑️ [Admin DELETE] Deleted entities:`, result.deletedEntities);
+    
     res.json({
       message: result.message,
       deletedCamp: {
@@ -1493,8 +1515,9 @@ router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) =>
       deletedEntities: result.deletedEntities
     });
   } catch (error) {
-    console.error('Delete camp error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ [Admin DELETE] Delete camp error:', error);
+    console.error('❌ [Admin DELETE] Error stack:', error.stack);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

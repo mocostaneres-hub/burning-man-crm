@@ -463,34 +463,29 @@ const AdminDashboard: React.FC = () => {
 
   const loadCamps = async () => {
     try {
+      console.log(`🔄 [Admin UI] Loading camps with sort: ${sortField} ${sortOrder}`);
       // Request ALL camps (no pagination limit)
       const response = await apiService.get(`/admin/camps?sortBy=${sortField}&sortOrder=${sortOrder}&limit=1000`);
-      console.log('🔍 [AdminDashboard] Camps response:', response);
+      console.log('✅ [Admin UI] Camps API response received:', { 
+        total: response.total, 
+        dataLength: response.data?.length,
+        currentPage: response.currentPage 
+      });
+      
       // Backend returns { data: camps[], totalPages, currentPage, total }
       const campData = response.data || response.camps;
-      console.log('🔍 [AdminDashboard] Camp data:', campData);
-      console.log('🔍 [AdminDashboard] Is array?', Array.isArray(campData));
-      console.log('🔍 [AdminDashboard] Camp count:', campData?.length);
+      console.log(`📊 [Admin UI] Processing ${campData?.length || 0} camps from response`);
+      
       if (campData && Array.isArray(campData)) {
         const campNames = campData.map(c => c.name || c.campName);
-        console.log('🔍 [AdminDashboard] Camp names:', campNames);
-        console.log('🔍 [AdminDashboard] All camp names as string:', campNames.join(', '));
-        const mudskippers = campData.find(c => 
-          (c.name || c.campName || '').toLowerCase().includes('mudskippers') ||
-          c.slug === 'mudskippers'
-        );
-        console.log('🔍 [AdminDashboard] Mudskippers found?', !!mudskippers);
-        if (mudskippers) {
-          console.log('✅ [AdminDashboard] Mudskippers data:', mudskippers);
-        } else {
-          console.log('❌ [AdminDashboard] Mudskippers NOT in response. Checking all camp data...');
-          console.log('All camps:', campData);
-        }
+        console.log('📋 [Admin UI] Camp names loaded:', campNames.slice(0, 10).join(', ') + (campNames.length > 10 ? '...' : ''));
       }
+      
       setCamps(Array.isArray(campData) ? campData : []);
+      console.log(`✅ [Admin UI] Camps state updated with ${campData?.length || 0} camps`);
     } catch (err) {
-      console.error('❌ Error loading camps:', err);
-      console.error('Error details:', err.response?.data);
+      console.error('❌ [Admin UI] Error loading camps:', err);
+      console.error('❌ [Admin UI] Error response:', err.response?.data);
       setCamps([]); // Ensure camps is always an array
     }
   };
@@ -591,15 +586,24 @@ const AdminDashboard: React.FC = () => {
     if (!selectedCamp) return;
 
     try {
-      await apiService.delete(`/admin/camps/${selectedCamp._id}`);
+      console.log(`🗑️ [Admin UI] Deleting camp: ${selectedCamp.name} (${selectedCamp._id})`);
+      const response = await apiService.delete(`/admin/camps/${selectedCamp._id}`);
+      console.log(`✅ [Admin UI] Delete response:`, response);
+      
       setShowDeleteCampModal(false);
       setSelectedCamp(null);
+      
       // Refetch camps from server so UI always reflects backend state
+      console.log(`🔄 [Admin UI] Refetching camps after deletion...`);
       await loadCamps();
       loadStats(); // Refresh stats
+      console.log(`✅ [Admin UI] Camps refetched successfully`);
+      
       alert('Camp deleted successfully!');
     } catch (err) {
-      console.error('Error deleting camp:', err);
+      console.error('❌ [Admin UI] Error deleting camp:', err);
+      console.error('❌ [Admin UI] Error response:', err.response?.data);
+      console.error('❌ [Admin UI] Error status:', err.response?.status);
       const message = err.response?.data?.message || err.message || 'Failed to delete camp. Please try again.';
       alert(message);
     }
