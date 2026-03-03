@@ -501,17 +501,25 @@ const CampProfile: React.FC = () => {
       console.log('🔍 [CampProfile] User:', user);
       console.log('🔍 [CampProfile] Camp ID:', campId);
       
-      // Prepare data for saving, including new fields
-      // IMPORTANT: Exclude 'photos' field - photos are managed separately via upload endpoint
+      // Prepare data for saving. Send structured location only when complete (from CityAutocomplete selection).
+      // Otherwise send hometown as string so backend accepts legacy; omit location to avoid overwriting with partial data.
       const { photos, ...campDataWithoutPhotos } = campData;
-      const saveData = {
+      const structuredLocation = toStructuredLocationOrNull(campData.location);
+      const saveData: Record<string, unknown> = {
         ...campDataWithoutPhotos,
         name: campData.campName, // Backend expects 'name' not 'campName'
-        hometown: campData.location.city || '',
-        categories: campData.categories, // Array of category IDs
-        selectedPerks: campData.selectedPerks, // Array of selected perks
+        categories: campData.categories,
+        selectedPerks: campData.selectedPerks,
         isPublic: campData.visibility === 'public'
       };
+      if (structuredLocation) {
+        saveData.location = { ...campData.location, ...structuredLocation };
+        saveData.hometown = structuredLocation.city;
+      } else {
+        saveData.hometown = campData.location?.city?.trim() || legacyHometown || '';
+        // Omit location so backend keeps existing; backend accepts legacy string hometown
+        delete saveData.location;
+      }
 
       let response;
       

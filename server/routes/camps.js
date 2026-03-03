@@ -30,12 +30,7 @@ const router = express.Router();
 const applyStructuredLocationToCampPayload = (payload) => {
   if (!payload || typeof payload !== 'object') return payload;
 
-  if (typeof payload.hometown === 'string' && payload.hometown.trim() && !hasStructuredLocationFields(payload.location)) {
-    const error = new Error('Hometown must be submitted as a structured location selection.');
-    error.statusCode = 400;
-    throw error;
-  }
-
+  // When location is provided as structured object, validate and normalize; otherwise allow legacy string hometown
   if (payload.location && hasStructuredLocationFields(payload.location)) {
     const validation = validateStructuredLocation(payload.location);
     if (!validation.valid) {

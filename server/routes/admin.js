@@ -1154,12 +1154,7 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
     const { id } = req.params;
     const updateData = req.body;
 
-    if (typeof updateData.hometown === 'string' && updateData.hometown.trim() && !updateData.location) {
-      return res.status(400).json({
-        message: 'Hometown must be submitted as a structured location object.'
-      });
-    }
-
+    // When location is provided as structured object, validate and normalize; otherwise allow legacy string hometown
     if (updateData.location && hasStructuredLocationFields(updateData.location)) {
       const validation = validateStructuredLocation(updateData.location);
       if (!validation.valid) {
