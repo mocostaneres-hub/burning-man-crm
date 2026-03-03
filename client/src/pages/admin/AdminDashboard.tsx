@@ -592,14 +592,16 @@ const AdminDashboard: React.FC = () => {
 
     try {
       await apiService.delete(`/admin/camps/${selectedCamp._id}`);
-      setCamps(camps.filter(c => c._id !== selectedCamp._id));
       setShowDeleteCampModal(false);
       setSelectedCamp(null);
-      alert('Camp deleted successfully!');
+      // Refetch camps from server so UI always reflects backend state
+      await loadCamps();
       loadStats(); // Refresh stats
+      alert('Camp deleted successfully!');
     } catch (err) {
       console.error('Error deleting camp:', err);
-      alert('Failed to delete camp. Please try again.');
+      const message = err.response?.data?.message || err.message || 'Failed to delete camp. Please try again.';
+      alert(message);
     }
   };
 

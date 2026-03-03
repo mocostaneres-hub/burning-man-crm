@@ -182,9 +182,7 @@ async function permanentlyDeleteCamp(campId, adminId) {
 
     const ownerId = camp.owner && (camp.owner._id || camp.owner);
     if (!ownerId) return { success: false, message: 'Camp has no owner' };
-    if (adminId && ownerId.toString() === adminId.toString()) {
-      return { success: false, message: 'You cannot permanently delete a camp you own' };
-    }
+    // Allow admin to delete any camp including their own (route is admin-only)
 
     const deleted = {
       members: 0,
