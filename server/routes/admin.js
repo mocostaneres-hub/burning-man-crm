@@ -12,7 +12,7 @@ const { authenticateToken, requireAdmin, requireSystemAdmin, requirePermission }
 const db = require('../database/databaseAdapter');
 const { getActivityLog, recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { getFieldDisplayName, formatFieldValue } = require('../utils/fieldNameMapper');
-const { permanentlyDeleteAccount } = require('../services/permanentDeletionService');
+const { permanentlyDeleteAccount, permanentlyDeleteCamp } = require('../services/permanentDeletionService');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 
 // Configure multer for photo uploads
@@ -1485,31 +1485,29 @@ router.post('/restore-camp-admin/:campId', authenticateToken, async (req, res) =
 });
 
 // @route   DELETE /api/admin/camps/:id
-// @desc    Delete camp by admin
+// @desc    Permanently delete camp by admin (camp + all related data + owner user)
 // @access  Private (Admin only)
 router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Check if camp exists
-    const camp = await db.findCamp({ _id: id });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
+    const adminUser = await db.findUser({ _id: req.user._id });
+    if (!adminUser) return res.status(401).json({ message: 'Admin user not found' });
+
+    const result = await permanentlyDeleteCamp(id, req.user._id);
+
+    if (!result.success) {
+      const status = result.message === 'Camp not found' ? 404 : 400;
+      return res.status(status).json({ message: result.message });
     }
 
-    // Log the admin action before deletion
-    const adminUser = await db.findUser({ _id: req.user._id });
-    console.log(`Admin ${adminUser.email} deleting camp: ${camp.name} (ID: ${id})`);
-
-    // Delete the camp
-    await db.deleteCamp(id);
-
-    res.json({ 
-      message: 'Camp deleted successfully',
+    console.log(`Admin ${adminUser.email} permanently deleted camp: ${result.campName} (ID: ${id})`);
+    res.json({
+      message: result.message,
       deletedCamp: {
-        _id: camp._id,
-        name: camp.name
-      }
+        _id: id,
+        name: result.campName
+      },
+      deletedEntities: result.deletedEntities
     });
   } catch (error) {
     console.error('Delete camp error:', error);

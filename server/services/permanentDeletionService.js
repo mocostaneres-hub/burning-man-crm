@@ -167,6 +167,90 @@ async function permanentlyDeleteAccount(userId, adminId) {
   }
 }
 
+/**
+ * Permanently delete a camp by ID: remove all related data (members, rosters,
+ * events, tasks, applications, invites, call slots, activity logs), then the
+ * camp and its owner User (camp login account).
+ * @param {string} campId - Camp _id
+ * @param {string} adminId - Admin user _id (for logging / self-delete guard)
+ * @returns {{ success: boolean, message: string, deletedEntities?: object }}
+ */
+async function permanentlyDeleteCamp(campId, adminId) {
+  try {
+    const camp = await Camp.findById(campId);
+    if (!camp) return { success: false, message: 'Camp not found' };
+
+    const ownerId = camp.owner && (camp.owner._id || camp.owner);
+    if (!ownerId) return { success: false, message: 'Camp has no owner' };
+    if (adminId && ownerId.toString() === adminId.toString()) {
+      return { success: false, message: 'You cannot permanently delete a camp you own' };
+    }
+
+    const deleted = {
+      members: 0,
+      rosters: 0,
+      applications: 0,
+      invites: 0,
+      events: 0,
+      callSlots: 0,
+      tasks: 0,
+      activityLogs: 0,
+      camps: 0,
+      users: 0
+    };
+
+    const id = camp._id;
+
+    const campMembersDeleted = await Member.deleteMany({ camp: id });
+    deleted.members += campMembersDeleted.deletedCount || 0;
+
+    const campRostersDeleted = await Roster.deleteMany({ camp: id });
+    deleted.rosters += campRostersDeleted.deletedCount || 0;
+
+    const campApplicationsDeleted = await MemberApplication.deleteMany({ camp: id });
+    deleted.applications += campApplicationsDeleted.deletedCount || 0;
+
+    const campInvitesDeleted = await Invite.deleteMany({ campId: id });
+    deleted.invites += campInvitesDeleted.deletedCount || 0;
+
+    const campEventsDeleted = await Event.deleteMany({ campId: id });
+    deleted.events += campEventsDeleted.deletedCount || 0;
+
+    const campCallSlotsDeleted = await CallSlot.deleteMany({ campId: id });
+    deleted.callSlots += campCallSlotsDeleted.deletedCount || 0;
+
+    const campTasksDeleted = await Task.deleteMany({ campId: id });
+    deleted.tasks += campTasksDeleted.deletedCount || 0;
+
+    const activityDeleted = await ActivityLog.deleteMany({
+      entityType: 'CAMP',
+      entityId: id
+    });
+    deleted.activityLogs += activityDeleted.deletedCount || 0;
+
+    const campDeleted = await Camp.deleteOne({ _id: id });
+    deleted.camps = campDeleted.deletedCount || 0;
+
+    const userDeleted = await User.deleteOne({ _id: ownerId });
+    deleted.users = userDeleted.deletedCount || 0;
+
+    if (deleted.camps === 0) {
+      return { success: false, message: 'Camp deletion failed' };
+    }
+
+    console.log(`✅ [Permanent Deletion] Camp permanently deleted: ${camp.name} (${id}), owner user removed.`);
+    return {
+      success: true,
+      message: 'Camp and all related data permanently deleted.',
+      campName: camp.name,
+      deletedEntities: deleted
+    };
+  } catch (error) {
+    console.error('❌ [Permanent Deletion] Error deleting camp:', error);
+    return { success: false, message: `Error deleting camp: ${error.message}` };
+  }
+}
+
 async function permanentlyDeleteCampAccount(userId, adminId) {
   return permanentlyDeleteAccount(userId, adminId);
 }
@@ -177,6 +261,7 @@ async function permanentlyDeleteMemberAccount(userId, adminId) {
 
 module.exports = {
   permanentlyDeleteAccount,
+  permanentlyDeleteCamp,
   permanentlyDeleteCampAccount,
   permanentlyDeleteMemberAccount
 };
