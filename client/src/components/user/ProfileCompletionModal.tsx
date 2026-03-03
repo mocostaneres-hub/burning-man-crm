@@ -3,6 +3,8 @@ import { Modal, Button, Input } from '../ui';
 import { X, CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import CityAutocomplete from '../location/CityAutocomplete';
+import { StructuredLocation } from '../../types';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -23,7 +25,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
   
   const [formData, setFormData] = useState({
     playaName: user?.playaName || '',
-    city: user?.city || '',
+    location: (user?.location as StructuredLocation) || null as StructuredLocation | null,
     yearsBurned: user?.yearsBurned || 0,
     bio: user?.bio || '',
     phoneNumber: user?.phoneNumber || '',
@@ -36,6 +38,34 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     interestedInEAP: user?.interestedInEAP || false,
     interestedInStrike: user?.interestedInStrike || false
   });
+
+  // Sync form from user when modal opens so we have latest user data (e.g. location)
+  useEffect(() => {
+    if (isOpen && user) {
+      const hasStructuredLocation = user.location &&
+        typeof user.location === 'object' &&
+        user.location.city &&
+        user.location.country &&
+        user.location.countryCode &&
+        typeof (user.location as StructuredLocation).lat === 'number' &&
+        typeof (user.location as StructuredLocation).lng === 'number';
+      setFormData(prev => ({
+        ...prev,
+        playaName: user.playaName || prev.playaName,
+        location: hasStructuredLocation ? (user.location as StructuredLocation) : prev.location,
+        yearsBurned: user.yearsBurned ?? prev.yearsBurned,
+        bio: user.bio ?? prev.bio,
+        phoneNumber: user.phoneNumber ?? prev.phoneNumber,
+        skills: Array.isArray(user.skills) ? user.skills : prev.skills,
+        hasTicket: user.hasTicket ?? prev.hasTicket,
+        hasVehiclePass: user.hasVehiclePass ?? prev.hasVehiclePass,
+        arrivalDate: user.arrivalDate ? new Date(user.arrivalDate).toISOString().split('T')[0] : prev.arrivalDate,
+        departureDate: user.departureDate ? new Date(user.departureDate).toISOString().split('T')[0] : prev.departureDate,
+        interestedInEAP: user.interestedInEAP ?? prev.interestedInEAP,
+        interestedInStrike: user.interestedInStrike ?? prev.interestedInStrike
+      }));
+    }
+  }, [isOpen, user]);
 
   // Load available skills
   useEffect(() => {
@@ -90,8 +120,8 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       setLoading(false);
       return;
     }
-    if (!formData.city.trim()) {
-      setError('City is required');
+    if (!formData.location || !formData.location.city?.trim()) {
+      setError('Please select your city from the search results');
       setLoading(false);
       return;
     }
@@ -108,10 +138,11 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     // Years burned validation (0 is valid for first-timers)
 
     try {
-      // Prepare data for submission
-      const submitData = {
+      // Prepare data for submission: send structured location (required by API)
+      const submitData: Record<string, unknown> = {
         ...formData,
-        // Convert date strings to Date objects if provided
+        location: formData.location || undefined,
+        city: formData.location?.city ?? '',
         arrivalDate: formData.arrivalDate ? new Date(formData.arrivalDate) : undefined,
         departureDate: formData.departureDate ? new Date(formData.departureDate) : undefined
       };
@@ -172,14 +203,15 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
                 required
               />
               
-              <Input
-                label="City *"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                placeholder="Your city"
-                required
-              />
+              <div>
+                <CityAutocomplete
+                  label="City *"
+                  value={formData.location}
+                  onChange={(location) => setFormData(prev => ({ ...prev, location }))}
+                  placeholder="Search and select your city"
+                  legacyValue={user?.city || undefined}
+                />
+              </div>
             </div>
 
             <Input

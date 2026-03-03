@@ -72,12 +72,7 @@ router.put('/profile', authenticateToken, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    if (typeof req.body.city === 'string' && !req.body.location) {
-      return res.status(400).json({
-        message: 'City must be submitted as a structured location object.'
-      });
-    }
-
+    // When location is provided as structured object, validate and normalize; otherwise allow legacy string city
     if (req.body.location && hasStructuredLocationFields(req.body.location)) {
       const validation = validateStructuredLocation(req.body.location);
       if (!validation.valid) {
@@ -781,12 +776,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    if (typeof req.body.city === 'string' && !req.body.location) {
-      return res.status(400).json({
-        message: 'City must be submitted as a structured location object.'
-      });
-    }
-
+    // When location is provided as structured object, validate and normalize; otherwise allow legacy string city
     if (req.body.location && hasStructuredLocationFields(req.body.location)) {
       const validation = validateStructuredLocation(req.body.location);
       if (!validation.valid) {

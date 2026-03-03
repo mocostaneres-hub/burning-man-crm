@@ -583,18 +583,11 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     }));
     
     // Apply filters
-    let filteredCamps = enrichedCamps;
+    // Exclude orphaned camps (owner user was deleted but camp doc still exists) so deleted camps never reappear
+    let filteredCamps = enrichedCamps.filter(c => c.owner || !c.ownerRef);
     
-    // IMPORTANT: System Admins should see ALL camps, including those with owner lookup issues
-    // Only exclude camps if we can definitively identify them as orphaned (requires explicit flag)
-    // For now, show all camps - owner lookup failures may be due to:
-    // - Missing owner field but valid contactEmail (will be shown with owner: null)
-    // - Owner user exists but lookup failed (should still show camp)
-    // - Actual orphaned camps (can be marked later with a flag)
-    // 
-    // System Admins need to see and potentially repair camps, so we show everything by default
-    // Individual camps with owner issues will have owner: null, which the UI can handle
-    
+    // System Admins see all non-orphaned camps. Owner lookup issues (owner: null but contactEmail set) still shown for repair
+
     // Log camps with owner lookup issues for visibility (but don't exclude them)
     enrichedCamps.forEach(camp => {
       if (!camp.owner && camp.contactEmail) {
@@ -965,12 +958,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     const { id } = req.params;
     const updateData = req.body;
 
-    if (typeof updateData.city === 'string' && !updateData.location) {
-      return res.status(400).json({
-        message: 'City must be submitted as a structured location object.'
-      });
-    }
-
+    // When location is provided as structured object, validate and normalize; otherwise allow legacy string city
     if (updateData.location && hasStructuredLocationFields(updateData.location)) {
       const validation = validateStructuredLocation(updateData.location);
       if (!validation.valid) {
