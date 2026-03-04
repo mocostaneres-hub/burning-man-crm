@@ -81,6 +81,13 @@ const TaskDetailsPage: React.FC = () => {
     return '/camp/tasks';
   };
 
+  const getTaskEditPath = (campId?: string) => {
+    if (campId) {
+      return `/camp/${campId}/tasks`;
+    }
+    return '/camp/tasks';
+  };
+
   const loadTask = useCallback(async () => {
     try {
       setLoading(true);
@@ -335,8 +342,8 @@ const TaskDetailsPage: React.FC = () => {
                 editTaskId: task._id,
                 campId: task.campId?.toString() || ''
               });
-              const taskListPath = getTaskListPath(task.campId?.toString());
-              navigate(`${taskListPath}?${params.toString()}`, { state: { editTaskId: task._id, campId: task.campId } });
+              const taskEditPath = getTaskEditPath(task.campId?.toString());
+              navigate(`${taskEditPath}?${params.toString()}`, { state: { editTaskId: task._id, campId: task.campId } });
             }}
             variant="outline"
           >
