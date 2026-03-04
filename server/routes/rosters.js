@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
+const { normalizeEmail } = require('../utils/emailUtils');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { renderTemplate } = require('../utils/renderTemplate');
@@ -895,15 +896,16 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
-    // Check if user with this email already exists
-    let user = await db.findUser({ email: memberData.email });
+    // Check if user with this email already exists (normalized for global uniqueness)
+    const normalizedMemberEmail = normalizeEmail(memberData.email);
+    let user = await db.findUser({ email: normalizedMemberEmail });
     
     if (!user) {
       // Create new user account
       const newUser = {
         firstName: memberData.firstName,
         lastName: memberData.lastName,
-        email: memberData.email,
+        email: normalizedMemberEmail,
         password: 'TempPass123!', // Temporary password - user should reset
         accountType: 'personal',
         playaName: memberData.playaName || '',

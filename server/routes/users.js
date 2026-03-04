@@ -4,6 +4,8 @@ const db = require('../database/databaseAdapter');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
+const { normalizeEmail } = require('../utils/emailUtils');
+const { propagateUserEmailChange } = require('../services/emailPropagationService');
 const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
@@ -559,6 +561,7 @@ router.put('/change-email', authenticateToken, [
     }
 
     const { newEmail, password } = req.body;
+    const normalizedNewEmail = normalizeEmail(newEmail);
     const userId = req.user._id;
 
     // Find user and verify current password
@@ -575,13 +578,21 @@ router.put('/change-email', authenticateToken, [
     }
 
     // Check if new email already exists
-    const existingUser = await db.findUser({ email: newEmail });
-    if (existingUser && existingUser._id !== userId) {
+    const existingUser = await db.findUser({ email: normalizedNewEmail });
+    if (existingUser && existingUser._id.toString() !== userId.toString()) {
       return res.status(400).json({ message: 'Email already in use' });
     }
 
     // Update user email
-    const updatedUser = await db.updateUserById(userId, { email: newEmail });
+    const updatedUser = await db.updateUserById(userId, { email: normalizedNewEmail });
+    if (!updatedUser) {
+      return res.status(500).json({ message: 'Failed to update email' });
+    }
+
+    const propagation = await propagateUserEmailChange({ userId, newEmail: normalizedNewEmail });
+    if (propagation.errors.length > 0) {
+      console.warn('⚠️ [PUT /api/users/change-email] Email propagation completed with warnings:', propagation.errors);
+    }
     
     // Remove password from response
     const userResponse = { ...updatedUser };

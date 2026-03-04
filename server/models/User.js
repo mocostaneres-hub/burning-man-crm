@@ -262,8 +262,9 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for efficient queries
-userSchema.index({ email: 1 });
+// Indexes
+// IMPORTANT: email uniqueness is enforced globally across all account types
+// by the field-level `unique: true` constraint above.
 userSchema.index({ accountType: 1 });
 userSchema.index({ googleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup
 userSchema.index({ appleId: 1 }, { sparse: true, unique: true }); // OAuth provider lookup

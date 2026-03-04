@@ -348,7 +348,16 @@ class MockDatabase {
   async findUser(query) {
     await this.ensureLoaded();
     if (query.email) {
-      return this.collections.users.get(query.email);
+      const normalizedEmail = query.email.toLowerCase().trim();
+      const direct = this.collections.users.get(normalizedEmail);
+      if (direct) return direct;
+      // Backward compatibility for legacy datasets where map key may not be normalized.
+      for (const user of this.collections.users.values()) {
+        if ((user.email || '').toLowerCase().trim() === normalizedEmail) {
+          return user;
+        }
+      }
+      return null;
     }
     if (query._id) {
       for (let user of this.collections.users.values()) {
@@ -389,29 +398,51 @@ class MockDatabase {
 
   async createUser(userData) {
     await this.ensureLoaded();
+    const normalizedEmail = (userData.email || '').toLowerCase().trim();
+    const existingUser = await this.findUser({ email: normalizedEmail });
+    if (existingUser) {
+      throw new Error('Email already in use');
+    }
     const user = {
       _id: generateNumericId('user'),
       isActive: true,
       isVerified: false,
       ...userData,
+      email: normalizedEmail,
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    this.collections.users.set(user.email, user);
+    this.collections.users.set(normalizedEmail, user);
     await this.saveData();
     return user;
   }
 
-  async updateUser(email, updateData) {
+  async updateUser(identifier, updateData) {
     await this.ensureLoaded();
-    const user = this.collections.users.get(email);
-    if (user) {
-      Object.assign(user, updateData, { updatedAt: new Date() });
-      this.collections.users.set(email, user);
+    // Support update by email key (legacy) or by user id.
+    const isEmailIdentifier = typeof identifier === 'string' && identifier.includes('@');
+    if (isEmailIdentifier) {
+      const emailKey = identifier.toLowerCase().trim();
+      const user = this.collections.users.get(emailKey);
+      if (!user) return null;
+
+      const nextEmail = updateData.email ? updateData.email.toLowerCase().trim() : user.email;
+      const existingByNextEmail = this.collections.users.get(nextEmail);
+      if (existingByNextEmail && existingByNextEmail._id !== user._id) {
+        throw new Error('Email already in use');
+      }
+
+      Object.assign(user, updateData, { email: nextEmail, updatedAt: new Date() });
+      if (nextEmail !== emailKey) {
+        this.collections.users.delete(emailKey);
+      }
+      this.collections.users.set(nextEmail, user);
       await this.saveData();
       return user;
     }
-    return null;
+
+    // Fallback: treat identifier as user id
+    return await this.updateUserById(identifier, updateData);
   }
 
   async updateUserById(id, updateData) {
@@ -428,8 +459,17 @@ class MockDatabase {
     }
     
     if (user && userKey) {
-      Object.assign(user, updateData, { updatedAt: new Date() });
-      this.collections.users.set(userKey, user);
+      const nextEmail = updateData.email ? updateData.email.toLowerCase().trim() : user.email;
+      const existingByNextEmail = this.collections.users.get(nextEmail);
+      if (existingByNextEmail && existingByNextEmail._id !== user._id) {
+        throw new Error('Email already in use');
+      }
+
+      Object.assign(user, updateData, { email: nextEmail, updatedAt: new Date() });
+      if (nextEmail !== userKey) {
+        this.collections.users.delete(userKey);
+      }
+      this.collections.users.set(nextEmail, user);
       await this.saveData();
       return user;
     }

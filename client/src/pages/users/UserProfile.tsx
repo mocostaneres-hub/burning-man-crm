@@ -70,8 +70,14 @@ const UserProfile: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [emailChangeData, setEmailChangeData] = useState({
+    newEmail: '',
+    currentPassword: ''
+  });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState('');
   const [legacyCity, setLegacyCity] = useState('');
 
   // Helper function to convert Date to string
@@ -235,6 +241,45 @@ const UserProfile: React.FC = () => {
     } catch (err: any) {
       console.error('Error changing password:', err);
       setPasswordError(err.response?.data?.message || 'Failed to change password');
+    }
+  };
+
+  const handleEmailChange = async () => {
+    try {
+      setEmailError('');
+      setEmailSuccess('');
+
+      const normalizedNewEmail = emailChangeData.newEmail.toLowerCase().trim();
+      const normalizedCurrentEmail = (user?.email || '').toLowerCase().trim();
+
+      if (!normalizedNewEmail || !emailChangeData.currentPassword) {
+        setEmailError('New email and current password are required');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedNewEmail)) {
+        setEmailError('Please enter a valid email address');
+        return;
+      }
+
+      if (normalizedNewEmail === normalizedCurrentEmail) {
+        setEmailError('New email must be different from current email');
+        return;
+      }
+
+      const response = await api.changeEmail(normalizedNewEmail, emailChangeData.currentPassword);
+
+      if (updateUser && response?.user) {
+        updateUser(response.user);
+      }
+
+      setProfileData(prev => ({ ...prev, email: normalizedNewEmail }));
+      setEmailSuccess('Login email updated successfully');
+      setEmailChangeData({ newEmail: '', currentPassword: '' });
+    } catch (err: any) {
+      console.error('Error changing email:', err);
+      setEmailError(err.response?.data?.message || 'Failed to change email');
     }
   };
 
@@ -826,6 +871,80 @@ const UserProfile: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Login Credentials Section - Full Width at Bottom */}
+      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2 border-b border-gray-200 pb-4">
+          <Mail className="w-5 h-5 text-blue-600" />
+          Login Email
+        </h2>
+
+        <p className="text-sm text-gray-600 mb-4">
+          This email is used for account authentication. Changing it updates your login credentials.
+        </p>
+
+        {emailError && (
+          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+            <p className="text-sm text-red-800 font-medium">{emailError}</p>
+          </div>
+        )}
+
+        {emailSuccess && (
+          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+            <p className="text-sm text-green-800 font-medium">{emailSuccess}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Current Email
+            </label>
+            <Input
+              value={user?.email || profileData.email}
+              disabled
+              className="bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              New Email
+            </label>
+            <Input
+              type="email"
+              value={emailChangeData.newEmail}
+              onChange={(e) => setEmailChangeData(prev => ({ ...prev, newEmail: e.target.value }))}
+              placeholder="Enter new login email"
+              className="bg-gray-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Current Password
+            </label>
+            <Input
+              type="password"
+              value={emailChangeData.currentPassword}
+              onChange={(e) => setEmailChangeData(prev => ({ ...prev, currentPassword: e.target.value }))}
+              placeholder="Enter current password"
+              className="bg-gray-50"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end pt-6 border-t border-gray-200">
+          <Button
+            variant="primary"
+            onClick={handleEmailChange}
+            className="flex items-center gap-2 px-6"
+          >
+            <SaveIcon className="w-4 h-4" />
+            Update Login Email
+          </Button>
+        </div>
+      </div>
 
       {/* Change Password Section - Full Width at Bottom */}
       <div className="bg-white rounded-xl shadow-lg p-8">

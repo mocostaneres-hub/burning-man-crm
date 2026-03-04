@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { sendWelcomeEmail } = require('../services/emailService');
+const { normalizeEmail } = require('../utils/emailUtils');
 
 const router = express.Router();
 
@@ -136,6 +137,7 @@ router.post('/google', [
         message: 'Email not provided by Google account' 
       });
     }
+    const normalizedGoogleEmail = normalizeEmail(googleUser.email);
 
     // ============================================================================
     // CRITICAL: OAuth Provider Linking and Account Identity
@@ -175,18 +177,18 @@ router.post('/google', [
     
     if (user) {
       // Returning OAuth user - update last login
-      console.log(`✅ [OAuth] Returning Google user found: ${googleUser.email} (accountType: ${user.accountType})`);
+      console.log(`✅ [OAuth] Returning Google user found: ${normalizedGoogleEmail} (accountType: ${user.accountType})`);
       await db.updateUser(user.email, { lastLogin: new Date() });
       user.lastLogin = new Date();
     } else {
       // Not found by googleId, try email (to link OAuth to existing account)
-      console.log('🔍 [OAuth] User not found by googleId, trying email:', googleUser.email);
-      user = await db.findUser({ email: googleUser.email });
+      console.log('🔍 [OAuth] User not found by googleId, trying email:', normalizedGoogleEmail);
+      user = await db.findUser({ email: normalizedGoogleEmail });
       
       if (user) {
         // Existing email/password user - link Google account
         isLinkingOAuth = true;
-        console.log(`🔗 [OAuth] Linking Google account to existing user: ${googleUser.email} (accountType: ${user.accountType})`);
+        console.log(`🔗 [OAuth] Linking Google account to existing user: ${normalizedGoogleEmail} (accountType: ${user.accountType})`);
         console.log(`🔗 [OAuth] User currently has these auth providers: ${user.authProviders || ['password (default)']}`);
         
         // CRITICAL: Use $set to update specific fields without triggering slug regeneration
@@ -215,13 +217,13 @@ router.post('/google', [
       // Note: New OAuth users always start as "personal" accounts
       // They can be promoted to other roles/types later through proper channels
       isNewUser = true;
-      console.log(`✨ [OAuth] Creating new user: ${googleUser.email}`);
+      console.log(`✨ [OAuth] Creating new user: ${normalizedGoogleEmail}`);
       
       const [firstName, ...lastNameParts] = (googleUser.name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
       user = await db.createUser({
-        email: googleUser.email,
+        email: normalizedGoogleEmail,
         password: crypto.randomUUID(), // Random password (not used for OAuth users, but required by schema)
         accountType: 'personal',
         firstName: firstName || '',
@@ -258,7 +260,7 @@ router.post('/google', [
     }
 
     const authAction = isNewUser ? 'new user created' : (isLinkingOAuth ? 'Google linked to existing account' : 'returning OAuth user');
-    console.log(`✅ [OAuth] Google authentication successful (${authAction}): ${googleUser.email}`);
+    console.log(`✅ [OAuth] Google authentication successful (${authAction}): ${normalizedGoogleEmail}`);
     console.log(`✅ [OAuth] User details: accountType=${userResponse.accountType}, authProviders=${userResponse.authProviders || 'not set'}`);
     console.log('✅ [OAuth] Sending response with token (length:', token?.length, ') and user (email:', userResponse.email, ')');
 
@@ -312,6 +314,7 @@ router.post('/apple', [
     }
 
     const { email, name, appleId, profilePicture } = req.body;
+    const normalizedAppleEmail = normalizeEmail(email);
 
     // OAuth must be account-type agnostic and support account linking
     // (see Google OAuth handler for comprehensive explanation)
@@ -323,18 +326,18 @@ router.post('/apple', [
     
     if (user) {
       // Returning OAuth user - update last login
-      console.log(`✅ [OAuth] Returning Apple user found: ${email} (accountType: ${user.accountType})`);
+      console.log(`✅ [OAuth] Returning Apple user found: ${normalizedAppleEmail} (accountType: ${user.accountType})`);
       await db.updateUser(user.email, { lastLogin: new Date() });
       user.lastLogin = new Date();
     } else {
       // Not found by appleId, try email (to link OAuth to existing account)
-      console.log('🔍 [OAuth] User not found by appleId, trying email:', email);
-      user = await db.findUser({ email });
+      console.log('🔍 [OAuth] User not found by appleId, trying email:', normalizedAppleEmail);
+      user = await db.findUser({ email: normalizedAppleEmail });
       
       if (user) {
         // Existing email/password user - link Apple account
         isLinkingOAuth = true;
-        console.log(`🔗 [OAuth] Linking Apple account to existing user: ${email} (accountType: ${user.accountType})`);
+        console.log(`🔗 [OAuth] Linking Apple account to existing user: ${normalizedAppleEmail} (accountType: ${user.accountType})`);
         console.log(`🔗 [OAuth] User currently has these auth providers: ${user.authProviders || ['password (default)']}`);
         
         // CRITICAL: Use $set to update specific fields without triggering slug regeneration
@@ -361,13 +364,13 @@ router.post('/apple', [
       // Create new personal account
       // Note: New OAuth users always start as "personal" accounts
       isNewUser = true;
-      console.log(`✨ [OAuth] Creating new user: ${email}`);
+      console.log(`✨ [OAuth] Creating new user: ${normalizedAppleEmail}`);
       
       const [firstName, ...lastNameParts] = (name || '').split(' ');
       const lastName = lastNameParts.join(' ') || '';
       
       user = await db.createUser({
-        email,
+        email: normalizedAppleEmail,
         password: crypto.randomUUID(), // Random password (not used for OAuth users, but required by schema)
         accountType: 'personal',
         firstName: firstName || '',
@@ -402,7 +405,7 @@ router.post('/apple', [
     }
 
     const authAction = isNewUser ? 'new user created' : (isLinkingOAuth ? 'Apple linked to existing account' : 'returning OAuth user');
-    console.log(`✅ [OAuth] Apple authentication successful (${authAction}): ${email}`);
+    console.log(`✅ [OAuth] Apple authentication successful (${authAction}): ${normalizedAppleEmail}`);
     console.log(`✅ [OAuth] User details: accountType=${userResponse.accountType}, authProviders=${userResponse.authProviders || 'not set'}`);
 
     res.json({

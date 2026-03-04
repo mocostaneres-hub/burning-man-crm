@@ -11,6 +11,7 @@ const { sendWelcomeEmail, sendPasswordResetEmail } = require('../services/emailS
 const ImpersonationToken = require('../models/ImpersonationToken');
 const { recordActivity } = require('../services/activityLogger');
 const { normalizeEmail } = require('../utils/emailUtils');
+const { propagateUserEmailChange } = require('../services/emailPropagationService');
 
 const router = express.Router();
 
@@ -237,8 +238,8 @@ router.post('/login', [
       }
     }
 
-    // Update last login
-    await db.updateUser(normalizedEmail, { lastLogin: new Date() });
+    // Update last login by user id (not email) to avoid stale-email write bugs
+    await db.updateUserById(user._id, { lastLogin: new Date() });
 
     // Generate token with user context
     const token = generateToken(user);
@@ -499,7 +500,7 @@ router.put('/change-password', authenticateToken, [
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     // Update password in database
-    await db.updateUser(user._id, { password: hashedPassword });
+    await db.updateUserById(user._id, { password: hashedPassword });
 
     res.json({ message: 'Password changed successfully' });
 
@@ -510,7 +511,7 @@ router.put('/change-password', authenticateToken, [
 });
 
 // @route   PUT /api/auth/update-credentials
-// @desc    Update user login credentials (email and/or password) - Camp accounts only
+// @desc    Update user login credentials (email and/or password) - Camp-affiliated accounts
 // @access  Private
 router.put('/update-credentials', authenticateToken, [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
@@ -580,8 +581,21 @@ router.put('/update-credentials', authenticateToken, [
       updatePayload.password = hashedPassword;
     }
 
-    // Update user credentials in database
-    await db.updateUser(user._id, updatePayload);
+    // Update user credentials in database (by id, never by email)
+    const updatedUser = await db.updateUserById(user._id, updatePayload);
+    if (!updatedUser) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to persist credential update'
+      });
+    }
+
+    if (normalizedEmail !== normalizeEmail(user.email)) {
+      const propagation = await propagateUserEmailChange({ userId: user._id, newEmail: normalizedEmail });
+      if (propagation.errors.length > 0) {
+        console.warn('⚠️ [AUTH] Email propagation completed with warnings:', propagation.errors);
+      }
+    }
 
     // Log activity
     await recordActivity(user._id, 'credentials_updated', 'auth', {

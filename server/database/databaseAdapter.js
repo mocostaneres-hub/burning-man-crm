@@ -14,7 +14,11 @@ class DatabaseAdapter {
   async findUser(query) {
     if (this.useMongoDB) {
       const User = require('../models/User');
-      return await User.findOne(query);
+      const normalizedQuery = { ...query };
+      if (normalizedQuery.email && typeof normalizedQuery.email === 'string') {
+        normalizedQuery.email = normalizedQuery.email.toLowerCase().trim();
+      }
+      return await User.findOne(normalizedQuery);
     } else {
       return await this.mockDB.findUser(query);
     }
@@ -41,7 +45,11 @@ class DatabaseAdapter {
   async createUser(userData) {
     if (this.useMongoDB) {
       const User = require('../models/User');
-      const user = new User(userData);
+      const normalizedUserData = { ...userData };
+      if (normalizedUserData.email && typeof normalizedUserData.email === 'string') {
+        normalizedUserData.email = normalizedUserData.email.toLowerCase().trim();
+      }
+      const user = new User(normalizedUserData);
       return await user.save();
     } else {
       // Hash password for mock database
@@ -52,12 +60,16 @@ class DatabaseAdapter {
     }
   }
 
-  async updateUser(email, updateData) {
+  async updateUser(identifier, updateData) {
     if (this.useMongoDB) {
       const User = require('../models/User');
-      return await User.findOneAndUpdate({ email }, updateData, { new: true });
+      const isEmailIdentifier = typeof identifier === 'string' && identifier.includes('@');
+      if (isEmailIdentifier) {
+        return await User.findOneAndUpdate({ email: identifier.toLowerCase().trim() }, updateData, { new: true });
+      }
+      return await User.findByIdAndUpdate(identifier, updateData, { new: true });
     } else {
-      return await this.mockDB.updateUser(email, updateData);
+      return await this.mockDB.updateUser(identifier, updateData);
     }
   }
 
