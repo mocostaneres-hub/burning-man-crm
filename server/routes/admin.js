@@ -585,13 +585,16 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     // Apply filters
     // Exclude orphaned camps (owner user was deleted but camp doc still exists) so deleted camps never reappear
     const beforeFilterCount = enrichedCamps.length;
+    console.log(`🔍 [Admin GET /camps] Before filtering: ${beforeFilterCount} camps`);
     let filteredCamps = enrichedCamps.filter(c => {
       const hasOwner = !!c.owner;
       const hasOwnerRef = !!c.ownerRef;
       // Keep camps that have an owner OR don't have ownerRef (prevent null.owner checks for camps without owner field)
       const keep = hasOwner || !hasOwnerRef;
       if (!keep) {
-        console.log(`🗑️ [Admin GET /camps] Filtering out orphaned camp: ${c.name} (${c._id}) - ownerRef: ${c.ownerRef}, hasOwner: ${hasOwner}`);
+        console.log(`🗑️ [Admin GET /camps] Filtering out orphaned camp: ${c.name || c.campName} (${c._id}) - ownerRef: ${c.ownerRef}, hasOwner: ${hasOwner}, owner: ${c.owner ? 'present' : 'null'}`);
+      } else {
+        console.log(`✅ [Admin GET /camps] Keeping camp: ${c.name || c.campName} (${c._id}) - hasOwner: ${hasOwner}, hasOwnerRef: ${hasOwnerRef}`);
       }
       return keep;
     });

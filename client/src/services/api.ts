@@ -632,8 +632,15 @@ class ApiService {
   }
 
   async delete(url: string, config?: any): Promise<any> {
-    const response = await this.api.delete(url, config);
-    return response.data;
+    console.log(`🗑️ [API] DELETE request to: ${url}`);
+    try {
+      const response = await this.api.delete(url, config);
+      console.log(`✅ [API] DELETE ${url} success:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ [API] DELETE ${url} failed:`, error);
+      throw error;
+    }
   }
 
   // Camp Lead role management methods
