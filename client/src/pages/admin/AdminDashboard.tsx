@@ -19,13 +19,29 @@ interface ExtendedUser extends UserType {
 }
 
 interface DashboardStats {
+  // All users (including camp and admin accounts)
   totalUsers: number;
   activeUsers: number;
   inactiveUsers: number;
+  
+  // Personal users only (excludes camp/admin accounts)
+  totalPersonalUsers: number;
+  activePersonalUsers: number;
+  inactivePersonalUsers: number;
+  
+  // Camp statistics
   totalCamps: number;
   activeCamps: number;
   recruitingCamps: number;
+  
+  // Roster member statistics (member applications)
+  activeRosterMembers: number;
+  totalRosterMembers: number;
+  pendingRosterMembers: number;
+  
+  // Legacy field (for backward compatibility)
   totalMembers: number;
+  
   accountTypeStats: {
     personal: number;
     camp: number;
@@ -401,12 +417,25 @@ const AdminDashboard: React.FC = () => {
       if (response && response.stats && typeof response.stats === 'object') {
         console.log('✅ [AdminDashboard] Setting stats:', response.stats);
         setStats({
+          // All users (including camp/admin accounts)
           totalUsers: response.stats.totalUsers || 0,
           activeUsers: response.stats.activeUsers || 0,
           inactiveUsers: response.stats.inactiveUsers || 0,
+          
+          // Personal users only
+          totalPersonalUsers: response.stats.totalPersonalUsers || 0,
+          activePersonalUsers: response.stats.activePersonalUsers || 0,
+          inactivePersonalUsers: response.stats.inactivePersonalUsers || 0,
           totalCamps: response.stats.totalCamps || 0,
           activeCamps: response.stats.activeCamps || 0,
           recruitingCamps: response.stats.recruitingCamps || 0,
+          
+          // Roster member statistics
+          activeRosterMembers: response.stats.activeRosterMembers || 0,
+          totalRosterMembers: response.stats.totalRosterMembers || 0,
+          pendingRosterMembers: response.stats.pendingRosterMembers || 0,
+          
+          // Legacy field
           totalMembers: response.stats.totalMembers || 0,
           accountTypeStats: response.stats.accountTypeStats || {
             personal: 0,
@@ -712,6 +741,21 @@ const AdminDashboard: React.FC = () => {
           <p className="text-body text-custom-text-secondary">
             Manage users, camps, and system settings
           </p>
+          
+          {/* Stats Info Banner */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm">
+            <div className="flex items-start gap-2">
+              <div className="text-blue-600 mt-0.5">ℹ️</div>
+              <div className="text-blue-800">
+                <strong>Metrics Guide:</strong> 
+                <span className="ml-2">
+                  <strong>Personal Users</strong> = Individual burner accounts (excludes camp/admin accounts) • 
+                  <strong>Roster Applications</strong> = Camp membership requests by status • 
+                  <strong>Total Camps</strong> = Active camp profiles with valid owners
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
         <Button
           variant="outline"
@@ -729,11 +773,11 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Total Members</p>
-              <p className="text-2xl font-lato-bold text-custom-text">{stats?.accountTypeStats?.personal || 0}</p>
+              <p className="text-sm font-medium text-custom-text-secondary">Personal Users</p>
+              <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalPersonalUsers || 0}</p>
               <div className="flex items-center gap-4 mt-2 text-xs">
-                <span className="text-green-600">Active: {stats?.activeUsers || 0}</span>
-                <span className="text-red-600">Inactive: {stats?.inactiveUsers || 0}</span>
+                <span className="text-green-600">Active: {stats?.activePersonalUsers || 0}</span>
+                <span className="text-red-600">Inactive: {stats?.inactivePersonalUsers || 0}</span>
               </div>
             </div>
             <Users className="w-8 h-8 text-custom-primary" />
@@ -757,10 +801,12 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Roster Members</p>
-              <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalMembers || 0}</p>
-              <div className="mt-2 text-xs text-custom-text-secondary">
-                Active roster members
+              <p className="text-sm font-medium text-custom-text-secondary">Roster Applications</p>
+              <p className="text-2xl font-lato-bold text-custom-text">{stats?.activeRosterMembers || 0}</p>
+              <div className="flex items-center gap-4 mt-2 text-xs">
+                <span className="text-green-600">Active: {stats?.activeRosterMembers || 0}</span>
+                <span className="text-yellow-600">Pending: {stats?.pendingRosterMembers || 0}</span>
+                <span className="text-gray-500">Total: {stats?.totalRosterMembers || 0}</span>
               </div>
             </div>
             <Shield className="w-8 h-8 text-custom-primary" />

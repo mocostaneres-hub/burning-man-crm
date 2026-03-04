@@ -49,21 +49,44 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
       db.findMembers()
     ]);
 
-    // Calculate comprehensive stats
-    const totalUsers = allUsers.length;
+    // Calculate comprehensive stats with clear distinctions
+    const allUsersCount = allUsers.length;
+    const personalUsers = allUsers.filter(user => user.accountType === 'personal');
+    const campUsers = allUsers.filter(user => user.accountType === 'camp');
+    const adminUsers = allUsers.filter(user => user.accountType === 'admin');
+    const unassignedUsers = allUsers.filter(user => user.accountType === 'unassigned' || !user.accountType);
+    
+    // Personal users (what most stats should refer to as "users")
+    const totalPersonalUsers = personalUsers.length;
+    const activePersonalUsers = personalUsers.filter(user => user.isActive).length;
+    const inactivePersonalUsers = totalPersonalUsers - activePersonalUsers;
+    
+    // All users (including camp accounts and admin accounts)
+    const totalUsers = allUsersCount;
     const activeUsers = allUsers.filter(user => user.isActive).length;
     const inactiveUsers = totalUsers - activeUsers;
-    const totalCamps = allCamps.length;
-    const activeCamps = allCamps.filter(camp => camp.status === 'active').length;
-    const totalMembers = allMembers.filter(member => member.status === 'active').length;
-    const recruitingCamps = allCamps.filter(camp => camp.status === 'active' && camp.isRecruiting).length;
+    
+    // Camp statistics (filter out orphaned camps consistently)
+    const validCamps = allCamps.filter(camp => {
+      // Apply same filtering logic as camp list to ensure consistency
+      // Only count camps with owners or valid contact info
+      return camp.owner || camp.contactEmail;
+    });
+    const totalCamps = validCamps.length;
+    const activeCamps = validCamps.filter(camp => camp.status === 'active').length;
+    const recruitingCamps = validCamps.filter(camp => camp.status === 'active' && camp.isRecruiting).length;
+    
+    // Member statistics (roster applications)
+    const activeRosterMembers = allMembers.filter(member => member.status === 'active').length;
+    const totalRosterMembers = allMembers.length; // All member applications regardless of status
+    const pendingRosterMembers = allMembers.filter(member => member.status === 'pending').length;
     
     // Account type breakdown
     const accountTypeStats = {
-      personal: allUsers.filter(user => user.accountType === 'personal').length,
-      camp: allUsers.filter(user => user.accountType === 'camp').length,
-      admin: allUsers.filter(user => user.accountType === 'admin').length,
-      unassigned: allUsers.filter(user => user.accountType === 'unassigned' || !user.accountType).length
+      personal: personalUsers.length,
+      camp: campUsers.length,
+      admin: adminUsers.length,
+      unassigned: unassignedUsers.length
     };
     
     // Recent activity (last 30 days)
@@ -143,13 +166,29 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
 
     res.json({
       stats: {
+        // All users (including camp and admin accounts) 
         totalUsers,
         activeUsers,
         inactiveUsers,
+        
+        // Personal users only (excludes camp/admin accounts)
+        totalPersonalUsers,
+        activePersonalUsers,
+        inactivePersonalUsers,
+        
+        // Camp statistics (with consistent filtering)
         totalCamps,
         activeCamps,
         recruitingCamps,
-        totalMembers,
+        
+        // Roster member statistics (member applications)
+        activeRosterMembers,
+        totalRosterMembers,
+        pendingRosterMembers,
+        
+        // Legacy field (keeping for backward compatibility, but use activeRosterMembers instead)
+        totalMembers: activeRosterMembers,
+        
         accountTypeStats,
         userGrowth,
         campStats
