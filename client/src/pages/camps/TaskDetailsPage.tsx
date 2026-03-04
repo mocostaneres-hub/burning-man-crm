@@ -320,7 +320,13 @@ const TaskDetailsPage: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex gap-2 pt-4 border-t">
           <Button
-            onClick={() => navigate('/camp/tasks', { state: { editTaskId: task._id, campId: task.campId } })}
+            onClick={() => {
+              const params = new URLSearchParams({
+                editTaskId: task._id,
+                campId: task.campId?.toString() || ''
+              });
+              navigate(`/camp/tasks?${params.toString()}`, { state: { editTaskId: task._id, campId: task.campId } });
+            }}
             variant="outline"
           >
             <Edit className="w-4 h-4 mr-2" />

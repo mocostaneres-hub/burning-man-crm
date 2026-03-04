@@ -129,7 +129,12 @@ const TaskManagement: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const canManageAssignments = canShowTaskAssignmentOptions(user);
-  const isPersonalEditFlow = Boolean(location.state?.editTaskId);
+  const searchParams = new URLSearchParams(location.search);
+  const editTaskIdFromQuery = searchParams.get('editTaskId');
+  const campIdFromQuery = searchParams.get('campId');
+  const editTaskId = location.state?.editTaskId || editTaskIdFromQuery;
+  const editCampId = location.state?.campId || campIdFromQuery;
+  const isPersonalEditFlow = Boolean(editTaskId);
 
   const fetchCampData = useCallback(async () => {
     try {
@@ -171,52 +176,29 @@ const TaskManagement: React.FC = () => {
     // Camp accounts can have camp context without user.campId in some flows.
     if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
       fetchCampData();
-    } else if (isPersonalEditFlow && location.state?.campId) {
-      setCampId(location.state.campId);
+    } else if (isPersonalEditFlow && editCampId) {
+      setCampId(editCampId);
     } else if (user) {
       setLoading(false);
       setError('Task management is only available for camp-affiliated accounts.');
     }
-  }, [user, fetchCampData, isPersonalEditFlow, location.state]);
+  }, [user, fetchCampData, isPersonalEditFlow, editCampId]);
 
-  // Handle editTaskId from location state (for personal accounts)
   useEffect(() => {
-    const handleEditFromState = async () => {
-      if (location.state?.editTaskId && !campId) {
-        // Use campId from location state if available
-        if (location.state.campId) {
-          setCampId(location.state.campId);
-          // Wait for tasks to load, then open the task in edit mode
-          setTimeout(() => {
-            const taskToEdit = tasks.find(t => t._id === location.state.editTaskId);
-            if (taskToEdit) {
-              handleTaskClick(taskToEdit);
-            }
-          }, 500);
-        } else {
-          // Fallback: try to find the task in assigned tasks
-          try {
-            const assignedTasks = await api.get(`/tasks/assigned/${user?._id}`);
-            const taskToEdit = assignedTasks.find((t: any) => t._id === location.state.editTaskId);
-            
-            if (taskToEdit && taskToEdit.campId) {
-              setCampId(taskToEdit.campId);
-              // Wait for tasks to load, then open the task in edit mode
-              setTimeout(() => {
-                const taskToEditAfterLoad = tasks.find(t => t._id === location.state.editTaskId);
-                if (taskToEditAfterLoad) {
-                  handleTaskClick(taskToEditAfterLoad);
-                }
-              }, 500);
-            }
-          } catch (err) {
-            console.error('Error loading task for editing:', err);
-          }
+    const resolveCampForEditTask = async () => {
+      if (!isPersonalEditFlow || campId || !editTaskId) return;
+      try {
+        const task = await api.getTaskById(editTaskId);
+        if (task?.campId) {
+          setCampId(task.campId.toString());
+          setError('');
         }
+      } catch (err) {
+        console.error('Error resolving camp from edit task:', err);
       }
     };
-    handleEditFromState();
-  }, [location.state, campId, tasks, user?._id]);
+    resolveCampForEditTask();
+  }, [isPersonalEditFlow, campId, editTaskId]);
 
   useEffect(() => {
     if (campId) {
@@ -314,18 +296,20 @@ const TaskManagement: React.FC = () => {
     setIsEditMode(true);
   };
 
-  // Check if we need to open a specific task in edit mode
+  // Handle editTaskId from navigation state or query params (for personal accounts)
   useEffect(() => {
-    if (location.state?.editTaskId && tasks.length > 0) {
-      const taskToEdit = tasks.find(task => task._id === location.state.editTaskId);
+    const handleEditFromContext = async () => {
+      if (!editTaskId || tasks.length === 0) return;
+      const taskToEdit = tasks.find((t) => t._id === editTaskId);
       if (taskToEdit) {
-        handleTaskClick(taskToEdit);
+        await handleTaskClick(taskToEdit);
         setIsEditMode(true);
-        // Clear the state to prevent re-opening on refresh
+        setError('');
         navigate(location.pathname, { replace: true });
       }
-    }
-  }, [location.state, tasks, navigate, handleTaskClick, location.pathname]);
+    };
+    handleEditFromContext();
+  }, [editTaskId, tasks, handleTaskClick, navigate, location.pathname]);
 
   const isCurrentUserAssigned = (task: GlobalTask | null): boolean => {
     if (!task || !user?._id) return false;
