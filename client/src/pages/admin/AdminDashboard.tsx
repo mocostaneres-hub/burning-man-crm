@@ -1944,10 +1944,20 @@ const UserEditModal: React.FC<{
 
   const handleSave = async () => {
     try {
+      if (newPassword && newPassword !== confirmPassword) {
+        alert('Passwords do not match');
+        return;
+      }
+
+      const saveData: ExtendedUser = { ...formData };
+      if (newPassword && newPassword.length >= 6) {
+        (saveData as any).newPassword = newPassword;
+      }
+
       // Photo data is already in formData from handlePhotoUpload/handlePhotoDelete
       // Just validate and save
       console.log('💾 [AdminDashboard] Saving user with photo:', formData.profilePhoto ? 'Photo included' : 'No photo');
-      onSave(formData as UserType);
+      onSave(saveData as UserType);
     } catch (err) {
       console.error('Error preparing user data:', err);
       alert('Failed to prepare user data. Please try again.');

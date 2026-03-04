@@ -279,16 +279,74 @@ const UserProfile: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div>
-            <div className="flex items-start gap-4">
-              <div className="relative flex-shrink-0">
-                {isEditing ? (
+            {isEditing ? (
+              <div className="space-y-5">
+                <div className="max-w-[280px]">
                   <PhotoUpload
                     profilePhoto={profileData.profilePhoto}
                     onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
                     isEditing={isEditing}
                   />
-                ) : (
-                  profileData.profilePhoto ? (
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    value={profileData.firstName}
+                    onChange={(e) => handleInputChange('firstName', e.target.value)}
+                    placeholder="First name"
+                  />
+                  <Input
+                    value={profileData.lastName}
+                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    placeholder="Last name"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-custom-text">Playa Name:</label>
+                  <Input
+                    value={profileData.playaName || ''}
+                    onChange={(e) => handleInputChange('playaName', e.target.value)}
+                    placeholder="Enter your playa name"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-custom-text flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    Location
+                  </label>
+                  <div className="mt-1">
+                    <CityAutocomplete
+                      value={profileData.location}
+                      onChange={(location) => handleInputChange('location', location)}
+                      label=""
+                      placeholder="Search and select your city"
+                      legacyValue={legacyCity}
+                    />
+                  </div>
+                </div>
+
+                <div className="max-w-[220px]">
+                  <label className="text-sm font-medium text-custom-text flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    Number of Burns
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={profileData.yearsBurned}
+                    onChange={(e) => handleInputChange('yearsBurned', parseInt(e.target.value) || 0)}
+                    placeholder="Years burned"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-4">
+                <div className="relative flex-shrink-0">
+                  {profileData.profilePhoto ? (
                     <img
                       src={profileData.profilePhoto}
                       alt={`${profileData.firstName} ${profileData.lastName}`}
@@ -298,85 +356,35 @@ const UserProfile: React.FC = () => {
                     <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
                       <UserIcon className="w-10 h-10 text-gray-400" />
                     </div>
-                  )
-                )}
-              </div>
-              <div className="flex-1">
-                {isEditing ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      value={profileData.firstName}
-                      onChange={(e) => handleInputChange('firstName', e.target.value)}
-                      placeholder="First name"
-                    />
-                    <Input
-                      value={profileData.lastName}
-                      onChange={(e) => handleInputChange('lastName', e.target.value)}
-                      placeholder="Last name"
-                    />
-                  </div>
-                ) : (
+                  )}
+                </div>
+                <div className="flex-1">
                   <h2 className="text-2xl font-bold text-gray-900">
                     {profileData.firstName} {profileData.lastName}
                   </h2>
-                )}
-
-                <div className="mt-3 space-y-2 text-sm text-custom-text-secondary">
-                  <div>
-                    <span className="font-medium text-custom-text">Playa Name: </span>
-                    {isEditing ? (
-                      <Input
-                        value={profileData.playaName || ''}
-                        onChange={(e) => handleInputChange('playaName', e.target.value)}
-                        placeholder="Enter your playa name"
-                        className="mt-1"
-                      />
-                    ) : (
+                  <div className="mt-3 space-y-2 text-sm text-custom-text-secondary">
+                    <div>
+                      <span className="font-medium text-custom-text">Playa Name: </span>
                       <span>{profileData.playaName || 'Not set'}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    <span className="font-medium text-custom-text min-w-[70px]">Location:</span>
-                    {isEditing ? (
-                      <div className="max-w-sm w-full">
-                        <CityAutocomplete
-                          value={profileData.location}
-                          onChange={(location) => handleInputChange('location', location)}
-                          label=""
-                          placeholder="Search and select your city"
-                          legacyValue={legacyCity}
-                        />
-                      </div>
-                    ) : (
-                      <span>
-                        {formatLocationLabel(profileData.location) || (legacyCity ? `${legacyCity} (unverified)` : 'Location not set')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span className="font-medium text-custom-text min-w-[130px]">Number of Burns:</span>
-                    {isEditing ? (
-                      <Input
-                        type="number"
-                        min="0"
-                        value={profileData.yearsBurned}
-                        onChange={(e) => handleInputChange('yearsBurned', parseInt(e.target.value) || 0)}
-                        placeholder="Years burned"
-                        className="max-w-sm"
-                      />
-                    ) : (
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span className="font-medium text-custom-text">Location:</span>
+                      <span>{formatLocationLabel(profileData.location) || (legacyCity ? `${legacyCity} (unverified)` : 'Location not set')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span className="font-medium text-custom-text">Number of Burns:</span>
                       <span>
                         {profileData.yearsBurned === 0
                           ? 'Virgin (First Burn)'
                           : `${profileData.yearsBurned} ${profileData.yearsBurned === 1 ? 'Burn' : 'Burns'}`}
                       </span>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="space-y-4">
