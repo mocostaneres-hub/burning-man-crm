@@ -4,7 +4,7 @@ const router = express.Router();
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
-const { getUserCampId, canAccessCamp, canAccessCampResources } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCampResources, canManageCamp } = require('../utils/permissionHelpers');
 const { generateUniqueTaskIdCode } = require('../utils/taskIdGenerator');
 const {
   sendTaskAssignmentEmail,
@@ -14,6 +14,64 @@ const {
   sendTaskCommentEmail,
   sendTaskPriorityChangeEmail
 } = require('../services/taskNotifications');
+
+const TASK_POPULATE_FIELDS = [
+  { path: 'createdBy', select: 'firstName lastName email playaName profilePhoto' },
+  { path: 'assignedTo', select: 'firstName lastName email playaName profilePhoto' },
+  { path: 'watchers', select: 'firstName lastName email playaName profilePhoto' },
+  { path: 'comments.user', select: 'firstName lastName email playaName profilePhoto' },
+  { path: 'history.user', select: 'firstName lastName email playaName profilePhoto' },
+  { path: 'completedBy', select: 'firstName lastName email playaName profilePhoto' }
+];
+
+const normalizeObjectId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object' && value._id) return value._id.toString();
+  return value.toString();
+};
+
+const resolveCampRosterUserIds = async (campId) => {
+  const members = await db.findMembers({ camp: campId, status: 'active' });
+  const rosterUserIds = new Set();
+  for (const member of members || []) {
+    const userId = normalizeObjectId(member.user);
+    if (userId) rosterUserIds.add(userId);
+  }
+  return Array.from(rosterUserIds);
+};
+
+const resolveAssignedUserIds = async ({
+  campId,
+  assignedTo,
+  assignmentScope,
+  individualAssigneeId,
+  fallbackUserId
+}) => {
+  const rosterUserIds = await resolveCampRosterUserIds(campId);
+  const rosterSet = new Set(rosterUserIds);
+
+  if (assignmentScope === 'roster') {
+    return rosterUserIds;
+  }
+
+  if (assignmentScope === 'individual') {
+    if (!individualAssigneeId) return [];
+    const normalized = normalizeObjectId(individualAssigneeId);
+    return normalized && rosterSet.has(normalized) ? [normalized] : [];
+  }
+
+  const rawAssignedIds = Array.isArray(assignedTo) ? assignedTo : [];
+  const normalizedAssignedIds = rawAssignedIds
+    .map(normalizeObjectId)
+    .filter(Boolean)
+    .filter((userId) => rosterSet.has(userId));
+
+  if (normalizedAssignedIds.length > 0) {
+    return [...new Set(normalizedAssignedIds)];
+  }
+
+  return fallbackUserId ? [fallbackUserId.toString()] : [];
+};
 // @route   GET /api/tasks
 // @desc    Return tasks for current user's camp
 // @access  Private (Camp accounts and admins)
@@ -86,6 +144,7 @@ router.get('/code/:taskIdCode', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // @route   GET /api/tasks/camp/:campId
 // @desc    Get all tasks for a camp
@@ -260,7 +319,16 @@ router.get('/assigned/:userId', authenticateToken, async (req, res) => {
 // @access  Private (Camp owners and roster members)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { campId, title, description, assignedTo, dueDate, priority = 'medium' } = req.body;
+    const {
+      campId,
+      title,
+      description,
+      assignedTo,
+      dueDate,
+      priority = 'medium',
+      assignmentScope,
+      individualAssigneeId
+    } = req.body;
 
     // Validate required fields
     if (!campId || !title || !description) {
@@ -274,7 +342,6 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Check camp ownership using helper (includes Camp Leads!)
-    const { canManageCamp } = require('../utils/permissionHelpers');
     const isCampOwner = await canManageCamp(req, campId);
     
     // Check if user is an active roster member
@@ -301,12 +368,29 @@ router.post('/', authenticateToken, async (req, res) => {
       return !!existingTask; // Return true if exists, false if unique
     });
 
+    const effectiveAssignmentScope = isCampOwner ? assignmentScope : undefined;
+    const effectiveIndividualAssigneeId = isCampOwner ? individualAssigneeId : undefined;
+    const resolvedAssignedTo = await resolveAssignedUserIds({
+      campId,
+      assignedTo,
+      assignmentScope: effectiveAssignmentScope,
+      individualAssigneeId: effectiveIndividualAssigneeId,
+      fallbackUserId: req.user._id
+    });
+
+    if (!isCampOwner && assignmentScope && assignmentScope !== 'creator') {
+      console.warn('[POST /api/tasks] Non-manager attempted scoped assignment, defaulting to creator assignment', {
+        userId: req.user._id?.toString(),
+        assignmentScope
+      });
+    }
+
     const taskData = {
       taskIdCode,
       campId,
       title,
       description,
-      assignedTo: assignedTo || [],
+      assignedTo: resolvedAssignedTo,
       dueDate: dueDate ? new Date(dueDate) : null,
       priority,
       createdBy: req.user._id,
@@ -327,7 +411,7 @@ router.post('/', authenticateToken, async (req, res) => {
       .populate('history.user', 'firstName lastName email playaName profilePhoto');
     
     // Send email notification if task was created with assignees
-    if (assignedTo && assignedTo.length > 0) {
+    if (resolvedAssignedTo && resolvedAssignedTo.length > 0) {
       try {
         // Use populated assignees from the task (they have email info)
         const assigneeUsers = populatedTask.assignedTo || [];
@@ -484,7 +568,7 @@ const trackTaskChanges = (oldTask, updates, userId) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
 
     const task = await Task.findById(id);
     if (!task) {
@@ -499,6 +583,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Check comprehensive camp access (owner or active roster member)
     const hasCampAccess = await canAccessCampResources(req, task.campId);
+    const canManageTask = await canManageCamp(req, task.campId);
     
     // Check if user is specifically assigned or watching
     const currentUserId = req.user._id.toString();
@@ -508,6 +593,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Allow camp owners, active roster members, assigned users, or watchers
     if (!hasCampAccess && !isAssigned && !isWatcher) {
       return res.status(403).json({ message: 'Access denied - must be camp owner, active roster member, assigned to task, or watcher' });
+    }
+
+    const allowedFields = ['title', 'description', 'priority', 'dueDate', 'status', 'assignedTo', 'watchers', 'assignmentScope', 'individualAssigneeId'];
+    const unknownFields = Object.keys(updates).filter((key) => !allowedFields.includes(key));
+    if (unknownFields.length > 0) {
+      console.warn('[PUT /api/tasks/:id] Ignoring non-editable fields:', unknownFields);
+      unknownFields.forEach((key) => delete updates[key]);
+    }
+
+    if (!canManageTask && (updates.assignedTo !== undefined || updates.watchers !== undefined || updates.assignmentScope || updates.individualAssigneeId)) {
+      return res.status(403).json({ message: 'Only camp management can change task assignment or watchers' });
     }
 
     console.log('✅ [PUT /api/tasks/:id] User authorized to update task:', {
@@ -526,6 +622,30 @@ router.put('/:id', authenticateToken, async (req, res) => {
       assignedTo: [...(task.assignedTo || [])].map(id => id.toString()),
       watchers: [...(task.watchers || [])].map(id => id.toString())
     };
+
+    if (canManageTask && (updates.assignedTo !== undefined || updates.assignmentScope || updates.individualAssigneeId)) {
+      const effectiveScope = updates.assignmentScope;
+      const effectiveIndividual = updates.individualAssigneeId;
+      updates.assignedTo = await resolveAssignedUserIds({
+        campId: task.campId,
+        assignedTo: updates.assignedTo,
+        assignmentScope: effectiveScope,
+        individualAssigneeId: effectiveIndividual,
+        fallbackUserId: req.user._id
+      });
+    }
+
+    if (canManageTask && updates.watchers !== undefined) {
+      const rosterUserIds = new Set(await resolveCampRosterUserIds(task.campId));
+      const normalizedWatcherIds = (Array.isArray(updates.watchers) ? updates.watchers : [])
+        .map(normalizeObjectId)
+        .filter(Boolean)
+        .filter((userId) => rosterUserIds.has(userId));
+      updates.watchers = [...new Set(normalizedWatcherIds)];
+    }
+
+    delete updates.assignmentScope;
+    delete updates.individualAssigneeId;
 
     // Track changes before updating
     const historyEntries = trackTaskChanges(task, updates, req.user._id);
@@ -666,7 +786,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.post('/:id/assign', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    let { assignedTo } = req.body;
+    const { assignedTo, assignmentScope, individualAssigneeId } = req.body;
 
     const task = await db.findTask({ _id: id });
     if (!task) {
@@ -680,28 +800,27 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
     }
     
     // Check camp ownership using helper (includes Camp Leads)
-    const { canManageCamp } = require('../utils/permissionHelpers');
     const hasAccess = await canManageCamp(req, task.campId);
     if (!hasAccess) {
       return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
     }
 
-    // Convert assignedTo array to numbers for consistency with mock database
-    if (Array.isArray(assignedTo)) {
-      assignedTo = assignedTo.map(id => {
-        const numId = parseInt(id);
-        return isNaN(numId) ? id : numId;
-      });
-    }
+    const resolvedAssignedTo = await resolveAssignedUserIds({
+      campId: task.campId,
+      assignedTo,
+      assignmentScope,
+      individualAssigneeId,
+      fallbackUserId: req.user._id
+    });
 
     console.log('🔄 [Task Assignment] Updating task:', {
       taskId: id,
       taskIdType: typeof id,
-      assignedTo: assignedTo,
-      assignedToType: typeof assignedTo[0]
+      assignedTo: resolvedAssignedTo,
+      assignedToType: typeof resolvedAssignedTo[0]
     });
 
-    const updatedTask = await db.updateTask(id, { assignedTo });
+    const updatedTask = await db.updateTask(id, { assignedTo: resolvedAssignedTo });
     
     if (!updatedTask) {
       console.error('❌ [Task Assignment] Task not found or update failed:', id);
@@ -910,6 +1029,38 @@ router.get('/my-events', authenticateToken, async (req, res) => {
       message: 'Server error fetching events',
       error: error.message
     });
+  }
+});
+
+// @route   GET /api/tasks/:id
+// @desc    Get a single task by ID
+// @access  Private (Camp owners, active roster members, assigned users, or watchers)
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const currentUserId = req.user._id.toString();
+    const hasCampAccess = await canAccessCampResources(req, task.campId);
+    const isAssigned = (task.assignedTo || []).some((userId) => userId.toString() === currentUserId);
+    const isWatcher = (task.watchers || []).some((userId) => userId.toString() === currentUserId);
+
+    if (!hasCampAccess && !isAssigned && !isWatcher) {
+      return res.status(403).json({ message: 'Access denied - must be camp member, assigned, or watcher' });
+    }
+
+    let query = Task.findById(task._id);
+    TASK_POPULATE_FIELDS.forEach((populateConfig) => {
+      query = query.populate(populateConfig.path, populateConfig.select);
+    });
+    const populatedTask = await query;
+
+    return res.json(populatedTask);
+  } catch (error) {
+    console.error('Error fetching task by ID:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 

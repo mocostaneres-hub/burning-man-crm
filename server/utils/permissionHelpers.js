@@ -145,6 +145,10 @@ async function isActiveRosterMember(req, targetCampId) {
     const memberIds = new Set(members.map(m => m._id.toString()));
     const isMember = activeRoster.members.some(rosterEntry => {
       if (!rosterEntry.member) return false;
+      const rosterEntryStatus = rosterEntry.status ? rosterEntry.status.toLowerCase() : '';
+      if (!['approved', 'active'].includes(rosterEntryStatus)) {
+        return false;
+      }
       
       // rosterEntry.member could be:
       // 1. Populated Member object with _id

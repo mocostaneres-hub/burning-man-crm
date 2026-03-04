@@ -6,15 +6,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFormatters';
 import { Task as GlobalTask, User as GlobalUser, TaskHistoryEntry } from '../../types';
-
-// Helper function to safely get user array from assignedTo/watchers
-const getUserArray = (field: string[] | GlobalUser[] | undefined): GlobalUser[] => {
-  if (!field) return [];
-  if (field.length === 0) return [];
-  // Check if first element is a string (ID) or object (populated User)
-  if (typeof field[0] === 'string') return [];
-  return field as GlobalUser[];
-};
+import {
+  AssignmentMode,
+  buildEditTaskState,
+  canShowTaskAssignmentOptions,
+  getUserArray
+} from './taskUiUtils';
 
 // Helper function to get user object from createdBy/completedBy
 const getUser = (field: string | GlobalUser | undefined): GlobalUser | null => {
@@ -112,6 +109,8 @@ const TaskManagement: React.FC = () => {
     priority: 'medium' as 'low' | 'medium' | 'high',
     dueDate: ''
   });
+  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('creator');
+  const [selectedIndividualAssignee, setSelectedIndividualAssignee] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedTask, setSelectedTask] = useState<GlobalTask | null>(null);
@@ -129,8 +128,9 @@ const TaskManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const canManageAssignments = canShowTaskAssignmentOptions(user);
 
-  const fetchCampData = async () => {
+  const fetchCampData = useCallback(async () => {
     try {
       // For Camp Leads, use their delegated camp ID
       if (user?.isCampLead && user?.campLeadCampId) {
@@ -145,8 +145,9 @@ const TaskManagement: React.FC = () => {
     } catch (err) {
       console.error('Error fetching camp data:', err);
       setError('Failed to load camp data');
+      setLoading(false);
     }
-  };
+  }, [user]);
 
   const fetchTasks = useCallback(async () => {
     if (!campId) return;
@@ -166,13 +167,14 @@ const TaskManagement: React.FC = () => {
   }, [campId]);
 
   useEffect(() => {
-    // Fetch camp data for:
-    // 1. Admins with campId
-    // 2. Camp Leads (isCampLead === true)
-    if (user?.campId || user?.isCampLead) {
+    // Camp accounts can have camp context without user.campId in some flows.
+    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
       fetchCampData();
+    } else if (user) {
+      setLoading(false);
+      setError('Task management is only available for camp-affiliated accounts.');
     }
-  }, [user?.campId, user?.isCampLead]);
+  }, [user, fetchCampData]);
 
   // Handle editTaskId from location state (for personal accounts)
   useEffect(() => {
@@ -219,6 +221,14 @@ const TaskManagement: React.FC = () => {
     }
   }, [campId, fetchTasks]);
 
+  useEffect(() => {
+    if (!campId) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'create') {
+      setShowCreateModal(true);
+    }
+  }, [campId, location.search]);
+
 
   const loadRosterMembers = useCallback(async () => {
     if (!campId) {
@@ -255,6 +265,11 @@ const TaskManagement: React.FC = () => {
     }
   }, [campId]);
 
+  useEffect(() => {
+    if (!showCreateModal || !canManageAssignments) return;
+    loadRosterMembers();
+  }, [showCreateModal, canManageAssignments, loadRosterMembers]);
+
   const getPriorityVariant = (priority: string): 'success' | 'warning' | 'error' | 'info' | 'neutral' => {
     switch (priority) {
       case 'high': return 'error';
@@ -275,18 +290,14 @@ const TaskManagement: React.FC = () => {
   const filteredTasks = tasks.filter(task => task.status === activeTab);
 
   const handleTaskClick = useCallback(async (task: GlobalTask) => {
-    setSelectedTask(task);
-    const assignees = getUserArray(task.assignedTo);
-    const taskWatchers = getUserArray(task.watchers);
-    setEditTask({
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      dueDate: task.dueDate || '',
-      status: task.status,
-      assignedTo: assignees.map(u => u._id.toString()),
-      watchers: taskWatchers.map(u => u._id.toString())
-    });
+    let taskToLoad = task;
+    try {
+      taskToLoad = await api.getTaskById(task._id);
+    } catch (err) {
+      console.warn('[TaskManagement] Falling back to list task for modal prefill', err);
+    }
+    setSelectedTask(taskToLoad);
+    setEditTask(buildEditTaskState(taskToLoad));
     setIsEditMode(false);
     setShowTaskModal(true);
     
@@ -294,6 +305,11 @@ const TaskManagement: React.FC = () => {
     console.log('🔄 [TaskManagement] Loading roster members for task modal');
     await loadRosterMembers();
   }, [loadRosterMembers]);
+
+  const openTaskInEditMode = async (task: GlobalTask) => {
+    await handleTaskClick(task);
+    setIsEditMode(true);
+  };
 
   // Check if we need to open a specific task in edit mode
   useEffect(() => {
@@ -370,16 +386,33 @@ const TaskManagement: React.FC = () => {
 
     try {
       setCreateLoading(true);
-      console.log('🔄 [TaskManagement] Creating task with creator auto-assigned');
-      
-      // Auto-assign the task creator
+      let assignedTo: string[] = user?._id ? [user._id] : [];
+
+      if (canManageAssignments) {
+        if (assignmentMode === 'roster') {
+          assignedTo = rosterMembers
+            .map((member) => member?.user?._id?.toString())
+            .filter(Boolean);
+          if (assignedTo.length === 0) {
+            setError('No active roster members found to assign.');
+            return;
+          }
+        } else if (assignmentMode === 'individual') {
+          if (!selectedIndividualAssignee) {
+            setError('Select a roster member to assign this task.');
+            return;
+          }
+          assignedTo = [selectedIndividualAssignee];
+        }
+      }
+
+      console.log('🔄 [TaskManagement] Creating task with assignment mode:', assignmentMode);
       await api.createTask({
         ...newTask,
         campId,
-        assignedTo: [user?._id] // Auto-assign creator
+        assignedTo
       });
-      
-      console.log('✅ [TaskManagement] Task created with creator assigned');
+      console.log('✅ [TaskManagement] Task created successfully');
       
       setNewTask({
         title: '',
@@ -387,6 +420,8 @@ const TaskManagement: React.FC = () => {
         priority: 'medium',
         dueDate: ''
       });
+      setAssignmentMode('creator');
+      setSelectedIndividualAssignee('');
       setShowCreateModal(false);
       await fetchTasks();
     } catch (err) {
@@ -563,14 +598,24 @@ const TaskManagement: React.FC = () => {
                   <td className="px-6 py-4">
                     <div>
                       <div 
-                        className={`text-sm font-medium ${task.taskIdCode ? 'text-custom-primary hover:underline cursor-pointer' : 'text-gray-900'}`}
-                        onClick={() => task.taskIdCode && navigate(`/tasks/${task.taskIdCode}`)}
+                        className="text-sm font-medium text-gray-900 hover:text-custom-primary cursor-pointer"
+                        onClick={() => handleTaskClick(task)}
                       >
                         {task.title}
                       </div>
                       {task.taskIdCode && (
                         <div className="text-xs text-gray-400 font-mono mb-1 flex items-center gap-2">
                           {task.taskIdCode}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/tasks/${task.taskIdCode}`);
+                            }}
+                            className="text-xs text-custom-primary hover:text-custom-primary-dark hover:underline"
+                            title="Open task URL"
+                          >
+                            [open]
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -586,6 +631,17 @@ const TaskManagement: React.FC = () => {
                       )}
                       <div className="text-sm text-gray-500 line-clamp-2 max-w-xs">
                         {task.description}
+                      </div>
+                      <div className="mt-2">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await openTaskInEditMode(task);
+                          }}
+                          className="text-xs text-custom-primary hover:text-custom-primary-dark hover:underline"
+                        >
+                          Edit
+                        </button>
                       </div>
                     </div>
                   </td>
@@ -792,37 +848,45 @@ const TaskManagement: React.FC = () => {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
-                  <Button onClick={handleEditClick} className="flex items-center gap-2">
-                    <Edit className="w-4 h-4" />
-                    Edit
-                  </Button>
-                  {selectedTask.status === 'open' ? (
-                    <Button 
-                      onClick={handleCloseTask}
-                      variant="outline"
-                      className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
-                    >
-                      <X className="w-4 h-4" />
-                      Close Task
-                    </Button>
+                  {canManageAssignments ? (
+                    <>
+                      <Button onClick={handleEditClick} className="flex items-center gap-2">
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </Button>
+                      {selectedTask.status === 'open' ? (
+                        <Button 
+                          onClick={handleCloseTask}
+                          variant="outline"
+                          className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+                        >
+                          <X className="w-4 h-4" />
+                          Close Task
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={handleReopenTask}
+                          variant="outline"
+                          className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Re-Open
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => handleDeleteTask(selectedTask._id)}
+                        variant="outline"
+                        className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </Button>
+                    </>
                   ) : (
-                    <Button 
-                      onClick={handleReopenTask}
-                      variant="outline"
-                      className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Re-Open
-                    </Button>
+                    <p className="text-sm text-gray-500 italic">
+                      You can view this task but only camp management can edit it.
+                    </p>
                   )}
-                  <Button
-                    onClick={() => handleDeleteTask(selectedTask._id)}
-                    variant="outline"
-                    className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </Button>
                 </div>
               </>
             ) : (
@@ -871,87 +935,93 @@ const TaskManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Assign Members */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign To ({editTask.assignedTo.length} selected)
-                  </label>
-                  {loadingMembers ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                      {rosterMembers.map((member) => {
-                        const userId = member.user?._id?.toString();
-                        return (
-                          <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editTask.assignedTo.includes(userId)}
-                              onChange={() => toggleAssignee(userId)}
-                              className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                            />
-                            <div className="text-sm">
-                              <div className="font-medium text-gray-900">
-                                {member.user?.firstName} {member.user?.lastName}
-                                {member.user?.playaName && (
-                                  <span className="text-gray-500 ml-2">({member.user.playaName})</span>
-                                )}
-                              </div>
+                {canManageAssignments && (
+                  <>
+                    {/* Assign Members */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Assign To ({editTask.assignedTo.length} selected)
+                      </label>
+                      {loadingMembers ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                          {rosterMembers.map((member) => {
+                            const userId = member.user?._id?.toString();
+                            if (!userId) return null;
+                            return (
+                              <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editTask.assignedTo.includes(userId)}
+                                  onChange={() => toggleAssignee(userId)}
+                                  className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                                />
+                                <div className="text-sm">
+                                  <div className="font-medium text-gray-900">
+                                    {member.user?.firstName} {member.user?.lastName}
+                                    {member.user?.playaName && (
+                                      <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {rosterMembers.length === 0 && (
+                            <div className="text-center py-4 text-gray-500">
+                              No roster members found
                             </div>
-                          </label>
-                        );
-                      })}
-                      {rosterMembers.length === 0 && (
-                        <div className="text-center py-4 text-gray-500">
-                          No roster members found
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Watchers */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Watchers ({editTask.watchers.length} selected)
-                  </label>
-                  {loadingMembers ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                      {rosterMembers.map((member) => {
-                        const userId = member.user?._id?.toString();
-                        return (
-                          <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editTask.watchers.includes(userId)}
-                              onChange={() => toggleWatcher(userId)}
-                              className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                            />
-                            <div className="text-sm">
-                              <div className="font-medium text-gray-900">
-                                {member.user?.firstName} {member.user?.lastName}
-                                {member.user?.playaName && (
-                                  <span className="text-gray-500 ml-2">({member.user.playaName})</span>
-                                )}
-                              </div>
+                    {/* Watchers */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Watchers ({editTask.watchers.length} selected)
+                      </label>
+                      {loadingMembers ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                          {rosterMembers.map((member) => {
+                            const userId = member.user?._id?.toString();
+                            if (!userId) return null;
+                            return (
+                              <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editTask.watchers.includes(userId)}
+                                  onChange={() => toggleWatcher(userId)}
+                                  className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                                />
+                                <div className="text-sm">
+                                  <div className="font-medium text-gray-900">
+                                    {member.user?.firstName} {member.user?.lastName}
+                                    {member.user?.playaName && (
+                                      <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {rosterMembers.length === 0 && (
+                            <div className="text-center py-4 text-gray-500">
+                              No roster members found
                             </div>
-                          </label>
-                        );
-                      })}
-                      {rosterMembers.length === 0 && (
-                        <div className="text-center py-4 text-gray-500">
-                          No roster members found
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
 
                 <div className="flex gap-2 pt-4 border-t">
                   <Button onClick={handleSaveTask}>
@@ -962,17 +1032,7 @@ const TaskManagement: React.FC = () => {
                     onClick={() => {
                       // Reset form to original task data
                       if (selectedTask) {
-                        const assignees = getUserArray(selectedTask.assignedTo);
-                        const taskWatchers = getUserArray(selectedTask.watchers);
-                        setEditTask({
-                          title: selectedTask.title,
-                          description: selectedTask.description,
-                          priority: selectedTask.priority,
-                          dueDate: selectedTask.dueDate || '',
-                          status: selectedTask.status,
-                          assignedTo: assignees.map(u => u._id.toString()),
-                          watchers: taskWatchers.map(u => u._id.toString())
-                        });
+                        setEditTask(buildEditTaskState(selectedTask));
                       }
                       setIsEditMode(false);
                     }}
@@ -1036,6 +1096,69 @@ const TaskManagement: React.FC = () => {
                 />
               </div>
             </div>
+
+            {canManageAssignments && (
+              <div className="space-y-3 border border-gray-200 rounded-md p-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Assignment</label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Camp Admins can assign this task to your entire roster or one specific member.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="assignmentMode"
+                      checked={assignmentMode === 'creator'}
+                      onChange={() => setAssignmentMode('creator')}
+                    />
+                    Assign to me
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="assignmentMode"
+                      checked={assignmentMode === 'roster'}
+                      onChange={() => setAssignmentMode('roster')}
+                    />
+                    Assign to entire roster
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      name="assignmentMode"
+                      checked={assignmentMode === 'individual'}
+                      onChange={() => setAssignmentMode('individual')}
+                    />
+                    Assign to one individual
+                  </label>
+                </div>
+
+                {assignmentMode === 'individual' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Roster member</label>
+                    <select
+                      value={selectedIndividualAssignee}
+                      onChange={(e) => setSelectedIndividualAssignee(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-custom-primary"
+                    >
+                      <option value="">Select a member</option>
+                      {rosterMembers.map((member) => {
+                        const userId = member.user?._id?.toString();
+                        if (!userId) return null;
+                        return (
+                          <option key={userId} value={userId}>
+                            {member.user?.firstName} {member.user?.lastName}
+                            {member.user?.playaName ? ` (${member.user.playaName})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2 pt-4">
               <Button 

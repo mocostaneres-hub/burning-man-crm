@@ -556,6 +556,11 @@ class ApiService {
     return response.data;
   }
 
+  async getTaskById(taskId: string): Promise<Task> {
+    const response: AxiosResponse<Task> = await this.api.get(`/tasks/${taskId}`);
+    return response.data;
+  }
+
   async getAssignedTasks(userId: string): Promise<Task[]> {
     const response: AxiosResponse<Task[]> = await this.api.get(`/tasks/assigned/${userId}`);
     return response.data;
