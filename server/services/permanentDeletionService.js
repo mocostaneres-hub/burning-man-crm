@@ -241,13 +241,21 @@ async function permanentlyDeleteCamp(campId, adminId) {
       const userDeleted = await User.deleteOne({ _id: ownerId });
       deleted.users = userDeleted.deletedCount || 0;
     } else {
-      // Mock database - use adapter methods (though deleteMany equivalents may not exist)
+      // Mock database - use adapter methods
       console.log('🗑️ [Permanent Deletion] Using mock database deletion');
-      deleted.camps = await db.deleteCamp(id) ? 1 : 0;
-      // Note: Mock database may not have all deleteMany equivalents; camp deletion might cascade
-      deleted.users = 1; // Assume user deletion succeeds in mock
       
-      // Ensure mock database saves changes
+      // Delete camp first
+      deleted.camps = await db.deleteCamp(id) ? 1 : 0;
+      console.log(`🗑️ [Permanent Deletion] Camp deleted: ${deleted.camps > 0 ? 'success' : 'failed'}`);
+      
+      // Actually delete the owner user
+      deleted.users = await db.deleteUser(ownerId) ? 1 : 0;
+      console.log(`🗑️ [Permanent Deletion] User deleted: ${deleted.users > 0 ? 'success' : 'failed'} (ID: ${ownerId})`);
+      
+      // Note: Mock database doesn't have all related entity types, so we can't delete members, rosters, etc.
+      // Those would need to be implemented in mockDB if needed for testing
+      
+      // Ensure mock database saves changes (though deleteUser/deleteCamp should already save)
       if (db.mockDB && db.mockDB.saveData) {
         await db.mockDB.saveData();
         console.log('🗑️ [Permanent Deletion] Mock database changes saved');

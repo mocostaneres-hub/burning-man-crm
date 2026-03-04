@@ -577,13 +577,21 @@ const AdminDashboard: React.FC = () => {
       setShowDeleteCampModal(false);
       setSelectedCamp(null);
       
-      // Refetch camps from server so UI always reflects backend state
-      console.log(`🔄 [Admin UI] Refetching camps after deletion...`);
-      await loadCamps();
-      loadStats(); // Refresh stats
-      console.log(`✅ [Admin UI] Camps refetched successfully`);
-      
+    // Refetch camps from server so UI always reflects backend state
+    console.log(`🔄 [Admin UI] Refetching camps after deletion...`);
+    await loadCamps();
+    loadStats(); // Refresh stats
+    console.log(`✅ [Admin UI] Camps refetched successfully`);
+
+    // Verify the camp was actually deleted
+    const stillExists = camps.find(c => c._id === selectedCamp._id);
+    if (stillExists) {
+      console.error(`❌ [Admin UI] Camp still exists after deletion: ${selectedCamp.name} (${selectedCamp._id})`);
+      alert('Warning: Camp deletion may not have completed successfully. Please check the admin dashboard.');
+    } else {
+      console.log(`✅ [Admin UI] Verified camp removal from UI: ${selectedCamp.name} (${selectedCamp._id})`);
       alert('Camp deleted successfully!');
+    }
     } catch (err) {
       console.error('❌ [Admin UI] Error deleting camp:', err);
       console.error('❌ [Admin UI] Error response:', err.response?.data);

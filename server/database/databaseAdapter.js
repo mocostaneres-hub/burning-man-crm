@@ -70,6 +70,15 @@ class DatabaseAdapter {
     }
   }
 
+  async deleteUser(id) {
+    if (this.useMongoDB) {
+      const User = require('../models/User');
+      return await User.findByIdAndDelete(id);
+    } else {
+      return await this.mockDB.deleteUser(id);
+    }
+  }
+
   // Camp operations
   async findCamp(query, options = {}) {
     if (this.useMongoDB) {

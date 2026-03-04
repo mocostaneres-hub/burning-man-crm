@@ -436,6 +436,29 @@ class MockDatabase {
     return null;
   }
 
+  async deleteUser(id) {
+    await this.ensureLoaded();
+    // Find user by ID since users are stored with email as key
+    let userKey = null;
+    for (const [key, userData] of this.collections.users.entries()) {
+      if (userData._id === parseInt(id) || userData._id === id || userData._id.toString() === id.toString()) {
+        userKey = key;
+        break;
+      }
+    }
+    
+    if (userKey) {
+      const deleted = this.collections.users.delete(userKey);
+      if (deleted) {
+        await this.saveData();
+        console.log(`🗑️ [Mock DB] Deleted user with ID: ${id} (key: ${userKey})`);
+      }
+      return deleted;
+    }
+    console.log(`⚠️ [Mock DB] User not found for deletion: ${id}`);
+    return false;
+  }
+
   // Camp operations
   async findCamp(query) {
     await this.ensureLoaded();
