@@ -538,11 +538,12 @@ router.put('/update-credentials', authenticateToken, [
       });
     }
 
-    // Only allow camp accounts to update credentials via this endpoint
-    if (user.accountType !== 'camp') {
+    // Allow camp-affiliated accounts (camp accounts or admin accounts tied to a camp)
+    const isCampAffiliatedAccount = user.accountType === 'camp' || (user.accountType === 'admin' && !!user.campId);
+    if (!isCampAffiliatedAccount) {
       return res.status(403).json({ 
         success: false,
-        message: 'This endpoint is only available for camp accounts' 
+        message: 'This endpoint is only available for camp-affiliated accounts' 
       });
     }
 

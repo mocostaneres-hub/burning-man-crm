@@ -874,8 +874,8 @@ const CampProfile: React.FC = () => {
           </div>
         </Card>
 
-        {/* Login Credentials - Only for Camp Accounts in Edit Mode */}
-        {isEditing && user?.accountType === 'camp' && (
+        {/* Login Credentials - Camp-affiliated accounts in Edit Mode */}
+        {isEditing && (user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId)) && (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-h2 font-lato-bold text-custom-text flex items-center">
