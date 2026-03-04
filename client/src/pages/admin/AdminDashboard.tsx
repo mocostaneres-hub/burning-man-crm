@@ -318,24 +318,7 @@ const AdminDashboard: React.FC = () => {
       }
     }
 
-    // Add confirmation for permanent deletion
-    if (bulkAction === 'delete') {
-      const confirmed = window.confirm(
-        `⚠️ PERMANENT DELETION WARNING ⚠️\n\n` +
-        `You are about to PERMANENTLY DELETE ${totalSelected} account(s).\n\n` +
-        `This action is IRREVERSIBLE and will:\n` +
-        `• Delete user accounts permanently\n` +
-        `• Remove user references from roster/tasks/invites/applications\n` +
-        `• Delete owned camp entities (rosters, events, tasks, applications, invites)\n` +
-        `• Allow the email to be used for new signups\n\n` +
-        `Are you ABSOLUTELY SURE you want to proceed?`
-      );
-      
-      if (!confirmed) {
-        console.log('Permanent deletion cancelled by admin');
-        return;
-      }
-    }
+    // Note: No additional browser confirmation needed - the modal already provides confirmation
 
     try {
       const response = await apiService.post('/admin/users/bulk-action', {
@@ -578,6 +561,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleCampDelete = (camp: Camp) => {
+    console.log(`🗑️ [Admin UI] Individual camp delete clicked: ${camp.name} (${camp._id})`);
     setSelectedCamp(camp);
     setShowDeleteCampModal(true);
   };
@@ -1655,7 +1639,7 @@ const AdminDashboard: React.FC = () => {
                       {selectedUsers.length > 0 && <><br />• {selectedUsers.length} member account(s)</>}
                       {selectedCamps.length > 0 && <><br />• {selectedCamps.length} camp account(s)</>}
                       <br /><br />
-                      • CAMP accounts: User deleted, camp data preserved
+                      • CAMP accounts: User deleted, camp data and all related entities deleted
                       <br />
                       • MEMBER accounts: User deleted, tasks transferred to camps
                     </>
