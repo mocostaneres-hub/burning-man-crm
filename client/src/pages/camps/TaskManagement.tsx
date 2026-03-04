@@ -129,6 +129,7 @@ const TaskManagement: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const canManageAssignments = canShowTaskAssignmentOptions(user);
+  const isPersonalEditFlow = Boolean(location.state?.editTaskId);
 
   const fetchCampData = useCallback(async () => {
     try {
@@ -170,11 +171,13 @@ const TaskManagement: React.FC = () => {
     // Camp accounts can have camp context without user.campId in some flows.
     if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
       fetchCampData();
+    } else if (isPersonalEditFlow && location.state?.campId) {
+      setCampId(location.state.campId);
     } else if (user) {
       setLoading(false);
       setError('Task management is only available for camp-affiliated accounts.');
     }
-  }, [user, fetchCampData]);
+  }, [user, fetchCampData, isPersonalEditFlow, location.state]);
 
   // Handle editTaskId from location state (for personal accounts)
   useEffect(() => {
@@ -324,7 +327,24 @@ const TaskManagement: React.FC = () => {
     }
   }, [location.state, tasks, navigate, handleTaskClick, location.pathname]);
 
+  const isCurrentUserAssigned = (task: GlobalTask | null): boolean => {
+    if (!task || !user?._id) return false;
+    return getUserArray(task.assignedTo).some((assignee) => assignee._id.toString() === user._id.toString());
+  };
+
+  const isCurrentUserWatcher = (task: GlobalTask | null): boolean => {
+    if (!task || !user?._id) return false;
+    return getUserArray(task.watchers).some((watcher) => watcher._id.toString() === user._id.toString());
+  };
+
+  const canEditSelectedTask =
+    canManageAssignments || isCurrentUserAssigned(selectedTask) || isCurrentUserWatcher(selectedTask);
+
   const handleEditClick = () => {
+    if (!canEditSelectedTask) {
+      setError('You do not have permission to edit this task.');
+      return;
+    }
     setIsEditMode(true);
   };
 
@@ -521,14 +541,16 @@ const TaskManagement: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button
-            variant="primary"
-            className="flex items-center gap-2"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <Plus className="w-4 h-4" />
-            Create Task
-          </Button>
+          {canManageAssignments && (
+            <Button
+              variant="primary"
+              className="flex items-center gap-2"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus className="w-4 h-4" />
+              Create Task
+            </Button>
+          )}
         </div>
       </div>
 
@@ -848,39 +870,43 @@ const TaskManagement: React.FC = () => {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
-                  {canManageAssignments ? (
+                  {canEditSelectedTask ? (
                     <>
                       <Button onClick={handleEditClick} className="flex items-center gap-2">
                         <Edit className="w-4 h-4" />
                         Edit
                       </Button>
-                      {selectedTask.status === 'open' ? (
-                        <Button 
-                          onClick={handleCloseTask}
-                          variant="outline"
-                          className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
-                        >
-                          <X className="w-4 h-4" />
-                          Close Task
-                        </Button>
-                      ) : (
-                        <Button 
-                          onClick={handleReopenTask}
-                          variant="outline"
-                          className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          Re-Open
-                        </Button>
+                      {canManageAssignments && (
+                        <>
+                          {selectedTask.status === 'open' ? (
+                            <Button 
+                              onClick={handleCloseTask}
+                              variant="outline"
+                              className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+                            >
+                              <X className="w-4 h-4" />
+                              Close Task
+                            </Button>
+                          ) : (
+                            <Button 
+                              onClick={handleReopenTask}
+                              variant="outline"
+                              className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Re-Open
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => handleDeleteTask(selectedTask._id)}
+                            variant="outline"
+                            className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </Button>
+                        </>
                       )}
-                      <Button
-                        onClick={() => handleDeleteTask(selectedTask._id)}
-                        variant="outline"
-                        className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </Button>
                     </>
                   ) : (
                     <p className="text-sm text-gray-500 italic">
