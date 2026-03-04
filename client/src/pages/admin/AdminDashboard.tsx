@@ -196,13 +196,29 @@ const toStructuredLocationOrNull = (
 const AdminDashboard: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
+    // All users (including camp and admin accounts)
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
+    
+    // Personal users only (excludes camp/admin accounts)
+    totalPersonalUsers: 0,
+    activePersonalUsers: 0,
+    inactivePersonalUsers: 0,
+    
+    // Camp statistics
     totalCamps: 0,
     activeCamps: 0,
     recruitingCamps: 0,
+    
+    // Roster member statistics (member applications)
+    activeRosterMembers: 0,
+    totalRosterMembers: 0,
+    pendingRosterMembers: 0,
+    
+    // Legacy field (for backward compatibility)
     totalMembers: 0,
+    
     accountTypeStats: {
       personal: 0,
       camp: 0,
