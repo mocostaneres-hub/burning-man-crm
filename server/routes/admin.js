@@ -392,15 +392,18 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     // Enrich camps with owner information, member count, and new metrics
     const enrichedCamps = await Promise.all(allCamps.map(async (camp) => {
       try {
-        // Convert Mongoose document to plain object to avoid internal properties
-        const campData = camp.toObject ? camp.toObject() : camp;
+      // Convert Mongoose document to plain object to avoid internal properties
+      const campData = camp.toObject ? camp.toObject() : camp;
+      
+      // Remove deprecated contactEmail from admin responses
+      const { contactEmail, ...campDataWithoutEmail } = campData;
       
       let owner = null;
       
       // Try multiple strategies to find owner user:
       // 1. If camp.owner exists, try to find that user (convert to string for consistent comparison)
-      if (campData.owner) {
-        const ownerId = campData.owner.toString();
+      if (campDataWithoutEmail.owner) {
+        const ownerId = campDataWithoutEmail.owner.toString();
         owner = await db.findUser({ _id: ownerId });
         
         // Also try with ObjectId if it's a string
@@ -409,19 +412,19 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
         }
       }
       
-      // 2. Fallback: Find user by contactEmail (case-insensitive)
-      if (!owner && campData.contactEmail) {
-        const email = campData.contactEmail.toLowerCase().trim();
+      // 2. Fallback: Find user by contactEmail (case-insensitive) - still use for owner lookup but don't expose in response
+      if (!owner && contactEmail) {
+        const email = contactEmail.toLowerCase().trim();
         owner = await db.findUser({ email: email });
         
         // Also try without lowercasing in case DB stores differently
         if (!owner) {
-          owner = await db.findUser({ email: campData.contactEmail });
+          owner = await db.findUser({ email: contactEmail });
         }
         
         // If found user but camp.owner is missing/incorrect, flag for repair
-        if (owner && (!campData.owner || campData.owner.toString() !== owner._id.toString())) {
-          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) needs owner repair. Found user ${owner._id} by email but camp.owner is ${campData.owner}`);
+        if (owner && (!campDataWithoutEmail.owner || campDataWithoutEmail.owner.toString() !== owner._id.toString())) {
+          console.log(`⚠️ [Admin Camps] Camp ${campDataWithoutEmail._id} (${campDataWithoutEmail.name || campDataWithoutEmail.campName}) needs owner repair. Found user ${owner._id} by email but camp.owner is ${campDataWithoutEmail.owner}`);
         }
       }
       
@@ -429,34 +432,34 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       if (!owner) {
         const campAccountUser = await db.findUser({ 
           accountType: 'camp',
-          campId: campData._id.toString()
+          campId: campDataWithoutEmail._id.toString()
         });
         
         if (campAccountUser) {
           owner = campAccountUser;
-          console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - found owner via campId lookup: ${owner._id}`);
+          console.log(`⚠️ [Admin Camps] Camp ${campDataWithoutEmail._id} (${campDataWithoutEmail.name || campDataWithoutEmail.campName}) - found owner via campId lookup: ${owner._id}`);
         }
       }
       
       // Log and mark orphaned camps explicitly
       if (!owner) {
-        console.log(`🗑️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - ORPHANED - no owner found anywhere. camp.owner: ${campData.owner}, contactEmail: ${campData.contactEmail}`);
+        console.log(`🗑️ [Admin Camps] Camp ${campDataWithoutEmail._id} (${campDataWithoutEmail.name || campDataWithoutEmail.campName}) - ORPHANED - no owner found anywhere. camp.owner: ${campDataWithoutEmail.owner}, contactEmail: ${contactEmail}`);
         // Clear ownerRef to ensure filtering works properly
-        campData.ownerRef = null;
-        campData.isOrphaned = true;
+        campDataWithoutEmail.ownerRef = null;
+        campDataWithoutEmail.isOrphaned = true;
       }
 
       // Get actual member count from roster
       let memberCount = 0;
       let hasActiveRoster = false;
       try {
-        const activeRoster = await db.findActiveRoster({ camp: campData._id });
+        const activeRoster = await db.findActiveRoster({ camp: campDataWithoutEmail._id });
         if (activeRoster && activeRoster.members) {
           memberCount = activeRoster.members.length;
           hasActiveRoster = true;
         }
       } catch (rosterError) {
-        console.warn(`Could not get roster for camp ${campData._id}:`, rosterError.message);
+        console.warn(`Could not get roster for camp ${campDataWithoutEmail._id}:`, rosterError.message);
       }
 
       // Calculate new metrics
@@ -481,7 +484,7 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
         
         // Get all active rosters for this camp
         const rosters = await Roster.find({ 
-          camp: campData._id, 
+          camp: campDataWithoutEmail._id, 
           isActive: true 
         }).select('members');
         
@@ -566,32 +569,32 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
       let activeApps = 0;
       try {
         activeApps = await MemberApplication.countDocuments({
-          camp: campData._id,
+          camp: campDataWithoutEmail._id,
           status: { $ne: 'rejected' }
         });
       } catch (error) {
-        console.warn(`Could not count applications for camp ${campData._id}:`, error.message);
+        console.warn(`Could not count applications for camp ${campDataWithoutEmail._id}:`, error.message);
       }
 
       // 4. Active Events - count where deletedAt IS NULL (or doesn't exist)
       let activeEvents = 0;
       try {
         activeEvents = await Event.countDocuments({
-          campId: campData._id,
+          campId: campDataWithoutEmail._id,
           $or: [
             { deletedAt: { $exists: false } },
             { deletedAt: null }
           ]
         });
       } catch (error) {
-        console.warn(`Could not count events for camp ${campData._id}:`, error.message);
+        console.warn(`Could not count events for camp ${campDataWithoutEmail._id}:`, error.message);
       }
 
       // 5. Active Shifts - count shifts in events where deletedAt IS NULL
       let activeShifts = 0;
       try {
         const events = await Event.find({
-          campId: campData._id,
+          campId: campDataWithoutEmail._id,
           $or: [
             { deletedAt: { $exists: false } },
             { deletedAt: null }
@@ -608,22 +611,22 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
           }
         });
       } catch (error) {
-        console.warn(`Could not count shifts for camp ${campData._id}:`, error.message);
+        console.warn(`Could not count shifts for camp ${campDataWithoutEmail._id}:`, error.message);
       }
 
       // 6. Active Tasks - count where status != "closed"
       let activeTasks = 0;
       try {
         activeTasks = await Task.countDocuments({
-          campId: campData._id,
+          campId: campDataWithoutEmail._id,
           status: { $ne: 'closed' }
         });
       } catch (error) {
-        console.warn(`Could not count tasks for camp ${campData._id}:`, error.message);
+        console.warn(`Could not count tasks for camp ${campDataWithoutEmail._id}:`, error.message);
       }
 
         return {
-          ...campData,
+          ...campDataWithoutEmail,
           memberCount, // Override with actual roster member count
           owner: owner ? {
             _id: owner._id,
@@ -633,9 +636,9 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
             accountType: owner.accountType,
             isSystemAdmin: (owner.accountType === 'admin' && !owner.campId) || !!owner.isSystemAdmin
           } : null,
-          ownerRef: campData.owner ? campData.owner.toString() : null,
-          ownerLookupFailed: !!campData.owner && !owner,
-          needsOwnerRepair: owner && (!campData.owner || campData.owner.toString() !== owner._id.toString()),
+          ownerRef: campDataWithoutEmail.owner ? campDataWithoutEmail.owner.toString() : null,
+          ownerLookupFailed: !!campDataWithoutEmail.owner && !owner,
+          needsOwnerRepair: owner && (!campDataWithoutEmail.owner || campDataWithoutEmail.owner.toString() !== owner._id.toString()),
           // New compact columns
           rosterInfo,
           lastLogin,
@@ -649,13 +652,14 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
         console.error(`❌ [Admin Camps] Enrichment failed for camp ${camp._id || 'unknown'}:`, enrichmentError.message);
         console.error('❌ [Admin Camps] Stack:', enrichmentError.stack);
         
-        const campData = camp.toObject ? camp.toObject() : camp;
+        const errorCampData = camp.toObject ? camp.toObject() : camp;
+        const { contactEmail: errorContactEmail, ...errorCampDataWithoutEmail } = errorCampData;
         return {
-          ...campData,
+          ...errorCampDataWithoutEmail,
           enrichmentError: enrichmentError.message,
           memberCount: 0,
           owner: null,
-          ownerRef: campData.owner ? campData.owner.toString() : null,
+          ownerRef: errorCampData.owner ? errorCampData.owner.toString() : null,
           ownerLookupFailed: false,
           rosterInfo: { hasActive: false, memberCount: 0 },
           lastLogin: null,

@@ -1363,8 +1363,8 @@ const AdminDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Analytics Tab */}
-      {activeTab === 3 && (
+      {/* Analytics Tab - DEPRECATED */}
+      {false && (
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -1461,8 +1461,8 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Audit Logs Tab */}
-      {activeTab === 4 && (
+      {/* Audit Logs Tab - DEPRECATED */}
+      {false && (
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">

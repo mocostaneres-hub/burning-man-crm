@@ -111,13 +111,7 @@ const CampProfileDisplay: React.FC<CampProfileDisplayProps> = ({ camp, onEdit })
             </h2>
             
             <div className="space-y-4">
-              <div>
-                <div className="flex items-center mb-1">
-                  <Mail className="w-4 h-4 text-custom-text-secondary mr-2" />
-                  <p className="text-sm text-custom-text-secondary">Email</p>
-                </div>
-                <p className="text-body text-custom-text">{camp.contactEmail}</p>
-              </div>
+              {/* Contact Email removed from public display for privacy */}
 
               {camp.website && (
                 <div>

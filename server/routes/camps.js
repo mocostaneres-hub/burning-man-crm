@@ -537,9 +537,12 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     // Convert Mongoose document to plain object to avoid internal properties
     const campData = camp.toObject ? camp.toObject() : camp;
     
+    // Remove deprecated contactEmail from public response for privacy
+    const { contactEmail, ...campDataWithoutEmail } = campData;
+    
     // Return public camp data with members
     const publicCamp = {
-      ...campData,
+      ...campDataWithoutEmail,
       campName: campData.name, // Frontend expects campName
       photos: processedPhotos,
       primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),

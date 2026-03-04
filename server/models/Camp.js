@@ -119,9 +119,12 @@ const campSchema = new mongoose.Schema({
   }],
   
   // Contact (Internal - for camp admin use only)
+  // DEPRECATED: contactEmail field is deprecated and will be removed in future version
+  // Use User.email for authentication instead. This field is kept for backward compatibility only.
   contactEmail: {
     type: String,
-    required: true
+    required: false, // Made optional for deprecation
+    select: false // Exclude from default queries for privacy
   },
   contactPhone: {
     type: String,

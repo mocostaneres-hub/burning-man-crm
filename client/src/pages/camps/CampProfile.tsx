@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button, Input, Card, Badge } from '../../components/ui';
-import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home } from 'lucide-react';
+import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home, Mail, Shield, AlertTriangle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -227,6 +227,18 @@ const CampProfile: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [campId, setCampId] = useState<string>('');
   const [legacyHometown, setLegacyHometown] = useState<string>('');
+  
+  // Login Credentials State (for camp accounts only)
+  const [loginCredentials, setLoginCredentials] = useState({
+    email: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showLoginCredentials, setShowLoginCredentials] = useState(false);
+  const [credentialsSaving, setCredentialsSaving] = useState(false);
+  const [credentialsSuccess, setCredentialsSuccess] = useState('');
+  const [credentialsError, setCredentialsError] = useState('');
 
   useEffect(() => {
     if (user && campIdentifier) {
@@ -512,6 +524,9 @@ const CampProfile: React.FC = () => {
         selectedPerks: campData.selectedPerks,
         isPublic: campData.visibility === 'public'
       };
+      
+      // Remove deprecated contactEmail from save payload for privacy
+      delete saveData.contactEmail;
       if (structuredLocation) {
         saveData.location = { ...campData.location, ...structuredLocation };
         saveData.hometown = structuredLocation.city;
@@ -571,6 +586,61 @@ const CampProfile: React.FC = () => {
     setIsEditing(false);
     setError('');
     fetchCampProfile();
+  };
+
+  const handleCredentialsUpdate = async () => {
+    try {
+      setCredentialsSaving(true);
+      setCredentialsError('');
+      setCredentialsSuccess('');
+
+      // Validation
+      if (!loginCredentials.email || !loginCredentials.currentPassword) {
+        setCredentialsError('Email and current password are required');
+        return;
+      }
+
+      if (loginCredentials.newPassword && loginCredentials.newPassword !== loginCredentials.confirmPassword) {
+        setCredentialsError('New passwords do not match');
+        return;
+      }
+
+      if (loginCredentials.newPassword && loginCredentials.newPassword.length < 6) {
+        setCredentialsError('New password must be at least 6 characters');
+        return;
+      }
+
+      // Prepare update payload
+      const updatePayload: any = {
+        email: loginCredentials.email,
+        currentPassword: loginCredentials.currentPassword
+      };
+
+      if (loginCredentials.newPassword) {
+        updatePayload.newPassword = loginCredentials.newPassword;
+      }
+
+      // Call API to update credentials
+      const response = await api.put('/auth/update-credentials', updatePayload);
+
+      if (response.data.success) {
+        setCredentialsSuccess('Login credentials updated successfully');
+        // Reset form
+        setLoginCredentials({ email: loginCredentials.email, currentPassword: '', newPassword: '', confirmPassword: '' });
+        
+        // If email changed, they may need to log in again
+        if (loginCredentials.email !== user?.email) {
+          setCredentialsSuccess('Email updated successfully. Please log in again with your new email.');
+        }
+      } else {
+        setCredentialsError(response.data.message || 'Failed to update credentials');
+      }
+    } catch (error: any) {
+      console.error('Error updating credentials:', error);
+      setCredentialsError(error.response?.data?.message || 'Failed to update credentials');
+    } finally {
+      setCredentialsSaving(false);
+    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -751,22 +821,7 @@ const CampProfile: React.FC = () => {
           </h2>
           
           <div className="space-y-4">
-            <div>
-              <label className="block text-label font-medium text-custom-text mb-2">
-                <Globe className="w-4 h-4 inline mr-2" />
-                Contact Email
-              </label>
-              {isEditing ? (
-                <Input
-                  type="email"
-                  value={campData.contactEmail}
-                  onChange={(e) => handleInputChange('contactEmail', e.target.value)}
-                  placeholder="Enter contact email"
-                />
-              ) : (
-                <p className="text-body text-custom-text">{campData.contactEmail}</p>
-              )}
-            </div>
+            {/* Contact Email field removed for privacy - no longer publicly editable */}
 
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
@@ -818,6 +873,164 @@ const CampProfile: React.FC = () => {
             </div>
           </div>
         </Card>
+
+        {/* Login Credentials - Only for Camp Accounts */}
+        {user?.accountType === 'camp' && (
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-h2 font-lato-bold text-custom-text flex items-center">
+                <Shield className="w-5 h-5 mr-2" />
+                Account Login Credentials
+              </h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowLoginCredentials(!showLoginCredentials);
+                  if (!showLoginCredentials) {
+                    // Initialize with current user email
+                    setLoginCredentials(prev => ({ ...prev, email: user?.email || '' }));
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                {showLoginCredentials ? 'Cancel' : 'Update Credentials'}
+              </Button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <strong>Authentication Email Only:</strong> This email is used strictly for account login and is never displayed publicly. 
+                  Visitors will contact your camp through social media links or camp applications.
+                </div>
+              </div>
+            </div>
+
+            {showLoginCredentials && (
+              <div className="space-y-4">
+                {credentialsError && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                      <p className="text-sm text-red-800">{credentialsError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {credentialsSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <p className="text-sm text-green-800">{credentialsSuccess}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    <Mail className="w-4 h-4 inline mr-2" />
+                    Login Email *
+                  </label>
+                  <Input
+                    type="email"
+                    value={loginCredentials.email}
+                    onChange={(e) => setLoginCredentials(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="Enter your login email"
+                    disabled={credentialsSaving}
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    This email will be used for account authentication only
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    <Shield className="w-4 h-4 inline mr-2" />
+                    Current Password *
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="password"
+                      value={loginCredentials.currentPassword}
+                      onChange={(e) => setLoginCredentials(prev => ({ ...prev, currentPassword: e.target.value }))}
+                      placeholder="Enter your current password"
+                      disabled={credentialsSaving}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-label font-medium text-custom-text mb-2">
+                    <Shield className="w-4 h-4 inline mr-2" />
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="password"
+                      value={loginCredentials.newPassword}
+                      onChange={(e) => setLoginCredentials(prev => ({ ...prev, newPassword: e.target.value }))}
+                      placeholder="Leave blank to keep current password"
+                      disabled={credentialsSaving}
+                    />
+                  </div>
+                </div>
+
+                {loginCredentials.newPassword && (
+                    <div>
+                      <label className="block text-label font-medium text-custom-text mb-2">
+                        <Shield className="w-4 h-4 inline mr-2" />
+                        Confirm New Password *
+                      </label>
+                    <div className="relative">
+                      <Input
+                        type="password"
+                        value={loginCredentials.confirmPassword}
+                        onChange={(e) => setLoginCredentials(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        placeholder="Confirm your new password"
+                        disabled={credentialsSaving}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={handleCredentialsUpdate}
+                    disabled={credentialsSaving || !loginCredentials.email || !loginCredentials.currentPassword}
+                    className="flex items-center gap-2"
+                  >
+                    {credentialsSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <SaveIcon className="w-4 h-4" />
+                        Update Credentials
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowLoginCredentials(false);
+                      setLoginCredentials({ email: '', currentPassword: '', newPassword: '', confirmPassword: '' });
+                      setCredentialsError('');
+                      setCredentialsSuccess('');
+                    }}
+                    disabled={credentialsSaving}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Social Media */}
         <Card className="p-6">

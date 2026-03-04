@@ -509,6 +509,105 @@ router.put('/change-password', authenticateToken, [
   }
 });
 
+// @route   PUT /api/auth/update-credentials
+// @desc    Update user login credentials (email and/or password) - Camp accounts only
+// @access  Private
+router.put('/update-credentials', authenticateToken, [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').optional().isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        message: errors.array()[0].msg,
+        errors: errors.array() 
+      });
+    }
+
+    const { email, currentPassword, newPassword } = req.body;
+
+    // Get user from database
+    const user = await db.findUser({ _id: req.user._id });
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    // Only allow camp accounts to update credentials via this endpoint
+    if (user.accountType !== 'camp') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'This endpoint is only available for camp accounts' 
+      });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Current password is incorrect' 
+      });
+    }
+
+    // Check if email is already taken by another user
+    const normalizedEmail = normalizeEmail(email);
+    if (normalizedEmail !== normalizeEmail(user.email)) {
+      const existingUser = await db.findUser({ email: normalizedEmail });
+      if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Email address is already registered to another account' 
+        });
+      }
+    }
+
+    // Prepare update payload
+    const updatePayload = {
+      email: normalizedEmail
+    };
+
+    // Hash new password if provided
+    if (newPassword) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      updatePayload.password = hashedPassword;
+    }
+
+    // Update user credentials in database
+    await db.updateUser(user._id, updatePayload);
+
+    // Log activity
+    await recordActivity(user._id, 'credentials_updated', 'auth', {
+      emailChanged: normalizedEmail !== normalizeEmail(user.email),
+      passwordChanged: !!newPassword
+    });
+
+    console.log(`✅ [AUTH] User ${user._id} updated login credentials. Email: ${normalizedEmail !== normalizeEmail(user.email) ? 'changed' : 'same'}, Password: ${newPassword ? 'changed' : 'same'}`);
+
+    res.json({ 
+      success: true,
+      message: 'Login credentials updated successfully',
+      data: {
+        email: normalizedEmail,
+        emailChanged: normalizedEmail !== normalizeEmail(user.email)
+      }
+    });
+
+  } catch (error) {
+    console.error('Update credentials error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while updating credentials' 
+    });
+  }
+});
+
 // @route   GET /api/auth/impersonate
 // @desc    Impersonate a user using a one-time token
 // @access  Public (token-based)
