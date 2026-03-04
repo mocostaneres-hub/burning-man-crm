@@ -23,8 +23,8 @@ interface DashboardStats {
   totalUsers: number;
   activeUsers: number;
   inactiveUsers: number;
-  
-  // Personal users only (excludes camp/admin accounts)
+
+  // User accounts (individual users: personal + admin + unassigned, excludes camp accounts)
   totalPersonalUsers: number;
   activePersonalUsers: number;
   inactivePersonalUsers: number;
@@ -200,8 +200,8 @@ const AdminDashboard: React.FC = () => {
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
-    
-    // Personal users only (excludes camp/admin accounts)
+
+    // User accounts (individual users: personal + admin + unassigned, excludes camp accounts)
     totalPersonalUsers: 0,
     activePersonalUsers: 0,
     inactivePersonalUsers: 0,
@@ -437,8 +437,8 @@ const AdminDashboard: React.FC = () => {
           totalUsers: response.stats.totalUsers || 0,
           activeUsers: response.stats.activeUsers || 0,
           inactiveUsers: response.stats.inactiveUsers || 0,
-          
-          // Personal users only
+
+          // User accounts (individual users: personal + admin + unassigned, excludes camp accounts)
           totalPersonalUsers: response.stats.totalPersonalUsers || 0,
           activePersonalUsers: response.stats.activePersonalUsers || 0,
           inactivePersonalUsers: response.stats.inactivePersonalUsers || 0,
@@ -765,7 +765,7 @@ const AdminDashboard: React.FC = () => {
               <div className="text-blue-800">
                 <strong>Metrics Guide:</strong> 
                 <span className="ml-2">
-                  <strong>Personal Users</strong> = Individual burner accounts (excludes camp/admin accounts) • 
+                  <strong>User Accounts</strong> = Individual accounts (personal + admin + unassigned, excludes camp accounts) • 
                   <strong>Roster Applications</strong> = Camp membership requests by status • 
                   <strong>Total Camps</strong> = Active camp profiles with valid owners
                 </span>
@@ -789,7 +789,7 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Personal Users</p>
+              <p className="text-sm font-medium text-custom-text-secondary">User Accounts</p>
               <p className="text-2xl font-lato-bold text-custom-text">{stats?.totalPersonalUsers || 0}</p>
               <div className="flex items-center gap-4 mt-2 text-xs">
                 <span className="text-green-600">Active: {stats?.activePersonalUsers || 0}</span>

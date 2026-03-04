@@ -62,24 +62,36 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
     console.log(`🔍 [Admin Dashboard Stats] User types - Personal: ${personalUsers.length}, Camp: ${campUsers.length}, Admin: ${adminUsers.length}, Unassigned: ${unassignedUsers.length}`);
     
     // Personal users (what most stats should refer to as "users")
-    const totalPersonalUsers = personalUsers.length;
-    const activePersonalUsers = personalUsers.filter(user => user.isActive).length;
+    // Match the Members list filtering: exclude only camp accounts (include personal + admin + unassigned)
+    const nonCampUsers = allUsers.filter(user => user.accountType !== 'camp');
+    const totalPersonalUsers = nonCampUsers.length;
+    const activePersonalUsers = nonCampUsers.filter(user => user.isActive).length;
     const inactivePersonalUsers = totalPersonalUsers - activePersonalUsers;
+    
+    console.log(`🔍 [Admin Dashboard Stats] Non-camp users breakdown - Total: ${totalPersonalUsers}, Active: ${activePersonalUsers}, Inactive: ${inactivePersonalUsers}`);
     
     // All users (including camp accounts and admin accounts)
     const totalUsers = allUsersCount;
     const activeUsers = allUsers.filter(user => user.isActive).length;
     const inactiveUsers = totalUsers - activeUsers;
     
-    // Camp statistics (filter out orphaned camps consistently)
+    // Camp statistics (filter out orphaned camps using same strict logic as camps list)
     const validCamps = allCamps.filter(camp => {
-      // Apply same filtering logic as camp list to ensure consistency
-      // Only count camps with owners or valid contact info
-      return camp.owner || camp.contactEmail;
+      // Apply same strict filtering as camps list: require valid owner that actually exists
+      if (!camp.owner) return false;
+      
+      // Check if the owner user actually exists (not deleted)
+      const ownerExists = allUsers.find(user => 
+        user._id.toString() === camp.owner.toString()
+      );
+      
+      return !!ownerExists;
     });
     const totalCamps = validCamps.length;
     const activeCamps = validCamps.filter(camp => camp.status === 'active').length;
     const recruitingCamps = validCamps.filter(camp => camp.status === 'active' && camp.isRecruiting).length;
+    
+    console.log(`🔍 [Admin Dashboard Stats] Camp filtering - All camps: ${allCamps.length}, Valid camps: ${totalCamps}, Filtered out: ${allCamps.length - totalCamps}`);
     
     // Member statistics (roster applications)
     const activeRosterMembers = allMembers.filter(member => member.status === 'active').length;
