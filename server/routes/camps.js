@@ -543,13 +543,13 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     // Return public camp data with members
     const publicCamp = {
       ...campDataWithoutEmail,
-      campName: campData.name, // Frontend expects campName
+      campName: campDataWithoutEmail.name, // Frontend expects campName
       photos: processedPhotos,
-      primaryPhotoIndex: Math.min(campData.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
+      primaryPhotoIndex: Math.min(campDataWithoutEmail.primaryPhotoIndex || 0, Math.max(0, processedPhotos.length - 1)),
       selectedPerks: populatedPerks,
       categories: populatedCategories, // Use manually populated categories
       isPubliclyVisible: isPubliclyVisible,
-      acceptingApplications: campData.acceptingApplications !== undefined ? campData.acceptingApplications : true, // Consolidated field
+      acceptingApplications: campDataWithoutEmail.acceptingApplications !== undefined ? campDataWithoutEmail.acceptingApplications : true, // Consolidated field
       isCampAdmin: isCampAdmin, // Let frontend know if viewing as camp admin
       isSystemAdmin: isSystemAdmin, // Let frontend know if viewing as system admin (includes impersonated system admins)
       members: (members || []).map(member => ({
