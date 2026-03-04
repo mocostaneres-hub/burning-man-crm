@@ -1306,8 +1306,13 @@ router.put('/camps/:id', authenticateToken, requireAdmin, [
     if (updateData.newPassword) {
       console.log('🔐 [Admin] Resetting camp account password for camp:', targetCamp.campName);
       
-      // Find the camp admin user
-      const campUser = await db.findUser({ campId: id, accountType: 'camp' });
+      // Find camp-affiliated login user (camp account OR camp-linked admin account)
+      const allUsers = await db.findUsers({});
+      const campUser = allUsers.find((u) => {
+        const isCampLinked = u.campId && u.campId.toString() === id.toString();
+        const isSupportedType = u.accountType === 'camp' || u.accountType === 'admin';
+        return isCampLinked && isSupportedType;
+      });
       if (campUser) {
         try {
           // Use the User model directly to trigger password hashing

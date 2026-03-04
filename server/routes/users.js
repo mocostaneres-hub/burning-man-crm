@@ -551,8 +551,7 @@ router.get('/public/:identifier', async (req, res) => {
 // @desc    Change user email
 // @access  Private
 router.put('/change-email', authenticateToken, [
-  body('newEmail').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Current password is required'),
+  body('newEmail').isEmail().withMessage('Valid email is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -560,7 +559,7 @@ router.put('/change-email', authenticateToken, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { newEmail, password } = req.body;
+    const { newEmail } = req.body;
     const normalizedNewEmail = normalizeEmail(newEmail);
     const userId = req.user._id;
 
@@ -568,13 +567,6 @@ router.put('/change-email', authenticateToken, [
     const user = await db.findUser({ _id: userId });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Verify current password
-    const bcrypt = require('bcryptjs');
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
     // Check if new email already exists
@@ -799,6 +791,18 @@ router.put('/:id', authenticateToken, requireAdmin, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    // Handle admin password reset safely: hash before persistence.
+    if (updateData.newPassword) {
+      if (updateData.newPassword.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      }
+      const bcrypt = require('bcryptjs');
+      const saltRounds = 12;
+      updateData.password = await bcrypt.hash(updateData.newPassword, saltRounds);
+      delete updateData.newPassword;
+      delete updateData.confirmPassword;
+    }
 
     // Debug: Log the request body
     console.log('🔍 [PUT /api/users/:id] Request body:', req.body);

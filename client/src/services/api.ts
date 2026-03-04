@@ -503,10 +503,9 @@ class ApiService {
 
   // Generic HTTP methods for direct API calls
   // Change email
-  async changeEmail(newEmail: string, password: string): Promise<{ user: User }> {
+  async changeEmail(newEmail: string): Promise<{ user: User }> {
     const response: AxiosResponse<{ user: User }> = await this.api.put('/users/change-email', {
-      newEmail,
-      password
+      newEmail
     });
     return response.data;
   }

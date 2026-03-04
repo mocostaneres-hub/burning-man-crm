@@ -70,14 +70,8 @@ const UserProfile: React.FC = () => {
     newPassword: '',
     confirmPassword: ''
   });
-  const [emailChangeData, setEmailChangeData] = useState({
-    newEmail: '',
-    currentPassword: ''
-  });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [emailSuccess, setEmailSuccess] = useState('');
   const [legacyCity, setLegacyCity] = useState('');
 
   // Helper function to convert Date to string
@@ -141,11 +135,22 @@ const UserProfile: React.FC = () => {
     try {
       setSaving(true);
       setError('');
-      
-      // Update user profile via API
-      console.log('🔄 [UserProfile] Saving profile data:', profileData);
+
+      // Unify email display/edit: if changed, update login email first.
+      const normalizedCurrentEmail = (user?.email || '').toLowerCase().trim();
+      const normalizedProfileEmail = (profileData.email || '').toLowerCase().trim();
+      if (normalizedProfileEmail && normalizedProfileEmail !== normalizedCurrentEmail) {
+        const emailResponse = await api.changeEmail(normalizedProfileEmail);
+        if (updateUser && emailResponse?.user) {
+          updateUser(emailResponse.user);
+        }
+      }
+
+      // Update remaining profile fields via API (exclude email, handled above)
+      const { email, ...profilePayload } = profileData;
+      console.log('🔄 [UserProfile] Saving profile data:', profilePayload);
       console.log('🔄 [UserProfile] Playa Name being saved:', profileData.playaName);
-      const response = await api.put('/users/profile', profileData);
+      const response = await api.put('/users/profile', profilePayload);
       console.log('✅ [UserProfile] Save response:', response);
       console.log('✅ [UserProfile] Response user object:', response.user);
       console.log('✅ [UserProfile] Response playaName:', response.user?.playaName);
@@ -244,45 +249,6 @@ const UserProfile: React.FC = () => {
     }
   };
 
-  const handleEmailChange = async () => {
-    try {
-      setEmailError('');
-      setEmailSuccess('');
-
-      const normalizedNewEmail = emailChangeData.newEmail.toLowerCase().trim();
-      const normalizedCurrentEmail = (user?.email || '').toLowerCase().trim();
-
-      if (!normalizedNewEmail || !emailChangeData.currentPassword) {
-        setEmailError('New email and current password are required');
-        return;
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(normalizedNewEmail)) {
-        setEmailError('Please enter a valid email address');
-        return;
-      }
-
-      if (normalizedNewEmail === normalizedCurrentEmail) {
-        setEmailError('New email must be different from current email');
-        return;
-      }
-
-      const response = await api.changeEmail(normalizedNewEmail, emailChangeData.currentPassword);
-
-      if (updateUser && response?.user) {
-        updateUser(response.user);
-      }
-
-      setProfileData(prev => ({ ...prev, email: normalizedNewEmail }));
-      setEmailSuccess('Login email updated successfully');
-      setEmailChangeData({ newEmail: '', currentPassword: '' });
-    } catch (err: any) {
-      console.error('Error changing email:', err);
-      setEmailError(err.response?.data?.message || 'Failed to change email');
-    }
-  };
-
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -315,16 +281,24 @@ const UserProfile: React.FC = () => {
           <div>
             <div className="flex items-start gap-4">
               <div className="relative flex-shrink-0">
-                {profileData.profilePhoto ? (
-                  <img
-                    src={profileData.profilePhoto}
-                    alt={`${profileData.firstName} ${profileData.lastName}`}
-                    className="w-24 h-24 rounded-full shadow object-cover bg-white"
+                {isEditing ? (
+                  <PhotoUpload
+                    profilePhoto={profileData.profilePhoto}
+                    onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
+                    isEditing={isEditing}
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
-                    <UserIcon className="w-10 h-10 text-gray-400" />
-                  </div>
+                  profileData.profilePhoto ? (
+                    <img
+                      src={profileData.profilePhoto}
+                      alt={`${profileData.firstName} ${profileData.lastName}`}
+                      className="w-24 h-24 rounded-full shadow object-cover bg-white"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
+                      <UserIcon className="w-10 h-10 text-gray-400" />
+                    </div>
+                  )
                 )}
               </div>
               <div className="flex-1">
@@ -363,6 +337,7 @@ const UserProfile: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
+                    <span className="font-medium text-custom-text min-w-[70px]">Location:</span>
                     {isEditing ? (
                       <div className="max-w-sm w-full">
                         <CityAutocomplete
@@ -381,6 +356,7 @@ const UserProfile: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
+                    <span className="font-medium text-custom-text min-w-[130px]">Number of Burns:</span>
                     {isEditing ? (
                       <Input
                         type="number"
@@ -401,26 +377,26 @@ const UserProfile: React.FC = () => {
                 </div>
               </div>
             </div>
-
-            {isEditing && (
-              <div className="mt-4 max-w-[240px]">
-                <PhotoUpload
-                  profilePhoto={profileData.profilePhoto}
-                  onPhotoChange={(photoUrl) => handleInputChange('profilePhoto', photoUrl)}
-                  isEditing={isEditing}
-                />
-              </div>
-            )}
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</p>
-                <p className="text-sm text-custom-text mt-1 flex items-center gap-1">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  {profileData.email}
-                </p>
+                {isEditing ? (
+                  <Input
+                    type="email"
+                    value={profileData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="Enter account email"
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm text-custom-text mt-1 flex items-center gap-1">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    {profileData.email}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -871,80 +847,6 @@ const UserProfile: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Login Credentials Section - Full Width at Bottom */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2 border-b border-gray-200 pb-4">
-          <Mail className="w-5 h-5 text-blue-600" />
-          Login Email
-        </h2>
-
-        <p className="text-sm text-gray-600 mb-4">
-          This email is used for account authentication. Changing it updates your login credentials.
-        </p>
-
-        {emailError && (
-          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
-            <p className="text-sm text-red-800 font-medium">{emailError}</p>
-          </div>
-        )}
-
-        {emailSuccess && (
-          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
-            <p className="text-sm text-green-800 font-medium">{emailSuccess}</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Current Email
-            </label>
-            <Input
-              value={user?.email || profileData.email}
-              disabled
-              className="bg-gray-100"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              New Email
-            </label>
-            <Input
-              type="email"
-              value={emailChangeData.newEmail}
-              onChange={(e) => setEmailChangeData(prev => ({ ...prev, newEmail: e.target.value }))}
-              placeholder="Enter new login email"
-              className="bg-gray-50"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Current Password
-            </label>
-            <Input
-              type="password"
-              value={emailChangeData.currentPassword}
-              onChange={(e) => setEmailChangeData(prev => ({ ...prev, currentPassword: e.target.value }))}
-              placeholder="Enter current password"
-              className="bg-gray-50"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex justify-end pt-6 border-t border-gray-200">
-          <Button
-            variant="primary"
-            onClick={handleEmailChange}
-            className="flex items-center gap-2 px-6"
-          >
-            <SaveIcon className="w-4 h-4" />
-            Update Login Email
-          </Button>
-        </div>
-      </div>
 
       {/* Change Password Section - Full Width at Bottom */}
       <div className="bg-white rounded-xl shadow-lg p-8">
