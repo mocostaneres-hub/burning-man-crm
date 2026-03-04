@@ -71,6 +71,16 @@ const TaskDetailsPage: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
 
+  const getTaskListPath = (campId?: string) => {
+    if (user?.accountType === 'personal') {
+      return '/tasks';
+    }
+    if (campId) {
+      return `/camp/${campId}/tasks`;
+    }
+    return '/camp/tasks';
+  };
+
   const loadTask = useCallback(async () => {
     try {
       setLoading(true);
@@ -152,7 +162,7 @@ const TaskDetailsPage: React.FC = () => {
         <Card className="p-8 text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Task Not Found</h2>
           <p className="text-gray-600 mb-6">{error || 'The task you are looking for does not exist or you do not have access to it.'}</p>
-          <Button onClick={() => navigate('/camp/tasks')}>
+          <Button onClick={() => navigate(getTaskListPath())}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Tasks
           </Button>
@@ -169,7 +179,7 @@ const TaskDetailsPage: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       {/* Header with back button */}
       <div className="mb-6 flex justify-between items-center">
-        <Button onClick={() => navigate('/camp/tasks')} variant="outline" className="flex items-center gap-2">
+        <Button onClick={() => navigate(getTaskListPath(task.campId?.toString()))} variant="outline" className="flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" />
           Back to Tasks
         </Button>
@@ -325,7 +335,8 @@ const TaskDetailsPage: React.FC = () => {
                 editTaskId: task._id,
                 campId: task.campId?.toString() || ''
               });
-              navigate(`/camp/tasks?${params.toString()}`, { state: { editTaskId: task._id, campId: task.campId } });
+              const taskListPath = getTaskListPath(task.campId?.toString());
+              navigate(`${taskListPath}?${params.toString()}`, { state: { editTaskId: task._id, campId: task.campId } });
             }}
             variant="outline"
           >

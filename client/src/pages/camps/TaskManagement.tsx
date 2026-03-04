@@ -129,6 +129,7 @@ const TaskManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [hasConsumedEditContext, setHasConsumedEditContext] = useState(false);
   const canManageAssignments = canShowTaskAssignmentOptions(user);
   const searchParams = new URLSearchParams(location.search);
   const editTaskIdFromQuery = searchParams.get('editTaskId');
@@ -179,11 +180,11 @@ const TaskManagement: React.FC = () => {
       fetchCampData();
     } else if (isPersonalEditFlow && editCampId) {
       setCampId(editCampId);
-    } else if (user) {
+    } else if (user && !campId) {
       setLoading(false);
       setError('Task management is only available for camp-affiliated accounts.');
     }
-  }, [user, fetchCampData, isPersonalEditFlow, editCampId]);
+  }, [user, fetchCampData, isPersonalEditFlow, editCampId, campId]);
 
   useEffect(() => {
     const resolveCampForEditTask = async () => {
@@ -200,6 +201,10 @@ const TaskManagement: React.FC = () => {
     };
     resolveCampForEditTask();
   }, [isPersonalEditFlow, campId, editTaskId]);
+
+  useEffect(() => {
+    setHasConsumedEditContext(false);
+  }, [editTaskId]);
 
   useEffect(() => {
     if (campId) {
@@ -300,17 +305,17 @@ const TaskManagement: React.FC = () => {
   // Handle editTaskId from navigation state or query params (for personal accounts)
   useEffect(() => {
     const handleEditFromContext = async () => {
-      if (!editTaskId || tasks.length === 0) return;
+      if (!editTaskId || tasks.length === 0 || hasConsumedEditContext) return;
       const taskToEdit = tasks.find((t) => t._id === editTaskId);
       if (taskToEdit) {
         await handleTaskClick(taskToEdit);
         setIsEditMode(true);
         setError('');
-        navigate(location.pathname, { replace: true });
+        setHasConsumedEditContext(true);
       }
     };
     handleEditFromContext();
-  }, [editTaskId, tasks, handleTaskClick, navigate, location.pathname]);
+  }, [editTaskId, tasks, handleTaskClick, hasConsumedEditContext]);
 
   const isCurrentUserAssigned = (task: GlobalTask | null): boolean => {
     if (!task || !user?._id) return false;

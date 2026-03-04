@@ -112,12 +112,24 @@ const CampProfileRedirect: React.FC = () => {
 // Generic redirect component for camp routes
 const CampRouteRedirect: React.FC<{ route: string }> = ({ route }) => {
   const { user } = useAuth();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const queryCampId = params.get('campId');
   
   // Get camp identifier and redirect to new URL format
-  const campId = user?.campId?.toString() || user?._id?.toString() || '';
-  const newPath = campId ? `/camp/${campId}${route}` : '/dashboard';
+  const derivedCampId = user?.campId?.toString() || user?._id?.toString() || '';
+  let newPath = derivedCampId ? `/camp/${derivedCampId}${route}` : '/dashboard';
+
+  // Personal assignees may hit /camp/tasks with explicit campId context from task edit flow.
+  if (route === '/tasks' && user?.accountType === 'personal') {
+    if (queryCampId) {
+      newPath = `/camp/${queryCampId}/tasks`;
+    } else {
+      newPath = '/tasks';
+    }
+  }
   
-  return <Navigate to={newPath} replace />;
+  return <Navigate to={`${newPath}${location.search || ''}`} replace />;
 };
 
 function App() {
