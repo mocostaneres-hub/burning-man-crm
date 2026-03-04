@@ -1,4 +1,8 @@
-import { buildEditTaskState, canShowTaskAssignmentOptions } from '../taskUiUtils';
+import {
+  buildEditTaskState,
+  buildTaskUpdatePayload,
+  canShowTaskAssignmentOptions
+} from '../taskUiUtils';
 
 describe('taskUiUtils', () => {
   it('shows assignment options for camp management users', () => {
@@ -31,5 +35,26 @@ describe('taskUiUtils', () => {
       assignedTo: ['user-1', 'user-2'],
       watchers: ['user-3']
     });
+  });
+
+  it('strips manager-only fields from assignee update payloads', () => {
+    const editState = {
+      title: 'Fix sound board',
+      description: 'Tune and test channels',
+      priority: 'medium',
+      dueDate: '2026-08-01',
+      status: 'open',
+      assignedTo: ['user-1', 'user-2'],
+      watchers: ['user-3']
+    } as any;
+
+    expect(buildTaskUpdatePayload(editState, false)).toEqual({
+      title: 'Fix sound board',
+      description: 'Tune and test channels',
+      priority: 'medium',
+      dueDate: '2026-08-01'
+    });
+
+    expect(buildTaskUpdatePayload(editState, true)).toEqual(editState);
   });
 });

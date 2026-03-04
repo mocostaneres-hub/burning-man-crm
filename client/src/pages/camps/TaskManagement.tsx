@@ -8,6 +8,7 @@ import { formatEventDate, formatTaskHistoryTimestamp } from '../../utils/dateFor
 import { Task as GlobalTask, User as GlobalUser, TaskHistoryEntry } from '../../types';
 import {
   AssignmentMode,
+  buildTaskUpdatePayload,
   buildEditTaskState,
   canShowTaskAssignmentOptions,
   getUserArray
@@ -364,8 +365,9 @@ const TaskManagement: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      console.log('🔄 [TaskManagement] Updating task:', selectedTask._id, 'with data:', editTask);
-      const updatedTask = await api.updateTask(selectedTask._id, editTask);
+      const updatePayload = buildTaskUpdatePayload(editTask, canManageAssignments);
+      console.log('🔄 [TaskManagement] Updating task:', selectedTask._id, 'with data:', updatePayload);
+      const updatedTask = await api.updateTask(selectedTask._id, updatePayload);
       console.log('✅ [TaskManagement] Task updated successfully:', updatedTask);
       
       // Refresh the tasks list

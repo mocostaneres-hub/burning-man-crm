@@ -1,6 +1,15 @@
 import { Task as GlobalTask, User as GlobalUser } from '../../types';
 
 export type AssignmentMode = 'creator' | 'roster' | 'individual';
+export type EditTaskState = {
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high';
+  dueDate: string;
+  status: 'open' | 'closed';
+  assignedTo: string[];
+  watchers: string[];
+};
 
 export const getUserArray = (field: string[] | GlobalUser[] | undefined): GlobalUser[] => {
   if (!field || field.length === 0) return [];
@@ -31,5 +40,22 @@ export const buildEditTaskState = (task: GlobalTask) => {
     status: task.status,
     assignedTo: assignees.map((u) => u._id.toString()),
     watchers: taskWatchers.map((u) => u._id.toString())
+  };
+};
+
+export const buildTaskUpdatePayload = (
+  editTask: EditTaskState,
+  canManageAssignments: boolean
+) => {
+  if (canManageAssignments) {
+    return editTask;
+  }
+
+  // Non-managers can edit task content, but assignment/watchers remain manager-only.
+  return {
+    title: editTask.title,
+    description: editTask.description,
+    priority: editTask.priority,
+    dueDate: editTask.dueDate
   };
 };
