@@ -392,10 +392,25 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
+    // CRITICAL: Verify camp is still active and valid (not deleted/inactive/archived)
+    // Only active camps should be publicly accessible
+    const validStatuses = ['active'];
+    const campStatus = camp.status || 'active'; // Default to active for legacy records
+    if (!validStatuses.includes(campStatus)) {
+      console.log(`❌ [GET /api/camps/public/:slug] Camp has invalid status: ${campStatus} for slug: ${slug}`);
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    // Additional check: if camp is missing critical owner/contact data, it may be orphaned
+    if (!camp.owner && !camp.contactEmail) {
+      console.log(`❌ [GET /api/camps/public/:slug] Camp appears orphaned (no owner/contact) for slug: ${slug}`);
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
     // Safe logging (avoid JSON.stringify on Mongoose docs - can throw on circular refs)
     const campId = camp._id?.toString?.() || camp._id;
     const campName = camp.name || camp.campName;
-    console.log('🔍 [GET /api/camps/public/:slug] Camp found:', campId, campName);
+    console.log('🔍 [GET /api/camps/public/:slug] Camp found and valid:', campId, campName, `status: ${camp.status || 'undefined'}`);
     
     // Check if the authenticated user is the camp admin
     // Camp admin can be:

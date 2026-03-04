@@ -202,6 +202,23 @@ async function permanentlyDeleteCamp(campId, adminId) {
     const id = camp._id;
     console.log(`🗑️ [Permanent Deletion] Starting deletion of camp: ${camp.name} (${id})`);
 
+    // SAFETY MEASURE: Set camp status to 'archived' before deletion
+    // This ensures that if deletion fails partway, the camp won't appear in public listings
+    try {
+      if (db.useMongoDB) {
+        const Camp = require('../models/Camp');
+        await Camp.updateOne({ _id: id }, { status: 'archived', isPubliclyVisible: false });
+        console.log(`🔒 [Permanent Deletion] Camp ${id} status set to 'archived' and made private`);
+      } else {
+        // For mock database, update the camp status
+        await db.updateCampById(id, { status: 'archived', isPubliclyVisible: false });
+        console.log(`🔒 [Permanent Deletion] Mock DB: Camp ${id} status set to 'archived' and made private`);
+      }
+    } catch (statusError) {
+      console.error(`⚠️ [Permanent Deletion] Failed to update camp status before deletion:`, statusError);
+      // Continue with deletion even if status update fails
+    }
+
     // Use database adapter or direct Mongoose for batch deletions (both should work with MongoDB)
     if (db.useMongoDB) {
       // Use direct Mongoose for efficient batch deleteMany operations
