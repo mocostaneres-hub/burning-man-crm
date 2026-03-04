@@ -49,12 +49,17 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
       db.findMembers()
     ]);
 
+    // Debug: Log data counts for troubleshooting
+    console.log(`🔍 [Admin Dashboard Stats] Raw data counts - Users: ${allUsers.length}, Camps: ${allCamps.length}, Members: ${allMembers.length}`);
+    
     // Calculate comprehensive stats with clear distinctions
     const allUsersCount = allUsers.length;
     const personalUsers = allUsers.filter(user => user.accountType === 'personal');
     const campUsers = allUsers.filter(user => user.accountType === 'camp');
     const adminUsers = allUsers.filter(user => user.accountType === 'admin');
     const unassignedUsers = allUsers.filter(user => user.accountType === 'unassigned' || !user.accountType);
+    
+    console.log(`🔍 [Admin Dashboard Stats] User types - Personal: ${personalUsers.length}, Camp: ${campUsers.length}, Admin: ${adminUsers.length}, Unassigned: ${unassignedUsers.length}`);
     
     // Personal users (what most stats should refer to as "users")
     const totalPersonalUsers = personalUsers.length;
@@ -80,6 +85,8 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
     const activeRosterMembers = allMembers.filter(member => member.status === 'active').length;
     const totalRosterMembers = allMembers.length; // All member applications regardless of status
     const pendingRosterMembers = allMembers.filter(member => member.status === 'pending').length;
+    
+    console.log(`🔍 [Admin Dashboard Stats] Member stats - Active: ${activeRosterMembers}, Total: ${totalRosterMembers}, Pending: ${pendingRosterMembers}`);
     
     // Account type breakdown
     const accountTypeStats = {
@@ -156,7 +163,7 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
       totalCamps: totalCamps,
       activeCamps: activeCamps,
       recruitingCamps: recruitingCamps,
-      totalMembers: totalMembers,
+      totalMembers: activeRosterMembers,
       accountTypeBreakdown: accountTypeStats,
       recentActivity: {
         newUsers: recentUsers.length,
