@@ -232,7 +232,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(1); // Default to Camps (Members=0, Camps=1)
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -832,20 +832,10 @@ const AdminDashboard: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-custom-text-secondary">Account Types</p>
-              <div className="mt-2 text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span>Personal:</span>
-                  <span className="font-medium">{stats?.accountTypeStats?.personal || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Camp:</span>
-                  <span className="font-medium">{stats?.accountTypeStats?.camp || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Admin:</span>
-                  <span className="font-medium">{stats?.accountTypeStats?.admin || 0}</span>
-                </div>
+              <p className="text-sm font-medium text-custom-text-secondary">System Admins</p>
+              <p className="text-2xl font-lato-bold text-custom-text">{stats?.accountTypeStats?.admin || 0}</p>
+              <div className="mt-2 text-xs text-custom-text-secondary">
+                Active admin accounts
               </div>
             </div>
             <Shield className="w-8 h-8 text-custom-primary" />
@@ -853,47 +843,14 @@ const AdminDashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* System Health Overview */}
-      {systemHealth && (
-        <Card className="p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-custom-text">System Health</h3>
-            <div className="flex items-center gap-2">
-              <CheckCircleIcon className="w-5 h-5 text-green-600" />
-              <span className="text-sm text-green-600 font-medium">Healthy</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-custom-text">{systemHealth.totalAccounts}</p>
-              <p className="text-sm text-custom-text-secondary">Total Accounts</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{systemHealth.activeAccounts}</p>
-              <p className="text-sm text-custom-text-secondary">Active Accounts</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{systemHealth.recruitingCamps}</p>
-              <p className="text-sm text-custom-text-secondary">Recruiting Camps</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{systemHealth.recentActivity.newUsers + systemHealth.recentActivity.newCamps}</p>
-              <p className="text-sm text-custom-text-secondary">New This Month</p>
-            </div>
-          </div>
-        </Card>
-      )}
 
       {/* Navigation Tabs */}
       <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg overflow-x-auto">
         {[
-          { id: 0, name: 'Overview', icon: Shield },
-          { id: 1, name: 'Members', icon: Users },
-          { id: 2, name: 'Camps', icon: BuildingIcon },
-          { id: 3, name: 'Analytics', icon: Shield },
-          { id: 4, name: 'Audit Logs', icon: Clock },
-          { id: 5, name: 'Email Templates', icon: Edit },
-          { id: 6, name: 'System', icon: Shield }
+          { id: 0, name: 'Members', icon: Users },
+          { id: 1, name: 'Camps', icon: BuildingIcon },
+          { id: 2, name: 'Email Templates', icon: Edit },
+          { id: 3, name: 'System', icon: Shield }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -911,8 +868,8 @@ const AdminDashboard: React.FC = () => {
       </div>
 
 
-      {/* Search - only show for Users and Camps tabs */}
-      {activeTab !== 2 && activeTab !== 3 && (
+      {/* Search - only show for Members and Camps tabs */}
+      {(activeTab === 0 || activeTab === 1) && (
         <div className="mb-6">
           <div className="relative max-w-md">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -926,69 +883,8 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Overview Tab */}
+      {/* Members Tab */}
       {activeTab === 0 && (
-        <div className="space-y-6">
-          <Card className="p-6">
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              System Overview
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Recent Activity</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-green-600" />
-                      <span className="text-sm">New users this month</span>
-                    </div>
-                    <span className="font-medium">{systemHealth?.recentActivity.newUsers || 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <BuildingIcon className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm">New camps this month</span>
-                    </div>
-                    <span className="font-medium">{systemHealth?.recentActivity.newCamps || 0}</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
-                <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => setShowAnalytics(true)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Analytics
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => setShowAuditLogs(true)}
-                  >
-                    <Clock className="w-4 h-4 mr-2" />
-                    View Audit Logs
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => setActiveTab(1)}
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Manage Members
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Users Tab */}
-      {activeTab === 1 && (
         <Card>
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1173,7 +1069,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Camps Tab */}
-      {activeTab === 2 && (
+      {activeTab === 1 && (
         <Card>
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1656,12 +1552,12 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Email Templates Tab */}
-      {activeTab === 5 && (
+      {activeTab === 2 && (
         <EmailTemplateEditor />
       )}
 
       {/* System Tab */}
-      {activeTab === 6 && (
+      {activeTab === 3 && (
         <SystemConfig />
       )}
 
