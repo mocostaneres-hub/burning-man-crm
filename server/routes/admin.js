@@ -356,9 +356,12 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
         }
       }
       
-      // Log if owner lookup completely failed (for debugging)
+      // Log and mark orphaned camps explicitly
       if (!owner) {
-        console.log(`⚠️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - owner lookup failed. camp.owner: ${campData.owner}, contactEmail: ${campData.contactEmail}`);
+        console.log(`🗑️ [Admin Camps] Camp ${campData._id} (${campData.name || campData.campName}) - ORPHANED - no owner found anywhere. camp.owner: ${campData.owner}, contactEmail: ${campData.contactEmail}`);
+        // Clear ownerRef to ensure filtering works properly
+        campData.ownerRef = null;
+        campData.isOrphaned = true;
       }
 
       // Get actual member count from roster
@@ -587,16 +590,20 @@ router.get('/camps', authenticateToken, requireAdmin, async (req, res) => {
     const beforeFilterCount = enrichedCamps.length;
     console.log(`🔍 [Admin GET /camps] Before filtering: ${beforeFilterCount} camps`);
     let filteredCamps = enrichedCamps.filter(c => {
-      const hasOwner = !!c.owner;
+      // CRITICAL FIX: Only keep camps with valid owner objects (not just ownerRef)
+      const hasValidOwner = !!(c.owner && typeof c.owner === 'object' && c.owner._id);
       const hasOwnerRef = !!c.ownerRef;
-      // Keep camps that have an owner OR don't have ownerRef (prevent null.owner checks for camps without owner field)
-      const keep = hasOwner || !hasOwnerRef;
-      if (!keep) {
-        console.log(`🗑️ [Admin GET /camps] Filtering out orphaned camp: ${c.name || c.campName} (${c._id}) - ownerRef: ${c.ownerRef}, hasOwner: ${hasOwner}, owner: ${c.owner ? 'present' : 'null'}`);
+      
+      if (!hasValidOwner) {
+        console.log(`🗑️ [Admin GET /camps] Filtering out orphaned camp: ${c.name || c.campName} (${c._id}) - ownerRef: ${hasOwnerRef}, owner: ${c.owner ? 'invalid' : 'null'}`);
+        if (hasOwnerRef && !c.owner) {
+          console.log(`🗑️ [Admin GET /camps] Camp has ownerRef ${c.ownerRef} but no owner object - likely deleted user`);
+        }
       } else {
-        console.log(`✅ [Admin GET /camps] Keeping camp: ${c.name || c.campName} (${c._id}) - hasOwner: ${hasOwner}, hasOwnerRef: ${hasOwnerRef}`);
+        console.log(`✅ [Admin GET /camps] Keeping camp: ${c.name || c.campName} (${c._id}) - valid owner: ${c.owner._id}`);
       }
-      return keep;
+      
+      return hasValidOwner;
     });
     const afterFilterCount = filteredCamps.length;
     console.log(`📊 [Admin GET /camps] Filtered camps: ${beforeFilterCount} -> ${afterFilterCount} (removed ${beforeFilterCount - afterFilterCount} orphaned)`);
@@ -1508,6 +1515,19 @@ router.delete('/camps/:id', authenticateToken, requireAdmin, async (req, res) =>
 
     console.log(`✅ [Admin DELETE] Admin ${adminUser.email} permanently deleted camp: ${result.campName} (ID: ${id})`);
     console.log(`🗑️ [Admin DELETE] Deleted entities:`, result.deletedEntities);
+    
+    // VERIFICATION: Check if the camp is actually gone from the database
+    const verificationCamp = await db.findCamp({ _id: id });
+    if (verificationCamp) {
+      console.error(`❌ [Admin DELETE] CRITICAL: Camp still exists in database after deletion! ${id}`);
+      console.error(`❌ [Admin DELETE] Verification found camp:`, verificationCamp);
+      return res.status(500).json({ 
+        message: 'Deletion failed - camp still exists in database', 
+        error: 'Database inconsistency detected'
+      });
+    } else {
+      console.log(`✅ [Admin DELETE] Verification: Camp ${id} confirmed deleted from database`);
+    }
     
     res.json({
       message: result.message,
