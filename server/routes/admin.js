@@ -75,17 +75,41 @@ router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
     const activeUsers = allUsers.filter(user => user.isActive).length;
     const inactiveUsers = totalUsers - activeUsers;
     
-    // Camp statistics (filter out orphaned camps using same strict logic as camps list)
+    // Camp statistics (filter using same owner lookup logic as camps list with fallback strategies)
     const validCamps = allCamps.filter(camp => {
-      // Apply same strict filtering as camps list: require valid owner that actually exists
-      if (!camp.owner) return false;
+      // Strategy 1: Direct owner lookup
+      if (camp.owner) {
+        const ownerExists = allUsers.find(user => 
+          user._id.toString() === camp.owner.toString()
+        );
+        if (ownerExists) return true;
+      }
       
-      // Check if the owner user actually exists (not deleted)
-      const ownerExists = allUsers.find(user => 
-        user._id.toString() === camp.owner.toString()
+      // Strategy 2: Fallback - find owner by contactEmail (matches camps list enrichment)
+      if (camp.contactEmail) {
+        const email = camp.contactEmail.toLowerCase().trim();
+        const ownerByEmail = allUsers.find(user => 
+          user.email && user.email.toLowerCase() === email
+        );
+        if (ownerByEmail) return true;
+        
+        // Try exact match without lowercasing
+        const ownerByEmailExact = allUsers.find(user => 
+          user.email === camp.contactEmail
+        );
+        if (ownerByEmailExact) return true;
+      }
+      
+      // Strategy 3: Fallback - find camp account user by campId (matches camps list enrichment)
+      const campAccountUser = allUsers.find(user => 
+        user.accountType === 'camp' && 
+        user.campId && 
+        user.campId.toString() === camp._id.toString()
       );
+      if (campAccountUser) return true;
       
-      return !!ownerExists;
+      // No valid owner found through any strategy
+      return false;
     });
     const totalCamps = validCamps.length;
     const activeCamps = validCamps.filter(camp => camp.status === 'active').length;
