@@ -45,17 +45,28 @@ export const buildEditTaskState = (task: GlobalTask) => {
 
 export const buildTaskUpdatePayload = (
   editTask: EditTaskState,
-  canManageAssignments: boolean
+  options: { canManageAssignments: boolean; canReassignTask: boolean }
 ) => {
+  const { canManageAssignments, canReassignTask } = options;
+
   if (canManageAssignments) {
     return editTask;
   }
 
-  // Non-managers can edit task content, but assignment/watchers remain manager-only.
-  return {
+  const basePayload = {
     title: editTask.title,
     description: editTask.description,
     priority: editTask.priority,
     dueDate: editTask.dueDate
   };
+
+  if (canReassignTask) {
+    return {
+      ...basePayload,
+      assignedTo: editTask.assignedTo
+    };
+  }
+
+  // Non-managers can edit content only when they don't have reassignment rights.
+  return basePayload;
 };

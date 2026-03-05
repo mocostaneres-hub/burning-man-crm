@@ -329,6 +329,7 @@ const TaskManagement: React.FC = () => {
 
   const canEditSelectedTask =
     canManageAssignments || isCurrentUserAssigned(selectedTask) || isCurrentUserWatcher(selectedTask);
+  const canReassignSelectedTask = canManageAssignments || isCurrentUserAssigned(selectedTask);
 
   const handleEditClick = () => {
     if (!canEditSelectedTask) {
@@ -370,7 +371,10 @@ const TaskManagement: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      const updatePayload = buildTaskUpdatePayload(editTask, canManageAssignments);
+      const updatePayload = buildTaskUpdatePayload(editTask, {
+        canManageAssignments,
+        canReassignTask: canReassignSelectedTask
+      });
       console.log('🔄 [TaskManagement] Updating task:', selectedTask._id, 'with data:', updatePayload);
       const updatedTask = await api.updateTask(selectedTask._id, updatePayload);
       console.log('✅ [TaskManagement] Task updated successfully:', updatedTask);
@@ -952,92 +956,90 @@ const TaskManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {canManageAssignments && (
-                  <>
-                    {/* Assign Members */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Assign To ({editTask.assignedTo.length} selected)
-                      </label>
-                      {loadingMembers ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                          {rosterMembers.map((member) => {
-                            const userId = member.user?._id?.toString();
-                            if (!userId) return null;
-                            return (
-                              <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editTask.assignedTo.includes(userId)}
-                                  onChange={() => toggleAssignee(userId)}
-                                  className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                                />
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-900">
-                                    {member.user?.firstName} {member.user?.lastName}
-                                    {member.user?.playaName && (
-                                      <span className="text-gray-500 ml-2">({member.user.playaName})</span>
-                                    )}
-                                  </div>
+                {canReassignSelectedTask && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assign To ({editTask.assignedTo.length} selected)
+                    </label>
+                    {loadingMembers ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                        {rosterMembers.map((member) => {
+                          const userId = member.user?._id?.toString();
+                          if (!userId) return null;
+                          return (
+                            <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editTask.assignedTo.includes(userId)}
+                                onChange={() => toggleAssignee(userId)}
+                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                              />
+                              <div className="text-sm">
+                                <div className="font-medium text-gray-900">
+                                  {member.user?.firstName} {member.user?.lastName}
+                                  {member.user?.playaName && (
+                                    <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                  )}
                                 </div>
-                              </label>
-                            );
-                          })}
-                          {rosterMembers.length === 0 && (
-                            <div className="text-center py-4 text-gray-500">
-                              No roster members found
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                        {rosterMembers.length === 0 && (
+                          <div className="text-center py-4 text-gray-500">
+                            No roster members found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                    {/* Watchers */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Watchers ({editTask.watchers.length} selected)
-                      </label>
-                      {loadingMembers ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
-                          {rosterMembers.map((member) => {
-                            const userId = member.user?._id?.toString();
-                            if (!userId) return null;
-                            return (
-                              <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editTask.watchers.includes(userId)}
-                                  onChange={() => toggleWatcher(userId)}
-                                  className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
-                                />
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-900">
-                                    {member.user?.firstName} {member.user?.lastName}
-                                    {member.user?.playaName && (
-                                      <span className="text-gray-500 ml-2">({member.user.playaName})</span>
-                                    )}
-                                  </div>
+                {canManageAssignments && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Watchers ({editTask.watchers.length} selected)
+                    </label>
+                    {loadingMembers ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-6 h-6 animate-spin text-custom-primary" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
+                        {rosterMembers.map((member) => {
+                          const userId = member.user?._id?.toString();
+                          if (!userId) return null;
+                          return (
+                            <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editTask.watchers.includes(userId)}
+                                onChange={() => toggleWatcher(userId)}
+                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                              />
+                              <div className="text-sm">
+                                <div className="font-medium text-gray-900">
+                                  {member.user?.firstName} {member.user?.lastName}
+                                  {member.user?.playaName && (
+                                    <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                  )}
                                 </div>
-                              </label>
-                            );
-                          })}
-                          {rosterMembers.length === 0 && (
-                            <div className="text-center py-4 text-gray-500">
-                              No roster members found
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
+                              </div>
+                            </label>
+                          );
+                        })}
+                        {rosterMembers.length === 0 && (
+                          <div className="text-center py-4 text-gray-500">
+                            No roster members found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex gap-2 pt-4 border-t">

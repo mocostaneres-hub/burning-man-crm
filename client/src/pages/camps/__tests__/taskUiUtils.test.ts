@@ -48,13 +48,27 @@ describe('taskUiUtils', () => {
       watchers: ['user-3']
     } as any;
 
-    expect(buildTaskUpdatePayload(editState, false)).toEqual({
+    expect(
+      buildTaskUpdatePayload(editState, { canManageAssignments: false, canReassignTask: false })
+    ).toEqual({
       title: 'Fix sound board',
       description: 'Tune and test channels',
       priority: 'medium',
       dueDate: '2026-08-01'
     });
 
-    expect(buildTaskUpdatePayload(editState, true)).toEqual(editState);
+    expect(
+      buildTaskUpdatePayload(editState, { canManageAssignments: false, canReassignTask: true })
+    ).toEqual({
+      title: 'Fix sound board',
+      description: 'Tune and test channels',
+      priority: 'medium',
+      dueDate: '2026-08-01',
+      assignedTo: ['user-1', 'user-2']
+    });
+
+    expect(
+      buildTaskUpdatePayload(editState, { canManageAssignments: true, canReassignTask: true })
+    ).toEqual(editState);
   });
 });

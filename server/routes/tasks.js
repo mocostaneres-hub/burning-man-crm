@@ -589,6 +589,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const currentUserId = req.user._id.toString();
     const isAssigned = task.assignedTo && task.assignedTo.some(assigneeId => assigneeId.toString() === currentUserId);
     const isWatcher = task.watchers && task.watchers.some(watcherId => watcherId.toString() === currentUserId);
+    const canReassignTask = canManageTask || isAssigned;
 
     // Allow camp owners, active roster members, assigned users, or watchers
     if (!hasCampAccess && !isAssigned && !isWatcher) {
@@ -602,8 +603,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
       unknownFields.forEach((key) => delete updates[key]);
     }
 
-    if (!canManageTask && (updates.assignedTo !== undefined || updates.watchers !== undefined || updates.assignmentScope || updates.individualAssigneeId)) {
-      return res.status(403).json({ message: 'Only camp management can change task assignment or watchers' });
+    if (!canManageTask && (updates.watchers !== undefined || updates.assignmentScope || updates.individualAssigneeId)) {
+      return res.status(403).json({ message: 'Only camp management can change task watchers or assignment scope' });
+    }
+
+    if (!canReassignTask && updates.assignedTo !== undefined) {
+      return res.status(403).json({ message: 'Only camp management or current assignees can reassign this task' });
     }
 
     console.log('✅ [PUT /api/tasks/:id] User authorized to update task:', {
@@ -623,9 +628,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       watchers: [...(task.watchers || [])].map(id => id.toString())
     };
 
-    if (canManageTask && (updates.assignedTo !== undefined || updates.assignmentScope || updates.individualAssigneeId)) {
-      const effectiveScope = updates.assignmentScope;
-      const effectiveIndividual = updates.individualAssigneeId;
+    if (updates.assignedTo !== undefined || (canManageTask && (updates.assignmentScope || updates.individualAssigneeId))) {
+      const effectiveScope = canManageTask ? updates.assignmentScope : undefined;
+      const effectiveIndividual = canManageTask ? updates.individualAssigneeId : undefined;
       updates.assignedTo = await resolveAssignedUserIds({
         campId: task.campId,
         assignedTo: updates.assignedTo,
