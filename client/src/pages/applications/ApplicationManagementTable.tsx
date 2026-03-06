@@ -52,6 +52,48 @@ interface Application {
   };
 }
 
+const APPLICATION_QUEUE_ORDER = [
+  'under-review',
+  'pending-orientation',
+  'approved',
+  'undecided',
+  'rejected',
+  'all'
+] as const;
+
+type ApplicationQueueFilter = (typeof APPLICATION_QUEUE_ORDER)[number];
+
+const APPLICATION_STATUS_OPTIONS = [
+  'pending',
+  'pending-orientation',
+  'under-review',
+  'approved',
+  'rejected',
+  'undecided'
+] as const;
+
+type ApplicationStatusOption = (typeof APPLICATION_STATUS_OPTIONS)[number];
+
+const DEPRECATED_APPLICATION_STATUSES = ['call-scheduled', 'unresponsive'] as const;
+
+const formatQueueLabel = (status: ApplicationQueueFilter): string => {
+  switch (status) {
+    case 'under-review':
+      return 'New';
+    case 'pending-orientation':
+      return 'Pending Orientation';
+    case 'approved':
+      return 'Approved';
+    case 'undecided':
+      return 'Undecided';
+    case 'rejected':
+      return 'Rejected';
+    case 'all':
+    default:
+      return 'All';
+  }
+};
+
 const ApplicationManagementTable: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -90,12 +132,12 @@ const ApplicationManagementTable: React.FC = () => {
   const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive' | 'undecided'>('all');
+  const [statusFilter, setStatusFilter] = useState<ApplicationQueueFilter>('under-review');
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatusOption>('under-review');
   const applicationsTableScrollRef = useRef<HTMLDivElement | null>(null);
   const [applicationsMaxScrollLeft, setApplicationsMaxScrollLeft] = useState(0);
   const [applicationsScrollLeft, setApplicationsScrollLeft] = useState(0);
@@ -251,7 +293,7 @@ const ApplicationManagementTable: React.FC = () => {
       case 'pending-orientation':
         return <Badge variant="warning">Pending Orientation</Badge>;
       case 'under-review':
-        return <Badge variant="neutral">Under Review</Badge>;
+        return <Badge variant="neutral">New</Badge>;
       case 'unresponsive':
         return <Badge variant="error">Unresponsive</Badge>;
       case 'undecided':
@@ -298,7 +340,10 @@ const ApplicationManagementTable: React.FC = () => {
   const openApplicationModal = (application: Application) => {
     setSelectedApplication(application);
     setReviewNotes(application.reviewNotes || '');
-    setSelectedStatus(application.status);
+    const normalizedStatus = DEPRECATED_APPLICATION_STATUSES.includes(application.status as any)
+      ? 'under-review'
+      : (application.status as ApplicationStatusOption);
+    setSelectedStatus(normalizedStatus);
     setShowApplicationModal(true);
   };
 
@@ -348,20 +393,14 @@ const ApplicationManagementTable: React.FC = () => {
             <span className="text-label font-medium text-custom-text">Filter:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(['all', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'undecided'] as const).map((status) => (
+            {APPLICATION_QUEUE_ORDER.map((status) => (
               <Button
                 key={status}
                 variant={statusFilter === status ? 'primary' : 'outline'}
                 size="sm"
                 onClick={() => setStatusFilter(status)}
               >
-                {status === 'all' ? 'All' : 
-                 status === 'call-scheduled' ? 'Call Scheduled' :
-                 status === 'pending-orientation' ? 'Pending Orientation' :
-                 status === 'under-review' ? 'Under Review' :
-                 status === 'unresponsive' ? 'Unresponsive' :
-                 status === 'undecided' ? 'Undecided' :
-                 status.charAt(0).toUpperCase() + status.slice(1)}
+                {formatQueueLabel(status)}
               </Button>
             ))}
           </div>
@@ -660,7 +699,7 @@ const ApplicationManagementTable: React.FC = () => {
             <p className="text-body text-custom-text-secondary">
               {statusFilter === 'all' 
                 ? 'No applications have been submitted yet.'
-                : `No ${statusFilter} applications found.`
+                : `No ${formatQueueLabel(statusFilter)} applications found.`
               }
             </p>
           </div>
@@ -933,16 +972,14 @@ const ApplicationManagementTable: React.FC = () => {
                     </label>
                     <select
                       value={selectedStatus}
-                      onChange={(e) => setSelectedStatus(e.target.value)}
+                      onChange={(e) => setSelectedStatus(e.target.value as ApplicationStatusOption)}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
                     >
                       <option value="pending">Pending</option>
-                      <option value="call-scheduled">Call Scheduled</option>
                       <option value="pending-orientation">Pending Orientation</option>
-                      <option value="under-review">Under Review</option>
+                      <option value="under-review">New</option>
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
-                      <option value="unresponsive">Unresponsive</option>
                       <option value="undecided">Undecided</option>
                     </select>
                   </div>
