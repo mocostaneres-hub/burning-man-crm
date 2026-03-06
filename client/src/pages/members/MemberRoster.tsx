@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
-import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock } from 'lucide-react';
+import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -8,7 +8,7 @@ import { Member, StructuredLocation } from '../../types';
 import { formatDate } from '../../utils/dateFormatters';
 import MetricsPanel from '../../components/roster/MetricsPanel';
 import RosterFilters, { FilterType } from '../../components/roster/RosterFilters';
-import { InviteMembersModal } from '../../components/invites';
+import { ImportRosterModal, InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { useSkills } from '../../hooks/useSkills';
@@ -206,6 +206,7 @@ const MemberRoster: React.FC = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<RosterMember | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [importRosterModalOpen, setImportRosterModalOpen] = useState(false);
   // Roster rename state
   const [rosterName, setRosterName] = useState<string>('Member Roster');
   const [rosterId, setRosterId] = useState<string | null>(null);
@@ -213,6 +214,7 @@ const MemberRoster: React.FC = () => {
   const [newRosterName, setNewRosterName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
+  const showAddMemberTile = false;
   // Camp Lead role management
   const [campLeadConfirmModal, setCampLeadConfirmModal] = useState<{
     isOpen: boolean;
@@ -1187,28 +1189,29 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {/* Invite Member + View Invites - camp admins/leads */}
+          {/* Invite Member tile - camp admins/leads */}
           {canEdit && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setInviteModalOpen(true)}
-                className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
-              >
-                <Mail className="w-4 h-4" />
-                Invite Member
-              </Button>
+            <Button
+              variant="outline"
+              onClick={() => setInviteModalOpen(true)}
+              className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
+              title="Send an invitation to a new member to apply to the camp."
+            >
+              <Mail className="w-4 h-4" />
+              Invite Member
+            </Button>
+          )}
 
-              <Link to={`/camp/invites`}>
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
-                >
-                  <Eye className="w-4 h-4" />
-                  View Invites
-                </Button>
-              </Link>
-            </>
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={() => setImportRosterModalOpen(true)}
+              className="flex items-center gap-2 text-purple-600 border-purple-600 hover:bg-purple-50"
+              title="Upload a CSV file of email addresses to send multiple invitations at once."
+            >
+              <Upload className="w-4 h-4" />
+              Import Roster
+            </Button>
           )}
 
           {/* Export Roster button - Available for all users with roster access */}
@@ -1217,6 +1220,7 @@ const MemberRoster: React.FC = () => {
               variant="outline"
               onClick={handleExportRoster}
               className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+              title="Download the current roster as a file."
             >
               <span className="text-lg">↓</span>
               Export Roster
@@ -1229,6 +1233,7 @@ const MemberRoster: React.FC = () => {
               className="flex items-center gap-2"
               onClick={handleOpenDuesTemplates}
               disabled={duesTemplatesLoading}
+              title="Edit your dues instructions and receipt emails."
             >
               Dues Emails
             </Button>
@@ -1241,6 +1246,7 @@ const MemberRoster: React.FC = () => {
               onClick={handleArchiveRoster}
               disabled={archiveLoading}
               className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+              title="Archive the current roster and move it to historical records."
             >
               <Users className={`w-4 h-4 ${archiveLoading ? 'animate-pulse' : ''}`} />
               Archive Roster
@@ -1252,12 +1258,13 @@ const MemberRoster: React.FC = () => {
             onClick={fetchMembers}
             disabled={loading}
             className="flex items-center gap-2"
+            title="Reload the roster data and latest updates."
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
-          {canEdit && rosterId && (
+          {showAddMemberTile && canEdit && rosterId && (
             <Button
               variant="primary"
               className="flex items-center gap-2"
@@ -1821,7 +1828,7 @@ const MemberRoster: React.FC = () => {
               Your roster has been created but has no members yet.
             </p>
             <p className="text-sm text-custom-text-secondary">
-              Add members by approving applications or using the "Add Member" button above.
+              Add members by approving applications or sending invites.
             </p>
           </div>
         )}
@@ -2569,6 +2576,13 @@ const MemberRoster: React.FC = () => {
       <InviteMembersModal
         isOpen={inviteModalOpen}
         onClose={() => setInviteModalOpen(false)}
+        campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
+      />
+
+      {/* Import Roster Modal */}
+      <ImportRosterModal
+        isOpen={importRosterModalOpen}
+        onClose={() => setImportRosterModalOpen(false)}
         campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
       />
 

@@ -39,7 +39,6 @@ import CallSlotManagement from './pages/camps/CallSlotManagement';
 import TaskManagement from './pages/camps/TaskManagement';
 import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
-import InviteTrackingPage from './pages/invites/InviteTrackingPage';
 import SelectRole from './pages/onboarding/SelectRole';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useLocation } from 'react-router-dom';
@@ -258,11 +257,6 @@ function App() {
                   <Route path="/camp/:campId/contacts/:userId" element={
                     <ProtectedRoute requireCampAccount>
                       <Contact360View />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/invites" element={
-                    <ProtectedRoute requireCampAccount>
-                      <InviteTrackingPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/camps" element={<CampDiscovery />} />

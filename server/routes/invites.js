@@ -263,9 +263,34 @@ router.post('/invites',
       
       const invitesSent = [];
       const sendErrors = [];
+      const existingInvites = await db.findInvites({ campId });
+      const existingRecipients = new Set(
+        existingInvites
+          .map((invite) => (invite?.recipient || '').toString().trim().toLowerCase())
+          .filter(Boolean)
+      );
       
       for (const recipient of recipients) {
         try {
+          const normalizedRecipient = recipient.trim().toLowerCase();
+
+          if (!normalizedRecipient) {
+            sendErrors.push({
+              recipient,
+              error: 'Recipient cannot be empty'
+            });
+            continue;
+          }
+
+          // Prevent duplicate invites for the same camp/email.
+          if (existingRecipients.has(normalizedRecipient)) {
+            sendErrors.push({
+              recipient: normalizedRecipient,
+              error: 'An invite already exists for this recipient'
+            });
+            continue;
+          }
+
           // Generate secure token
           const token = crypto.randomBytes(32).toString('hex');
           
@@ -273,7 +298,7 @@ router.post('/invites',
           const inviteData = {
             campId,
             senderId: req.user._id,
-            recipient: recipient.trim(),
+            recipient: normalizedRecipient,
             method,
             token,
             status: 'pending'
@@ -339,26 +364,27 @@ router.post('/invites',
               
               // Send email using the email service
               await sendInviteEmail(
-                recipient.trim(),
+                normalizedRecipient,
                 camp,
                 sender,
                 inviteLink,
                 message // Pass the custom message from template (placeholders already replaced)
               );
               
-              console.log(`✅ Email invitation sent to ${recipient.trim()}`);
-              console.log(`📧 [INVITE] Created invite with ID: ${invite._id}, campId: ${campId}, recipient: ${recipient.trim()}`);
+              console.log(`✅ Email invitation sent to ${normalizedRecipient}`);
+              console.log(`📧 [INVITE] Created invite with ID: ${invite._id}, campId: ${campId}, recipient: ${normalizedRecipient}`);
               
               // Update invite status to sent
               await db.updateInviteById(invite._id, { status: 'sent' });
               
               // Add to successful invites list
               invitesSent.push({
-                recipient,
+                recipient: normalizedRecipient,
                 token,
                 inviteLink,
                 status: 'sent'
               });
+              existingRecipients.add(normalizedRecipient);
             } catch (emailError) {
               console.error(`❌ Error sending email invitation to ${recipient}:`, emailError);
               // Don't fail the entire request, but mark this invite as failed
@@ -379,11 +405,12 @@ router.post('/invites',
             
             // Add to successful invites list (SMS is considered "sent" even though not actually sent)
             invitesSent.push({
-              recipient,
+              recipient: normalizedRecipient,
               token,
               inviteLink,
               status: 'sent'
             });
+            existingRecipients.add(normalizedRecipient);
           }
           
         } catch (error) {
