@@ -52,21 +52,36 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
       
       console.log('🔄 [InviteModal] Loading templates for campId:', campId);
       
-      // Load templates and camp data in parallel
-      const [templatesResponse, campResponse] = await Promise.all([
-        api.get(`/camps/${campId}/invites/template`),
-        api.getCamp(campId)
-      ]);
-      
+      // Always load templates first; this endpoint is authorized for invite flow.
+      const templatesResponse = await api.getInviteTemplates(campId!);
       console.log('✅ [InviteModal] Templates loaded:', templatesResponse);
-      console.log('✅ [InviteModal] Camp data loaded:', campResponse);
-      
-      // api.get() already returns response.data, so use it directly
       setTemplates(templatesResponse);
-      
-      // Handle both 'campName' and 'name' fields from API response
-      const camp: any = campResponse.camp || campResponse;
-      setCampName(camp?.name || camp?.campName || user?.campName || 'Your Camp');
+
+      // Resolve camp name as best-effort only; do not fail modal when unauthorized.
+      let resolvedCampName = user?.campName || 'Your Camp';
+      try {
+        const isCurrentCampContext =
+          user?.accountType === 'camp' &&
+          user?.campId?.toString() === campId;
+
+        if (isCurrentCampContext) {
+          const myCamp: any = await api.getMyCamp();
+          resolvedCampName = myCamp?.name || myCamp?.campName || resolvedCampName;
+          console.log('✅ [InviteModal] Camp name loaded from /camps/my-camp:', resolvedCampName);
+        } else {
+          const campResponse = await api.getCamp(campId!);
+          const camp: any = campResponse?.camp || campResponse;
+          resolvedCampName = camp?.name || camp?.campName || resolvedCampName;
+          console.log('✅ [InviteModal] Camp name loaded from /camps/:id:', resolvedCampName);
+        }
+      } catch (campErr: any) {
+        console.warn(
+          '⚠️ [InviteModal] Camp name lookup failed (continuing with fallback):',
+          campErr?.response?.data || campErr?.message
+        );
+      }
+
+      setCampName(resolvedCampName);
     } catch (err: any) {
       console.error('❌ [InviteModal] Error loading templates:', err);
       console.error('❌ [InviteModal] Error response:', err.response?.data);
