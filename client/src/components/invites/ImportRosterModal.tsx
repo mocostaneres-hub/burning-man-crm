@@ -163,6 +163,9 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
             <p className="text-xs text-gray-500 mt-2">
               Include email addresses in one column or multiple columns. One email per cell works best.
             </p>
+            <p className="text-sm text-gray-700 mt-3">
+              Once you submit your file, each email address will receive an invitation to join your camp. You&apos;ll be notified of each application, and you can review them in your Applications section and move them to your roster.
+            </p>
           </div>
 
           {selectedFile && (
