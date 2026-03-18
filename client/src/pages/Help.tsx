@@ -27,6 +27,7 @@ interface SupportMessage {
 }
 
 type RequesterType = 'camp' | 'member' | 'other';
+const SHOW_SUPPORT_MESSAGES_SECTION = false;
 
 const Help: React.FC = () => {
   const { user } = useAuth();
@@ -73,10 +74,11 @@ const Help: React.FC = () => {
   const loadHelpData = async () => {
     try {
       setLoading(true);
-      await Promise.all([
-        loadFAQs(),
-        loadSupportMessages()
-      ]);
+      const requests: Promise<any>[] = [loadFAQs()];
+      if (SHOW_SUPPORT_MESSAGES_SECTION) {
+        requests.push(loadSupportMessages());
+      }
+      await Promise.all(requests);
     } catch (err) {
       console.error('Error loading help data:', err);
     } finally {
@@ -347,8 +349,8 @@ const Help: React.FC = () => {
             </div>
           </Card>
 
-          {/* Support Messages History */}
-          {supportMessages.length > 0 && (
+          {/* Support Messages History (deprecated - keep code behind flag for easy re-enable) */}
+          {SHOW_SUPPORT_MESSAGES_SECTION && supportMessages.length > 0 && (
             <div className="mt-8">
               <h3 className="text-h3 font-lato-bold text-custom-text mb-4">
                 Your Support Messages
