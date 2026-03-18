@@ -26,6 +26,8 @@ interface SupportMessage {
   updatedAt: string;
 }
 
+type RequesterType = 'camp' | 'member' | 'other';
+
 const Help: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -36,6 +38,9 @@ const Help: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [showContactModal, setShowContactModal] = useState(false);
   const [contactForm, setContactForm] = useState({
+    requesterType: 'other' as RequesterType,
+    requesterEmail: '',
+    requesterPhone: '',
     subject: '',
     message: ''
   });
@@ -120,7 +125,13 @@ const Help: React.FC = () => {
     try {
       setSubmitting(true);
       await apiService.post('/help/contact', contactForm);
-      setContactForm({ subject: '', message: '' });
+      setContactForm({
+        requesterType: user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : 'other',
+        requesterEmail: user?.email || '',
+        requesterPhone: '',
+        subject: '',
+        message: ''
+      });
       setShowContactModal(false);
       // Show success message
     } catch (err) {
@@ -129,6 +140,14 @@ const Help: React.FC = () => {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    setContactForm(prev => ({
+      ...prev,
+      requesterType: user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : prev.requesterType,
+      requesterEmail: user?.email || prev.requesterEmail
+    }));
+  }, [user]);
 
   if (loading) {
     return (
@@ -248,10 +267,49 @@ const Help: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-label font-medium text-custom-text mb-2">
+                  I am a
+                </label>
+                <select
+                  value={contactForm.requesterType}
+                  onChange={(e) => setContactForm({ ...contactForm, requesterType: e.target.value as RequesterType })}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+                >
+                  <option value="camp">Camp</option>
+                  <option value="member">Member</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-label font-medium text-custom-text mb-2">
+                  Email Address
+                </label>
+                <Input
+                  type="email"
+                  value={contactForm.requesterEmail}
+                  onChange={(e) => setContactForm({ ...contactForm, requesterEmail: e.target.value })}
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-label font-medium text-custom-text mb-2">
+                  Phone Number <span className="text-custom-text-secondary">(Optional)</span>
+                </label>
+                <Input
+                  type="tel"
+                  value={contactForm.requesterPhone}
+                  onChange={(e) => setContactForm({ ...contactForm, requesterPhone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+
+              <div>
+                <label className="block text-label font-medium text-custom-text mb-2">
                   Subject
                 </label>
                 <Input
-                    value={contactForm.subject}
+                  value={contactForm.subject}
                   onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
                   placeholder="What can we help you with?"
                 />
@@ -262,7 +320,7 @@ const Help: React.FC = () => {
                   Message
                 </label>
                 <textarea
-                    value={contactForm.message}
+                  value={contactForm.message}
                   onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                   placeholder="Please describe your question or issue in detail..."
                   rows={6}
@@ -270,17 +328,22 @@ const Help: React.FC = () => {
                 />
               </div>
 
-                  <Button
+              <Button
                 variant="primary"
                 onClick={() => setShowContactModal(true)}
-                disabled={!contactForm.subject.trim() || !contactForm.message.trim()}
+                disabled={
+                  !contactForm.requesterType ||
+                  !contactForm.requesterEmail.trim() ||
+                  !contactForm.subject.trim() ||
+                  !contactForm.message.trim()
+                }
                 className="w-full flex items-center justify-center gap-2"
               >
                 <div className="w-4 h-4">
                   <Send className="w-full h-full" />
                 </div>
                 Send Message
-                  </Button>
+              </Button>
             </div>
           </Card>
 
@@ -334,6 +397,23 @@ const Help: React.FC = () => {
             Are you sure you want to send this support request? Our team will respond within 24 hours.
           </p>
           
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-custom-text mb-1">I am a:</p>
+            <p className="text-sm text-custom-text-secondary capitalize">{contactForm.requesterType}</p>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-custom-text mb-1">Email:</p>
+            <p className="text-sm text-custom-text-secondary">{contactForm.requesterEmail}</p>
+          </div>
+
+          {contactForm.requesterPhone.trim() && (
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm font-medium text-custom-text mb-1">Phone:</p>
+              <p className="text-sm text-custom-text-secondary">{contactForm.requesterPhone}</p>
+            </div>
+          )}
+
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="text-sm font-medium text-custom-text mb-1">Subject:</p>
             <p className="text-sm text-custom-text-secondary">{contactForm.subject}</p>

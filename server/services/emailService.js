@@ -597,6 +597,63 @@ const sendTestEmail = async (to) => {
   });
 };
 
+/**
+ * Send support contact email to G8Road support inbox.
+ */
+const sendSupportContactEmail = async ({
+  requesterType,
+  requesterEmail,
+  requesterPhone,
+  subject,
+  message,
+  submittedByUser,
+  submittedAt
+}) => {
+  const supportInbox = 'info@g8road.com';
+  const submittedDate = submittedAt ? new Date(submittedAt) : new Date();
+  const safeRequesterType = requesterType || 'other';
+  const safeRequesterEmail = requesterEmail || 'Not provided';
+  const safeRequesterPhone = requesterPhone || 'Not provided';
+  const safeSubject = subject || 'Support request';
+  const safeMessage = message || '';
+
+  const actorLine = submittedByUser
+    ? `${submittedByUser.firstName || ''} ${submittedByUser.lastName || ''}`.trim() || submittedByUser.email || 'Authenticated user'
+    : 'Unauthenticated visitor';
+
+  return sendEmail({
+    to: supportInbox,
+    subject: `[Support] ${safeSubject}`,
+    fromName: 'G8Road Support Form',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+        <h2 style="margin-bottom: 12px;">New Support Request</h2>
+        <p style="margin: 4px 0;"><strong>Requester type:</strong> ${safeRequesterType}</p>
+        <p style="margin: 4px 0;"><strong>Email:</strong> ${safeRequesterEmail}</p>
+        <p style="margin: 4px 0;"><strong>Phone:</strong> ${safeRequesterPhone}</p>
+        <p style="margin: 4px 0;"><strong>Submitted by:</strong> ${actorLine}</p>
+        <p style="margin: 4px 0;"><strong>Submitted at:</strong> ${submittedDate.toISOString()}</p>
+        <hr style="margin: 16px 0; border: 0; border-top: 1px solid #ddd;" />
+        <p style="margin: 4px 0;"><strong>Subject:</strong> ${safeSubject}</p>
+        <p style="margin: 10px 0 4px;"><strong>Message:</strong></p>
+        <div style="white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 6px; border: 1px solid #eee;">${safeMessage}</div>
+      </div>
+    `,
+    text: `New Support Request
+
+Requester type: ${safeRequesterType}
+Email: ${safeRequesterEmail}
+Phone: ${safeRequesterPhone}
+Submitted by: ${actorLine}
+Submitted at: ${submittedDate.toISOString()}
+
+Subject: ${safeSubject}
+
+Message:
+${safeMessage}`
+  });
+};
+
 module.exports = {
   sendEmail,
   sendApplicationStatusEmail,
@@ -606,5 +663,6 @@ module.exports = {
   sendInviteEmail,
   sendTestEmail,
   sendCampLeadGrantedEmail,
-  sendDuesEmail
+  sendDuesEmail,
+  sendSupportContactEmail
 };

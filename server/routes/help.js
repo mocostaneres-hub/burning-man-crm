@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
 const FAQ = require('../models/FAQ');
+const { sendSupportContactEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -77,14 +78,14 @@ router.get('/support-messages', authenticateToken, async (req, res) => {
 });
 
 // @route   POST /api/help/contact
-// @desc    Submit contact form
-// @access  Public
-router.post('/contact', [
-  body('name').notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email is required'),
+// @desc    Submit contact form and notify support inbox
+// @access  Public (optional auth)
+router.post('/contact', optionalAuth, [
+  body('requesterType').isIn(['camp', 'member', 'other']).withMessage('Requester type must be camp, member, or other'),
+  body('requesterEmail').isEmail().withMessage('Valid email is required'),
+  body('requesterPhone').optional({ checkFalsy: true }).isString().withMessage('Phone must be a valid string'),
   body('subject').notEmpty().withMessage('Subject is required'),
-  body('message').notEmpty().withMessage('Message is required'),
-  body('category').notEmpty().withMessage('Category is required'),
+  body('message').notEmpty().withMessage('Message is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -92,28 +93,32 @@ router.post('/contact', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, subject, message, category } = req.body;
+    const { requesterType, requesterEmail, requesterPhone, subject, message } = req.body;
+    const submissionTimestamp = new Date().toISOString();
 
-    // For now, just log the contact form submission
     console.log('Contact Form Submission:', {
-      name,
-      email,
+      requesterType,
+      requesterEmail,
+      requesterPhone,
       subject,
       message,
-      category,
-      timestamp: new Date().toISOString(),
-      ip: req.ip,
+      timestamp: submissionTimestamp,
+      ip: req.ip
     });
 
-    // TODO: In a real application, you would:
-    // 1. Save to database
-    // 2. Send email notification to support team
-    // 3. Send confirmation email to user
-    // 4. Create a support ticket
+    await sendSupportContactEmail({
+      requesterType,
+      requesterEmail,
+      requesterPhone,
+      subject,
+      message,
+      submittedByUser: req.user,
+      submittedAt: submissionTimestamp
+    });
 
     res.json({ 
       message: 'Contact form submitted successfully',
-      ticketId: `TICKET-${Date.now()}`, // Mock ticket ID
+      ticketId: `TICKET-${Date.now()}`,
     });
   } catch (error) {
     console.error('Contact form error:', error);
