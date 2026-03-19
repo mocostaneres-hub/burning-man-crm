@@ -27,6 +27,11 @@ const shiftSchema = new mongoose.Schema({
     required: true,
     min: 1
   },
+  currentSignups: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   memberIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Member'

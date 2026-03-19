@@ -6,6 +6,7 @@ const db = require('../database/databaseAdapter');
 const { sendApplicationNotification, sendApplicationStatusNotification } = require('../services/notifications');
 const { createBulkNotifications, createNotification } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
+const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 
@@ -804,6 +805,11 @@ router.put('/:applicationId/status', authenticateToken, [
       if (!isInRoster) {
         await db.addMemberToRoster(activeRoster._id, member._id, req.user._id);
         console.log('✅ [Application Approval] Added member to roster:', member._id);
+        await autoAssignRosterUserToOpenShifts({
+          campId: campId,
+          userId: applicantId,
+          assignedBy: req.user._id
+        });
         
         // Log member added to roster for both MEMBER and CAMP
         await recordActivity('MEMBER', applicantId, req.user._id, 'ADDED_TO_ROSTER', {

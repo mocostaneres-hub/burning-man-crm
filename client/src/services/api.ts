@@ -644,6 +644,20 @@ class ApiService {
     return response.data;
   }
 
+  async getShiftAssignees(shiftId: string): Promise<{
+    shiftId: string;
+    assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
+    unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
+  }> {
+    const response = await this.api.get(`/shifts/shifts/${shiftId}/assignees`);
+    return response.data;
+  }
+
+  async addShiftAssignees(shiftId: string, userIds: string[]): Promise<{ addedCount: number; addedUserIds: string[] }> {
+    const response = await this.api.post(`/shifts/shifts/${shiftId}/assignees/add`, { userIds });
+    return response.data;
+  }
+
   // Generic HTTP methods
   async get(url: string, config?: any): Promise<any> {
     const response = await this.api.get(url, config);

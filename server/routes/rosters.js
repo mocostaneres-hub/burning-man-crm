@@ -4,6 +4,7 @@ const db = require('../database/databaseAdapter');
 const { normalizeEmail } = require('../utils/emailUtils');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
+const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
 const { renderTemplate } = require('../utils/renderTemplate');
 const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 const { sendDuesEmail } = require('../services/emailService');
@@ -968,6 +969,13 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       req.user._id,
       { duesStatus: memberData.duesPaid === true ? DUES_STATUS.PAID : DUES_STATUS.UNPAID }
     );
+
+    // Auto-assign newly added roster users to open shifts for this camp.
+    await autoAssignRosterUserToOpenShifts({
+      campId: camp._id,
+      userId: user._id,
+      assignedBy: req.user._id
+    });
     
     // Log member addition for both MEMBER and CAMP
     await recordActivity('MEMBER', user._id, req.user._id, 'RESOURCE_ASSIGNED', {

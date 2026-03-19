@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -41,11 +41,20 @@ const VolunteerShifts: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
+  const [selectedShiftForAssignment, setSelectedShiftForAssignment] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assignmentState, setAssignmentState] = useState<{
+    assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
+    unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
+  }>({ assignedUsers: [], unassignedUsers: [] });
+  const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTime' | 'description'>('date');
@@ -64,13 +73,16 @@ const VolunteerShifts: React.FC = () => {
       startTime: string;
       endTime: string;
       maxSignUps: number;
-    }>
+    }>,
+    assignmentMode: 'ALL_ROSTER' as 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS',
+    selectedUserIds: [] as string[]
   });
   const [rosterMembers, setRosterMembers] = useState<Array<{
     _id: string;
     firstName: string;
     lastName: string;
     email: string;
+    isLead: boolean;
   }>>([]);
 
   // Check if user has admin/lead access (including Camp Leads)
@@ -115,6 +127,46 @@ const VolunteerShifts: React.FC = () => {
     return direction === 'asc' ? '▲' : '▼';
   };
 
+  const allRosterIds = useMemo(() => rosterMembers.map((member) => member._id), [rosterMembers]);
+  const leadRosterIds = useMemo(
+    () => rosterMembers.filter((member) => member.isLead).map((member) => member._id),
+    [rosterMembers]
+  );
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+    setEventForm((prev) => {
+      if (prev.assignmentMode === 'ALL_ROSTER') {
+        return { ...prev, selectedUserIds: allRosterIds };
+      }
+      if (prev.assignmentMode === 'LEADS_ONLY') {
+        return { ...prev, selectedUserIds: leadRosterIds };
+      }
+      return prev;
+    });
+  }, [showCreateModal, allRosterIds, leadRosterIds]);
+
+  const handleAssignmentModeChange = (mode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS') => {
+    setEventForm((prev) => {
+      if (mode === 'ALL_ROSTER') {
+        return { ...prev, assignmentMode: mode, selectedUserIds: allRosterIds };
+      }
+      if (mode === 'LEADS_ONLY') {
+        return { ...prev, assignmentMode: mode, selectedUserIds: leadRosterIds };
+      }
+      return { ...prev, assignmentMode: mode, selectedUserIds: [] };
+    });
+  };
+
+  const toggleSelectedUser = (userId: string) => {
+    setEventForm((prev) => {
+      const selected = prev.selectedUserIds.includes(userId)
+        ? prev.selectedUserIds.filter((id) => id !== userId)
+        : [...prev.selectedUserIds, userId];
+      return { ...prev, selectedUserIds: selected };
+    });
+  };
+
   const loadRosterMembers = useCallback(async () => {
     try {
       let campId;
@@ -137,7 +189,8 @@ const VolunteerShifts: React.FC = () => {
           _id: resolvedUser._id || member._id,
           firstName: resolvedUser.firstName || '',
           lastName: resolvedUser.lastName || '',
-          email: resolvedUser.email || ''
+          email: resolvedUser.email || '',
+          isLead: member?.isCampLead === true || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((member?.role || '').toLowerCase())
         };
       });
       setRosterMembers(normalized);
@@ -207,10 +260,24 @@ const VolunteerShifts: React.FC = () => {
       }
 
       // Prepare the event data
+      const selectedSet = new Set(eventForm.selectedUserIds);
+      const baseline = eventForm.assignmentMode === 'ALL_ROSTER'
+        ? allRosterIds
+        : eventForm.assignmentMode === 'LEADS_ONLY'
+          ? leadRosterIds
+          : [];
+      const baselineSet = new Set(baseline);
+      const manualAddIds = [...selectedSet].filter((id) => !baselineSet.has(id));
+      const manualRemoveIds = [...baselineSet].filter((id) => !selectedSet.has(id));
+
       const eventData = {
         eventName: eventForm.eventName,
         description: eventForm.description,
         ...(campId ? { campId } : {}),
+        assignmentMode: eventForm.assignmentMode,
+        selectedUserIds: eventForm.selectedUserIds,
+        manualAddIds,
+        manualRemoveIds,
         shifts: eventForm.shifts.map(shift => ({
           title: shift.title,
           description: shift.description,
@@ -284,7 +351,9 @@ const VolunteerShifts: React.FC = () => {
     setEventForm({
       eventName: '',
       description: '',
-      shifts: []
+      shifts: [],
+      assignmentMode: 'ALL_ROSTER',
+      selectedUserIds: allRosterIds
     });
     setIsEditMode(false);
     setEventToEdit(null);
@@ -305,7 +374,9 @@ const VolunteerShifts: React.FC = () => {
         startTime: new Date(shift.startTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         maxSignUps: shift.maxSignUps
-      }))
+      })),
+      assignmentMode: 'ALL_ROSTER',
+      selectedUserIds: allRosterIds
     });
     
     setShowCreateModal(true);
@@ -350,6 +421,43 @@ const VolunteerShifts: React.FC = () => {
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
     setEventToDelete(null);
+  };
+
+  const openAssignmentModal = async (shift: any) => {
+    try {
+      setSelectedShiftForAssignment(shift);
+      setShowAssignmentModal(true);
+      setAssignmentLoading(true);
+      setPendingAddUserIds([]);
+      const response = await api.getShiftAssignees(shift._id);
+      setAssignmentState({
+        assignedUsers: response.assignedUsers || [],
+        unassignedUsers: response.unassignedUsers || []
+      });
+    } catch (error) {
+      console.error('Error loading shift assignees:', error);
+      alert('Failed to load shift assignees');
+      setShowAssignmentModal(false);
+      setSelectedShiftForAssignment(null);
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
+
+  const handleAddAssignees = async () => {
+    if (!selectedShiftForAssignment || pendingAddUserIds.length === 0) return;
+    try {
+      setAssignmentSaving(true);
+      await api.addShiftAssignees(selectedShiftForAssignment._id, pendingAddUserIds);
+      await openAssignmentModal(selectedShiftForAssignment);
+      await loadEvents();
+      alert('Assignees added successfully');
+    } catch (error: any) {
+      console.error('Error adding assignees:', error);
+      alert(error?.response?.data?.message || 'Failed to add assignees');
+    } finally {
+      setAssignmentSaving(false);
+    }
   };
 
   // Using shared date formatting utilities
@@ -1049,9 +1157,61 @@ const VolunteerShifts: React.FC = () => {
             )}
           </div>
 
-          <div className="border-t pt-6 text-sm text-gray-600">
-            Shift-as-task assignment is deprecated. Members now manage signups from the dedicated "My Shifts" page.
+          {!isEditMode && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Assign To</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                <input
+                  type="radio"
+                  className="mr-2"
+                  checked={eventForm.assignmentMode === 'ALL_ROSTER'}
+                  onChange={() => handleAssignmentModeChange('ALL_ROSTER')}
+                />
+                Entire Roster
+              </label>
+              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'LEADS_ONLY' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                <input
+                  type="radio"
+                  className="mr-2"
+                  checked={eventForm.assignmentMode === 'LEADS_ONLY'}
+                  onChange={() => handleAssignmentModeChange('LEADS_ONLY')}
+                />
+                Leads Only
+              </label>
+              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'SELECTED_USERS' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                <input
+                  type="radio"
+                  className="mr-2"
+                  checked={eventForm.assignmentMode === 'SELECTED_USERS'}
+                  onChange={() => handleAssignmentModeChange('SELECTED_USERS')}
+                />
+                Selected People
+              </label>
+            </div>
+
+            <div className="text-sm text-gray-600 mb-2">
+              Selected: {eventForm.selectedUserIds.length} / {rosterMembers.length}
+            </div>
+            <div className="max-h-52 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
+              {rosterMembers.map((member) => {
+                const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+                return (
+                  <label key={member._id} className="flex items-center justify-between">
+                    <span className="text-sm">
+                      {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={eventForm.selectedUserIds.includes(member._id)}
+                      onChange={() => toggleSelectedUser(member._id)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
           </div>
+          )}
 
           <div className="flex gap-3 pt-4 border-t">
             <Button
@@ -1105,9 +1265,18 @@ const VolunteerShifts: React.FC = () => {
                     <div key={shift._id} className="border rounded-lg p-3">
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-medium">{shift.title}</h5>
-                        <span className="text-sm text-gray-500">
-                          {shift.memberIds.length}/{shift.maxSignUps} signed up
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">
+                            {shift.memberIds.length}/{shift.maxSignUps} signed up
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAssignmentModal(shift)}
+                          >
+                            Manage Assignees
+                          </Button>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{shift.description}</p>
                       <div className="text-sm text-gray-500">
@@ -1130,6 +1299,90 @@ const VolunteerShifts: React.FC = () => {
           >
             Close
           </Button>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showAssignmentModal}
+        onClose={() => {
+          setShowAssignmentModal(false);
+          setSelectedShiftForAssignment(null);
+          setPendingAddUserIds([]);
+        }}
+        title={selectedShiftForAssignment ? `Manage Assignees: ${selectedShiftForAssignment.title}` : 'Manage Assignees'}
+        size="lg"
+      >
+        <div className="space-y-4">
+          {assignmentLoading ? (
+            <div className="text-sm text-gray-500">Loading assignees...</div>
+          ) : (
+            <>
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-2">Current Assignees ({assignmentState.assignedUsers.length})</div>
+                <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
+                  {assignmentState.assignedUsers.length === 0 ? (
+                    <div className="text-sm text-gray-500">No assignees yet.</div>
+                  ) : (
+                    assignmentState.assignedUsers.map((user) => (
+                      <div key={user.userId} className="text-sm text-gray-700">
+                        {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-2">Add More People</div>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
+                  {assignmentState.unassignedUsers.length === 0 ? (
+                    <div className="text-sm text-gray-500">No unassigned roster users available.</div>
+                  ) : (
+                    assignmentState.unassignedUsers.map((user) => (
+                      <label key={user.userId} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">
+                          {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email}
+                          {user.isLead ? <span className="text-xs text-orange-700 ml-1">(Lead)</span> : null}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={pendingAddUserIds.includes(user.userId)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setPendingAddUserIds((prev) => [...prev, user.userId]);
+                            } else {
+                              setPendingAddUserIds((prev) => prev.filter((id) => id !== user.userId));
+                            }
+                          }}
+                        />
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAssignmentModal(false);
+                    setSelectedShiftForAssignment(null);
+                    setPendingAddUserIds([]);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={assignmentSaving || pendingAddUserIds.length === 0}
+                  onClick={handleAddAssignees}
+                >
+                  {assignmentSaving ? 'Adding...' : `Add ${pendingAddUserIds.length || ''} People`}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 

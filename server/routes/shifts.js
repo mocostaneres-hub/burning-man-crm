@@ -5,7 +5,14 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const Event = require('../models/Event');
+const ShiftAssignment = require('../models/ShiftAssignment');
+const ShiftSignup = require('../models/ShiftSignup');
 const { buildMyShiftsPayload } = require('../services/shiftService');
+const {
+  resolveAssignmentCandidates,
+  createShiftAssignments,
+  getShiftAssignmentState
+} = require('../services/shiftService');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 
@@ -75,10 +82,37 @@ router.get('/events', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
-    // Get events for this camp  
+    // Get events for this camp
     const events = await db.findEvents({ campId });
-    
-    res.json({ events });
+    const shiftIds = events.flatMap((event) => (event.shifts || []).map((shift) => shift._id));
+    const signups = shiftIds.length > 0
+      ? await ShiftSignup.find({ shiftId: { $in: shiftIds } }).select('shiftId userId').lean()
+      : [];
+
+    const signupMap = new Map();
+    for (const signup of signups) {
+      const shiftId = signup.shiftId.toString();
+      if (!signupMap.has(shiftId)) signupMap.set(shiftId, []);
+      signupMap.get(shiftId).push(signup.userId.toString());
+    }
+
+    const hydratedEvents = events.map((event) => {
+      const plainEvent = typeof event.toObject === 'function' ? event.toObject() : event;
+      plainEvent.shifts = (plainEvent.shifts || []).map((shift) => {
+        const memberIds = [...new Set([
+          ...(shift.memberIds || []).map((id) => id.toString()),
+          ...(signupMap.get(shift._id.toString()) || [])
+        ])];
+        return {
+          ...shift,
+          memberIds,
+          currentSignups: memberIds.length
+        };
+      });
+      return plainEvent;
+    });
+
+    res.json({ events: hydratedEvents });
   } catch (error) {
     console.error('Get events error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -134,9 +168,35 @@ router.get('/my-events', authenticateToken, async (req, res) => {
       allEvents.push(...events);
     }
 
-    console.log('✅ [MY EVENTS] Found events:', allEvents.length);
+    const shiftIds = allEvents.flatMap((event) => (event.shifts || []).map((shift) => shift._id));
+    const signups = shiftIds.length > 0
+      ? await ShiftSignup.find({ shiftId: { $in: shiftIds } }).select('shiftId userId').lean()
+      : [];
+    const signupMap = new Map();
+    for (const signup of signups) {
+      const shiftId = signup.shiftId.toString();
+      if (!signupMap.has(shiftId)) signupMap.set(shiftId, []);
+      signupMap.get(shiftId).push(signup.userId.toString());
+    }
 
-    res.json({ events: allEvents });
+    const hydratedEvents = allEvents.map((event) => {
+      const plainEvent = typeof event.toObject === 'function' ? event.toObject() : event;
+      plainEvent.shifts = (plainEvent.shifts || []).map((shift) => {
+        const memberIds = [...new Set([
+          ...(shift.memberIds || []).map((id) => id.toString()),
+          ...(signupMap.get(shift._id.toString()) || [])
+        ])];
+        return {
+          ...shift,
+          memberIds,
+          currentSignups: memberIds.length
+        };
+      });
+      return plainEvent;
+    });
+
+    console.log('✅ [MY EVENTS] Found events:', hydratedEvents.length);
+    res.json({ events: hydratedEvents });
   } catch (error) {
     console.error('❌ [MY EVENTS] Error fetching events:', error);
     res.status(500).json({
@@ -168,7 +228,15 @@ router.get('/my-shifts', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.post('/events', authenticateToken, async (req, res) => {
   try {
-    const { eventName, description, shifts } = req.body;
+    const {
+      eventName,
+      description,
+      shifts,
+      assignmentMode = 'ALL_ROSTER',
+      selectedUserIds = [],
+      manualAddIds = [],
+      manualRemoveIds = []
+    } = req.body;
 
     // Validation
     if (!eventName || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
@@ -204,6 +272,15 @@ router.post('/events', authenticateToken, async (req, res) => {
       }
     }
 
+    // Resolve assignment candidates once; apply to all newly created shifts.
+    const assignmentCandidates = await resolveAssignmentCandidates({
+      campId,
+      mode: assignmentMode,
+      selectedUserIds,
+      manualAddIds,
+      manualRemoveIds
+    });
+
     // Create event
     const event = await db.createEvent({
       eventName,
@@ -217,10 +294,24 @@ router.post('/events', authenticateToken, async (req, res) => {
         startTime: new Date(`${shift.date}T${shift.startTime}`),
         endTime: new Date(`${shift.date}T${shift.endTime}`),
         maxSignUps: parseInt(shift.maxSignUps),
-        memberIds: [],
+        memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
+        currentSignups: 0,
         createdBy: req.user._id
       }))
     });
+
+    // Create shift assignments.
+    for (const createdShift of event.shifts || []) {
+      await createShiftAssignments({
+        shiftId: createdShift._id,
+        eventId: event._id,
+        campId,
+        assignedBy: req.user._id,
+        mode: assignmentMode,
+        candidates: assignmentCandidates,
+        source: 'CREATE_MODE'
+      });
+    }
 
     try {
       const activeMembers = await db.findMembers({ camp: campId, status: 'active' });
@@ -598,42 +689,35 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
 router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
   try {
     const { shiftId } = req.params;
-    const memberId = req.user._id;
+    const memberId = req.user._id.toString();
 
     const { event, shift } = await resolveEventAndShift(shiftId);
     if (!event || !shift) {
       return res.status(404).json({ message: 'Shift not found' });
     }
 
-    const isSignedUp = shift.memberIds?.some(id => id.toString() === memberId.toString());
-    if (!isSignedUp) {
+    const existingSignup = await ShiftSignup.findOne({ shiftId: shift._id, userId: req.user._id }).lean();
+    const legacySigned = (shift.memberIds || []).some((id) => id.toString() === memberId);
+    if (!existingSignup && !legacySigned) {
       return res.status(400).json({ message: 'Not signed up for this shift' });
     }
 
-    if (useMongo) {
-      const shiftObjectId = mongoose.Types.ObjectId.isValid(shiftId)
-        ? new mongoose.Types.ObjectId(shiftId)
-        : shiftId;
-      const memberObjectId = mongoose.Types.ObjectId.isValid(memberId)
-        ? new mongoose.Types.ObjectId(memberId)
-        : memberId;
-
-      await Event.updateOne(
-        { _id: event._id, 'shifts._id': shiftObjectId },
-        { $pull: { 'shifts.$.memberIds': memberObjectId } }
-      );
-    } else {
-      await db.updateEvent(event._id, {
-        ...event,
-        shifts: event.shifts.map(existingShift => {
-          if (existingShift._id.toString() !== shiftId.toString()) return existingShift;
-          return {
-            ...existingShift,
-            memberIds: (existingShift.memberIds || []).filter(id => id.toString() !== memberId.toString())
-          };
-        })
-      });
+    const previousCount = Math.max(
+      await ShiftSignup.countDocuments({ shiftId: shift._id }),
+      (shift.memberIds || []).length,
+      shift.currentSignups || 0
+    );
+    if (existingSignup) {
+      await ShiftSignup.deleteOne({ _id: existingSignup._id });
     }
+    await Event.updateOne(
+      { _id: event._id, 'shifts._id': shift._id, 'shifts.currentSignups': { $gt: 0 } },
+      { $inc: { 'shifts.$.currentSignups': -1 } }
+    );
+    await Event.updateOne(
+      { _id: event._id, 'shifts._id': shift._id },
+      { $pull: { 'shifts.$.memberIds': req.user._id } }
+    );
 
     try {
       const managerRecipients = await getCampManagerRecipientIds(event.campId);
@@ -652,6 +736,24 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
       });
     } catch (notificationError) {
       console.error('Shift unsignup notification error:', notificationError);
+    }
+
+    if (previousCount >= (shift.maxSignUps || 0)) {
+      try {
+        const assignedUsers = await ShiftAssignment.find({ shiftId: shift._id }).select('userId').lean();
+        const recipients = [...new Set(assignedUsers.map((item) => item.userId.toString()).filter((id) => id !== memberId))];
+        await createBulkNotifications(recipients, {
+          actor: req.user._id,
+          campId: event.campId,
+          type: NOTIFICATION_TYPES.SHIFT_SPOT_OPENED,
+          title: `Spot opened: ${shift.title}`,
+          message: 'A spot just opened up on a shift you are assigned to.',
+          link: '/my-shifts',
+          metadata: { eventId: event._id, shiftId: shift._id }
+        });
+      } catch (notificationError) {
+        console.error('Shift spot-opened notification error:', notificationError);
+      }
     }
 
     res.json({
@@ -693,13 +795,28 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
 
     // Get all events for this camp
     const events = await db.findEvents({ campId });
-    
+    const shiftIds = events.flatMap((event) => (event.shifts || []).map((shift) => shift._id));
+    const signups = shiftIds.length > 0
+      ? await ShiftSignup.find({ shiftId: { $in: shiftIds } }).select('shiftId userId').lean()
+      : [];
+
     // Build per-person report (bulk user lookup to avoid N+1)
     const report = [];
-    const memberIds = new Set();
+    const memberIds = new Set(signups.map((signup) => signup.userId.toString()));
+    const signupMap = new Map();
+    for (const signup of signups) {
+      const sid = signup.shiftId.toString();
+      if (!signupMap.has(sid)) signupMap.set(sid, []);
+      signupMap.get(sid).push(signup.userId.toString());
+    }
     for (const event of events) {
-      for (const shift of event.shifts) {
-        (shift.memberIds || []).forEach(memberId => memberIds.add(memberId.toString()));
+      for (const shift of event.shifts || []) {
+        const sid = shift._id.toString();
+        if (!signupMap.has(sid)) signupMap.set(sid, []);
+        for (const memberId of shift.memberIds || []) {
+          const value = memberId.toString();
+          if (!signupMap.get(sid).includes(value)) signupMap.get(sid).push(value);
+        }
       }
     }
 
@@ -710,7 +827,7 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
 
     for (const event of events) {
       for (const shift of event.shifts) {
-        for (const memberId of shift.memberIds || []) {
+        for (const memberId of signupMap.get(shift._id.toString()) || []) {
           const user = userMap.get(memberId.toString());
           if (user) {
             report.push({
@@ -766,6 +883,26 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 
     // Get all events for this camp
     const events = await db.findEvents({ campId });
+    const shiftIds = events.flatMap((event) => (event.shifts || []).map((shift) => shift._id));
+    const signups = shiftIds.length > 0
+      ? await ShiftSignup.find({ shiftId: { $in: shiftIds } }).select('shiftId userId').lean()
+      : [];
+    const signupMap = new Map();
+    for (const signup of signups) {
+      const sid = signup.shiftId.toString();
+      if (!signupMap.has(sid)) signupMap.set(sid, []);
+      signupMap.get(sid).push(signup.userId.toString());
+    }
+    for (const event of events) {
+      for (const shift of event.shifts || []) {
+        const sid = shift._id.toString();
+        if (!signupMap.has(sid)) signupMap.set(sid, []);
+        for (const memberId of shift.memberIds || []) {
+          const value = memberId.toString();
+          if (!signupMap.get(sid).includes(value)) signupMap.get(sid).push(value);
+        }
+      }
+    }
     
     // Build per-day report for the specified date (bulk user lookup)
     const report = [];
@@ -783,7 +920,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 
     const memberIds = new Set();
     shiftsForDay.forEach(({ shift }) => {
-      (shift.memberIds || []).forEach(memberId => memberIds.add(memberId.toString()));
+      (signupMap.get(shift._id.toString()) || []).forEach(memberId => memberIds.add(memberId.toString()));
     });
 
     const users = memberIds.size > 0
@@ -792,7 +929,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
     const userMap = new Map((users || []).map(user => [user._id.toString(), user]));
 
     for (const { event, shift } of shiftsForDay) {
-      for (const memberId of shift.memberIds || []) {
+      for (const memberId of signupMap.get(shift._id.toString()) || []) {
         const user = userMap.get(memberId.toString());
         if (user) {
           report.push({
@@ -852,14 +989,24 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       }
     }
 
+    const existingShiftIds = new Set((existingEvent.shifts || []).map((shift) => shift._id.toString()));
+    const incomingShiftIds = new Set(
+      shifts
+        .map((shift) => (shift._id ? shift._id.toString() : null))
+        .filter(Boolean)
+    );
+    const removedShiftIds = [...existingShiftIds].filter((id) => !incomingShiftIds.has(id));
+
     // Update event
     const updatedEvent = await db.updateEvent(eventId, {
       eventName,
       description,
-      shifts: shifts.map((shift, index) => {
-        // Preserve existing shift IDs if they exist, otherwise generate new ones
-        const existingShift = existingEvent.shifts[index];
-        const shiftId = existingShift ? existingShift._id : (Date.now() + Math.random()).toString();
+      shifts: shifts.map((shift) => {
+        // Preserve existing shift IDs if they exist, otherwise generate one.
+        const existingShift = shift._id
+          ? existingEvent.shifts.find((item) => item._id.toString() === shift._id.toString())
+          : null;
+        const shiftId = existingShift ? existingShift._id : new mongoose.Types.ObjectId();
         
         return {
           _id: shiftId,
@@ -871,12 +1018,18 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
           endTime: new Date(`${shift.date}T${shift.endTime}`),
           maxSignUps: parseInt(shift.maxSignUps),
           memberIds: existingShift ? existingShift.memberIds : [], // Preserve existing sign-ups
+          currentSignups: existingShift ? (existingShift.currentSignups || 0) : 0,
           createdBy: existingShift ? existingShift.createdBy : req.user._id,
           createdAt: existingShift ? existingShift.createdAt : new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
       })
     });
+
+    if (removedShiftIds.length > 0) {
+      await ShiftAssignment.deleteMany({ shiftId: { $in: removedShiftIds } });
+      await ShiftSignup.deleteMany({ shiftId: { $in: removedShiftIds } });
+    }
 
     try {
       const activeMembers = await db.findMembers({ camp: eventCampId, status: 'active' });
@@ -939,9 +1092,12 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     console.log('✅ [EVENT DELETION] Camp scope confirmed');
 
     // Shift-as-task is deprecated; deleting event no longer mutates Task records.
+    // Clean up assignment/signup records tied to this event.
     let deletedTasksCount = 0;
     const failedTaskDeletions = [];
     const tasks = [];
+    await ShiftAssignment.deleteMany({ eventId: eventId });
+    await ShiftSignup.deleteMany({ eventId: eventId });
 
     // Step 1: Shifts will be deleted automatically when the event is deleted
     // (shifts are embedded subdocuments in the event)
@@ -1330,6 +1486,107 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
   }
 });
 
+// @route   GET /api/shifts/shifts/:shiftId/assignees
+// @desc    Get current assignees and non-assigned roster users for a shift
+// @access  Private (Camp admins/leads only)
+router.get('/shifts/:shiftId/assignees', authenticateToken, async (req, res) => {
+  try {
+    const { shiftId } = req.params;
+    const { event, shift } = await resolveEventAndShift(shiftId);
+    if (!event || !shift) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+
+    const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    const assignmentState = await getShiftAssignmentState({ shiftId: shift._id, campId: eventCampId });
+    const userIds = [
+      ...assignmentState.assignedUsers.map((user) => user.userId),
+      ...assignmentState.unassignedUsers.map((user) => user.userId)
+    ];
+    const users = userIds.length > 0 ? await db.findUsers({ _id: { $in: userIds } }) : [];
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+
+    const mapUser = (entry) => {
+      const user = userMap.get(entry.userId);
+      return {
+        userId: entry.userId,
+        firstName: user?.firstName || '',
+        lastName: user?.lastName || '',
+        email: user?.email || '',
+        playaName: user?.playaName || '',
+        isLead: entry.isLead
+      };
+    };
+
+    return res.json({
+      shiftId,
+      assignedUsers: assignmentState.assignedUsers.map(mapUser),
+      unassignedUsers: assignmentState.unassignedUsers.map(mapUser)
+    });
+  } catch (error) {
+    console.error('Get shift assignees error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/shifts/shifts/:shiftId/assignees/add
+// @desc    Incrementally add assignees to existing shift
+// @access  Private (Camp admins/leads only)
+router.post('/shifts/:shiftId/assignees/add', authenticateToken, async (req, res) => {
+  try {
+    const { shiftId } = req.params;
+    const { userIds = [] } = req.body || {};
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: 'userIds array is required' });
+    }
+
+    const { event, shift } = await resolveEventAndShift(shiftId);
+    if (!event || !shift) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+
+    const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, eventCampId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    const assignmentState = await getShiftAssignmentState({ shiftId: shift._id, campId: eventCampId });
+    const alreadyAssigned = new Set(assignmentState.assignedUsers.map((user) => user.userId));
+    const allowedUsers = new Set(assignmentState.unassignedUsers.map((user) => user.userId));
+    const toAdd = userIds
+      .map((id) => id?.toString())
+      .filter(Boolean)
+      .filter((userId) => !alreadyAssigned.has(userId) && allowedUsers.has(userId));
+
+    const result = await createShiftAssignments({
+      shiftId: shift._id,
+      eventId: event._id,
+      campId: eventCampId,
+      assignedBy: req.user._id,
+      mode: 'SELECTED_USERS',
+      candidates: toAdd,
+      source: 'EDIT_ADD'
+    });
+
+    return res.json({
+      message: 'Assignments updated',
+      addedCount: result.insertedCount,
+      addedUserIds: result.insertedUserIds
+    });
+  } catch (error) {
+    console.error('Add shift assignees error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   POST /api/shifts/shifts/:shiftId/signup
 // @desc    Sign up for a specific shift
 // @access  Private (Approved camp members only)
@@ -1392,14 +1649,28 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       userId: userId
     });
 
-    // Check if user is already signed up
-    if (targetShift.memberIds && targetShift.memberIds.some(id => id.toString() === userId.toString())) {
+    // Must be assigned to sign up.
+    const assignment = await ShiftAssignment.findOne({ shiftId: targetShift._id, userId }).lean();
+    if (!assignment) {
+      return res.status(403).json({ message: 'You are not assigned to this shift' });
+    }
+
+    // Check if user is already signed up.
+    const existingSignup = await ShiftSignup.findOne({ shiftId: targetShift._id, userId }).lean();
+    if (existingSignup) {
       console.log('⚠️ [SHIFT SIGNUP] User already signed up for this shift');
       return res.status(400).json({ message: 'You are already signed up for this shift' });
     }
+    if ((targetShift.memberIds || []).some((id) => id.toString() === userId.toString())) {
+      return res.status(400).json({ message: 'You are already signed up for this shift' });
+    }
 
-    // Check capacity limits (transactional check)
-    let currentSignUps = targetShift.memberIds ? targetShift.memberIds.length : 0;
+    // Capacity check.
+    let currentSignUps = Math.max(
+      await ShiftSignup.countDocuments({ shiftId: targetShift._id }),
+      (targetShift.memberIds || []).length,
+      targetShift.currentSignups || 0
+    );
     console.log('📊 [SHIFT SIGNUP] Capacity check:', {
       currentSignUps,
       maxSignUps: targetShift.maxSignUps,
@@ -1415,96 +1686,50 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       });
     }
 
-    // Add user to shift memberIds with capacity enforcement
-    console.log('📝 [SHIFT SIGNUP] Adding user to shift memberIds');
-    let updatedShift = targetShift;
+    // Atomic capacity reservation at shift level, then insert signup row.
+    const updateResult = await Event.updateOne(
+      {
+        _id: targetEvent._id,
+        'shifts._id': targetShift._id,
+        'shifts.currentSignups': { $lt: targetShift.maxSignUps }
+      },
+      { $inc: { 'shifts.$.currentSignups': 1 } }
+    );
 
-    if (useMongo) {
-      const shiftObjectId = mongoose.Types.ObjectId.isValid(shiftId)
-        ? new mongoose.Types.ObjectId(shiftId)
-        : shiftId;
-      const userObjectId = mongoose.Types.ObjectId.isValid(userId)
-        ? new mongoose.Types.ObjectId(userId)
-        : userId;
+    if (!updateResult?.modifiedCount) {
+      return res.status(409).json({
+        message: 'This shift is now full. Please try a different shift.'
+      });
+    }
 
+    try {
+      await ShiftSignup.create({
+        shiftId: targetShift._id,
+        eventId: targetEvent._id,
+        campId: targetEvent.campId?._id || targetEvent.campId,
+        userId,
+        createdAt: new Date()
+      });
+    } catch (signupError) {
+      // Roll back reservation on duplicate/insert failure.
       await Event.updateOne(
-        { _id: targetEvent._id, 'shifts._id': shiftObjectId },
-        [
-          {
-            $set: {
-              shifts: {
-                $map: {
-                  input: '$shifts',
-                  as: 'shift',
-                  in: {
-                    $cond: [
-                      { $eq: ['$$shift._id', shiftObjectId] },
-                      {
-                        $let: {
-                          vars: {
-                            alreadySignedUp: { $in: [userObjectId, '$$shift.memberIds'] },
-                            remaining: { $subtract: ['$$shift.maxSignUps', { $size: '$$shift.memberIds' }] }
-                          },
-                          in: {
-                            $cond: [
-                              { $and: [{ $not: ['$$alreadySignedUp'] }, { $gt: ['$$remaining', 0] }] },
-                              {
-                                $mergeObjects: [
-                                  '$$shift',
-                                  { memberIds: { $concatArrays: ['$$shift.memberIds', [userObjectId]] } }
-                                ]
-                              },
-                              '$$shift'
-                            ]
-                          }
-                        }
-                      },
-                      '$$shift'
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        ]
+        { _id: targetEvent._id, 'shifts._id': targetShift._id, 'shifts.currentSignups': { $gt: 0 } },
+        { $inc: { 'shifts.$.currentSignups': -1 } }
       );
 
-      const refreshedEvent = await Event.findById(targetEvent._id);
-      updatedShift = refreshedEvent?.shifts?.id(shiftObjectId)
-        || refreshedEvent?.shifts?.find(s => s._id.toString() === shiftId.toString());
-
-      if (!updatedShift) {
-        console.error('❌ [SHIFT SIGNUP] Updated shift not found after save');
-        return res.status(500).json({ message: 'Failed to update shift signup' });
+      if (signupError?.code === 11000) {
+        return res.status(400).json({ message: 'You are already signed up for this shift' });
       }
-
-      currentSignUps = updatedShift.memberIds ? updatedShift.memberIds.length : 0;
-      const isSignedUp = updatedShift.memberIds?.some(id => id.toString() === userId.toString());
-
-      if (!isSignedUp) {
-        if (currentSignUps >= updatedShift.maxSignUps) {
-          console.log('❌ [SHIFT SIGNUP] Shift is at capacity after update attempt');
-          return res.status(409).json({
-            message: 'This shift is now full. Please try a different shift.',
-            currentSignUps,
-            maxSignUps: updatedShift.maxSignUps
-          });
-        }
-
-        return res.status(500).json({ message: 'Failed to sign up for shift' });
-      }
-    } else {
-      if (!targetShift.memberIds) {
-        targetShift.memberIds = [];
-      }
-      targetShift.memberIds.push(userId);
-
-      // Update the event with the modified shift
-      console.log('💾 [SHIFT SIGNUP] Updating event with new shift data');
-      await db.updateEvent(targetEvent._id, targetEvent);
-      updatedShift = targetShift;
-      currentSignUps = updatedShift.memberIds.length;
+      throw signupError;
     }
+
+    // Keep legacy embedded memberIds in sync for older views.
+    await Event.updateOne(
+      { _id: targetEvent._id, 'shifts._id': targetShift._id },
+      { $addToSet: { 'shifts.$.memberIds': userId } }
+    );
+
+    currentSignUps = await ShiftSignup.countDocuments({ shiftId: targetShift._id });
 
     try {
       const managerRecipients = await getCampManagerRecipientIds(targetEvent.campId);
@@ -1529,11 +1754,11 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
 
     res.json({
       message: 'Successfully signed up for shift',
-      shiftId: updatedShift._id,
+      shiftId: targetShift._id,
       eventId: targetEvent._id,
       currentSignUps,
-      maxSignUps: updatedShift.maxSignUps,
-      remainingSpots: Math.max(updatedShift.maxSignUps - currentSignUps, 0)
+      maxSignUps: targetShift.maxSignUps,
+      remainingSpots: Math.max(targetShift.maxSignUps - currentSignUps, 0)
     });
   } catch (error) {
     console.error('❌ [SHIFT SIGNUP] Critical error during sign-up:', error);
@@ -1596,9 +1821,38 @@ router.get('/events/:eventId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied - not an approved camp member' });
     }
 
-    console.log('✅ [EVENT DETAIL] User is approved member, returning event data');
+    const shiftIds = (event.shifts || []).map((shift) => shift._id);
+    const signups = shiftIds.length > 0
+      ? await ShiftSignup.find({ shiftId: { $in: shiftIds } }).select('shiftId userId').lean()
+      : [];
+    const signupMap = new Map();
+    for (const signup of signups) {
+      const sid = signup.shiftId.toString();
+      if (!signupMap.has(sid)) signupMap.set(sid, []);
+      signupMap.get(sid).push(signup.userId.toString());
+    }
 
-    res.json(event);
+    const assignedRows = await ShiftAssignment.find({ shiftId: { $in: shiftIds }, userId: req.user._id })
+      .select('shiftId')
+      .lean();
+    const assignedShiftSet = new Set(assignedRows.map((row) => row.shiftId.toString()));
+
+    const payload = typeof event.toObject === 'function' ? event.toObject() : event;
+    payload.shifts = (payload.shifts || []).map((shift) => {
+      const memberIds = [...new Set([
+        ...(shift.memberIds || []).map((id) => id.toString()),
+        ...(signupMap.get(shift._id.toString()) || [])
+      ])];
+      return {
+        ...shift,
+        memberIds,
+        currentSignups: memberIds.length,
+        isAssigned: assignedShiftSet.has(shift._id.toString())
+      };
+    });
+
+    console.log('✅ [EVENT DETAIL] User is approved member, returning event data');
+    res.json(payload);
   } catch (error) {
     console.error('❌ [EVENT DETAIL] Error fetching event:', error);
     res.status(500).json({ 
