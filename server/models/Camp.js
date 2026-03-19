@@ -364,6 +364,28 @@ const campSchema = new mongoose.Schema({
   duesReceiptBody: {
     type: String,
     default: null
+  },
+
+  // Onboarding reminder tracking (UTC)
+  accountCreatedAt: {
+    type: Date,
+    default: Date.now
+  },
+  rosterCreatedAt: {
+    type: Date,
+    default: null
+  },
+  invitesSentAt: {
+    type: Date,
+    default: null
+  },
+  campReminder24hSentAt: {
+    type: Date,
+    default: null
+  },
+  campReminder7dSentAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

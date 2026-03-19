@@ -345,7 +345,9 @@ router.post('/apply', authenticateToken, [
           await db.updateInviteById(invite._id, { 
             status: 'applied',
             appliedBy: req.user._id,
-            appliedAt: new Date()
+            appliedAt: new Date(),
+            applicationCompletedAt: new Date(),
+            invitedUserId: req.user._id
           });
           
           console.log(`✅ [Applications] Invite ${invite._id} marked as 'applied'`);
@@ -372,7 +374,9 @@ router.post('/apply', authenticateToken, [
             await db.updateInviteById(inviteByEmail._id, { 
               status: 'applied',
               appliedBy: req.user._id,
-              appliedAt: new Date()
+              appliedAt: new Date(),
+              applicationCompletedAt: new Date(),
+              invitedUserId: req.user._id
             });
             
             console.log(`✅ [Applications] Invite ${inviteByEmail._id} marked as 'applied' (matched by email)`);
@@ -408,7 +412,9 @@ router.post('/apply', authenticateToken, [
           await db.updateInviteById(inviteByEmail._id, { 
             status: 'applied',
             appliedBy: req.user._id,
-            appliedAt: new Date()
+            appliedAt: new Date(),
+            applicationCompletedAt: new Date(),
+            invitedUserId: req.user._id
           });
           
           console.log(`✅ [Applications] Invite ${inviteByEmail._id} marked as 'applied' (matched by email, no token)`);

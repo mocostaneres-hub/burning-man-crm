@@ -394,6 +394,7 @@ router.post('/', authenticateToken, async (req, res) => {
       isActive: true,
       createdBy: req.user._id
     });
+    await db.updateCampById(camp._id, { rosterCreatedAt: new Date() });
 
     // Log roster creation for CAMP
     await recordActivity('CAMP', camp._id, req.user._id, 'ENTITY_CREATED', {

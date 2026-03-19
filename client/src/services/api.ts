@@ -479,6 +479,44 @@ class ApiService {
     return response.data;
   }
 
+  async getEmailTemplates(): Promise<{ templates: Array<{
+    _id: string;
+    key: string;
+    name: string;
+    description: string;
+    subject: string;
+    htmlContent: string;
+    textContent: string;
+    variables: string[];
+    isActive: boolean;
+  }> }> {
+    const response = await this.api.get('/admin/email-templates');
+    return response.data;
+  }
+
+  async updateEmailTemplate(
+    key: string,
+    payload: {
+      subject: string;
+      htmlContent: string;
+      textContent: string;
+      variables?: string[];
+      isActive?: boolean;
+    }
+  ): Promise<{ template: any }> {
+    const response = await this.api.put(`/admin/email-templates/${key}`, payload);
+    return response.data;
+  }
+
+  async previewEmailTemplate(key: string, data: Record<string, string>): Promise<{
+    subject: string;
+    htmlContent: string;
+    textContent: string;
+  }> {
+    const response = await this.api.post(`/admin/email-templates/${key}/preview`, { data });
+    return response.data;
+  }
+
   // Role Management endpoints
   async getRoleHierarchy(): Promise<ApiResponse> {
     const response: AxiosResponse<ApiResponse> = await this.api.get('/role-management/roles/hierarchy');

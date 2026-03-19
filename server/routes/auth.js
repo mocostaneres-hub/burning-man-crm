@@ -86,13 +86,12 @@ router.post('/register', [
         return res.status(400).json({ message: 'Invitation link is invalid' });
       }
 
-      if (invite.status === 'applied') {
-        return res.status(400).json({ message: 'This invitation has already been used' });
-      }
-
       const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
       if (isExpired || invite.status === 'expired') {
-        return res.status(400).json({ message: 'This invitation link has expired' });
+        await db.updateInviteById(invite._id, {
+          status: invite.status === 'expired' ? 'sent' : invite.status,
+          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+        });
       }
 
       const camp = await db.findCamp({ _id: invite.campId });
@@ -140,6 +139,30 @@ router.post('/register', [
     // NOTE: Camp creation moved to onboarding flow for atomicity
     // Registration only creates the user account - onboarding will handle camp setup
     const user = await db.createUser(userData);
+
+    // Persist invite/member onboarding tracking.
+    if (inviteToken) {
+      const invite = await db.findInvite({ token: inviteToken });
+      if (invite) {
+        await db.updateInviteById(invite._id, {
+          invitedUserId: user._id,
+          accountCreatedAt: invite.accountCreatedAt || new Date(),
+          status: invite.status === 'expired' ? 'sent' : invite.status
+        });
+      }
+    } else {
+      // Fallback: if user signed up without token but had an invite email, start reminder tracking.
+      const invites = await db.findInvites({ recipient: normalizedEmail });
+      const openInvite = (invites || [])
+        .filter((inv) => !inv.applicationCompletedAt)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      if (openInvite) {
+        await db.updateInviteById(openInvite._id, {
+          invitedUserId: user._id,
+          accountCreatedAt: openInvite.accountCreatedAt || new Date()
+        });
+      }
+    }
 
     // Generate token with user context
     const token = generateToken(user);

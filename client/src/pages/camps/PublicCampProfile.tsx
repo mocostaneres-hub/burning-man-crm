@@ -134,7 +134,7 @@ const PublicCampProfile: React.FC = () => {
   const [showProfileCompletionModal, setShowProfileCompletionModal] = useState(false);
   
   // Capture invite token from URL if present
-  const inviteToken = searchParams.get('invite');
+  const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
   
   // Application form state
   const [applicationData, setApplicationData] = useState({
@@ -224,7 +224,7 @@ const PublicCampProfile: React.FC = () => {
       // Redirect non-authenticated users to registration page with camp context
       const currentUrl = new URL(window.location.href);
       const campSlug = currentUrl.pathname.split('/').pop();
-      const inviteParam = inviteToken ? `&invite=${inviteToken}` : '';
+      const inviteParam = inviteToken ? `&invite_token=${inviteToken}` : '';
       window.location.href = `https://www.g8road.com/register?camp=${campSlug}${inviteParam}`;
       return;
     }

@@ -138,7 +138,8 @@ router.post('/select-role', [
             isPubliclyVisible: false, // Ensure it doesn't appear in discovery until ready
             acceptingNewMembers: true,
             showApplyNow: true,
-            showMemberCount: true
+            showMemberCount: true,
+            accountCreatedAt: user.createdAt || new Date()
           };
 
           console.log('🏕️ [Onboarding] Creating camp with slug:', slug);

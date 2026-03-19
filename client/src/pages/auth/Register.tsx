@@ -45,7 +45,7 @@ const Register: React.FC = () => {
   const [oauthLoading, setOauthLoading] = useState(false);
   
   // Capture invitation context from URL
-  const inviteToken = searchParams.get('invite');
+  const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
   const campSlug = searchParams.get('camp');
 
   const {
@@ -115,7 +115,7 @@ const Register: React.FC = () => {
         try {
           const { campSlug, token } = JSON.parse(pendingInvite);
           if (campSlug && token) {
-            navigate(`/camps/${campSlug}?invite=${token}`, { replace: true });
+            navigate(`/apply?invite_token=${token}`, { replace: true });
             return;
           }
         } catch (err) {
@@ -193,7 +193,7 @@ const Register: React.FC = () => {
           const { campSlug, token } = JSON.parse(pendingInviteAfterSignup);
           console.log('🎟️ [Register] Redirecting to camp profile with invite:', { campSlug, token });
           // Don't clear the invite yet - we'll need it for the profile completion modal
-          navigate(`/camps/${campSlug}?invite=${token}`, { replace: true });
+          navigate(`/apply?invite_token=${token}`, { replace: true });
           return;
         } catch (err) {
           console.error('❌ [Register] Error parsing pending invite:', err);
@@ -244,7 +244,7 @@ const Register: React.FC = () => {
         try {
           const { campSlug, token } = JSON.parse(pendingInvite);
           if (campSlug && token) {
-            window.location.href = `/camps/${campSlug}?invite=${token}`;
+            window.location.href = `/apply?invite_token=${token}`;
             return;
           }
         } catch (err) {

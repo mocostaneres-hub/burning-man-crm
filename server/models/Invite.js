@@ -64,6 +64,34 @@ const inviteSchema = new mongoose.Schema({
   appliedAt: {
     type: Date,
     required: false
+  },
+
+  // Track invited-account lifecycle for reminder automation.
+  invitedUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false,
+    index: true
+  },
+  accountCreatedAt: {
+    type: Date,
+    required: false,
+    default: null
+  },
+  applicationCompletedAt: {
+    type: Date,
+    required: false,
+    default: null
+  },
+  memberReminder24hSentAt: {
+    type: Date,
+    required: false,
+    default: null
+  },
+  memberReminder7dSentAt: {
+    type: Date,
+    required: false,
+    default: null
   }
 }, {
   timestamps: true
@@ -76,7 +104,7 @@ inviteSchema.index({ expiresAt: 1 });
 inviteSchema.index({ senderId: 1 });
 
 // Automatic cleanup of expired invites
-inviteSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Removed TTL auto-delete: invite links must remain recoverable for reminder flow.
 
 // Pre-save middleware to validate email format if method is email
 inviteSchema.pre('save', function(next) {
@@ -149,7 +177,7 @@ inviteSchema.methods.generateInviteLink = function(baseUrl) {
     );
   }
   
-  return `${baseUrl}/apply?token=${this.token}`;
+  return `${baseUrl}/apply?invite_token=${this.token}`;
 };
 
 module.exports = mongoose.model('Invite', inviteSchema);

@@ -1,5 +1,10 @@
 const { Resend } = require('resend');
 const { renderDuesBodyHtml } = require('../utils/duesEmailFormatter');
+const db = require('../database/databaseAdapter');
+const {
+  getTemplateByKey,
+  renderTemplateString
+} = require('./emailTemplateService');
 
 // Initialize Resend with API key from environment variables
 // CRITICAL: Fail-fast if not configured properly
@@ -654,6 +659,40 @@ ${safeMessage}`
   });
 };
 
+/**
+ * Send a DB-backed template email by key.
+ * @param {string} templateKey
+ * @param {string|Object} userId
+ * @param {Object} data
+ */
+const sendTemplate = async (templateKey, userId, data = {}) => {
+  const user = typeof userId === 'object' ? userId : await db.findUser({ _id: userId });
+  if (!user || !user.email) {
+    throw new Error(`Cannot send template ${templateKey}: user not found or missing email`);
+  }
+
+  const template = await getTemplateByKey(templateKey);
+  if (!template) {
+    throw new Error(`Template not found: ${templateKey}`);
+  }
+
+  const mergedData = {
+    user_name: user.firstName || user.playaName || user.email,
+    ...data
+  };
+
+  const subject = renderTemplateString(template.subject, mergedData);
+  const html = renderTemplateString(template.htmlContent, mergedData);
+  const text = renderTemplateString(template.textContent || '', mergedData);
+
+  return sendEmail({
+    to: user.email,
+    subject,
+    html,
+    text
+  });
+};
+
 module.exports = {
   sendEmail,
   sendApplicationStatusEmail,
@@ -664,5 +703,6 @@ module.exports = {
   sendTestEmail,
   sendCampLeadGrantedEmail,
   sendDuesEmail,
-  sendSupportContactEmail
+  sendSupportContactEmail,
+  sendTemplate
 };

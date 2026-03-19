@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ApplyInviteRedirect from './pages/auth/ApplyInviteRedirect';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import Impersonate from './pages/auth/Impersonate';
@@ -145,6 +146,7 @@ function App() {
                   <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/apply" element={<ApplyInviteRedirect />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/auth/impersonate" element={<Impersonate />} />

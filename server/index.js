@@ -124,6 +124,22 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] Photo migration failed:', migrationError.message);
     // Don't crash server if migration fails, just log it
   }
+
+  // Ensure system email templates exist.
+  try {
+    const { ensureDefaultTemplates } = require('./services/emailTemplateService');
+    await ensureDefaultTemplates();
+  } catch (templateError) {
+    console.error('⚠️  [Startup] Email template initialization failed:', templateError.message);
+  }
+
+  // Start reminder worker (hourly cadence).
+  try {
+    const { startOnboardingReminderWorker } = require('./startup/startOnboardingReminderWorker');
+    startOnboardingReminderWorker();
+  } catch (workerError) {
+    console.error('⚠️  [Startup] Onboarding reminder worker failed to start:', workerError.message);
+  }
 })
 .catch(err => {
   console.log('MongoDB connection failed, using mock database for development');
@@ -161,6 +177,7 @@ app.use('/api/diagnostic', require('./routes/diagnostic'));
 // Register admin deletion routes (admin only - USE WITH CAUTION)
 app.use('/api/admin-delete', require('./routes/admin-delete'));
 app.use('/api/email', require('./routes/email'));
+app.use('/api/admin/email-templates', require('./routes/emailTemplates'));
 app.use('/api/admin/faqs', require('./routes/adminFAQs'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/upload', require('./routes/profile-photos'));

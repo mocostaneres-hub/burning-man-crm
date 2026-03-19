@@ -26,13 +26,13 @@ router.get('/invites/validate/:token', async (req, res) => {
       return res.status(404).json({ valid: false, message: 'Invitation link is invalid' });
     }
 
-    if (invite.status === 'applied') {
-      return res.status(400).json({ valid: false, message: 'This invitation has already been used' });
-    }
-
     const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
     if (isExpired || invite.status === 'expired') {
-      return res.status(400).json({ valid: false, message: 'This invitation link has expired' });
+      // Keep invite links valid after signup: extend expired invites instead of rejecting.
+      await db.updateInviteById(invite._id, {
+        status: invite.status === 'expired' ? 'sent' : invite.status,
+        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+      });
     }
 
     const camp = await db.findCamp({ _id: invite.campId });
@@ -342,7 +342,7 @@ router.post('/invites',
           }
           
           const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          const inviteLink = `${clientUrl}/camps/${campSlug}?invite=${token}`;
+          const inviteLink = `${clientUrl}/apply?invite_token=${token}`;
           
           // Get template and replace placeholders
           const defaultEmailTemplate = "Hello! You've been personally invited to apply to join our camp, {{campName}}, for Burning Man. Click here to start your application: {{link}}";
@@ -427,6 +427,7 @@ router.post('/invites',
       const emailList = invitesSent.map(inv => inv.recipient).join(', ');
       
       if (invitesSent.length > 0) {
+        await db.updateCampById(campId, { invitesSentAt: new Date() });
         await recordActivity('CAMP', campId, req.user._id, 'COMMUNICATION_SENT', {
           field: 'emails',
           emails: emailList,
