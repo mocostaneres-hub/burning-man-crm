@@ -2533,11 +2533,6 @@ const UserEditModal: React.FC<{
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {auditLog.map((activity, index) => {
-                // Only show activities that have actual changes
-                if (!activity.details?.field && activity.activityType === 'PROFILE_UPDATE') {
-                  return null;
-                }
-                
                 const fieldName = activity.details?.fieldDisplayName || activity.details?.field || '';
                 const oldValue = activity.details?.oldValueDisplay || activity.details?.oldValue;
                 const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
@@ -2545,6 +2540,15 @@ const UserEditModal: React.FC<{
                 
                 // Format activity type for display
                 const getActivityTitle = () => {
+                  if (activity.activityType === 'ACCOUNT_CREATED') {
+                    return 'User Signed Up';
+                  }
+                  if (activity.activityType === 'LOGIN_SUCCESS') {
+                    return 'User Logged In';
+                  }
+                  if (activity.activityType === 'ONBOARDING_COMPLETED') {
+                    return 'Onboarding Completed';
+                  }
                   if (activity.activityType === 'APPLICATION_SUBMITTED' || activity.activityType === 'APPLICATION_RECEIVED') {
                     return 'Application Submitted';
                   }
@@ -2577,6 +2581,15 @@ const UserEditModal: React.FC<{
                   }
                   if (activity.activityType === 'PASSWORD_CHANGED') {
                     return 'Password Changed';
+                  }
+                  if (activity.activityType === 'PASSWORD_RESET_REQUESTED') {
+                    return 'Password Reset Requested';
+                  }
+                  if (activity.activityType === 'PASSWORD_RESET_COMPLETED') {
+                    return 'Password Reset Completed';
+                  }
+                  if (activity.activityType === 'CREDENTIALS_UPDATED') {
+                    return 'Login Credentials Updated';
                   }
                   if (activity.activityType === 'ADMIN_IMPERSONATION') {
                     return activity.details?.action === 'impersonation_completed' 
@@ -3110,18 +3123,6 @@ const CampEditModal: React.FC<{
               ) : (
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {auditLog.map((activity, index) => {
-                    // Only show activities that have actual changes (unless it's a special activity type)
-                    if (!activity.details?.field && 
-                        activity.activityType === 'PROFILE_UPDATE' && 
-                        activity.activityType !== 'APPLICATION_STATUS_CHANGED' &&
-                        activity.activityType !== 'APPLICATION_SUBMITTED' &&
-                        activity.activityType !== 'APPLICATION_RECEIVED' &&
-                        activity.activityType !== 'ADDED_TO_ROSTER' &&
-                        activity.activityType !== 'MEMBER_ADDED_TO_ROSTER' &&
-                        activity.activityType !== 'ROSTER_CREATED') {
-                      return null;
-                    }
-                    
                     const fieldName = activity.details?.fieldDisplayName || activity.details?.field || '';
                     const oldValue = activity.details?.oldValueDisplay || activity.details?.oldValue;
                     const newValue = activity.details?.newValueDisplay || activity.details?.newValue;
@@ -3129,6 +3130,15 @@ const CampEditModal: React.FC<{
                     
                     // Format activity type for display
                     const getActivityTitle = () => {
+                      if (activity.activityType === 'ACCOUNT_CREATED') {
+                        return 'User Signed Up';
+                      }
+                      if (activity.activityType === 'LOGIN_SUCCESS') {
+                        return 'User Logged In';
+                      }
+                      if (activity.activityType === 'ONBOARDING_COMPLETED') {
+                        return 'Onboarding Completed';
+                      }
                       if (activity.activityType === 'APPLICATION_SUBMITTED' || activity.activityType === 'APPLICATION_RECEIVED') {
                         return 'Application Submitted';
                       }
@@ -3161,6 +3171,15 @@ const CampEditModal: React.FC<{
                       }
                       if (activity.activityType === 'PASSWORD_CHANGED') {
                         return 'Password Changed';
+                      }
+                      if (activity.activityType === 'PASSWORD_RESET_REQUESTED') {
+                        return 'Password Reset Requested';
+                      }
+                      if (activity.activityType === 'PASSWORD_RESET_COMPLETED') {
+                        return 'Password Reset Completed';
+                      }
+                      if (activity.activityType === 'CREDENTIALS_UPDATED') {
+                        return 'Login Credentials Updated';
                       }
                       if (activity.activityType === 'ADMIN_IMPERSONATION') {
                         return activity.details?.action === 'impersonation_completed' 

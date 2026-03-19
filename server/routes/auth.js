@@ -165,6 +165,15 @@ router.post('/register', [
         console.error('⚠️ [Auth] Failed to send welcome email:', emailError);
       });
 
+    // Audit: account signup
+    await recordActivity('MEMBER', user._id, user._id, 'ACCOUNT_CREATED', {
+      field: 'account',
+      newValue: effectiveAccountType,
+      note: inviteContext
+        ? 'User signed up via invitation link'
+        : 'User signed up via email/password'
+    });
+
     res.status(201).json({
       message: 'User registered successfully',
       token,
@@ -240,6 +249,13 @@ router.post('/login', [
 
     // Update last login by user id (not email) to avoid stale-email write bugs
     await db.updateUserById(user._id, { lastLogin: new Date() });
+
+    // Audit: successful login
+    await recordActivity('MEMBER', user._id, user._id, 'LOGIN_SUCCESS', {
+      field: 'lastLogin',
+      newValue: new Date().toISOString(),
+      note: 'User logged in successfully'
+    });
 
     // Generate token with user context
     const token = generateToken(user);
@@ -415,6 +431,13 @@ router.post('/forgot-password', forgotPasswordLimiter, [
       PASSWORD_RESET_EXPIRY_HOURS
     );
 
+    // Audit: password reset requested
+    await recordActivity('MEMBER', user._id, user._id, 'PASSWORD_RESET_REQUESTED', {
+      field: 'passwordReset',
+      action: 'requested',
+      note: 'Password reset email requested'
+    });
+
     res.json({ message: 'We sent a reset link to that email address. Check your inbox and spam folder.' });
   } catch (error) {
     console.error('Forgot password error:', error.message);
@@ -460,6 +483,13 @@ router.post('/reset-password', [
     userDoc.passwordResetTokenExpiry = undefined;
     await userDoc.save();
 
+    // Audit: password reset completed
+    await recordActivity('MEMBER', userDoc._id, userDoc._id, 'PASSWORD_RESET_COMPLETED', {
+      field: 'passwordReset',
+      action: 'completed',
+      note: 'Password reset completed using reset token'
+    });
+
     res.json({ message: 'Password has been reset. You can now sign in with your new password.' });
   } catch (error) {
     console.error('Reset password error:', error.message);
@@ -501,6 +531,12 @@ router.put('/change-password', authenticateToken, [
 
     // Update password in database
     await db.updateUserById(user._id, { password: hashedPassword });
+
+    // Audit: password changed while authenticated
+    await recordActivity('MEMBER', user._id, req.user._id, 'PASSWORD_CHANGED', {
+      field: 'password',
+      note: 'Password changed from authenticated session'
+    });
 
     res.json({ message: 'Password changed successfully' });
 
@@ -597,10 +633,12 @@ router.put('/update-credentials', authenticateToken, [
       }
     }
 
-    // Log activity
-    await recordActivity(user._id, 'credentials_updated', 'auth', {
+    // Audit: credentials updated
+    await recordActivity('MEMBER', user._id, req.user._id, 'CREDENTIALS_UPDATED', {
+      field: 'credentials',
       emailChanged: normalizedEmail !== normalizeEmail(user.email),
-      passwordChanged: !!newPassword
+      passwordChanged: !!newPassword,
+      note: 'Login credentials updated'
     });
 
     console.log(`✅ [AUTH] User ${user._id} updated login credentials. Email: ${normalizedEmail !== normalizeEmail(user.email) ? 'changed' : 'same'}, Password: ${newPassword ? 'changed' : 'same'}`);

@@ -1647,8 +1647,14 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get activity log from ActivityLog collection (no limit to show all)
-    const activityLogs = await getActivityLog('MEMBER', id, { limit: null });
+    // Get account activity logs (member + camp account context when present)
+    const memberLogs = await getActivityLog('MEMBER', id, { limit: null });
+    const campLogs = user.campId
+      ? await getActivityLog('CAMP', user.campId.toString(), { limit: null })
+      : [];
+    const activityLogs = [...memberLogs, ...campLogs].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
     
     // Format activities for frontend with human-readable names
     const activities = activityLogs.map(log => {
@@ -1671,9 +1677,18 @@ router.get('/users/:id/history', authenticateToken, requireAdmin, async (req, re
       return {
         action: log.activityType,
         activityType: log.activityType,
+        entityType: log.entityType,
         actingUserId: log.actingUserId,
         timestamp: log.timestamp,
-        details: formattedDetails,
+        details: {
+          ...formattedDetails,
+          context:
+            log.entityType === 'CAMP'
+              ? (formattedDetails.context
+                  ? `Camp Activity | ${formattedDetails.context}`
+                  : 'Camp Activity')
+              : formattedDetails.context
+        },
         type: 'activity_log'
       };
     });
@@ -1711,9 +1726,17 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Get activity log from ActivityLog collection (no limit to show all)
+    // Get camp activity logs + owner account activity logs
     console.log(`🔍 [GET /api/admin/camps/:id/history] Fetching history for camp ID: ${id}`);
-    const activityLogs = await getActivityLog('CAMP', id, { limit: null });
+    const campLogs = await getActivityLog('CAMP', id, { limit: null });
+    const ownerId =
+      camp.owner && typeof camp.owner === 'object'
+        ? camp.owner._id?.toString()
+        : camp.owner?.toString?.() || camp.owner;
+    const ownerMemberLogs = ownerId ? await getActivityLog('MEMBER', ownerId, { limit: null }) : [];
+    const activityLogs = [...campLogs, ...ownerMemberLogs].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
     console.log(`🔍 [GET /api/admin/camps/:id/history] Found ${activityLogs.length} activity logs`);
     
     // Get all perks for resolving IDs to names
@@ -1869,9 +1892,18 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
       return {
         action: log.activityType,
         activityType: log.activityType,
+        entityType: log.entityType,
         actingUserId: log.actingUserId,
         timestamp: log.timestamp,
-        details: formattedDetails,
+        details: {
+          ...formattedDetails,
+          context:
+            log.entityType === 'MEMBER'
+              ? (formattedDetails.context
+                  ? `Owner Account Activity | ${formattedDetails.context}`
+                  : 'Owner Account Activity')
+              : formattedDetails.context
+        },
         type: 'activity_log'
       };
     });

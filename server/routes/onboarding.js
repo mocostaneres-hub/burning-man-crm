@@ -5,6 +5,7 @@ const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
 const mongoose = require('mongoose');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
+const { recordActivity } = require('../services/activityLogger');
 
 // @route   POST /api/onboarding/select-role
 // @desc    Select role for new user (member or camp_lead)
@@ -174,6 +175,14 @@ router.post('/select-role', [
           updatedUser.urlSlug = userWithCamp.urlSlug;
 
           console.log('✅ [Onboarding] Linked user to camp');
+
+          // Audit: camp created during onboarding
+          await recordActivity('CAMP', camp._id, user._id, 'ENTITY_CREATED', {
+            field: 'camp',
+            action: 'created',
+            note: 'Camp account was created during onboarding',
+            campName: camp.name
+          });
         } else {
           console.log('ℹ️ [Onboarding] User already has camp, skipping creation');
         }
@@ -199,6 +208,23 @@ router.post('/select-role', [
 
       // ALL OPERATIONS COMPLETED
       console.log('✅ [Onboarding] Operations completed successfully (no transaction)');
+
+      // Audit: role selection completed
+      await recordActivity('MEMBER', updatedUser._id, updatedUser._id, 'ONBOARDING_COMPLETED', {
+        field: 'role',
+        newValue: role,
+        accountType: updatedUser.accountType,
+        note: `Onboarding completed with role "${role}"`
+      });
+
+      // If this is a camp account with a linked camp, mirror onboarding event on camp entity.
+      if (updatedUser.accountType === 'camp' && updatedUser.campId) {
+        await recordActivity('CAMP', updatedUser.campId, updatedUser._id, 'ONBOARDING_COMPLETED', {
+          field: 'campOnboarding',
+          newValue: 'completed',
+          note: 'Camp onboarding completed'
+        });
+      }
 
       // Use the updatedUser we already have instead of fetching again
       // (Fetching immediately after commit can sometimes fail due to replication lag)
