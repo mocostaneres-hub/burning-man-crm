@@ -138,7 +138,6 @@ const Navbar: React.FC = () => {
       // Get camp identifier for profile edit URL
       const campIdentifier = campIdFromCamp
         || user?.campId?.toString()
-        || (user?.accountType === 'camp' ? user?._id?.toString() : '')
         || '';
       
       // ============================================================================

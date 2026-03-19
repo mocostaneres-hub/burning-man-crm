@@ -86,7 +86,7 @@ const DashboardRedirect: React.FC = () => {
   
   // Camp accounts redirect to identifier-based dashboard URL
   if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
-    const campId = user?.campId?.toString() || user?._id?.toString() || '';
+    const campId = user?.campId?.toString() || '';
     if (campId) {
       console.log('🔍 [DashboardRedirect] Redirecting camp account to identifier-based dashboard');
       return <Navigate to={`/camp/${campId}/dashboard`} replace />;
@@ -102,7 +102,7 @@ const CampProfileRedirect: React.FC = () => {
   const { user } = useAuth();
   
   // Get camp identifier and redirect to new URL format
-  const campId = user?.campId?.toString() || user?._id?.toString() || '';
+  const campId = user?.campId?.toString() || '';
   const newPath = campId ? `/camp/${campId}/profile` : '/dashboard';
   
   return <Navigate to={newPath} replace />;
@@ -116,7 +116,7 @@ const CampRouteRedirect: React.FC<{ route: string }> = ({ route }) => {
   const queryCampId = params.get('campId');
   
   // Get camp identifier and redirect to new URL format
-  const derivedCampId = user?.campId?.toString() || user?._id?.toString() || '';
+  const derivedCampId = user?.campId?.toString() || '';
   let newPath = derivedCampId ? `/camp/${derivedCampId}${route}` : '/dashboard';
 
   // Personal assignees may hit /camp/tasks with explicit campId context from task edit flow.
