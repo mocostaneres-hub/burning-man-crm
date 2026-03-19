@@ -4,6 +4,92 @@ const { EMAIL_TEMPLATE_KEYS } = require('../constants/emailTemplateKeys');
 const DEFAULT_TEMPLATE_VARIABLES = ['camp_name', 'user_name', 'invite_link', 'time_since_signup'];
 
 const DEFAULT_TEMPLATE_DATA = {
+  [EMAIL_TEMPLATE_KEYS.NEW_APPLICATION_NOTIFICATION]: {
+    key: EMAIL_TEMPLATE_KEYS.NEW_APPLICATION_NOTIFICATION,
+    name: 'New Application Notification',
+    description: 'Sent to camp admins when someone applies to their camp.',
+    subject: 'New Application to {{campName}} - G8Road CRM',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">🏕️ G8Road CRM</h1>
+          <p style="color: white; margin: 10px 0 0 0;">New Camp Application</p>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <h2 style="color: #333; margin-top: 0;">New Application Received!</h2>
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #FF6B35; margin-top: 0;">Camp: {{campName}}</h3>
+            <p><strong>Applicant:</strong> {{applicantFirstName}} {{applicantLastName}}</p>
+            <p><strong>Email:</strong> {{applicantEmail}}</p>
+            <p><strong>Applied:</strong> {{appliedDate}}</p>
+          </div>
+          <div style="text-align: center;">
+            <a href="{{reviewLink}}" style="background: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              Review Application
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+    textContent:
+      'New application to {{campName}} from {{applicantFirstName}} {{applicantLastName}} ({{applicantEmail}}). Review: {{reviewLink}}',
+    variables: ['campName', 'applicantFirstName', 'applicantLastName', 'applicantEmail', 'appliedDate', 'reviewLink']
+  },
+  [EMAIL_TEMPLATE_KEYS.APPLICATION_APPROVED]: {
+    key: EMAIL_TEMPLATE_KEYS.APPLICATION_APPROVED,
+    name: 'Application Approval Email',
+    description: 'Sent to applicants when their application is approved.',
+    subject: '🎉 Welcome to {{campName}}! - G8Road CRM',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">🎉 Congratulations!</h1>
+          <p style="color: white; margin: 10px 0 0 0;">You've been accepted!</p>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <h2 style="color: #333; margin-top: 0;">Welcome to {{campName}}!</h2>
+          <p>Dear {{firstName}},</p>
+          <p>Your application to <strong>{{campName}}</strong> has been approved.</p>
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="{{dashboardLink}}" style="background: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              Go to Dashboard
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+    textContent:
+      'Congratulations {{firstName}}! Your application to {{campName}} has been approved. Dashboard: {{dashboardLink}}',
+    variables: ['campName', 'firstName', 'dashboardLink']
+  },
+  [EMAIL_TEMPLATE_KEYS.APPLICATION_REJECTED]: {
+    key: EMAIL_TEMPLATE_KEYS.APPLICATION_REJECTED,
+    name: 'Application Rejection Email',
+    description: 'Sent to applicants when their application is not accepted.',
+    subject: 'Application Update - {{campName}} - G8Road CRM',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">🏕️ G8Road CRM</h1>
+          <p style="color: white; margin: 10px 0 0 0;">Application Update</p>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <h2 style="color: #333; margin-top: 0;">Application Status Update</h2>
+          <p>Dear {{firstName}},</p>
+          <p>Thank you for your interest in joining <strong>{{campName}}</strong>.</p>
+          <p>After review, we are not moving forward at this time.</p>
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="{{exploreCampsLink}}" style="background: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              Explore Other Camps
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+    textContent:
+      'Thank you {{firstName}} for applying to {{campName}}. We are not moving forward at this time. Explore camps: {{exploreCampsLink}}',
+    variables: ['campName', 'firstName', 'exploreCampsLink']
+  },
   [EMAIL_TEMPLATE_KEYS.CAMP_REMINDER_24H]: {
     key: EMAIL_TEMPLATE_KEYS.CAMP_REMINDER_24H,
     name: 'Camp Onboarding Reminder (24h)',
