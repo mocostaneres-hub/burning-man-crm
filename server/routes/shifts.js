@@ -5,6 +5,9 @@ const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const Event = require('../models/Event');
+const { buildMyShiftsPayload } = require('../services/shiftService');
+const { createBulkNotifications } = require('../services/notificationService');
+const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 
 // Test route to verify this file is being loaded
 router.get('/debug-test', (req, res) => {
@@ -27,6 +30,23 @@ const resolveEventAndShift = async (shiftId) => {
   if (!event) return { event: null, shift: null };
   const eventShift = event.shifts.find(s => s._id.toString() === shiftId.toString()) || shift;
   return { event, shift: eventShift };
+};
+
+const getCampManagerRecipientIds = async (campId) => {
+  const normalizedCampId = campId?._id ? campId._id : campId;
+  const recipientIds = new Set();
+  const camp = await db.findCamp({ _id: normalizedCampId });
+  if (camp?.owner) {
+    recipientIds.add(camp.owner.toString());
+  }
+
+  const activeRoster = await db.findActiveRoster({ camp: normalizedCampId });
+  for (const memberEntry of activeRoster?.members || []) {
+    if (memberEntry?.isCampLead !== true || memberEntry?.status !== 'approved' || !memberEntry?.member?.user) continue;
+    recipientIds.add(memberEntry.member.user._id?.toString?.() || memberEntry.member.user.toString());
+  }
+
+  return Array.from(recipientIds);
 };
 
 // @route   GET /api/shifts/events
@@ -126,6 +146,23 @@ router.get('/my-events', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   GET /api/shifts/my-shifts
+// @desc    Get shift-centric payload for personal members
+// @access  Private (Personal accounts)
+router.get('/my-shifts', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'personal') {
+      return res.status(403).json({ message: 'Personal account required' });
+    }
+
+    const payload = await buildMyShiftsPayload(req.user._id);
+    return res.json(payload);
+  } catch (error) {
+    console.error('Get my shifts error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   POST /api/shifts/events
 // @desc    Create a new event with shifts
 // @access  Private (Camp admins/leads only)
@@ -185,6 +222,22 @@ router.post('/events', authenticateToken, async (req, res) => {
       }))
     });
 
+    try {
+      const activeMembers = await db.findMembers({ camp: campId, status: 'active' });
+      const recipientIds = [...new Set(activeMembers.map((member) => member.user?.toString()).filter(Boolean))];
+      await createBulkNotifications(recipientIds, {
+        actor: req.user._id,
+        campId,
+        type: NOTIFICATION_TYPES.SHIFT_CREATED,
+        title: `New volunteer event: ${event.eventName}`,
+        message: `${event.shifts?.length || 0} shift(s) are now available to sign up.`,
+        link: '/my-shifts',
+        metadata: { eventId: event._id }
+      });
+    } catch (notificationError) {
+      console.error('Create event notification error:', notificationError);
+    }
+
     res.status(201).json({ event });
   } catch (error) {
     console.error('Create event error:', error);
@@ -231,6 +284,10 @@ router.get('/events/:eventId', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.post('/events/:eventId/send-task', authenticateToken, async (req, res) => {
   try {
+    return res.status(410).json({
+      message: 'Shift-as-task assignment has been deprecated. Use the My Shifts experience instead.'
+    });
+
     console.log('🔄 [TASK ASSIGNMENT] Starting task assignment process');
     console.log('📝 [TASK ASSIGNMENT] Request params:', { eventId: req.params.eventId });
     console.log('📝 [TASK ASSIGNMENT] Request body:', req.body);
@@ -578,6 +635,25 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
       });
     }
 
+    try {
+      const managerRecipients = await getCampManagerRecipientIds(event.campId);
+      await createBulkNotifications(managerRecipients, {
+        actor: req.user._id,
+        campId: event.campId,
+        type: NOTIFICATION_TYPES.SHIFT_UNSIGNUP,
+        title: `Shift signup cancelled: ${shift.title}`,
+        message: `${req.user.firstName || 'A member'} ${req.user.lastName || ''}`.trim() + ' cancelled a shift signup.',
+        link: `/camp/${event.campId}/events`,
+        metadata: {
+          eventId: event._id,
+          shiftId: shift._id,
+          memberId: req.user._id
+        }
+      });
+    } catch (notificationError) {
+      console.error('Shift unsignup notification error:', notificationError);
+    }
+
     res.json({
       message: 'Successfully cancelled shift signup',
       shiftId,
@@ -802,6 +878,22 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       })
     });
 
+    try {
+      const activeMembers = await db.findMembers({ camp: eventCampId, status: 'active' });
+      const recipientIds = [...new Set(activeMembers.map((member) => member.user?.toString()).filter(Boolean))];
+      await createBulkNotifications(recipientIds, {
+        actor: req.user._id,
+        campId: eventCampId,
+        type: NOTIFICATION_TYPES.SHIFT_UPDATED,
+        title: `Volunteer event updated: ${eventName}`,
+        message: 'Shift details were updated. Please review your upcoming shifts.',
+        link: '/my-shifts',
+        metadata: { eventId: eventId }
+      });
+    } catch (notificationError) {
+      console.error('Update event notification error:', notificationError);
+    }
+
     res.json({ event: updatedEvent });
   } catch (error) {
     console.error('Update event error:', error);
@@ -846,36 +938,17 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     
     console.log('✅ [EVENT DELETION] Camp scope confirmed');
 
-    // Step 1: Delete all tasks related to this event
-    console.log('🔍 [EVENT DELETION] Searching for tasks to delete');
-    const tasks = await db.findTasks({ 
-      'metadata.eventId': eventId,
-      type: 'volunteer_shift'
-    });
-
-    console.log(`📊 [EVENT DELETION] Found ${tasks.length} tasks to delete`);
-
+    // Shift-as-task is deprecated; deleting event no longer mutates Task records.
     let deletedTasksCount = 0;
     const failedTaskDeletions = [];
-    
-    for (const task of tasks) {
-      try {
-        console.log(`🗑️ [EVENT DELETION] Deleting task: ${task._id} (assigned to: ${task.assignedTo})`);
-        await db.deleteTask(task._id);
-        deletedTasksCount++;
-        console.log(`✅ [EVENT DELETION] Task deleted successfully: ${task._id}`);
-      } catch (deleteError) {
-        console.error(`❌ [EVENT DELETION] Failed to delete task ${task._id}:`, deleteError);
-        failedTaskDeletions.push({ taskId: task._id, error: deleteError.message });
-      }
-    }
+    const tasks = [];
 
-    // Step 2: Shifts will be deleted automatically when the event is deleted
+    // Step 1: Shifts will be deleted automatically when the event is deleted
     // (shifts are embedded subdocuments in the event)
     const shiftsCount = event.shifts?.length || 0;
     console.log(`📊 [EVENT DELETION] Event contains ${shiftsCount} shifts (will be deleted with event)`);
 
-    // Step 3: Delete the event itself
+    // Step 2: Delete the event itself
     console.log('🗑️ [EVENT DELETION] Deleting event:', eventId);
     try {
       await db.deleteEvent(eventId);
@@ -888,7 +961,23 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log('🎉 [EVENT DELETION] Complete deletion summary:', { 
+    try {
+      const activeMembers = await db.findMembers({ camp: eventCampId, status: 'active' });
+      const recipientIds = [...new Set(activeMembers.map((member) => member.user?.toString()).filter(Boolean))];
+      await createBulkNotifications(recipientIds, {
+        actor: req.user._id,
+        campId: eventCampId,
+        type: NOTIFICATION_TYPES.SHIFT_DELETED,
+        title: `Volunteer event removed: ${event.eventName}`,
+        message: 'A volunteer event was deleted by camp leadership.',
+        link: '/my-shifts',
+        metadata: { eventId }
+      });
+    } catch (notificationError) {
+      console.error('Delete event notification error:', notificationError);
+    }
+
+    console.log('🎉 [EVENT DELETION] Complete deletion summary:', {
       eventDeleted: true,
       tasksDeleted: deletedTasksCount,
       shiftsDeleted: shiftsCount,
@@ -924,6 +1013,10 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
   try {
+    return res.status(410).json({
+      message: 'Shift-as-task assignment has been deprecated. Event tasks are no longer managed.'
+    });
+
     console.log('🗑️ [TASK DELETION] Starting task deletion process');
     console.log('📝 [TASK DELETION] Event ID:', req.params.eventId);
     
@@ -1006,6 +1099,10 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.put('/events/:eventId/task-assignments', authenticateToken, async (req, res) => {
   try {
+    return res.status(410).json({
+      message: 'Shift-as-task assignment has been deprecated. Use the My Shifts experience instead.'
+    });
+
     console.log('🔄 [TASK SYNC] Starting targeted task assignment update');
     console.log('📝 [TASK SYNC] Request params:', { eventId: req.params.eventId });
     console.log('📝 [TASK SYNC] Request body:', req.body);
@@ -1409,33 +1506,23 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       currentSignUps = updatedShift.memberIds.length;
     }
 
-    // Mark the user's volunteer shift task as completed (first sign-up only)
-    console.log('🎯 [SHIFT SIGNUP] Looking for user\'s volunteer shift task');
-    const userTasks = await db.findTasks({
-      assignedTo: userId,
-      'metadata.eventId': targetEvent._id,
-      type: 'volunteer_shift',
-      status: 'open'
-    });
-
-    console.log(`📊 [SHIFT SIGNUP] Found ${userTasks.length} pending volunteer shift tasks for this event`);
-
-    if (userTasks.length > 0) {
-      // Update the first matching task to completed
-      const taskToComplete = userTasks[0];
-      console.log('✅ [SHIFT SIGNUP] Marking task as completed:', taskToComplete._id);
-      
-      const updatedTaskData = {
-        ...taskToComplete,
-        status: 'closed',
-        completedAt: new Date().toISOString(),
-        completedBy: userId
-      };
-      
-      await db.updateTask(taskToComplete._id, updatedTaskData);
-      console.log('✅ [SHIFT SIGNUP] Task marked as completed');
-    } else {
-      console.log('⚠️ [SHIFT SIGNUP] No pending volunteer shift task found for this user/event');
+    try {
+      const managerRecipients = await getCampManagerRecipientIds(targetEvent.campId);
+      await createBulkNotifications(managerRecipients, {
+        actor: req.user._id,
+        campId: targetEvent.campId,
+        type: NOTIFICATION_TYPES.SHIFT_SIGNUP,
+        title: `New shift signup: ${targetShift.title}`,
+        message: `${req.user.firstName || 'A member'} ${req.user.lastName || ''}`.trim() + ' signed up for a shift.',
+        link: `/camp/${targetEvent.campId}/events`,
+        metadata: {
+          eventId: targetEvent._id,
+          shiftId: targetShift._id,
+          memberId: req.user._id
+        }
+      });
+    } catch (notificationError) {
+      console.error('Shift signup notification error:', notificationError);
     }
 
     console.log('🎉 [SHIFT SIGNUP] Sign-up process completed successfully');

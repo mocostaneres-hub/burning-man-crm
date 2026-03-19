@@ -457,3 +457,60 @@ export interface ShiftSignUp {
   signedUpAt: Date;
   status: 'confirmed' | 'cancelled';
 }
+
+export interface NotificationItem {
+  _id: string;
+  recipient: string;
+  actor?: string | null;
+  campId?: string | null;
+  type: string;
+  title: string;
+  message: string;
+  link?: string | null;
+  metadata?: Record<string, any>;
+  readAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationItem[];
+  unreadCount: number;
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface MyShiftCoworker {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  playaName?: string;
+  email?: string;
+  profilePhoto?: string | null;
+}
+
+export interface MyShiftItem {
+  shiftId: string;
+  eventId: string;
+  eventName: string;
+  campId: string;
+  campName: string;
+  title: string;
+  description?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  maxSignUps: number;
+  signedUpCount: number;
+  remainingSpots: number;
+  isFull: boolean;
+  memberIds: string[];
+  coworkers: MyShiftCoworker[];
+}
+
+export interface MyShiftsResponse {
+  camps: Array<{ _id: string; name: string }>;
+  availableShifts: MyShiftItem[];
+  signedUpShifts: MyShiftItem[];
+}

@@ -1,51 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
-import { formatEventDate, formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
-
-// Helper function for retrying API calls with exponential backoff
-const retryApiCall = async (
-  apiCall: () => Promise<any>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<any> => {
-  let lastError: any;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await apiCall();
-    } catch (error: any) {
-      lastError = error;
-      
-      // Don't retry on authentication or permission errors
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        throw error;
-      }
-      
-      // Don't retry on the last attempt
-      if (attempt === maxRetries) {
-        break;
-      }
-      
-      // Calculate delay with exponential backoff
-      const delay = baseDelay * Math.pow(2, attempt);
-      console.log(`⏳ API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
-      
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw lastError;
-};
+import { formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
 
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { campIdentifier, eventId, shiftId } = useParams<{ campIdentifier?: string; eventId?: string; shiftId?: string }>();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [events, setEvents] = useState<Event[]>([]);
   
   // Security check: Verify camp identifier matches authenticated user's camp
@@ -99,19 +64,14 @@ const VolunteerShifts: React.FC = () => {
       startTime: string;
       endTime: string;
       maxSignUps: number;
-    }>,
-    assignmentType: 'none' as 'none' | 'all' | 'specific',
-    selectedMembers: [] as string[]
+    }>
   });
-
-  // State for roster members
   const [rosterMembers, setRosterMembers] = useState<Array<{
     _id: string;
     firstName: string;
     lastName: string;
     email: string;
   }>>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Check if user has admin/lead access (including Camp Leads)
   const isCampContext = user?.accountType === 'camp' 
@@ -155,67 +115,39 @@ const VolunteerShifts: React.FC = () => {
     return direction === 'asc' ? '▲' : '▼';
   };
 
-  useEffect(() => {
-    if (canAccessShifts) {
-      loadEvents();
-      loadRosterMembers();
-    }
-  }, [canAccessShifts]);
-
-  const loadRosterMembers = async () => {
+  const loadRosterMembers = useCallback(async () => {
     try {
-      setLoadingMembers(true);
-      
-    // Get camp ID from user context  
-    let campId;
-    if (user?.accountType === 'camp') {
-      const camp = await api.get('/camps/my-camp');
-      campId = camp?._id;
-    } else if (user?.accountType === 'admin' && user?.campId) {
-      const camp = await api.get('/camps/my-camp');
-      campId = camp?._id;
-    } else if (user?.isCampLead && user?.campLeadCampId) {
-      campId = user.campLeadCampId;
-    }
+      let campId;
+      if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+        const camp = await api.get('/camps/my-camp');
+        campId = camp?._id;
+      } else if (user?.isCampLead && user?.campLeadCampId) {
+        campId = user.campLeadCampId;
+      }
 
       if (!campId) {
         setRosterMembers([]);
         return;
       }
 
-      // Use the same endpoint as MemberRoster for consistency
       const response = await api.getCampMembers(campId.toString());
-      
-      if (response.members && Array.isArray(response.members)) {
-        // Filter for approved members only
-        const approvedMembers = response.members
-          .filter((member: any) => {
-            // Check if the member is approved in the roster
-            return member.status === 'approved' || member.role !== 'pending';
-          })
-          .map((member: any) => {
-            const user = typeof member.user === 'object' ? member.user : member;
-            return {
-              _id: user._id || member._id,
-              firstName: user.firstName || '',
-              lastName: user.lastName || '',
-              email: user.email || ''
-            };
-          });
-        
-        setRosterMembers(approvedMembers);
-      } else {
-        setRosterMembers([]);
-      }
+      const normalized = (response.members || []).map((member: any) => {
+        const resolvedUser = typeof member.user === 'object' ? member.user : member;
+        return {
+          _id: resolvedUser._id || member._id,
+          firstName: resolvedUser.firstName || '',
+          lastName: resolvedUser.lastName || '',
+          email: resolvedUser.email || ''
+        };
+      });
+      setRosterMembers(normalized);
     } catch (error) {
       console.error('Error loading roster members:', error);
       setRosterMembers([]);
-    } finally {
-      setLoadingMembers(false);
     }
-  };
+  }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       // For Camp Leads: pass campId as query parameter for backend permission check
       let url = '/shifts/events';
@@ -233,7 +165,14 @@ const VolunteerShifts: React.FC = () => {
       console.error('Error loading events:', error);
       setEvents([]);
     }
-  };
+  }, [user?.isCampLead, user?.campLeadCampId]);
+
+  useEffect(() => {
+    if (canAccessShifts) {
+      loadEvents();
+      loadRosterMembers();
+    }
+  }, [canAccessShifts, loadEvents, loadRosterMembers]);
 
   const handleCreateEvent = async () => {
     try {
@@ -282,134 +221,12 @@ const VolunteerShifts: React.FC = () => {
         }))
       };
 
-      let response;
-      let successMessage;
+      const response = isEditMode && eventToEdit
+        ? await api.put(`/shifts/events/${eventToEdit._id}`, eventData)
+        : await api.post('/shifts/events', eventData);
 
-      if (isEditMode && eventToEdit) {
-        // Update existing event
-        response = await api.put(`/shifts/events/${eventToEdit._id}`, eventData);
-        successMessage = 'Event updated successfully!';
-      } else {
-        // Create new event
-        response = await api.post('/shifts/events', eventData);
-        successMessage = 'Event created successfully!';
-      }
-      
       if (response?.event) {
-        const resultEvent = response.event;
-        
-        // Handle task assignment changes
-        let taskResult = { success: true, message: '' };
-        
-        if (isEditMode) {
-          try {
-            // Use targeted task assignment update (only affects this event's tasks)
-            console.log('🔄 Updating task assignments for event:', resultEvent._id);
-            
-            const taskData: any = {
-              assignmentType: eventForm.assignmentType
-            };
-            
-            if (eventForm.assignmentType === 'all') {
-              taskData.sendToAllMembers = true;
-            } else if (eventForm.assignmentType === 'specific') {
-              taskData.memberIds = eventForm.selectedMembers;
-            }
-            
-            console.log('📝 Updating task assignments with data:', taskData);
-            const updateResponse = await retryApiCall(
-              () => api.put(`/shifts/events/${resultEvent._id}/task-assignments`, taskData),
-              3, // 3 retries
-              1000 // 1 second delay
-            );
-            console.log('✅ Task assignment update response:', updateResponse);
-            
-            const { deletedCount, createdCount, membersAdded, membersRemoved, finalMemberCount, noChangesNeeded } = updateResponse || {};
-            
-            if (noChangesNeeded) {
-              taskResult.message = `Task assignments unchanged - already correctly assigned to ${finalMemberCount} members.`;
-            } else if (eventForm.assignmentType === 'none') {
-              taskResult.message = `Removed all ${deletedCount} task assignments for this event.`;
-            } else {
-              let messageDetails = [];
-              if (deletedCount > 0) {
-                messageDetails.push(`removed ${deletedCount} tasks from ${membersRemoved} members`);
-              }
-              if (createdCount > 0) {
-                messageDetails.push(`added ${createdCount} tasks for ${membersAdded} members`);
-              }
-              
-              if (messageDetails.length > 0) {
-                taskResult.message = `Updated task assignments: ${messageDetails.join(', ')}. Now assigned to ${finalMemberCount} members.`;
-              } else {
-                taskResult.message = `Task assignments unchanged - already assigned to ${finalMemberCount} members.`;
-              }
-            }
-            
-            if (updateResponse?.warnings) {
-              taskResult.message += ` Warning: ${updateResponse.warnings}`;
-            }
-          } catch (taskError: any) {
-            console.error('❌ Task assignment update failed:', taskError);
-            taskResult.success = false;
-            
-            const errorMsg = taskError.response?.data?.message || taskError.message || 'Unknown error';
-            taskResult.message = `Task assignment update failed: ${errorMsg}`;
-            
-            if (taskError.response?.data?.error) {
-              taskResult.message += ` (${taskError.response.data.error})`;
-            }
-          }
-        } else {
-          // For new events, only create tasks if assignment is not 'none'
-          if (eventForm.assignmentType !== 'none') {
-            try {
-              const taskData: any = {};
-              
-              if (eventForm.assignmentType === 'all') {
-                taskData.sendToAllMembers = true;
-              } else if (eventForm.assignmentType === 'specific') {
-                taskData.memberIds = eventForm.selectedMembers;
-              }
-              
-              console.log('📝 Creating tasks for new event with data:', taskData);
-              const createResponse = await retryApiCall(
-                () => api.post(`/shifts/events/${resultEvent._id}/send-task`, taskData),
-                3, // 3 retries
-                1000 // 1 second delay
-              );
-              console.log('✅ Task creation response:', createResponse);
-              
-              taskResult.message = `Created ${createResponse?.tasksCreated || 0} tasks for ${createResponse?.targetMembers || 0} members.`;
-              
-              if (createResponse?.warnings) {
-                taskResult.message += ` Warning: ${createResponse.warnings}`;
-              }
-            } catch (taskError: any) {
-              console.error('❌ Task assignment failed:', taskError);
-              taskResult.success = false;
-              
-              const errorMsg = taskError.response?.data?.message || taskError.message || 'Unknown error';
-              taskResult.message = `Task assignment failed: ${errorMsg}`;
-              
-              if (taskError.response?.data?.error) {
-                taskResult.message += ` (${taskError.response.data.error})`;
-              }
-            }
-          }
-        }
-        
-        // Show appropriate success/warning message
-        if (taskResult.success) {
-          if (taskResult.message) {
-            alert(`${successMessage}\n\nTask Assignment: ${taskResult.message}`);
-          } else {
-            alert(successMessage);
-          }
-        } else {
-          alert(`${successMessage}\n\nHowever, there was an issue with task assignments:\n${taskResult.message}`);
-        }
-        
+        alert(isEditMode ? 'Event updated successfully!' : 'Event created successfully!');
         setShowCreateModal(false);
         resetForm();
         
@@ -467,9 +284,7 @@ const VolunteerShifts: React.FC = () => {
     setEventForm({
       eventName: '',
       description: '',
-      shifts: [],
-      assignmentType: 'none',
-      selectedMembers: []
+      shifts: []
     });
     setIsEditMode(false);
     setEventToEdit(null);
@@ -490,9 +305,7 @@ const VolunteerShifts: React.FC = () => {
         startTime: new Date(shift.startTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         maxSignUps: shift.maxSignUps
-      })),
-      assignmentType: 'none', // Reset assignment for edits
-      selectedMembers: []
+      }))
     });
     
     setShowCreateModal(true);
@@ -1236,102 +1049,9 @@ const VolunteerShifts: React.FC = () => {
             )}
           </div>
 
-          {/* Assignment Options */}
-          {(
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Task Assignment</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              {isEditMode 
-                ? "Update task assignment for this event. Note: Changing assignment will affect existing tasks sent to members."
-                : "Optionally send this event as a task to roster members. Members will see the volunteer shifts in their \"My Tasks\" view."
-              }
-            </p>
-            
-            <div className="space-y-3">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="assignmentType"
-                  value="none"
-                  checked={eventForm.assignmentType === 'none'}
-                  onChange={(e) => setEventForm(prev => ({ ...prev, assignmentType: e.target.value as any }))}
-                  className="mr-2"
-                />
-                <span>Don't send as task</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="assignmentType"
-                  value="all"
-                  checked={eventForm.assignmentType === 'all'}
-                  onChange={(e) => setEventForm(prev => ({ ...prev, assignmentType: e.target.value as any }))}
-                  className="mr-2"
-                />
-                <span>Send to entire approved roster ({rosterMembers.length} members)</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="assignmentType"
-                  value="specific"
-                  checked={eventForm.assignmentType === 'specific'}
-                  onChange={(e) => setEventForm(prev => ({ ...prev, assignmentType: e.target.value as any }))}
-                  className="mr-2"
-                />
-                <span>Send to specific members</span>
-              </label>
-            </div>
-
-            {/* Specific Members Selection */}
-            {eventForm.assignmentType === 'specific' && (
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Members ({eventForm.selectedMembers.length} selected)
-                </label>
-                {loadingMembers ? (
-                  <p className="text-gray-500">Loading members...</p>
-                ) : (
-                  <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 space-y-2">
-                    {rosterMembers.map((member) => (
-                      <label key={member._id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={eventForm.selectedMembers.includes(member._id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEventForm(prev => ({
-                                ...prev,
-                                selectedMembers: [...prev.selectedMembers, member._id]
-                              }));
-                            } else {
-                              setEventForm(prev => ({
-                                ...prev,
-                                selectedMembers: prev.selectedMembers.filter(id => id !== member._id)
-                              }));
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <span className="text-sm">
-                          {member.firstName || member.lastName 
-                            ? `${member.firstName} ${member.lastName}`.trim()
-                            : member.email
-                          } ({member.email})
-                        </span>
-                      </label>
-                    ))}
-                    {rosterMembers.length === 0 && (
-                      <p className="text-gray-500 text-sm">No approved members found in roster.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+          <div className="border-t pt-6 text-sm text-gray-600">
+            Shift-as-task assignment is deprecated. Members now manage signups from the dedicated "My Shifts" page.
           </div>
-          )}
 
           <div className="flex gap-3 pt-4 border-t">
             <Button
@@ -1349,8 +1069,7 @@ const VolunteerShifts: React.FC = () => {
               onClick={handleCreateEvent}
               disabled={
                 !eventForm.eventName || 
-                eventForm.shifts.length === 0 ||
-                (eventForm.assignmentType === 'specific' && eventForm.selectedMembers.length === 0)
+                eventForm.shifts.length === 0
               }
               className="flex-1"
             >

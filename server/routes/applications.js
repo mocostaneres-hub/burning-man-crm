@@ -4,6 +4,8 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { sendApplicationNotification, sendApplicationStatusNotification } = require('../services/notifications');
+const { createBulkNotifications, createNotification } = require('../services/notificationService');
+const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 
@@ -297,6 +299,36 @@ router.post('/apply', authenticateToken, [
     } catch (notificationError) {
       console.error('⚠️  Failed to send application notification (application was still created):', notificationError);
       // Don't throw - we don't want to fail the application submission if email fails
+    }
+
+    // In-app notifications for camp owner + approved Camp Leads.
+    try {
+      const recipientIds = new Set();
+      if (camp.owner) {
+        const ownerId = typeof camp.owner === 'object' ? camp.owner._id?.toString() : camp.owner.toString();
+        if (ownerId) recipientIds.add(ownerId);
+      }
+
+      const activeRoster = await db.findActiveRoster({ camp: camp._id });
+      for (const memberEntry of activeRoster?.members || []) {
+        if (memberEntry?.isCampLead !== true || memberEntry?.status !== 'approved' || !memberEntry?.member?.user) continue;
+        recipientIds.add(memberEntry.member.user._id?.toString?.() || memberEntry.member.user.toString());
+      }
+
+      await createBulkNotifications(Array.from(recipientIds), {
+        actor: req.user._id,
+        campId: camp._id,
+        type: NOTIFICATION_TYPES.APPLICATION_SUBMITTED,
+        title: `New application to ${camp.name || camp.campName || 'your camp'}`,
+        message: `${freshUser.firstName || 'A member'} ${freshUser.lastName || ''}`.trim() + ' submitted an application.',
+        link: `/camp/${camp._id}/applications`,
+        metadata: {
+          applicationId: application._id,
+          applicantId: req.user._id
+        }
+      });
+    } catch (notificationError) {
+      console.error('⚠️ Failed to create in-app application notifications:', notificationError);
     }
     
     // Update invite status to 'applied' if this application came from an invitation
@@ -818,6 +850,26 @@ router.put('/:applicationId/status', authenticateToken, [
         console.error(`⚠️  Failed to send ${status} notification (application status was still updated):`, notificationError);
         // Don't fail the status update if notification fails
       }
+    }
+
+    // In-app notification for applicant whenever status changes.
+    try {
+      await createNotification({
+        recipient: application.applicant,
+        actor: req.user._id,
+        campId: camp._id,
+        type: NOTIFICATION_TYPES.APPLICATION_STATUS_UPDATED,
+        title: `Application updated by ${camp.name || camp.campName || 'camp'}`,
+        message: `Your application status is now "${status}".`,
+        link: '/applications/my',
+        metadata: {
+          applicationId,
+          previousStatus,
+          newStatus: status
+        }
+      });
+    } catch (notificationError) {
+      console.error('⚠️ Failed to create in-app status notification:', notificationError);
     }
 
     res.json({

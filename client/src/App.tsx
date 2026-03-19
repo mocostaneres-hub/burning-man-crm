@@ -22,6 +22,7 @@ import MemberProfile from './pages/members/MemberProfile';
 import UserProfile from './pages/users/UserProfile';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import VolunteerShifts from './pages/shifts/VolunteerShifts';
+import MyShiftsPage from './pages/shifts/MyShiftsPage';
 import Help from './pages/Help';
 import FAQAdmin from './pages/help/FAQAdmin';
 import Principles from './pages/Principles';
@@ -319,6 +320,11 @@ function App() {
                   <Route path="/tasks" element={
                     <ProtectedRoute requirePersonalAccount>
                       <MyTasks />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/my-shifts" element={
+                    <ProtectedRoute requirePersonalAccount>
+                      <MyShiftsPage />
                     </ProtectedRoute>
                   } />
                   <Route path="*" element={<Navigate to="/" replace />} />

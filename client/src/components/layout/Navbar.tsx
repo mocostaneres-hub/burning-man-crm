@@ -18,6 +18,7 @@ import {
   Calendar,
   Square as Task,
 } from 'lucide-react';
+import NotificationBell from '../notifications/NotificationBell';
 
 const Navbar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -163,9 +164,6 @@ const Navbar: React.FC = () => {
         campPublicProfilePath = null;
       }
       
-      // Profile edit path with identifier
-      const campProfileEditPath = campIdentifier ? `/camp/${campIdentifier}/profile` : '/camp/profile';
-      
       const navItems = [];
       
       // Only add "My Camp" link if we have a valid camp slug
@@ -205,6 +203,7 @@ const Navbar: React.FC = () => {
       const items = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
         { label: 'My Tasks', path: '/tasks', icon: <Task size={18} /> },
+        { label: 'My Shifts', path: '/my-shifts', icon: <Calendar size={18} /> },
         { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> },
         { label: 'Principles', path: '/principles', icon: <Book size={18} /> },
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
@@ -285,6 +284,7 @@ const Navbar: React.FC = () => {
             {/* User Menu */}
             {isAuthenticated && (
               <div className="flex items-center space-x-2">
+                <NotificationBell enabled={isAuthenticated} />
                 <span className="text-sm text-custom-text-secondary">
                   {user?.firstName || 'User'}
                 </span>
@@ -368,6 +368,9 @@ const Navbar: React.FC = () => {
             {/* Mobile User Menu */}
             {isAuthenticated && (
               <div className="border-t border-gray-200 pt-4">
+                <div className="px-3 py-2">
+                  <NotificationBell enabled={isAuthenticated} />
+                </div>
                 <div className="px-3 py-2">
                   <span className="text-sm text-custom-text-secondary">
                     {user?.firstName || 'User'}

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation } from '../types';
+import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation, NotificationListResponse, MyShiftsResponse } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -609,6 +609,38 @@ class ApiService {
   async getCampInvites(campId: string, status?: string): Promise<any> {
     const url = status ? `/camps/${campId}/invites?status=${status}` : `/camps/${campId}/invites`;
     const response = await this.api.get(url);
+    return response.data;
+  }
+
+  // Notifications
+  async getNotifications(params?: { page?: number; limit?: number; unreadOnly?: boolean }): Promise<NotificationListResponse> {
+    const response: AxiosResponse<NotificationListResponse> = await this.api.get('/notifications', { params });
+    return response.data;
+  }
+
+  async markNotificationRead(notificationId: string): Promise<{ notification: any }> {
+    const response: AxiosResponse<{ notification: any }> = await this.api.put(`/notifications/${notificationId}/read`);
+    return response.data;
+  }
+
+  async markAllNotificationsRead(): Promise<{ message: string; modifiedCount: number }> {
+    const response: AxiosResponse<{ message: string; modifiedCount: number }> = await this.api.put('/notifications/read-all');
+    return response.data;
+  }
+
+  // Shift/member experience
+  async getMyShifts(): Promise<MyShiftsResponse> {
+    const response: AxiosResponse<MyShiftsResponse> = await this.api.get('/shifts/my-shifts');
+    return response.data;
+  }
+
+  async signUpForShift(shiftId: string): Promise<any> {
+    const response = await this.api.post(`/shifts/shifts/${shiftId}/signup`);
+    return response.data;
+  }
+
+  async cancelShiftSignup(shiftId: string): Promise<any> {
+    const response = await this.api.delete(`/shifts/shifts/${shiftId}/signup`);
     return response.data;
   }
 

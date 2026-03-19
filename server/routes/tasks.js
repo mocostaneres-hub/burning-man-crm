@@ -14,6 +14,8 @@ const {
   sendTaskCommentEmail,
   sendTaskPriorityChangeEmail
 } = require('../services/taskNotifications');
+const { createBulkNotifications } = require('../services/notificationService');
+const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 
 const TASK_POPULATE_FIELDS = [
   { path: 'createdBy', select: 'firstName lastName email playaName profilePhoto' },
@@ -421,6 +423,20 @@ router.post('/', authenticateToken, async (req, res) => {
         // Don't fail the request if email fails
       }
     }
+
+    try {
+      await createBulkNotifications(resolvedAssignedTo || [], {
+        actor: req.user._id,
+        campId,
+        type: NOTIFICATION_TYPES.TASK_ASSIGNED,
+        title: `New task: ${title}`,
+        message: 'A task was assigned to you.',
+        link: taskIdCode ? `/tasks/${taskIdCode}` : '/tasks',
+        metadata: { taskId: newTask._id }
+      });
+    } catch (notificationError) {
+      console.error('⚠️ Failed to create task assignment notifications:', notificationError);
+    }
     
     res.status(201).json(populatedTask);
   } catch (error) {
@@ -743,6 +759,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
     } catch (emailError) {
       console.error('⚠️  Failed to send task update email notifications:', emailError);
       // Don't fail the request if email fails
+    }
+
+    try {
+      await createBulkNotifications(uniqueRecipientIds || [], {
+        actor: req.user._id,
+        campId: task.campId,
+        type: NOTIFICATION_TYPES.TASK_UPDATED,
+        title: `Task updated: ${populatedTask.title}`,
+        message: 'A task you are following was updated.',
+        link: populatedTask.taskIdCode ? `/tasks/${populatedTask.taskIdCode}` : '/tasks',
+        metadata: { taskId: populatedTask._id }
+      });
+    } catch (notificationError) {
+      console.error('⚠️ Failed to create task update notifications:', notificationError);
     }
 
     res.json(populatedTask);
@@ -1124,6 +1154,26 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     } catch (emailError) {
       console.error('⚠️  Failed to send task comment email (comment was still added):', emailError);
       // Don't fail the request if email fails
+    }
+
+    try {
+      const recipientIds = [
+        ...(task.assignedTo || []).map((u) => u._id?.toString?.() || u.toString()),
+        ...(task.watchers || []).map((u) => u._id?.toString?.() || u.toString())
+      ]
+        .filter(Boolean)
+        .filter((id) => id !== req.user._id.toString());
+      await createBulkNotifications([...new Set(recipientIds)], {
+        actor: req.user._id,
+        campId: task.campId,
+        type: NOTIFICATION_TYPES.TASK_COMMENTED,
+        title: `New comment on: ${task.title}`,
+        message: `${req.user.firstName || 'A member'} commented on a task you follow.`,
+        link: task.taskIdCode ? `/tasks/${task.taskIdCode}` : '/tasks',
+        metadata: { taskId: task._id }
+      });
+    } catch (notificationError) {
+      console.error('⚠️ Failed to create task comment notifications:', notificationError);
     }
 
     res.json(newComment);

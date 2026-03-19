@@ -172,6 +172,7 @@ app.use('/api/help', require('./routes/help'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/call-slots', require('./routes/callSlots'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/shifts-test', require('./routes/shifts-test'));
 try {
   console.log('Loading shifts-minimal router...');
