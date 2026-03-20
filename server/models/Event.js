@@ -55,6 +55,15 @@ const eventSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  eventDate: {
+    type: Date
+  },
+  startTime: {
+    type: Date
+  },
+  endTime: {
+    type: Date
+  },
   campId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Camp',

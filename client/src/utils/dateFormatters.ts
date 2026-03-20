@@ -99,8 +99,8 @@ export const formatTime = (timeString: string | Date): string => {
 };
 
 /**
- * Formats date for shifts in Pacific Time
- * Output: "Sun, 06/15 (PT)"
+ * Formats date for shifts
+ * Output: "Sun, 06/15"
  */
 export const formatShiftDate = (dateString: string | Date): string => {
   if (!dateString) return 'Not specified';
@@ -116,15 +116,15 @@ export const formatShiftDate = (dateString: string | Date): string => {
       timeZone: 'America/Los_Angeles'
     }).replace(/(\w+),\s*(\d+)\/(\d+)/, '$1, $2/$3');
 
-    return `${dateStr} (PT)`;
+    return dateStr;
   } catch (error) {
     return 'Not specified';
   }
 };
 
 /**
- * Formats time for shifts in Pacific Time
- * Output: "2:30 PM PT"
+ * Formats time for shifts
+ * Output: "2:30 PM"
  */
 export const formatShiftTime = (timeString: string | Date): string => {
   if (!timeString) return 'Not specified';
@@ -140,7 +140,7 @@ export const formatShiftTime = (timeString: string | Date): string => {
       timeZone: 'America/Los_Angeles'
     });
 
-    return `${timeStr} PT`;
+    return timeStr;
   } catch (error) {
     return 'Not specified';
   }

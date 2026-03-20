@@ -231,12 +231,15 @@ router.post('/events', authenticateToken, async (req, res) => {
     const {
       eventName,
       description,
+      eventDate,
+      startTime,
+      endTime,
       shifts
     } = req.body;
 
     // Validation
-    if (!eventName || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
-      return res.status(400).json({ message: 'Event name and at least one shift are required' });
+    if (!eventName || !eventDate || !startTime || !endTime || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
+      return res.status(400).json({ message: 'Event name, event date/time, and at least one shift are required' });
     }
 
     // Get camp ID for camp owners
@@ -272,6 +275,9 @@ router.post('/events', authenticateToken, async (req, res) => {
     const event = await db.createEvent({
       eventName,
       description,
+      eventDate: new Date(eventDate),
+      startTime: new Date(`${eventDate}T${startTime}`),
+      endTime: new Date(`${eventDate}T${endTime}`),
       campId,
       createdBy: req.user._id,
       shifts: shifts.map(shift => ({
@@ -832,7 +838,7 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
               email: user.email,
               date: shift.date,
               eventName: event.eventName,
-              shiftTime: `${shift.startTime.toTimeString().slice(0, 5)} – ${shift.endTime.toTimeString().slice(0, 5)}`,
+              shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`,
               description: shift.description
             });
           }
@@ -934,7 +940,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
             email: user.email,
             date: shift.date,
             eventName: event.eventName,
-            shiftTime: `${shift.startTime.toTimeString().slice(0, 5)} – ${shift.endTime.toTimeString().slice(0, 5)}`,
+            shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`,
             description: shift.description
           });
         }
@@ -957,12 +963,15 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     const {
       eventName,
       description,
+      eventDate,
+      startTime,
+      endTime,
       shifts
     } = req.body;
 
     // Validation
-    if (!eventName || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
-      return res.status(400).json({ message: 'Event name and at least one shift are required' });
+    if (!eventName || !eventDate || !startTime || !endTime || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
+      return res.status(400).json({ message: 'Event name, event date/time, and at least one shift are required' });
     }
 
     // Check if event exists
@@ -1002,6 +1011,9 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     const updatedEvent = await db.updateEvent(eventId, {
       eventName,
       description,
+      eventDate: new Date(eventDate),
+      startTime: new Date(`${eventDate}T${startTime}`),
+      endTime: new Date(`${eventDate}T${endTime}`),
       shifts: shifts.map((shift) => {
         // Preserve existing shift IDs if they exist, otherwise generate one.
         const existingShift = shift._id

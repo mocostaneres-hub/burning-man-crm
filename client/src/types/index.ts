@@ -429,6 +429,9 @@ export interface Event {
   eventName: string;
   campId: string;
   description?: string;
+  eventDate?: Date | string;
+  startTime?: Date | string;
+  endTime?: Date | string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the event

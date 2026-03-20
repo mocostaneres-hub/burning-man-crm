@@ -67,6 +67,9 @@ const VolunteerShifts: React.FC = () => {
   const [eventForm, setEventForm] = useState({
     eventName: '',
     description: '',
+    eventDate: '',
+    startTime: '',
+    endTime: '',
     shifts: [] as Array<{
       _id?: string;
       title: string;
@@ -277,6 +280,9 @@ const VolunteerShifts: React.FC = () => {
       const eventData = {
         eventName: eventForm.eventName,
         description: eventForm.description,
+        eventDate: eventForm.eventDate,
+        startTime: eventForm.startTime,
+        endTime: eventForm.endTime,
         ...(campId ? { campId } : {}),
         shifts: eventForm.shifts.map(shift => ({
           ...(shift._id ? { _id: shift._id } : {}),
@@ -374,6 +380,9 @@ const VolunteerShifts: React.FC = () => {
     setEventForm({
       eventName: '',
       description: '',
+      eventDate: '',
+      startTime: '',
+      endTime: '',
       shifts: []
     });
     setLoadingExistingAssignments(false);
@@ -407,6 +416,9 @@ const VolunteerShifts: React.FC = () => {
     setEventForm({
       eventName: event.eventName,
       description: event.description || '',
+      eventDate: event.eventDate ? new Date(event.eventDate).toISOString().split('T')[0] : '',
+      startTime: event.startTime ? new Date(event.startTime).toTimeString().slice(0, 5) : '',
+      endTime: event.endTime ? new Date(event.endTime).toTimeString().slice(0, 5) : '',
       shifts: event.shifts.map((shift, index) => ({
         _id: shift._id?.toString(),
         title: shift.title,
@@ -505,6 +517,104 @@ const VolunteerShifts: React.FC = () => {
   };
 
   // Using shared date formatting utilities
+
+  const handlePrintReportView = () => {
+    const printWindow = window.open('', '_blank', 'width=1024,height=768');
+    if (!printWindow) return;
+
+    const generatedAt = new Date().toLocaleString();
+    const title = reportType === 'per-person' ? 'Volunteer Shift Report - Per Person' : 'Volunteer Shift Report - Per Day';
+
+    const personRows: Array<{ personName: string; date: string; eventName: string; shiftTime: string; description: string }> = [];
+    events.forEach(event => {
+      event.shifts.forEach(shift => {
+        if (shift.memberIds && shift.memberIds.length > 0) {
+          shift.memberIds.forEach(memberId => {
+            const member = rosterMembers.find(m => m._id === memberId);
+            const memberName = member
+              ? `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member'
+              : 'Unknown Member';
+            personRows.push({
+              personName: memberName,
+              date: formatShiftDate(shift.date),
+              eventName: event.eventName,
+              shiftTime: `${formatShiftTime(shift.startTime)} - ${formatShiftTime(shift.endTime)}`,
+              description: shift.description || shift.title
+            });
+          });
+        }
+      });
+    });
+
+    const dayRowsByDate: Record<string, Array<{ eventName: string; shiftTime: string; description: string; signedUpMembers: string[] }>> = {};
+    events.forEach(event => {
+      event.shifts.forEach(shift => {
+        const dateKey = formatShiftDate(shift.date);
+        if (selectedDate) {
+          const selectedKey = formatShiftDate(new Date(selectedDate));
+          if (dateKey !== selectedKey) return;
+        }
+        if (!dayRowsByDate[dateKey]) dayRowsByDate[dateKey] = [];
+        const signedUpMembers = (shift.memberIds || []).map((memberId: any) => {
+          const member = rosterMembers.find(m => m._id === memberId);
+          if (!member) return 'Unknown Member';
+          const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member';
+          return member.email ? `${name} (${member.email})` : name;
+        });
+        dayRowsByDate[dateKey].push({
+          eventName: event.eventName,
+          shiftTime: `${formatShiftTime(shift.startTime)} - ${formatShiftTime(shift.endTime)}`,
+          description: shift.description || shift.title,
+          signedUpMembers
+        });
+      });
+    });
+
+    const personTable = `
+      <table>
+        <thead><tr><th>Person Name</th><th>Date</th><th>Event Name</th><th>Shift Time</th><th>Description</th></tr></thead>
+        <tbody>
+          ${personRows.length === 0 ? '<tr><td colspan="5">No sign-ups yet</td></tr>' : personRows.map(r => `<tr><td>${r.personName}</td><td>${r.date}</td><td>${r.eventName}</td><td>${r.shiftTime}</td><td>${r.description}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+
+    const daySections = Object.keys(dayRowsByDate).sort().map(date => `
+      <h3>${date}</h3>
+      <table>
+        <thead><tr><th>Event Name</th><th>Shift Time</th><th>Description</th><th>Signed Up Members</th></tr></thead>
+        <tbody>
+          ${dayRowsByDate[date].map(row => `<tr><td>${row.eventName}</td><td>${row.shiftTime}</td><td>${row.description}</td><td>${row.signedUpMembers.join('<br/>') || 'No sign-ups'}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+            h1 { margin: 0 0 8px 0; }
+            .meta { color: #555; margin-bottom: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #f3f4f6; }
+            h3 { margin: 18px 0 8px 0; }
+            @media print { body { padding: 8px; } }
+          </style>
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <div class="meta">Generated: ${generatedAt}</div>
+          ${reportType === 'per-person' ? personTable : daySections || '<p>No shifts scheduled for selected day.</p>'}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
 
 
   if (!canAccessShifts) {
@@ -607,6 +717,14 @@ const VolunteerShifts: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="font-medium text-lg">{event.eventName}</h3>
                         <p className="text-gray-600">{event.description}</p>
+                        {(event.eventDate || event.startTime || event.endTime) && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {event.eventDate ? formatDate(event.eventDate) : 'Date TBD'}
+                            {event.startTime && event.endTime
+                              ? ` • ${formatShiftTime(event.startTime)} - ${formatShiftTime(event.endTime)}`
+                              : ''}
+                          </p>
+                        )}
                         <p className="text-sm text-gray-500 mt-1">
                           {event.shifts.length} shift{event.shifts.length !== 1 ? 's' : ''}
                         </p>
@@ -722,9 +840,9 @@ const VolunteerShifts: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.print()}
+                  onClick={handlePrintReportView}
                 >
-                  Print
+                  Printable View
                 </Button>
               </div>
             </div>
@@ -793,7 +911,7 @@ const VolunteerShifts: React.FC = () => {
                                   >
                                     Date {getSortIndicator(eventShiftSortKey, 'date', eventShiftSortDir)}
                                   </th>
-                                  <th className="border border-gray-300 px-4 py-2 text-left">Time (PT)</th>
+                                  <th className="border border-gray-300 px-4 py-2 text-left">Time</th>
                                   <th
                                     className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
                                     onClick={() => toggleEventShiftSort('filled')}
@@ -1018,7 +1136,7 @@ const VolunteerShifts: React.FC = () => {
                                 <thead>
                                   <tr className="border-b border-gray-200">
                                     <th className="text-left py-2">Event Name</th>
-                                    <th className="text-left py-2">Shift Time (PT)</th>
+                                    <th className="text-left py-2">Shift Time</th>
                                     <th className="text-left py-2">Description</th>
                                     <th className="text-left py-2">Signed Up Members</th>
                                   </tr>
@@ -1095,6 +1213,39 @@ const VolunteerShifts: React.FC = () => {
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
               placeholder="Enter event description"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Event Date *
+              </label>
+              <Input
+                type="date"
+                value={eventForm.eventDate}
+                onChange={(e) => setEventForm(prev => ({ ...prev, eventDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Event Start Time *
+              </label>
+              <Input
+                type="time"
+                value={eventForm.startTime}
+                onChange={(e) => setEventForm(prev => ({ ...prev, startTime: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Event End Time *
+              </label>
+              <Input
+                type="time"
+                value={eventForm.endTime}
+                onChange={(e) => setEventForm(prev => ({ ...prev, endTime: e.target.value }))}
+              />
+            </div>
           </div>
 
           <div>
@@ -1297,6 +1448,9 @@ const VolunteerShifts: React.FC = () => {
               onClick={handleCreateEvent}
               disabled={
                 !eventForm.eventName || 
+                !eventForm.eventDate ||
+                !eventForm.startTime ||
+                !eventForm.endTime ||
                 eventForm.shifts.length === 0
               }
               className="flex-1"
@@ -1321,6 +1475,14 @@ const VolunteerShifts: React.FC = () => {
               <div className="border-b pb-4">
                 <h3 className="text-xl font-semibold">{selectedEvent.eventName}</h3>
                 <p className="text-gray-600 mt-1">{selectedEvent.description}</p>
+                {(selectedEvent.eventDate || selectedEvent.startTime || selectedEvent.endTime) && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedEvent.eventDate ? formatDate(selectedEvent.eventDate) : 'Date TBD'}
+                    {selectedEvent.startTime && selectedEvent.endTime
+                      ? ` • ${formatShiftTime(selectedEvent.startTime)} - ${formatShiftTime(selectedEvent.endTime)}`
+                      : ''}
+                  </p>
+                )}
                 <p className="text-sm text-gray-500 mt-2">
                   Created: {new Date(selectedEvent.createdAt).toLocaleDateString()}
                 </p>
