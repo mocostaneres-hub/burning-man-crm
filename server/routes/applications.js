@@ -192,7 +192,7 @@ router.post('/apply', authenticateToken, [
     } else if (applicationData.selectedCallSlotId) {
       initialStatus = 'call-scheduled'; // When call time is selected
     } else {
-      initialStatus = 'pending-orientation'; // Default when no call slot available
+      initialStatus = 'new'; // Brand-new application; camp moves to pending-orientation etc. when ready
     }
 
     // Create new application (with additional race condition protection)
@@ -612,7 +612,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 // @desc    Update application status (camp admins only)
 // @access  Private (Camp owners only)
 router.put('/:applicationId/status', authenticateToken, [
-  body('status').isIn(['pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive']).withMessage('Invalid status'),
+  body('status').isIn(['new', 'pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'undecided', 'withdrawn']).withMessage('Invalid status'),
   body('reviewNotes').optional().trim().isLength({ max: 1000 })
 ], async (req, res) => {
   try {

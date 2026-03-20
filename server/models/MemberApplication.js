@@ -57,8 +57,8 @@ const memberApplicationSchema = new mongoose.Schema({
   // Application status
   status: {
     type: String,
-    enum: ['pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'withdrawn', 'deleted', 'undecided'],
-    default: 'pending'
+    enum: ['new', 'pending', 'call-scheduled', 'pending-orientation', 'under-review', 'approved', 'rejected', 'unresponsive', 'withdrawn', 'deleted', 'undecided'],
+    default: 'new'
   },
   
   // Review details

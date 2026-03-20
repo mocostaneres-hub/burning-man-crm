@@ -23,7 +23,7 @@ interface Camp {
 interface MyApplication {
   _id: string;
   camp: Camp;
-  status: 'pending' | 'approved' | 'rejected';
+  status: string;
   appliedAt: string;
   reviewedAt?: string;
   reviewNotes?: string;
@@ -71,7 +71,6 @@ const MyApplications: React.FC = () => {
         return <CheckCircleIcon className="w-5 h-5 text-green-600" />;
       case 'rejected':
         return <X className="w-5 h-5 text-red-600" />;
-      case 'pending':
       default:
         return <Clock className="w-5 h-5 text-yellow-600" />;
     }
@@ -83,6 +82,8 @@ const MyApplications: React.FC = () => {
         return <Badge variant="success">Approved</Badge>;
       case 'rejected':
         return <Badge variant="error">Rejected</Badge>;
+      case 'new':
+        return <Badge variant="warning">New</Badge>;
       case 'pending':
       default:
         return <Badge variant="warning">Pending</Badge>;
@@ -230,7 +231,7 @@ const MyApplications: React.FC = () => {
                       <Eye className="w-4 h-4" />
                       View Camp
                     </Button>
-                    {application.status === 'pending' && (
+                    {(application.status === 'pending' || application.status === 'new') && (
                       <Button
                         variant="outline"
                         onClick={() => navigate(`/applications/${application._id}/edit`)}

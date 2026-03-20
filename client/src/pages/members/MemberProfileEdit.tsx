@@ -6,7 +6,7 @@ import apiService from '../../services/api';
 import PhotoUpload from '../../components/profile/PhotoUpload';
 import { useSkills } from '../../hooks/useSkills';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
-import { StructuredLocation } from '../../types';
+import { StructuredLocation, User } from '../../types';
 
 interface MemberProfileData {
   firstName: string;
@@ -32,6 +32,43 @@ const formatLocationLabel = (location: StructuredLocation | null | undefined): s
   return [location.city, location.state, location.country].filter(Boolean).join(', ');
 };
 
+/** Map API user → edit form state (same rules as GET /users/profile in fetchProfile). */
+const mapApiUserToMemberProfileData = (userData: User): MemberProfileData => ({
+  firstName: userData.firstName || '',
+  lastName: userData.lastName || '',
+  phoneNumber: userData.phoneNumber || '',
+  location:
+    userData.location?.city &&
+    userData.location?.country &&
+    userData.location?.countryCode &&
+    userData.location?.lat !== undefined &&
+    userData.location?.lng !== undefined
+      ? (userData.location as StructuredLocation)
+      : null,
+  yearsBurned: userData.yearsBurned ?? 0,
+  isFirstBurn: (userData.yearsBurned ?? 0) === 0,
+  previousCamps: userData.previousCamps || '',
+  skills: userData.skills || [],
+  interests: userData.interests || [],
+  bio: userData.bio || '',
+  profilePhoto: userData.profilePhoto,
+  socialMedia: userData.socialMedia || {}
+});
+
+const buildProfileUpdatePayload = (data: MemberProfileData): Partial<User> => ({
+  firstName: data.firstName,
+  lastName: data.lastName,
+  phoneNumber: data.phoneNumber,
+  location: data.location ?? undefined,
+  yearsBurned: data.isFirstBurn ? 0 : data.yearsBurned,
+  previousCamps: data.previousCamps,
+  skills: data.skills,
+  interests: data.interests,
+  bio: data.bio,
+  profilePhoto: data.profilePhoto,
+  socialMedia: data.socialMedia
+});
+
 const INTERESTS_OPTIONS = [
   'Art & Music', 'Food & Drinks', 'Wellness & Healing', 'Technology & Innovation',
   'Performance & Theater', 'Community & Social', 'Spiritual & Religious',
@@ -41,7 +78,7 @@ const INTERESTS_OPTIONS = [
 ];
 
 const MemberProfileEdit: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { skills: SKILLS_OPTIONS } = useSkills();
   const [profileData, setProfileData] = useState<MemberProfileData>({
     firstName: '',
@@ -74,25 +111,8 @@ const MemberProfileEdit: React.FC = () => {
       setLoading(true);
       const response = await apiService.getUserProfile();
       const userData = response.user;
-      
-      // Map user data to MemberProfileData
-      setProfileData({
-        firstName: userData.firstName || '',
-        lastName: userData.lastName || '',
-        phoneNumber: userData.phoneNumber || '',
-        location: userData.location?.city && userData.location?.country && userData.location?.countryCode &&
-          userData.location?.lat !== undefined && userData.location?.lng !== undefined
-          ? userData.location as StructuredLocation
-          : null,
-        yearsBurned: userData.yearsBurned || 0,
-        isFirstBurn: userData.yearsBurned === 0,
-        previousCamps: userData.previousCamps || '',
-        skills: userData.skills || [],
-        interests: userData.interests || [],
-        bio: userData.bio || '',
-        profilePhoto: userData.profilePhoto,
-        socialMedia: userData.socialMedia || {}
-      });
+
+      setProfileData(mapApiUserToMemberProfileData(userData));
       setLegacyCity(userData.city || '');
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -106,7 +126,14 @@ const MemberProfileEdit: React.FC = () => {
     try {
       setSaving(true);
       setError('');
-      await apiService.updateUserProfile(profileData);
+      const payload = buildProfileUpdatePayload(profileData);
+      const response = await apiService.updateUserProfile(payload);
+      if (response?.user) {
+        // Keep AuthContext in sync so /member/profile and the rest of the app show saved data immediately
+        updateUser(response.user);
+        setProfileData(mapApiUserToMemberProfileData(response.user));
+        setLegacyCity(response.user.city || '');
+      }
       setSuccess('Profile updated successfully!');
       setIsEditing(false);
     } catch (err) {

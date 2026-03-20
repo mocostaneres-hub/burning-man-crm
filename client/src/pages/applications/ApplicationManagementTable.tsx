@@ -30,7 +30,7 @@ interface Application {
       facebook?: string;
     };
   };
-  status: 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive' | 'undecided';
+  status: 'new' | 'pending' | 'call-scheduled' | 'pending-orientation' | 'under-review' | 'approved' | 'rejected' | 'unresponsive' | 'undecided';
   appliedAt: string;
   reviewedAt?: string;
   reviewNotes?: string;
@@ -53,8 +53,9 @@ interface Application {
 }
 
 const APPLICATION_QUEUE_ORDER = [
-  'under-review',
+  'new',
   'pending-orientation',
+  'under-review',
   'approved',
   'undecided',
   'rejected',
@@ -64,6 +65,7 @@ const APPLICATION_QUEUE_ORDER = [
 type ApplicationQueueFilter = (typeof APPLICATION_QUEUE_ORDER)[number];
 
 const APPLICATION_STATUS_OPTIONS = [
+  'new',
   'pending',
   'pending-orientation',
   'under-review',
@@ -78,8 +80,10 @@ const DEPRECATED_APPLICATION_STATUSES = ['call-scheduled', 'unresponsive'] as co
 
 const formatQueueLabel = (status: ApplicationQueueFilter): string => {
   switch (status) {
-    case 'under-review':
+    case 'new':
       return 'New';
+    case 'under-review':
+      return 'Under Review';
     case 'pending-orientation':
       return 'Pending Orientation';
     case 'approved':
@@ -132,12 +136,12 @@ const ApplicationManagementTable: React.FC = () => {
   const [filteredApplications, setFilteredApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ApplicationQueueFilter>('under-review');
+  const [statusFilter, setStatusFilter] = useState<ApplicationQueueFilter>('new');
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatusOption>('under-review');
+  const [selectedStatus, setSelectedStatus] = useState<ApplicationStatusOption>('new');
   const applicationsTableScrollRef = useRef<HTMLDivElement | null>(null);
   const [applicationsMaxScrollLeft, setApplicationsMaxScrollLeft] = useState(0);
   const [applicationsScrollLeft, setApplicationsScrollLeft] = useState(0);
@@ -293,6 +297,8 @@ const ApplicationManagementTable: React.FC = () => {
       case 'pending-orientation':
         return <Badge variant="warning">Pending Orientation</Badge>;
       case 'under-review':
+        return <Badge variant="neutral">Under Review</Badge>;
+      case 'new':
         return <Badge variant="neutral">New</Badge>;
       case 'unresponsive':
         return <Badge variant="error">Unresponsive</Badge>;
@@ -341,7 +347,7 @@ const ApplicationManagementTable: React.FC = () => {
     setSelectedApplication(application);
     setReviewNotes(application.reviewNotes || '');
     const normalizedStatus = DEPRECATED_APPLICATION_STATUSES.includes(application.status as any)
-      ? 'under-review'
+      ? 'new'
       : (application.status as ApplicationStatusOption);
     setSelectedStatus(normalizedStatus);
     setShowApplicationModal(true);
@@ -659,7 +665,7 @@ const ApplicationManagementTable: React.FC = () => {
                         <Eye className="w-3 h-3" />
                         View
                       </Button>
-                      {application.status === 'pending' && (
+                      {(application.status === 'pending' || application.status === 'new') && (
                         <>
                           <Button
                             variant="outline"
@@ -975,9 +981,10 @@ const ApplicationManagementTable: React.FC = () => {
                       onChange={(e) => setSelectedStatus(e.target.value as ApplicationStatusOption)}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
                     >
+                      <option value="new">New</option>
                       <option value="pending">Pending</option>
                       <option value="pending-orientation">Pending Orientation</option>
-                      <option value="under-review">New</option>
+                      <option value="under-review">Under Review</option>
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
                       <option value="undecided">Undecided</option>

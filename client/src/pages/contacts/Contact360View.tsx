@@ -134,7 +134,7 @@ const Contact360View: React.FC = () => {
                       application.status === 'rejected' ? 'error' : 
                       'warning'
                     }>
-                      {application.status}
+                      {application.status === 'new' ? 'New' : application.status}
                     </Badge>
                   </div>
                 </div>

@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
           const tasks = Array.isArray(tasksRes) ? tasksRes : [];
           const members = membersRes?.members || [];
 
-          const openApplicationStatuses = new Set(['pending', 'call-scheduled', 'pending-orientation', 'under-review']);
+          const openApplicationStatuses = new Set(['new', 'pending', 'call-scheduled', 'pending-orientation', 'under-review', 'undecided']);
 
           setStats({
             pendingApplications: applications.filter((app: { status?: string }) =>
@@ -96,7 +96,9 @@ const Dashboard: React.FC = () => {
           ]);
           
           setStats({
-            pendingApplications: applicationsRes.applications?.filter((app: { status: string }) => app.status === 'pending').length || 0,
+            pendingApplications: applicationsRes.applications?.filter((app: { status: string }) =>
+              ['pending', 'new', 'call-scheduled', 'pending-orientation', 'under-review', 'undecided'].includes(app.status)
+            ).length || 0,
             approvedApplications: applicationsRes.applications?.filter((app: { status: string }) => app.status === 'approved').length || 0,
             totalTasks: tasksRes?.length || 0,
             openTasks: tasksRes?.filter((task: { status: string }) => task.status === 'open').length || 0,

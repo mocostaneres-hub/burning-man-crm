@@ -1820,6 +1820,7 @@ router.get('/camps/:id/history', authenticateToken, requireAdmin, async (req, re
       else if (details.field === 'applicationStatus' || log.activityType === 'APPLICATION_STATUS_CHANGED' || log.activityType === 'APPLICATION_SUBMITTED' || log.activityType === 'APPLICATION_RECEIVED') {
         // Format status values to be more readable
         const statusMap = {
+          'new': 'New',
           'pending': 'Pending',
           'call-scheduled': 'Call Scheduled',
           'pending-orientation': 'Pending Orientation',
@@ -1991,7 +1992,7 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req, res) => {
     const applicationStats = {
       total: allApplications.length,
       new: newApplications.length,
-      pending: allApplications.filter(app => app.status === 'pending').length,
+      pending: allApplications.filter(app => app.status === 'pending' || app.status === 'new').length,
       approved: allApplications.filter(app => app.status === 'approved').length,
       rejected: allApplications.filter(app => app.status === 'rejected').length,
       approvalRate: allApplications.length > 0 ? 
