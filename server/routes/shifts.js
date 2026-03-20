@@ -1056,6 +1056,17 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     // Safeguard: skip rewrites when desired assignees already match existing assignment rows
     // (e.g., event name/description-only edits).
     for (const currentShift of updatedEvent.shifts || []) {
+      // If members have already signed up for this specific shift, do not rewrite assignments
+      // during event edit. This prevents reassignment churn for in-progress staffed shifts.
+      const signedUpRows = await ShiftSignup.find({ shiftId: currentShift._id })
+        .select('userId')
+        .lean();
+      const hasSignedUpMembers = signedUpRows.length > 0
+        || ((currentShift.memberIds || []).length > 0);
+      if (hasSignedUpMembers) {
+        continue;
+      }
+
       const sourceShift = shifts.find((shift) =>
         shift._id && shift._id.toString() === currentShift._id.toString()
       );
