@@ -684,7 +684,7 @@ const PublicCampProfile: React.FC = () => {
                   </Button>
                 </div>
               ) : camp.acceptingApplications ? (
-                // Show Apply Now button only for personal accounts or non-logged in users
+                // Apply only for personal accounts or guests; camp logins cannot apply
                 (user?.accountType === 'personal' || !user) ? (
                   <Button 
                     onClick={handleApplyNow}
@@ -694,6 +694,10 @@ const PublicCampProfile: React.FC = () => {
                     <Send className="w-4 h-4 mr-2" />
                     Apply Now
                   </Button>
+                ) : user?.accountType === 'camp' ? (
+                  <p className="text-sm text-custom-text-secondary text-center lg:text-left">
+                    Member accounts can apply
+                  </p>
                 ) : null
               ) : (
                 // Camp is not accepting applications

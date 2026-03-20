@@ -598,19 +598,25 @@ const CampDiscovery: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Apply Now Button */}
+                        {/* Apply Now — hidden for camp accounts; they cannot apply as a camp login */}
                         {camp.acceptingApplications && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleApplyNow(camp);
-                              }}
-                              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                              <UserPlus className="w-4 h-4" />
-                              Apply Now
-                            </Button>
+                            {user?.accountType === 'camp' ? (
+                              <p className="text-sm text-center text-custom-text-secondary">
+                                Member accounts can apply
+                              </p>
+                            ) : (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApplyNow(camp);
+                                }}
+                                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                              >
+                                <UserPlus className="w-4 h-4" />
+                                Apply Now
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>
