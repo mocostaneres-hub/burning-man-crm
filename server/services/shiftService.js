@@ -101,14 +101,21 @@ async function createShiftAssignments({
   const inserted = await ShiftAssignment.find({ shiftId, userId: { $in: candidates } }).select('userId').lean();
   const insertedUserIds = [...new Set(inserted.map((item) => normalizeId(item.userId)).filter(Boolean))];
 
+  const [camp, event] = await Promise.all([
+    db.findCamp({ _id: campId }),
+    db.findEvent({ _id: eventId })
+  ]);
+  const campName = camp?.name || camp?.campName || 'Camp';
+  const eventName = event?.eventName || 'Event';
+
   // Notify newly assigned users.
   try {
     await createBulkNotifications(insertedUserIds, {
       actor: assignedBy,
       campId,
       type: NOTIFICATION_TYPES.SHIFT_ASSIGNED,
-      title: 'You were assigned to a shift',
-      message: 'A camp lead assigned you to an available shift.',
+      title: 'Please sign up for shifts',
+      message: `"${campName}" needs your help with "${eventName}"`,
       link: '/my-shifts',
       metadata: { shiftId, eventId }
     });

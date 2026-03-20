@@ -957,7 +957,15 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
 router.put('/events/:eventId', authenticateToken, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { eventName, description, shifts } = req.body;
+    const {
+      eventName,
+      description,
+      shifts,
+      assignmentMode,
+      selectedUserIds = [],
+      manualAddIds = [],
+      manualRemoveIds = []
+    } = req.body;
 
     // Validation
     if (!eventName || !shifts || !Array.isArray(shifts) || shifts.length === 0) {
@@ -1029,6 +1037,36 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     if (removedShiftIds.length > 0) {
       await ShiftAssignment.deleteMany({ shiftId: { $in: removedShiftIds } });
       await ShiftSignup.deleteMany({ shiftId: { $in: removedShiftIds } });
+    }
+
+    // Optional assignment update during edit mode.
+    // When assignment fields are sent, we treat them as the desired assignment policy for this event
+    // and re-seed assignments across all current shifts.
+    if (assignmentMode) {
+      const assignmentCandidates = await resolveAssignmentCandidates({
+        campId: eventCampId,
+        mode: assignmentMode,
+        selectedUserIds,
+        manualAddIds,
+        manualRemoveIds
+      });
+
+      const currentShiftIds = (updatedEvent.shifts || []).map((shift) => shift._id);
+      if (currentShiftIds.length > 0) {
+        await ShiftAssignment.deleteMany({ shiftId: { $in: currentShiftIds } });
+      }
+
+      for (const currentShift of updatedEvent.shifts || []) {
+        await createShiftAssignments({
+          shiftId: currentShift._id,
+          eventId: updatedEvent._id,
+          campId: eventCampId,
+          assignedBy: req.user._id,
+          mode: assignmentMode,
+          candidates: assignmentCandidates,
+          source: 'EDIT_MODE'
+        });
+      }
     }
 
     try {

@@ -55,6 +55,8 @@ const VolunteerShifts: React.FC = () => {
     unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
   }>({ assignedUsers: [], unassignedUsers: [] });
   const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
+  const [existingAssignedUserIds, setExistingAssignedUserIds] = useState<string[]>([]);
+  const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTime' | 'description'>('date');
@@ -131,6 +133,10 @@ const VolunteerShifts: React.FC = () => {
   const leadRosterIds = useMemo(
     () => rosterMembers.filter((member) => member.isLead).map((member) => member._id),
     [rosterMembers]
+  );
+  const existingAssignedUserIdSet = useMemo(
+    () => new Set(existingAssignedUserIds),
+    [existingAssignedUserIds]
   );
 
   useEffect(() => {
@@ -355,15 +361,44 @@ const VolunteerShifts: React.FC = () => {
       assignmentMode: 'ALL_ROSTER',
       selectedUserIds: allRosterIds
     });
+    setExistingAssignedUserIds([]);
+    setLoadingExistingAssignments(false);
     setIsEditMode(false);
     setEventToEdit(null);
   };
 
-  const handleEditEvent = (event: Event) => {
+  const handleEditEvent = async (event: Event) => {
     setEventToEdit(event);
     setIsEditMode(true);
-    
-    // Populate form with event data
+
+    setLoadingExistingAssignments(true);
+    let preselectedUserIds: string[] = [];
+    try {
+      const assignmentResponses = await Promise.all(
+        (event.shifts || []).map(async (shift) => {
+          try {
+            return await api.getShiftAssignees(shift._id);
+          } catch (error) {
+            console.error('Error fetching shift assignees for edit preload:', error);
+            return null;
+          }
+        })
+      );
+
+      const assignedSet = new Set<string>();
+      assignmentResponses.forEach((response) => {
+        (response?.assignedUsers || []).forEach((assignedUser: any) => {
+          if (assignedUser?.userId) assignedSet.add(assignedUser.userId.toString());
+        });
+      });
+      preselectedUserIds = Array.from(assignedSet);
+    } finally {
+      setLoadingExistingAssignments(false);
+    }
+
+    setExistingAssignedUserIds(preselectedUserIds);
+
+    // Populate form with event data + assignment baseline from existing assignees
     setEventForm({
       eventName: event.eventName,
       description: event.description || '',
@@ -375,8 +410,8 @@ const VolunteerShifts: React.FC = () => {
         endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         maxSignUps: shift.maxSignUps
       })),
-      assignmentMode: 'ALL_ROSTER',
-      selectedUserIds: allRosterIds
+      assignmentMode: 'SELECTED_USERS',
+      selectedUserIds: preselectedUserIds
     });
     
     setShowCreateModal(true);
@@ -1157,7 +1192,6 @@ const VolunteerShifts: React.FC = () => {
             )}
           </div>
 
-          {!isEditMode && (
           <div className="border-t pt-6">
             <h3 className="text-lg font-medium text-gray-900 mb-3">Assign To</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -1190,16 +1224,28 @@ const VolunteerShifts: React.FC = () => {
               </label>
             </div>
 
+            {isEditMode && (
+              <div className="text-xs text-gray-600 mb-2">
+                Previously assigned members are preselected and marked.
+              </div>
+            )}
+
+            {loadingExistingAssignments && isEditMode && (
+              <div className="text-xs text-gray-500 mb-2">Loading existing assignments...</div>
+            )}
+
             <div className="text-sm text-gray-600 mb-2">
               Selected: {eventForm.selectedUserIds.length} / {rosterMembers.length}
             </div>
             <div className="max-h-52 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
               {rosterMembers.map((member) => {
                 const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+                const wasAssigned = existingAssignedUserIdSet.has(member._id);
                 return (
                   <label key={member._id} className="flex items-center justify-between">
                     <span className="text-sm">
                       {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
+                      {wasAssigned ? <span className="text-xs text-blue-700 ml-1">(Already assigned)</span> : null}
                     </span>
                     <input
                       type="checkbox"
@@ -1211,7 +1257,6 @@ const VolunteerShifts: React.FC = () => {
               })}
             </div>
           </div>
-          )}
 
           <div className="flex gap-3 pt-4 border-t">
             <Button
