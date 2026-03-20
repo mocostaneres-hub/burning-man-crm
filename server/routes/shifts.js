@@ -231,11 +231,7 @@ router.post('/events', authenticateToken, async (req, res) => {
     const {
       eventName,
       description,
-      shifts,
-      assignmentMode = 'ALL_ROSTER',
-      selectedUserIds = [],
-      manualAddIds = [],
-      manualRemoveIds = []
+      shifts
     } = req.body;
 
     // Validation
@@ -272,15 +268,6 @@ router.post('/events', authenticateToken, async (req, res) => {
       }
     }
 
-    // Resolve assignment candidates once; apply to all newly created shifts.
-    const assignmentCandidates = await resolveAssignmentCandidates({
-      campId,
-      mode: assignmentMode,
-      selectedUserIds,
-      manualAddIds,
-      manualRemoveIds
-    });
-
     // Create event
     const event = await db.createEvent({
       eventName,
@@ -301,13 +288,23 @@ router.post('/events', authenticateToken, async (req, res) => {
     });
 
     // Create shift assignments.
-    for (const createdShift of event.shifts || []) {
+    for (let index = 0; index < (event.shifts || []).length; index += 1) {
+      const createdShift = event.shifts[index];
+      const inputShift = shifts[index] || {};
+      const shiftAssignmentMode = inputShift.assignmentMode || 'ALL_ROSTER';
+      const assignmentCandidates = await resolveAssignmentCandidates({
+        campId,
+        mode: shiftAssignmentMode,
+        selectedUserIds: inputShift.selectedUserIds || [],
+        manualAddIds: inputShift.manualAddIds || [],
+        manualRemoveIds: inputShift.manualRemoveIds || []
+      });
       await createShiftAssignments({
         shiftId: createdShift._id,
         eventId: event._id,
         campId,
         assignedBy: req.user._id,
-        mode: assignmentMode,
+        mode: shiftAssignmentMode,
         candidates: assignmentCandidates,
         source: 'CREATE_MODE'
       });
@@ -960,11 +957,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     const {
       eventName,
       description,
-      shifts,
-      assignmentMode,
-      selectedUserIds = [],
-      manualAddIds = [],
-      manualRemoveIds = []
+      shifts
     } = req.body;
 
     // Validation
@@ -1039,34 +1032,30 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       await ShiftSignup.deleteMany({ shiftId: { $in: removedShiftIds } });
     }
 
-    // Optional assignment update during edit mode.
-    // When assignment fields are sent, we treat them as the desired assignment policy for this event
-    // and re-seed assignments across all current shifts.
-    if (assignmentMode) {
+    // Per-shift assignment update during edit mode.
+    for (const currentShift of updatedEvent.shifts || []) {
+      const sourceShift = shifts.find((shift) =>
+        shift._id && shift._id.toString() === currentShift._id.toString()
+      );
+      const shiftAssignmentMode = sourceShift?.assignmentMode || 'ALL_ROSTER';
       const assignmentCandidates = await resolveAssignmentCandidates({
         campId: eventCampId,
-        mode: assignmentMode,
-        selectedUserIds,
-        manualAddIds,
-        manualRemoveIds
+        mode: shiftAssignmentMode,
+        selectedUserIds: sourceShift?.selectedUserIds || [],
+        manualAddIds: sourceShift?.manualAddIds || [],
+        manualRemoveIds: sourceShift?.manualRemoveIds || []
       });
 
-      const currentShiftIds = (updatedEvent.shifts || []).map((shift) => shift._id);
-      if (currentShiftIds.length > 0) {
-        await ShiftAssignment.deleteMany({ shiftId: { $in: currentShiftIds } });
-      }
-
-      for (const currentShift of updatedEvent.shifts || []) {
-        await createShiftAssignments({
-          shiftId: currentShift._id,
-          eventId: updatedEvent._id,
-          campId: eventCampId,
-          assignedBy: req.user._id,
-          mode: assignmentMode,
-          candidates: assignmentCandidates,
-          source: 'EDIT_MODE'
-        });
-      }
+      await ShiftAssignment.deleteMany({ shiftId: currentShift._id });
+      await createShiftAssignments({
+        shiftId: currentShift._id,
+        eventId: updatedEvent._id,
+        campId: eventCampId,
+        assignedBy: req.user._id,
+        mode: shiftAssignmentMode,
+        candidates: assignmentCandidates,
+        source: 'EDIT_MODE'
+      });
     }
 
     try {

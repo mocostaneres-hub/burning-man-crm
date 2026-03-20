@@ -55,7 +55,6 @@ const VolunteerShifts: React.FC = () => {
     unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
   }>({ assignedUsers: [], unassignedUsers: [] });
   const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
-  const [existingAssignedUserIds, setExistingAssignedUserIds] = useState<string[]>([]);
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -69,15 +68,16 @@ const VolunteerShifts: React.FC = () => {
     eventName: '',
     description: '',
     shifts: [] as Array<{
+      _id?: string;
       title: string;
       description: string;
       date: string;
       startTime: string;
       endTime: string;
       maxSignUps: number;
-    }>,
-    assignmentMode: 'ALL_ROSTER' as 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS',
-    selectedUserIds: [] as string[]
+      assignmentMode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+      selectedUserIds: string[];
+    }>
   });
   const [rosterMembers, setRosterMembers] = useState<Array<{
     _id: string;
@@ -134,43 +134,51 @@ const VolunteerShifts: React.FC = () => {
     () => rosterMembers.filter((member) => member.isLead).map((member) => member._id),
     [rosterMembers]
   );
-  const existingAssignedUserIdSet = useMemo(
-    () => new Set(existingAssignedUserIds),
-    [existingAssignedUserIds]
-  );
-
   useEffect(() => {
     if (!showCreateModal) return;
     setEventForm((prev) => {
-      if (prev.assignmentMode === 'ALL_ROSTER') {
-        return { ...prev, selectedUserIds: allRosterIds };
-      }
-      if (prev.assignmentMode === 'LEADS_ONLY') {
-        return { ...prev, selectedUserIds: leadRosterIds };
-      }
-      return prev;
+      return {
+        ...prev,
+        shifts: prev.shifts.map((shift) => {
+          if (shift.assignmentMode === 'ALL_ROSTER') {
+            return { ...shift, selectedUserIds: allRosterIds };
+          }
+          if (shift.assignmentMode === 'LEADS_ONLY') {
+            return { ...shift, selectedUserIds: leadRosterIds };
+          }
+          return shift;
+        })
+      };
     });
   }, [showCreateModal, allRosterIds, leadRosterIds]);
 
-  const handleAssignmentModeChange = (mode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS') => {
-    setEventForm((prev) => {
-      if (mode === 'ALL_ROSTER') {
-        return { ...prev, assignmentMode: mode, selectedUserIds: allRosterIds };
-      }
-      if (mode === 'LEADS_ONLY') {
-        return { ...prev, assignmentMode: mode, selectedUserIds: leadRosterIds };
-      }
-      return { ...prev, assignmentMode: mode, selectedUserIds: [] };
-    });
+  const handleAssignmentModeChange = (shiftIndex: number, mode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS') => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((shift, index) => {
+        if (index !== shiftIndex) return shift;
+        if (mode === 'ALL_ROSTER') {
+          return { ...shift, assignmentMode: mode, selectedUserIds: allRosterIds };
+        }
+        if (mode === 'LEADS_ONLY') {
+          return { ...shift, assignmentMode: mode, selectedUserIds: leadRosterIds };
+        }
+        return { ...shift, assignmentMode: mode, selectedUserIds: [] };
+      })
+    }));
   };
 
-  const toggleSelectedUser = (userId: string) => {
-    setEventForm((prev) => {
-      const selected = prev.selectedUserIds.includes(userId)
-        ? prev.selectedUserIds.filter((id) => id !== userId)
-        : [...prev.selectedUserIds, userId];
-      return { ...prev, selectedUserIds: selected };
-    });
+  const toggleSelectedUser = (shiftIndex: number, userId: string) => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((shift, index) => {
+        if (index !== shiftIndex) return shift;
+        const selected = shift.selectedUserIds.includes(userId)
+          ? shift.selectedUserIds.filter((id) => id !== userId)
+          : [...shift.selectedUserIds, userId];
+        return { ...shift, selectedUserIds: selected };
+      })
+    }));
   };
 
   const loadRosterMembers = useCallback(async () => {
@@ -265,32 +273,37 @@ const VolunteerShifts: React.FC = () => {
         return;
       }
 
-      // Prepare the event data
-      const selectedSet = new Set(eventForm.selectedUserIds);
-      const baseline = eventForm.assignmentMode === 'ALL_ROSTER'
-        ? allRosterIds
-        : eventForm.assignmentMode === 'LEADS_ONLY'
-          ? leadRosterIds
-          : [];
-      const baselineSet = new Set(baseline);
-      const manualAddIds = [...selectedSet].filter((id) => !baselineSet.has(id));
-      const manualRemoveIds = [...baselineSet].filter((id) => !selectedSet.has(id));
-
       const eventData = {
         eventName: eventForm.eventName,
         description: eventForm.description,
         ...(campId ? { campId } : {}),
-        assignmentMode: eventForm.assignmentMode,
-        selectedUserIds: eventForm.selectedUserIds,
-        manualAddIds,
-        manualRemoveIds,
         shifts: eventForm.shifts.map(shift => ({
+          ...(shift._id ? { _id: shift._id } : {}),
           title: shift.title,
           description: shift.description,
           date: shift.date,
           startTime: shift.startTime,
           endTime: shift.endTime,
-          maxSignUps: shift.maxSignUps
+          maxSignUps: shift.maxSignUps,
+          assignmentMode: shift.assignmentMode,
+          selectedUserIds: shift.selectedUserIds,
+          manualAddIds: shift.selectedUserIds.filter((id) => {
+            const baseline = shift.assignmentMode === 'ALL_ROSTER'
+              ? allRosterIds
+              : shift.assignmentMode === 'LEADS_ONLY'
+                ? leadRosterIds
+                : [];
+            return !baseline.includes(id);
+          }),
+          manualRemoveIds: (() => {
+            const baseline = shift.assignmentMode === 'ALL_ROSTER'
+              ? allRosterIds
+              : shift.assignmentMode === 'LEADS_ONLY'
+                ? leadRosterIds
+                : [];
+            const selectedSet = new Set(shift.selectedUserIds);
+            return baseline.filter((id) => !selectedSet.has(id));
+          })()
         }))
       };
 
@@ -332,7 +345,9 @@ const VolunteerShifts: React.FC = () => {
         date: '',
         startTime: '',
         endTime: '',
-        maxSignUps: 1
+        maxSignUps: 1,
+        assignmentMode: 'ALL_ROSTER',
+        selectedUserIds: allRosterIds
       }]
     }));
   };
@@ -357,11 +372,8 @@ const VolunteerShifts: React.FC = () => {
     setEventForm({
       eventName: '',
       description: '',
-      shifts: [],
-      assignmentMode: 'ALL_ROSTER',
-      selectedUserIds: allRosterIds
+      shifts: []
     });
-    setExistingAssignedUserIds([]);
     setLoadingExistingAssignments(false);
     setIsEditMode(false);
     setEventToEdit(null);
@@ -372,9 +384,9 @@ const VolunteerShifts: React.FC = () => {
     setIsEditMode(true);
 
     setLoadingExistingAssignments(true);
-    let preselectedUserIds: string[] = [];
+    let assignmentResponses: any[] = [];
     try {
-      const assignmentResponses = await Promise.all(
+      assignmentResponses = await Promise.all(
         (event.shifts || []).map(async (shift) => {
           try {
             return await api.getShiftAssignees(shift._id);
@@ -385,33 +397,27 @@ const VolunteerShifts: React.FC = () => {
         })
       );
 
-      const assignedSet = new Set<string>();
-      assignmentResponses.forEach((response) => {
-        (response?.assignedUsers || []).forEach((assignedUser: any) => {
-          if (assignedUser?.userId) assignedSet.add(assignedUser.userId.toString());
-        });
-      });
-      preselectedUserIds = Array.from(assignedSet);
     } finally {
       setLoadingExistingAssignments(false);
     }
-
-    setExistingAssignedUserIds(preselectedUserIds);
 
     // Populate form with event data + assignment baseline from existing assignees
     setEventForm({
       eventName: event.eventName,
       description: event.description || '',
-      shifts: event.shifts.map(shift => ({
+      shifts: event.shifts.map((shift, index) => ({
+        _id: shift._id?.toString(),
         title: shift.title,
         description: shift.description || '',
         date: new Date(shift.date).toISOString().split('T')[0], // Convert to YYYY-MM-DD format
         startTime: new Date(shift.startTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
-        maxSignUps: shift.maxSignUps
-      })),
-      assignmentMode: 'SELECTED_USERS',
-      selectedUserIds: preselectedUserIds
+        maxSignUps: shift.maxSignUps,
+        assignmentMode: 'SELECTED_USERS',
+        selectedUserIds: (assignmentResponses[index]?.assignedUsers || [])
+          .map((assignedUser: any) => assignedUser?.userId?.toString())
+          .filter(Boolean)
+      }))
     });
     
     setShowCreateModal(true);
@@ -1182,6 +1188,60 @@ const VolunteerShifts: React.FC = () => {
                     placeholder="Shift description"
                   />
                 </div>
+
+                <div className="border-t pt-4 mt-4">
+                  <h5 className="text-sm font-medium text-gray-900 mb-2">Assign To</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={shift.assignmentMode === 'ALL_ROSTER'}
+                        onChange={() => handleAssignmentModeChange(index, 'ALL_ROSTER')}
+                      />
+                      Entire Roster
+                    </label>
+                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'LEADS_ONLY' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={shift.assignmentMode === 'LEADS_ONLY'}
+                        onChange={() => handleAssignmentModeChange(index, 'LEADS_ONLY')}
+                      />
+                      Leads Only
+                    </label>
+                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'SELECTED_USERS' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                      <input
+                        type="radio"
+                        className="mr-2"
+                        checked={shift.assignmentMode === 'SELECTED_USERS'}
+                        onChange={() => handleAssignmentModeChange(index, 'SELECTED_USERS')}
+                      />
+                      Selected People
+                    </label>
+                  </div>
+
+                  <div className="text-sm text-gray-600 mb-2">
+                    Selected: {shift.selectedUserIds.length} / {rosterMembers.length}
+                  </div>
+                  <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+                    {rosterMembers.map((member) => {
+                      const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+                      return (
+                        <label key={member._id} className="flex items-center justify-between">
+                          <span className="text-sm">
+                            {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={shift.selectedUserIds.includes(member._id)}
+                            onChange={() => toggleSelectedUser(index, member._id)}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ))}
 
@@ -1192,71 +1252,9 @@ const VolunteerShifts: React.FC = () => {
             )}
           </div>
 
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Assign To</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                <input
-                  type="radio"
-                  className="mr-2"
-                  checked={eventForm.assignmentMode === 'ALL_ROSTER'}
-                  onChange={() => handleAssignmentModeChange('ALL_ROSTER')}
-                />
-                Entire Roster
-              </label>
-              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'LEADS_ONLY' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                <input
-                  type="radio"
-                  className="mr-2"
-                  checked={eventForm.assignmentMode === 'LEADS_ONLY'}
-                  onChange={() => handleAssignmentModeChange('LEADS_ONLY')}
-                />
-                Leads Only
-              </label>
-              <label className={`border rounded-lg p-3 cursor-pointer ${eventForm.assignmentMode === 'SELECTED_USERS' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                <input
-                  type="radio"
-                  className="mr-2"
-                  checked={eventForm.assignmentMode === 'SELECTED_USERS'}
-                  onChange={() => handleAssignmentModeChange('SELECTED_USERS')}
-                />
-                Selected People
-              </label>
-            </div>
-
-            {isEditMode && (
-              <div className="text-xs text-gray-600 mb-2">
-                Previously assigned members are preselected and marked.
-              </div>
-            )}
-
-            {loadingExistingAssignments && isEditMode && (
-              <div className="text-xs text-gray-500 mb-2">Loading existing assignments...</div>
-            )}
-
-            <div className="text-sm text-gray-600 mb-2">
-              Selected: {eventForm.selectedUserIds.length} / {rosterMembers.length}
-            </div>
-            <div className="max-h-52 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
-              {rosterMembers.map((member) => {
-                const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
-                const wasAssigned = existingAssignedUserIdSet.has(member._id);
-                return (
-                  <label key={member._id} className="flex items-center justify-between">
-                    <span className="text-sm">
-                      {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
-                      {wasAssigned ? <span className="text-xs text-blue-700 ml-1">(Already assigned)</span> : null}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={eventForm.selectedUserIds.includes(member._id)}
-                      onChange={() => toggleSelectedUser(member._id)}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          </div>
+          {loadingExistingAssignments && isEditMode && (
+            <div className="text-xs text-gray-500 mb-2">Loading existing assignments...</div>
+          )}
 
           <div className="flex gap-3 pt-4 border-t">
             <Button
