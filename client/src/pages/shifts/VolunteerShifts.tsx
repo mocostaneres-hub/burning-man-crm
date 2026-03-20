@@ -75,6 +75,7 @@ const VolunteerShifts: React.FC = () => {
       startTime: string;
       endTime: string;
       maxSignUps: number;
+      currentSignups: number;
       assignmentMode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
       selectedUserIds: string[];
     }>
@@ -346,6 +347,7 @@ const VolunteerShifts: React.FC = () => {
         startTime: '',
         endTime: '',
         maxSignUps: 1,
+        currentSignups: 0,
         assignmentMode: 'ALL_ROSTER',
         selectedUserIds: allRosterIds
       }]
@@ -413,6 +415,7 @@ const VolunteerShifts: React.FC = () => {
         startTime: new Date(shift.startTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
         maxSignUps: shift.maxSignUps,
+        currentSignups: shift.memberIds?.length || 0,
         assignmentMode: 'SELECTED_USERS',
         selectedUserIds: (assignmentResponses[index]?.assignedUsers || [])
           .map((assignedUser: any) => assignedUser?.userId?.toString())
@@ -1108,10 +1111,26 @@ const VolunteerShifts: React.FC = () => {
               </Button>
             </div>
 
-            {eventForm.shifts.map((shift, index) => (
-              <div key={index} className="border rounded-lg p-4 mb-4">
+            {isEditMode && eventForm.shifts.length > 0 && eventForm.shifts.every((shift) => shift.currentSignups >= shift.maxSignUps) && (
+              <div className="mb-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+                This event is fully staffed. You can still edit all fields and assignments.
+              </div>
+            )}
+
+            {eventForm.shifts.map((shift, index) => {
+              const isFullyStaffed = isEditMode && shift.currentSignups >= shift.maxSignUps;
+              const staffedFieldClass = isFullyStaffed ? 'bg-gray-100' : '';
+              return (
+              <div key={index} className={`border rounded-lg p-4 mb-4 ${isFullyStaffed ? 'border-green-300 bg-green-50/40' : ''}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">Shift {index + 1}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">Shift {index + 1}</h4>
+                    {isFullyStaffed && (
+                      <span className="text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
+                        Fully staffed
+                      </span>
+                    )}
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1131,6 +1150,7 @@ const VolunteerShifts: React.FC = () => {
                       value={shift.title}
                       onChange={(e) => handleShiftChange(index, 'title', e.target.value)}
                       placeholder="Shift title"
+                      className={staffedFieldClass}
                     />
                   </div>
                   <div>
@@ -1142,6 +1162,7 @@ const VolunteerShifts: React.FC = () => {
                       value={shift.maxSignUps}
                       onChange={(e) => handleShiftChange(index, 'maxSignUps', parseInt(e.target.value) || 1)}
                       min="1"
+                      className={staffedFieldClass}
                     />
                   </div>
                   <div>
@@ -1152,6 +1173,7 @@ const VolunteerShifts: React.FC = () => {
                       type="date"
                       value={shift.date}
                       onChange={(e) => handleShiftChange(index, 'date', e.target.value)}
+                      className={staffedFieldClass}
                     />
                   </div>
                   <div>
@@ -1162,6 +1184,7 @@ const VolunteerShifts: React.FC = () => {
                       type="time"
                       value={shift.startTime}
                       onChange={(e) => handleShiftChange(index, 'startTime', e.target.value)}
+                      className={staffedFieldClass}
                     />
                   </div>
                   <div>
@@ -1172,6 +1195,7 @@ const VolunteerShifts: React.FC = () => {
                       type="time"
                       value={shift.endTime}
                       onChange={(e) => handleShiftChange(index, 'endTime', e.target.value)}
+                      className={staffedFieldClass}
                     />
                   </div>
                 </div>
@@ -1184,7 +1208,7 @@ const VolunteerShifts: React.FC = () => {
                     value={shift.description}
                     onChange={(e) => handleShiftChange(index, 'description', e.target.value)}
                     rows={2}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+                    className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent ${staffedFieldClass}`}
                     placeholder="Shift description"
                   />
                 </div>
@@ -1243,7 +1267,8 @@ const VolunteerShifts: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
 
             {eventForm.shifts.length === 0 && (
               <p className="text-gray-500 text-center py-8">

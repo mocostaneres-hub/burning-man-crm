@@ -1032,7 +1032,17 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       await ShiftSignup.deleteMany({ shiftId: { $in: removedShiftIds } });
     }
 
+    const setsAreEqual = (left, right) => {
+      if (left.size !== right.size) return false;
+      for (const value of left) {
+        if (!right.has(value)) return false;
+      }
+      return true;
+    };
+
     // Per-shift assignment update during edit mode.
+    // Safeguard: skip rewrites when desired assignees already match existing assignment rows
+    // (e.g., event name/description-only edits).
     for (const currentShift of updatedEvent.shifts || []) {
       const sourceShift = shifts.find((shift) =>
         shift._id && shift._id.toString() === currentShift._id.toString()
@@ -1045,6 +1055,15 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
         manualAddIds: sourceShift?.manualAddIds || [],
         manualRemoveIds: sourceShift?.manualRemoveIds || []
       });
+
+      const existingRows = await ShiftAssignment.find({ shiftId: currentShift._id })
+        .select('userId')
+        .lean();
+      const existingAssigneeIds = new Set(existingRows.map((row) => row.userId.toString()));
+      const desiredAssigneeIds = new Set((assignmentCandidates || []).map((id) => id.toString()));
+      if (setsAreEqual(existingAssigneeIds, desiredAssigneeIds)) {
+        continue;
+      }
 
       await ShiftAssignment.deleteMany({ shiftId: currentShift._id });
       await createShiftAssignments({

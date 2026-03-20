@@ -266,7 +266,10 @@ async function buildMyShiftsPayload(userId) {
     signupByShift.get(shiftId).push(normalizeId(signup.userId));
   }
 
-  for (const shiftId of assignedShiftIds) {
+  // Show shifts in My Shifts if the user is assigned OR already signed up.
+  // This prevents signed-up shifts from disappearing if assignments are edited.
+  const relevantShiftIds = new Set([...assignedShiftIds, ...signedShiftIds]);
+  for (const shiftId of relevantShiftIds) {
     const indexed = shiftIndex.get(shiftId);
     if (!indexed) continue;
     const { event, shift, campId, campName } = indexed;
