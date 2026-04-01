@@ -7,6 +7,7 @@ const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const Event = require('../models/Event');
 const ShiftAssignment = require('../models/ShiftAssignment');
 const ShiftSignup = require('../models/ShiftSignup');
+const NotificationModel = require('../models/Notification');
 const { buildMyShiftsPayload } = require('../services/shiftService');
 const {
   resolveAssignmentCandidates,
@@ -15,6 +16,7 @@ const {
 } = require('../services/shiftService');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
+const { sendEmail } = require('../services/emailService');
 
 // Test route to verify this file is being loaded
 router.get('/debug-test', (req, res) => {
@@ -336,6 +338,167 @@ router.post('/events', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Create event error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/shifts/events/invite-entire-roster
+// @desc    Invite entire roster to all available shifts (one generic invite per member)
+// @access  Private (Camp admins/leads only)
+router.post('/events/invite-entire-roster', authenticateToken, async (req, res) => {
+  try {
+    // Resolve camp context (camp accounts/admins vs Camp Leads)
+    let campId;
+    if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+      campId = await getUserCampId(req);
+      if (!campId) {
+        return res.status(404).json({ message: 'Unable to determine camp context' });
+      }
+    } else if (req.body.campId || req.query.campId) {
+      const targetCampId = req.body.campId || req.query.campId;
+      const { canManageCamp } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageCamp(req, targetCampId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      }
+      campId = targetCampId;
+    } else {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    // Ensure roster exists
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (!activeRoster || !Array.isArray(activeRoster.members) || activeRoster.members.length === 0) {
+      return res.status(400).json({ message: 'No active roster found for this camp' });
+    }
+
+    // Find all events and shifts for this camp
+    const events = await db.findEvents({ campId });
+    const availableShifts = [];
+    for (const event of events || []) {
+      for (const shift of event.shifts || []) {
+        const max = shift.maxSignUps || 0;
+        if (max <= 0) continue;
+        const current = Math.max(
+          shift.currentSignups || 0,
+          (shift.memberIds || []).length
+        );
+        if (current < max) {
+          availableShifts.push({ eventId: event._id, shiftId: shift._id });
+        }
+      }
+    }
+
+    if (availableShifts.length === 0) {
+      return res.status(400).json({ message: 'No available shifts to invite roster to' });
+    }
+
+    // Idempotency safeguard: avoid spamming if a bulk invite was recently sent
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentBulk = await NotificationModel.exists({
+      campId,
+      type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
+      'metadata.scope': 'all_shifts',
+      createdAt: { $gte: tenMinutesAgo }
+    });
+    if (recentBulk) {
+      return res.status(200).json({
+        message: 'A bulk invite was already sent recently. Skipping duplicate sends.',
+        invitedCount: 0,
+        availableShiftCount: availableShifts.length
+      });
+    }
+
+    // Collect unique roster user IDs (approved/active members only)
+    const rosterUserIds = new Set();
+    for (const memberEntry of activeRoster.members) {
+      if (!memberEntry.member) continue;
+      const member = await db.findMember({ _id: memberEntry.member });
+      if (!member || !member.user) continue;
+      const status = member.status || memberEntry.status;
+      if (status !== 'approved' && status !== 'active') continue;
+      const userId = typeof member.user === 'object' ? member.user._id : member.user;
+      if (userId) {
+        rosterUserIds.add(userId.toString());
+      }
+    }
+
+    if (rosterUserIds.size === 0) {
+      return res.status(400).json({ message: 'No approved roster members found to invite' });
+    }
+
+    const userIds = Array.from(rosterUserIds);
+    const users = await db.findUsers({ _id: { $in: userIds } }) || [];
+    const userEmailMap = new Map(
+      users
+        .filter((u) => u.email && u.email.trim() !== '')
+        .map((u) => [u._id.toString(), u.email])
+    );
+
+    const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+    const shiftsUrl = `${clientUrl}/my-shifts`;
+    const subject = 'Camp invited you to sign up for available shifts';
+    const textBody = `Your camp has open volunteer shifts available.\n\nVisit your shifts page to view and sign up: ${shiftsUrl}`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Camp Shifts Are Open</h1>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <div style="background: white; padding: 20px; border-radius: 8px;">
+            <p>Your camp has volunteer shifts available that could use your help.</p>
+            <p>Click below to browse open shifts and sign up:</p>
+            <div style="margin: 20px 0; text-align: center;">
+              <a href="${shiftsUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                View Shifts
+              </a>
+            </div>
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              You can always see your current and available shifts from the My Shifts page.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Send one email per user
+    for (const userId of userIds) {
+      const email = userEmailMap.get(userId);
+      if (!email) continue;
+      try {
+        await sendEmail({
+          to: email,
+          subject,
+          html: htmlBody,
+          text: textBody
+        });
+      } catch (emailError) {
+        console.error('Bulk shift invite email error for user', userId, emailError);
+      }
+    }
+
+    // Create one in-app notification per user
+    await createBulkNotifications(userIds, {
+      actor: req.user._id,
+      campId,
+      type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
+      title: 'Camp invited you to sign up for shifts',
+      message: 'Your camp has volunteer shifts available. Visit My Shifts to browse and sign up.',
+      link: '/my-shifts',
+      metadata: {
+        scope: 'all_shifts',
+        campId,
+        availableShiftCount: availableShifts.length
+      }
+    });
+
+    return res.json({
+      message: 'Bulk invite sent to roster members.',
+      invitedCount: userIds.length,
+      availableShiftCount: availableShifts.length
+    });
+  } catch (error) {
+    console.error('Bulk roster invite error:', error);
+    return res.status(500).json({ message: 'Server error while sending roster invites' });
   }
 });
 

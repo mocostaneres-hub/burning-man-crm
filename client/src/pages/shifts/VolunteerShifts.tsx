@@ -42,6 +42,7 @@ const VolunteerShifts: React.FC = () => {
   const [showManageModal, setShowManageModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -62,6 +63,7 @@ const VolunteerShifts: React.FC = () => {
   const [personSortDir, setPersonSortDir] = useState<'asc' | 'desc'>('asc');
   const [eventShiftSortKey, setEventShiftSortKey] = useState<'title' | 'date' | 'filled' | 'capacity' | 'remaining'>('date');
   const [eventShiftSortDir, setEventShiftSortDir] = useState<'asc' | 'desc'>('asc');
+  const [bulkInviteLoading, setBulkInviteLoading] = useState(false);
 
   // Form state for creating events
   const [eventForm, setEventForm] = useState({
@@ -244,6 +246,18 @@ const VolunteerShifts: React.FC = () => {
       loadRosterMembers();
     }
   }, [canAccessShifts, loadEvents, loadRosterMembers]);
+
+  const hasRoster = rosterMembers.length > 0;
+  const hasAvailableShifts = useMemo(() => {
+    return events.some(event =>
+      (event.shifts || []).some(shift => {
+        const max = shift.maxSignUps || 0;
+        if (max <= 0) return false;
+        const current = (shift.memberIds || []).length;
+        return current < max;
+      })
+    );
+  }, [events]);
 
   const handleCreateEvent = async () => {
     try {
@@ -616,6 +630,28 @@ const VolunteerShifts: React.FC = () => {
     printWindow.print();
   };
 
+  const handleBulkInviteConfirm = async () => {
+    try {
+      setBulkInviteLoading(true);
+      let campId: string | undefined;
+      if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+        const camp = await api.get('/camps/my-camp');
+        campId = camp?._id;
+      } else if (user?.isCampLead && user?.campLeadCampId) {
+        campId = user.campLeadCampId;
+      }
+
+      const response = await api.inviteEntireRosterToAllShifts(campId);
+      alert(response.message);
+      setShowBulkInviteModal(false);
+    } catch (error: any) {
+      console.error('Bulk invite error:', error);
+      alert(error?.response?.data?.message || 'Failed to send roster invites.');
+    } finally {
+      setBulkInviteLoading(false);
+    }
+  };
+
 
   if (!canAccessShifts) {
     return (
@@ -640,14 +676,26 @@ const VolunteerShifts: React.FC = () => {
             Create and manage volunteer shifts for your camp
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Create Event
-        </Button>
+        <div className="flex items-center gap-3">
+          {hasRoster && (
+            <Button
+              variant="primary"
+              onClick={() => setShowBulkInviteModal(true)}
+              disabled={bulkInviteLoading || !hasAvailableShifts}
+              className="flex items-center gap-2"
+            >
+              Invite Entire Roster to All Shifts
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Event
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -679,14 +727,26 @@ const VolunteerShifts: React.FC = () => {
                   Manage your camp's volunteer events and shifts. Create new events or edit existing ones.
                 </p>
               </div>
-              <Button
-                variant="primary"
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Create Event
-              </Button>
+              <div className="flex gap-3">
+                {hasRoster && (
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowBulkInviteModal(true)}
+                    disabled={bulkInviteLoading || !hasAvailableShifts}
+                    className="flex items-center gap-2"
+                  >
+                    Invite Entire Roster to All Shifts
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Event
+                </Button>
+              </div>
             </div>
 
             {events.length === 0 ? (
@@ -1264,7 +1324,7 @@ const VolunteerShifts: React.FC = () => {
 
             {isEditMode && eventForm.shifts.length > 0 && eventForm.shifts.every((shift) => shift.currentSignups >= shift.maxSignUps) && (
               <div className="mb-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
-                This event is fully staffed. You can still edit all fields and assignments.
+                This event is fully staffed. You can still edit all fields and invites.
               </div>
             )}
 
@@ -1365,7 +1425,7 @@ const VolunteerShifts: React.FC = () => {
                 </div>
 
                 <div className="border-t pt-4 mt-4">
-                  <h5 className="text-sm font-medium text-gray-900 mb-2">Assign To</h5>
+                  <h5 className="text-sm font-medium text-gray-900 mb-2">Invite To</h5>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                     <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
                       <input
@@ -1462,6 +1522,42 @@ const VolunteerShifts: React.FC = () => {
         </div>
       </Modal>
 
+      {/* Bulk Invite Confirmation Modal */}
+      <Modal
+        isOpen={showBulkInviteModal}
+        onClose={() => {
+          if (bulkInviteLoading) return;
+          setShowBulkInviteModal(false);
+        }}
+        title="Invite Entire Roster to All Shifts"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">
+            Are you sure you want to invite the entire roster to sign up for all available shifts?
+          </p>
+          <p className="text-xs text-gray-500">
+            Each roster member will receive one generic email and one in-app notification with a link to the shifts page.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkInviteModal(false)}
+              disabled={bulkInviteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleBulkInviteConfirm}
+              disabled={bulkInviteLoading}
+            >
+              {bulkInviteLoading ? 'Sending...' : 'Send Invites'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Manage Event Details Modal */}
       <Modal
         isOpen={showManageModal}
@@ -1504,7 +1600,7 @@ const VolunteerShifts: React.FC = () => {
                             size="sm"
                             onClick={() => openAssignmentModal(shift)}
                           >
-                            Manage Assignees
+                            Invite to Shift
                           </Button>
                         </div>
                       </div>
@@ -1540,7 +1636,7 @@ const VolunteerShifts: React.FC = () => {
           setSelectedShiftForAssignment(null);
           setPendingAddUserIds([]);
         }}
-        title={selectedShiftForAssignment ? `Manage Assignees: ${selectedShiftForAssignment.title}` : 'Manage Assignees'}
+        title={selectedShiftForAssignment ? `Invite to Shift: ${selectedShiftForAssignment.title}` : 'Invite to Shift'}
         size="lg"
       >
         <div className="space-y-4">

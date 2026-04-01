@@ -696,6 +696,12 @@ class ApiService {
     return response.data;
   }
 
+  async inviteEntireRosterToAllShifts(campId?: string): Promise<{ message: string; invitedCount: number; availableShiftCount: number }> {
+    const url = campId ? `/shifts/events/invite-entire-roster?campId=${campId}` : '/shifts/events/invite-entire-roster';
+    const response: AxiosResponse<{ message: string; invitedCount: number; availableShiftCount: number }> = await this.api.post(url);
+    return response.data;
+  }
+
   // Generic HTTP methods
   async get(url: string, config?: any): Promise<any> {
     const response = await this.api.get(url, config);
