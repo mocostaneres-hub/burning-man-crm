@@ -685,7 +685,7 @@ const PublicCampProfile: React.FC = () => {
                 </div>
               ) : camp.acceptingApplications ? (
                 // Apply only for personal accounts or guests; camp logins cannot apply
-                (user?.accountType === 'personal' || !user) ? (
+                ((user?.accountType === 'personal' || !user) && !((user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow)) ? (
                   <Button 
                     onClick={handleApplyNow}
                     size="lg"
@@ -697,6 +697,10 @@ const PublicCampProfile: React.FC = () => {
                 ) : user?.accountType === 'camp' ? (
                   <p className="text-sm text-custom-text-secondary text-center lg:text-left">
                     Member accounts can apply
+                  </p>
+                ) : (user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow ? (
+                  <p className="text-sm text-custom-text-secondary text-center lg:text-left">
+                    Shifts-only members can apply to camps after September 15
                   </p>
                 ) : null
               ) : (

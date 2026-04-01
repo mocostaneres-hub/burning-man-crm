@@ -23,9 +23,18 @@ const ApplyInviteRedirect: React.FC = () => {
         if (!campSlug) {
           throw new Error('Invalid invitation link');
         }
-        localStorage.setItem('pendingInvite', JSON.stringify({ token, campSlug }));
+        const pendingInvite = {
+          token,
+          campSlug,
+          mode: result?.isShiftsOnlyInvite ? 'shifts_only' : 'standard'
+        };
+        localStorage.setItem('pendingInvite', JSON.stringify(pendingInvite));
         if (!isMounted) return;
-        navigate(`/camps/${campSlug}?invite_token=${token}`, { replace: true });
+        if (result?.isShiftsOnlyInvite) {
+          navigate(`/register?invite_token=${token}&shifts_only=1`, { replace: true });
+        } else {
+          navigate(`/camps/${campSlug}?invite_token=${token}`, { replace: true });
+        }
       } catch (err: any) {
         if (!isMounted) return;
         setError(err?.response?.data?.message || err?.message || 'Invalid invitation link.');

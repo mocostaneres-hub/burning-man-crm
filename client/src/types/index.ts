@@ -61,6 +61,8 @@ export interface User {
   campLeadCampId?: string;
   campLeadCampSlug?: string;
   campLeadCampName?: string;
+  isShiftsOnlyMember?: boolean;
+  canApplyToCampsNow?: boolean;
   isActive: boolean;
   isVerified: boolean;
   /** True if user has been promoted to system admin (or is accountType admin with no camp) */
@@ -178,9 +180,19 @@ export interface CampVideo {
 export interface Member {
   _id: string;
   camp: string | Camp;
-  user: string | User;
+  user?: string | User;
+  name?: string;
+  email?: string;
+  phone?: string;
+  tags?: string[];
+  inviteToken?: string | null;
+  invitedAt?: string | Date | null;
+  joinedAt?: string | Date | null;
+  isShiftsOnly?: boolean;
+  signupSource?: 'shifts_only_invite' | 'standard_invite' | 'application' | 'manual';
+  customFieldValues?: Record<string, any>;
   role: 'member' | 'project-lead' | 'camp-lead';
-  status: 'pending' | 'active' | 'inactive' | 'suspended' | 'rejected';
+  status: 'roster_only' | 'invited' | 'pending' | 'active' | 'inactive' | 'suspended' | 'rejected' | 'withdrawn';
   applicationData: Record<string, any>;
   appliedAt: string;
   reviewedAt?: string;

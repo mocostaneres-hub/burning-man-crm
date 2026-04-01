@@ -605,6 +605,10 @@ const CampDiscovery: React.FC = () => {
                               <p className="text-sm text-center text-custom-text-secondary">
                                 Member accounts can apply
                               </p>
+                            ) : (user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow ? (
+                              <p className="text-sm text-center text-custom-text-secondary">
+                                Shifts-only members can apply to camps after September 15
+                              </p>
                             ) : (
                               <Button
                                 onClick={(e) => {

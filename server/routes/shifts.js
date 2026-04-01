@@ -413,22 +413,34 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
       });
     }
 
-    // Collect unique roster user IDs (approved/active members only)
+    // Collect recipients from active roster (supports shifts-only members without accounts).
     const rosterUserIds = new Set();
+    const rosterOnlyRecipients = [];
     for (const memberEntry of activeRoster.members) {
       if (!memberEntry.member) continue;
-      const member = await db.findMember({ _id: memberEntry.member });
-      if (!member || !member.user) continue;
-      const status = member.status || memberEntry.status;
-      if (status !== 'approved' && status !== 'active') continue;
-      const userId = typeof member.user === 'object' ? member.user._id : member.user;
+      const memberRef = memberEntry.member;
+      const member = (typeof memberRef === 'object' && memberRef._id)
+        ? memberRef
+        : await db.findMember({ _id: memberEntry.member });
+      if (!member) continue;
+
+      const memberStatus = (member.status || memberEntry.status || '').toLowerCase();
+      if (!['approved', 'active', 'roster_only', 'invited'].includes(memberStatus)) continue;
+
+      const userId = typeof member.user === 'object' ? member.user?._id : member.user;
       if (userId) {
         rosterUserIds.add(userId.toString());
+      } else if (member.email) {
+        rosterOnlyRecipients.push({
+          memberId: member._id?.toString(),
+          email: String(member.email).trim().toLowerCase(),
+          name: member.name || ''
+        });
       }
     }
 
-    if (rosterUserIds.size === 0) {
-      return res.status(400).json({ message: 'No approved roster members found to invite' });
+    if (rosterUserIds.size === 0 && rosterOnlyRecipients.length === 0) {
+      return res.status(400).json({ message: 'No eligible roster members found to invite' });
     }
 
     const userIds = Array.from(rosterUserIds);
@@ -457,7 +469,7 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
       renderTemplateString(template?.textContent, templateData) ||
       `${campName} has open volunteer shifts available.\n\nVisit your shifts page to view and sign up: ${shiftsUrl}`;
 
-    // Send one email per user
+    // Send one email per existing user account
     for (const userId of userIds) {
       const email = userEmailMap.get(userId);
       if (!email) continue;
@@ -470,6 +482,52 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
         });
       } catch (emailError) {
         console.error('Bulk shift invite email error for user', userId, emailError);
+      }
+    }
+
+    // Send one email per roster-only member (no user account yet) with invite token.
+    for (const recipient of rosterOnlyRecipients) {
+      try {
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(24).toString('hex');
+        const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+        await db.createInvite({
+          campId,
+          senderId: req.user._id,
+          recipient: recipient.email,
+          method: 'email',
+          token,
+          status: 'sent',
+          inviteType: 'shifts_only',
+          signupSource: 'shifts_only_invite',
+          memberId: recipient.memberId
+        });
+
+        await db.updateMember(recipient.memberId, {
+          status: 'invited',
+          invitedAt: new Date(),
+          inviteToken: token,
+          isShiftsOnly: true,
+          signupSource: 'shifts_only_invite'
+        });
+
+        const inviteSubject = `${campName} invited you to sign up for available shifts`;
+        const inviteTextBody = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
+        const inviteHtmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>${campName} invited you to sign up for available shifts</h2>
+            <p>${campName} has volunteer shifts available that could use your help.</p>
+            <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
+          </div>
+        `;
+        await sendEmail({
+          to: recipient.email,
+          subject: inviteSubject,
+          html: inviteHtmlBody,
+          text: inviteTextBody
+        });
+      } catch (emailError) {
+        console.error('Bulk shifts-only invite email error for member', recipient.memberId, emailError);
       }
     }
 
@@ -490,7 +548,7 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
 
     return res.json({
       message: 'Bulk invite sent to roster members.',
-      invitedCount: userIds.length,
+      invitedCount: userIds.length + rosterOnlyRecipients.length,
       availableShiftCount: availableShifts.length
     });
   } catch (error) {

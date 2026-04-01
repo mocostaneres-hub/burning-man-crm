@@ -347,6 +347,28 @@ const campSchema = new mongoose.Schema({
     type: String,
     default: "You're invited to {{campName}}! Apply here: {{link}}"
   },
+  rosterCustomFields: {
+    type: [{
+      key: { type: String, required: true, trim: true },
+      label: { type: String, required: true, trim: true },
+      type: {
+        type: String,
+        enum: ['text', 'number', 'dropdown', 'checkbox'],
+        required: true
+      },
+      options: {
+        type: [String],
+        default: []
+      }
+    }],
+    default: [],
+    validate: {
+      validator: function(fields) {
+        return Array.isArray(fields) && fields.length <= 5;
+      },
+      message: 'A maximum of 5 roster custom fields is allowed'
+    }
+  },
 
   // Dues email templates (camp-level overrides over system defaults)
   duesInstructionsSubject: {

@@ -42,6 +42,7 @@ import TaskManagement from './pages/camps/TaskManagement';
 import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
 import SelectRole from './pages/onboarding/SelectRole';
+import ShiftsOnlyOnboarding from './pages/onboarding/ShiftsOnlyOnboarding';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { useLocation } from 'react-router-dom';
 
@@ -156,6 +157,11 @@ function App() {
                   <Route path="/onboarding/select-role" element={
                     <ProtectedRoute>
                       <SelectRole />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/onboarding/shifts-only" element={
+                    <ProtectedRoute requirePersonalAccount>
+                      <ShiftsOnlyOnboarding />
                     </ProtectedRoute>
                   } />
                   {/* Legacy dashboard route - redirects based on account type */}

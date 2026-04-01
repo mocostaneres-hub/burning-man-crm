@@ -9,6 +9,7 @@ interface AddMemberModalProps {
   onClose: () => void;
   rosterId: string;
   onMemberAdded: () => void;
+  customFields?: Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>;
 }
 
 interface MemberFormData {
@@ -24,6 +25,7 @@ interface MemberFormData {
   departureDate: string;
   skills: string[];
   duesPaid: boolean;
+  customFieldValues: Record<string, any>;
 }
 
 const AddMemberModal: React.FC<AddMemberModalProps> = ({
@@ -31,6 +33,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
   onClose,
   rosterId,
   onMemberAdded,
+  customFields = []
 }) => {
   const { skills: SKILLS_OPTIONS, loading: skillsLoading } = useSkills();
   const [loading, setLoading] = useState(false);
@@ -48,6 +51,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
     departureDate: '',
     skills: [],
     duesPaid: false,
+    customFieldValues: {},
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -125,6 +129,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
         departureDate: '',
         skills: [],
         duesPaid: false,
+        customFieldValues: {},
       });
       
       onMemberAdded();
@@ -199,6 +204,67 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             onChange={handleInputChange}
           />
         </div>
+
+        {customFields.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Custom Fields</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {customFields.map((field) => {
+                const value = formData.customFieldValues?.[field.key];
+                if (field.type === 'checkbox') {
+                  return (
+                    <label key={field.key} className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(value)}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          customFieldValues: { ...prev.customFieldValues, [field.key]: e.target.checked }
+                        }))}
+                      />
+                      {field.label}
+                    </label>
+                  );
+                }
+                if (field.type === 'dropdown') {
+                  return (
+                    <div key={field.key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        value={value || ''}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          customFieldValues: { ...prev.customFieldValues, [field.key]: e.target.value }
+                        }))}
+                      >
+                        <option value="">Select...</option>
+                        {(field.options || []).map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                return (
+                  <Input
+                    key={field.key}
+                    label={field.label}
+                    type={field.type === 'number' ? 'number' : 'text'}
+                    value={value ?? ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      customFieldValues: {
+                        ...prev.customFieldValues,
+                        [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
+                      }
+                    }))}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Ticket & VP Status */}
         <div className="space-y-4">

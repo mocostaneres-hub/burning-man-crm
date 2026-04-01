@@ -359,6 +359,23 @@ class ApiService {
     return response.data;
   }
 
+  async importMembersCsv(params: {
+    file: File;
+    campId?: string;
+    confirm?: boolean;
+    mapping?: Record<string, string>;
+  }): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', params.file);
+    if (params.campId) formData.append('campId', params.campId);
+    if (params.confirm) formData.append('confirm', 'true');
+    if (params.mapping) formData.append('mapping', JSON.stringify(params.mapping));
+    const response = await this.api.post('/members/import-csv', formData, {
+      transformRequest: [(data) => data]
+    });
+    return response.data;
+  }
+
   // Upload endpoints
   async uploadProfilePhoto(file: File): Promise<{ photoUrl: string }> {
     const formData = new FormData();
@@ -788,6 +805,24 @@ class ApiService {
     }
   ): Promise<any> {
     const response = await this.api.put(`/rosters/${rosterId}/dues/templates`, payload);
+    return response.data;
+  }
+
+  async getRosterCustomFields(campId: string): Promise<{ customFields: Array<{ key: string; label: string; type: string; options?: string[] }> }> {
+    const response = await this.api.get('/rosters/custom-fields', { params: { campId } });
+    return response.data;
+  }
+
+  async updateRosterCustomFields(
+    campId: string,
+    customFields: Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>
+  ): Promise<{ customFields: any[] }> {
+    const response = await this.api.put('/rosters/custom-fields', { campId, customFields });
+    return response.data;
+  }
+
+  async updateRosterMember(rosterId: string, memberId: string, payload: Record<string, any>): Promise<any> {
+    const response = await this.api.put(`/rosters/${rosterId}/members/${memberId}`, payload);
     return response.data;
   }
 }

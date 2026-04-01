@@ -77,6 +77,7 @@ router.post('/register', [
     let effectiveAccountType = accountType;
     let effectiveRole = 'unassigned';
     let inviteContext = null;
+    let inviteRecord = null;
 
     // Invitation-based signup is always a member-style personal account.
     // Backend enforces this so role/accountType cannot be escalated by client payloads.
@@ -85,6 +86,7 @@ router.post('/register', [
       if (!invite) {
         return res.status(400).json({ message: 'Invitation link is invalid' });
       }
+      inviteRecord = invite;
 
       const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
       if (isExpired || invite.status === 'expired') {
@@ -103,7 +105,9 @@ router.post('/register', [
       inviteContext = {
         token: inviteToken,
         campId: invite.campId,
-        campSlug
+        campSlug,
+        inviteType: invite.inviteType || 'standard',
+        isShiftsOnlyInvite: (invite.inviteType || 'standard') === 'shifts_only'
       };
 
       effectiveAccountType = 'personal';
@@ -142,13 +146,33 @@ router.post('/register', [
 
     // Persist invite/member onboarding tracking.
     if (inviteToken) {
-      const invite = await db.findInvite({ token: inviteToken });
+      const invite = inviteRecord || await db.findInvite({ token: inviteToken });
       if (invite) {
-        await db.updateInviteById(invite._id, {
+        const inviteUpdates = {
           invitedUserId: user._id,
           accountCreatedAt: invite.accountCreatedAt || new Date(),
           status: invite.status === 'expired' ? 'sent' : invite.status
-        });
+        };
+
+        // For shifts-only invites, activate the pre-created member row and bind to this new user.
+        if ((invite.inviteType || 'standard') === 'shifts_only' && invite.memberId) {
+          await db.updateMember(invite.memberId, {
+            user: user._id,
+            status: 'active',
+            joinedAt: new Date(),
+            invitedAt: invite.createdAt || new Date(),
+            isShiftsOnly: true,
+            signupSource: 'shifts_only_invite',
+            inviteToken: invite.token,
+            email: normalizedEmail,
+            name: `${firstName || ''} ${lastName || ''}`.trim()
+          });
+          inviteUpdates.status = 'applied';
+          inviteUpdates.appliedAt = new Date();
+          inviteUpdates.appliedBy = user._id;
+        }
+
+        await db.updateInviteById(invite._id, inviteUpdates);
       }
     } else {
       // Fallback: if user signed up without token but had an invite email, start reminder tracking.
@@ -310,6 +334,9 @@ router.post('/login', [
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = req.user;
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+    const applyCutoffDateUtc = new Date(Date.UTC(currentYear, 8, 15, 0, 0, 0)); // Sep 15
 
     // Compute isSystemAdmin: User flag, accountType admin with no camp, OR Admin collection super-admin
     let isSystemAdmin = (user.accountType === 'admin' && !user.campId) || !!user.isSystemAdmin;
@@ -370,12 +397,26 @@ router.get('/me', authenticateToken, async (req, res) => {
       }
     }
     
+    // Enrich personal accounts with shifts-only membership flags.
+    let isShiftsOnlyMember = false;
+    if (user.accountType === 'personal') {
+      const Member = require('../models/Member');
+      const shiftsOnlyMember = await Member.findOne({
+        user: user._id,
+        isShiftsOnly: true,
+        status: { $in: ['roster_only', 'invited', 'active'] }
+      }).select('_id status isShiftsOnly');
+      isShiftsOnlyMember = !!shiftsOnlyMember;
+    }
+
     // Not a Camp Lead, return normal user data (include isSystemAdmin for frontend)
     const userObj = user.toObject ? user.toObject() : { ...user };
     res.json({
       user: {
         ...userObj,
-        isSystemAdmin
+        isSystemAdmin,
+        isShiftsOnlyMember,
+        canApplyToCampsNow: !isShiftsOnlyMember || now >= applyCutoffDateUtc
       }
     });
   } catch (error) {

@@ -310,6 +310,52 @@ router.post('/select-role', [
   }
 });
 
+// @route   POST /api/onboarding/shifts-only-complete
+// @desc    Complete shifts-only invite onboarding
+// @access  Private
+router.post('/shifts-only-complete', authenticateToken, async (req, res) => {
+  try {
+    const { skills = [], playaName = '', profilePhoto = '' } = req.body || {};
+    if (!Array.isArray(skills) || skills.length === 0) {
+      return res.status(400).json({ message: 'At least one skill is required' });
+    }
+
+    const userId = req.user._id;
+    const user = await db.findUserById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    await db.updateUserById(userId, {
+      skills,
+      playaName: String(playaName || '').trim(),
+      ...(profilePhoto ? { profilePhoto } : {})
+    });
+
+    const Member = require('../models/Member');
+    const member = await Member.findOne({
+      user: userId,
+      isShiftsOnly: true
+    });
+    if (member) {
+      member.status = 'active';
+      member.joinedAt = member.joinedAt || new Date();
+      member.signupSource = 'shifts_only_invite';
+      member.playaName = String(playaName || member.playaName || '').trim();
+      await member.save();
+    }
+
+    await recordActivity('MEMBER', userId, userId, 'ONBOARDING_COMPLETED', {
+      field: 'shiftsOnlyOnboarding',
+      newValue: 'completed',
+      signup_source: 'shifts_only_invite'
+    });
+
+    res.json({ message: 'Shifts-only onboarding completed', redirectTo: '/my-shifts' });
+  } catch (error) {
+    console.error('Shifts-only onboarding completion error:', error);
+    res.status(500).json({ message: 'Server error completing onboarding' });
+  }
+});
+
 // @route   GET /api/onboarding/status
 // @desc    Check if user needs to complete onboarding
 // @access  Private

@@ -46,7 +46,11 @@ router.get('/invites/validate/:token', async (req, res) => {
       valid: true,
       campId: invite.campId,
       campSlug,
-      inviteToken: token
+      inviteToken: token,
+      inviteType: invite.inviteType || 'standard',
+      signupSource: invite.signupSource || 'standard_invite',
+      isShiftsOnlyInvite: (invite.inviteType || 'standard') === 'shifts_only',
+      memberId: invite.memberId || null
     });
   } catch (error) {
     console.error('Validate invite token error:', error);

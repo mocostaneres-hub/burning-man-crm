@@ -8,6 +8,9 @@ interface RosterFiltersProps {
   activeFilters: FilterType[];
   onFilterChange: (filters: FilterType[]) => void;
   availableSkills: string[];
+  availableStatuses?: string[];
+  availableTags?: string[];
+  customFieldOptions?: Array<{ key: string; label: string; values: string[] }>;
 }
 
 interface FilterButtonProps {
@@ -53,7 +56,14 @@ const FilterButton: React.FC<FilterButtonProps> = ({
   );
 };
 
-const RosterFilters: React.FC<RosterFiltersProps> = ({ activeFilters, onFilterChange, availableSkills }) => {
+const RosterFilters: React.FC<RosterFiltersProps> = ({
+  activeFilters,
+  onFilterChange,
+  availableSkills,
+  availableStatuses = [],
+  availableTags = [],
+  customFieldOptions = []
+}) => {
   const toggleFilter = (filterType: FilterType) => {
     if (filterType === 'all') {
       onFilterChange([]);
@@ -229,6 +239,75 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({ activeFilters, onFilterCh
             ))}
           </div>
         </div>
+
+        {availableStatuses.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium text-gray-600">Status:</span>
+            <select
+              className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+              value=""
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                const token = `status:${value}`;
+                if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
+              }}
+            >
+              <option value="">Select status...</option>
+              {availableStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {availableTags.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium text-gray-600">Tags:</span>
+            <select
+              className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+              value=""
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                const token = `tag:${value}`;
+                if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
+              }}
+            >
+              <option value="">Select tag...</option>
+              {availableTags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {customFieldOptions.map((field) => (
+          <div className="flex items-center gap-1" key={field.key}>
+            <span className="text-sm font-medium text-gray-600">{field.label}:</span>
+            <select
+              className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+              value=""
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                const token = `cf:${field.key}:${value}`;
+                if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
+              }}
+            >
+              <option value="">Select...</option>
+              {field.values.map((value) => (
+                <option key={`${field.key}-${value}`} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
       </div>
 
       {hasActiveFilters && (

@@ -200,14 +200,19 @@ const Navbar: React.FC = () => {
 
     // Personal accounts navigation
     if (user?.accountType === 'personal') {
+      const now = new Date();
+      const cutoff = new Date(Date.UTC(now.getUTCFullYear(), 8, 15, 0, 0, 0)); // Sep 15
+      const canDiscoverCamps = !(user as any)?.isShiftsOnlyMember || now >= cutoff;
       const items = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
         { label: 'My Tasks', path: '/tasks', icon: <Task size={18} /> },
         { label: 'My Shifts', path: '/my-shifts', icon: <Calendar size={18} /> },
-        { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> },
         { label: 'Principles', path: '/principles', icon: <Book size={18} /> },
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
       ];
+      if (canDiscoverCamps) {
+        items.splice(3, 0, { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> });
+      }
       if (user?.isSystemAdmin) {
         items.push({ label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> });
       }

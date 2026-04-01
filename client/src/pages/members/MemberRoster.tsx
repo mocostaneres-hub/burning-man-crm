@@ -214,7 +214,7 @@ const MemberRoster: React.FC = () => {
   const [newRosterName, setNewRosterName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
-  const showAddMemberTile = false;
+  const showAddMemberTile = true;
   // Camp Lead role management
   const [campLeadConfirmModal, setCampLeadConfirmModal] = useState<{
     isOpen: boolean;
@@ -230,6 +230,9 @@ const MemberRoster: React.FC = () => {
     receiptSubject: '',
     receiptBody: ''
   });
+  const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
+  const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
+  const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
   const rosterTableScrollRef = useRef<HTMLDivElement | null>(null);
   const [rosterMaxScrollLeft, setRosterMaxScrollLeft] = useState(0);
   const [rosterScrollLeft, setRosterScrollLeft] = useState(0);
@@ -614,10 +617,30 @@ const MemberRoster: React.FC = () => {
             memberId = memberEntry.member?.toString() || null;
           }
           
+          const memberData = memberEntry.member || {};
+          const fallbackName = memberData.name || '';
+          const [fallbackFirstName, ...fallbackRest] = fallbackName.split(' ').filter(Boolean);
+          const fallbackLastName = fallbackRest.join(' ');
+          const fallbackUser = {
+            _id: memberData.user || memberData._id || memberId,
+            firstName: fallbackFirstName || memberData.firstName || '',
+            lastName: fallbackLastName || memberData.lastName || '',
+            email: memberData.email || '',
+            playaName: memberData.playaName || '',
+            city: memberData.city || '',
+            yearsBurned: memberData.yearsBurned || 0,
+            skills: memberData.skills || [],
+            hasTicket: memberData.hasTicket,
+            hasVehiclePass: memberData.hasVehiclePass,
+            interestedInEAP: memberData.interestedInEAP,
+            interestedInStrike: memberData.interestedInStrike,
+            profilePhoto: memberData.profilePhoto || ''
+          };
+
           return {
             _id: memberId, // The member ID (handle both object and string)
             member: memberEntry.member, // The full member object with nested user data
-            user: memberEntry.member?.user,  // The populated user data from the backend
+            user: memberEntry.member?.user || fallbackUser,  // The populated user data from the backend
             duesPaid: duesPaid,
             duesStatus: normalizedDuesStatus,
             duesInstructedAt: memberEntry.duesInstructedAt || null,
@@ -627,7 +650,10 @@ const MemberRoster: React.FC = () => {
             addedAt: memberEntry.addedAt,
             addedBy: memberEntry.addedBy,
             rosterStatus: memberEntry.status || 'active',
-            overrides: memberEntry.overrides || {} // Roster-specific overrides
+            overrides: memberEntry.overrides || {}, // Roster-specific overrides
+            status: memberData.status || memberEntry.status || 'active',
+            tags: memberData.tags || [],
+            customFieldValues: memberData.customFieldValues || {}
           };
         })
         .filter((member: any) => member._id); // Filter out any members without a valid ID
@@ -648,6 +674,17 @@ const MemberRoster: React.FC = () => {
     }
   }, [campId]);
 
+  const fetchCustomFields = useCallback(async () => {
+    if (!campId) return;
+    try {
+      const response = await api.getRosterCustomFields(campId);
+      setCustomFields((response?.customFields || []) as any);
+    } catch (err) {
+      console.error('Failed to load custom fields:', err);
+      setCustomFields([]);
+    }
+  }, [campId]);
+
   useEffect(() => {
     // Fetch camp data for:
     // 1. Camp accounts (accountType === 'camp')
@@ -664,6 +701,12 @@ const MemberRoster: React.FC = () => {
     }
   }, [campId, fetchMembers]);
 
+  useEffect(() => {
+    if (campId) {
+      fetchCustomFields();
+    }
+  }, [campId, fetchCustomFields]);
+
   // Extract all unique skills from members
   const availableSkills = useMemo(() => {
     const allSkills = new Set<string>();
@@ -675,6 +718,30 @@ const MemberRoster: React.FC = () => {
     });
     return Array.from(allSkills).sort();
   }, [members]);
+
+  const availableStatuses = useMemo(
+    () => [...new Set(members.map((member) => (member.status || member.rosterStatus || '').toString()).filter(Boolean))],
+    [members]
+  );
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    members.forEach((member) => (member.tags || []).forEach((tag) => tagSet.add(String(tag))));
+    return [...tagSet];
+  }, [members]);
+
+  const customFieldFilterOptions = useMemo(
+    () => customFields.map((field) => {
+      const values = new Set<string>();
+      members.forEach((member) => {
+        const raw = (member.customFieldValues || {})[field.key];
+        if (raw === undefined || raw === null || raw === '') return;
+        values.add(String(raw));
+      });
+      return { key: field.key, label: field.label, values: [...values] };
+    }),
+    [customFields, members]
+  );
 
 
   const handleFilterChange = (filters: FilterType[]) => {
@@ -1117,6 +1184,23 @@ const MemberRoster: React.FC = () => {
             if (!user?.yearsBurned || user.yearsBurned === 0) return false;
             break;
           default:
+            if (filter.startsWith('status:')) {
+              const targetStatus = filter.replace('status:', '');
+              const memberStatus = (member.status || member.rosterStatus || '').toString();
+              if (memberStatus !== targetStatus) return false;
+              break;
+            }
+            if (filter.startsWith('tag:')) {
+              const targetTag = filter.replace('tag:', '');
+              if (!(member.tags || []).includes(targetTag)) return false;
+              break;
+            }
+            if (filter.startsWith('cf:')) {
+              const [, key, value] = filter.split(':');
+              const fieldValue = (member.customFieldValues || {})[key];
+              if (String(fieldValue) !== value) return false;
+              break;
+            }
             // Check if it's a skill filter
             if (user?.skills && Array.isArray(user.skills)) {
               if (!user.skills.includes(filter)) return false;
@@ -1238,6 +1322,16 @@ const MemberRoster: React.FC = () => {
               Dues Emails
             </Button>
           )}
+          {canEdit && (
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setCustomFieldsModalOpen(true)}
+              title="Configure roster custom fields."
+            >
+              Custom Fields
+            </Button>
+          )}
 
           {/* Archive button - Only for admins/leads */}
           {canEdit && hasActiveRoster && (
@@ -1294,7 +1388,7 @@ const MemberRoster: React.FC = () => {
       )}
 
       {/* Metrics Panel - Only for admins/leads */}
-      {canViewMetrics && <MetricsPanel members={filteredMembers} />}
+      {canViewMetrics && <MetricsPanel members={filteredMembers} customFields={customFields} />}
 
       {/* Filters - Only for admins/leads */}
       {canUseFilters && (
@@ -1302,6 +1396,9 @@ const MemberRoster: React.FC = () => {
           activeFilters={activeFilters}
           onFilterChange={handleFilterChange}
           availableSkills={availableSkills}
+          availableStatuses={availableStatuses}
+          availableTags={availableTags}
+          customFieldOptions={customFieldFilterOptions}
         />
       )}
 
@@ -2584,6 +2681,7 @@ const MemberRoster: React.FC = () => {
         isOpen={importRosterModalOpen}
         onClose={() => setImportRosterModalOpen(false)}
         campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
+        customFields={customFields}
       />
 
       {/* Camp Lead Confirmation Modal */}
@@ -2664,8 +2762,102 @@ const MemberRoster: React.FC = () => {
           onClose={() => setAddMemberModalOpen(false)}
           rosterId={rosterId}
           onMemberAdded={fetchMembers}
+          customFields={customFields}
         />
       )}
+
+      <Modal
+        isOpen={customFieldsModalOpen}
+        onClose={() => !customFieldsSaving && setCustomFieldsModalOpen(false)}
+        title="Roster Custom Fields"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Define up to 5 custom fields for this camp roster.</p>
+          {customFields.map((field, index) => (
+            <div key={field.key} className="grid grid-cols-12 gap-2 items-center">
+              <Input
+                label=""
+                value={field.label}
+                onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, label: e.target.value } : f))}
+                className="col-span-5"
+              />
+              <select
+                className="col-span-3 border border-gray-300 rounded px-2 py-2"
+                value={field.type}
+                onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, type: e.target.value as any } : f))}
+              >
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="dropdown">Dropdown</option>
+                <option value="checkbox">Checkbox</option>
+              </select>
+              <Input
+                label=""
+                value={field.key}
+                onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, key: e.target.value } : f))}
+                className="col-span-3"
+              />
+              <button
+                className="col-span-1 text-red-600 text-sm"
+                onClick={() => setCustomFields((prev) => prev.filter((_, i) => i !== index))}
+              >
+                ✕
+              </button>
+              {field.type === 'dropdown' && (
+                <div className="col-span-12">
+                  <Input
+                    label=""
+                    value={(field.options || []).join(', ')}
+                    onChange={(e) =>
+                      setCustomFields((prev) =>
+                        prev.map((f, i) =>
+                          i === index
+                            ? { ...f, options: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }
+                            : f
+                        )
+                      )
+                    }
+                    placeholder="Dropdown options separated by commas"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+          <div className="flex justify-between">
+            <Button
+              variant="outline"
+              disabled={customFields.length >= 5}
+              onClick={() =>
+                setCustomFields((prev) => [
+                  ...prev,
+                  { key: `field_${prev.length + 1}`, label: `Field ${prev.length + 1}`, type: 'text', options: [] }
+                ] as any)
+              }
+            >
+              Add Field
+            </Button>
+            <Button
+              variant="primary"
+              disabled={customFieldsSaving}
+              onClick={async () => {
+                if (!campId) return;
+                try {
+                  setCustomFieldsSaving(true);
+                  await api.updateRosterCustomFields(campId, customFields as any);
+                  alert('Custom fields updated');
+                  setCustomFieldsModalOpen(false);
+                } catch (err: any) {
+                  alert(err?.response?.data?.message || 'Failed to save custom fields');
+                } finally {
+                  setCustomFieldsSaving(false);
+                }
+              }}
+            >
+              {customFieldsSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Camp-level Dues Template Defaults */}
       <Modal

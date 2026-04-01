@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Modal, Button } from '../ui';
 import { Upload, Loader2, X } from 'lucide-react';
 import api from '../../services/api';
@@ -7,46 +7,23 @@ interface ImportRosterModalProps {
   isOpen: boolean;
   onClose: () => void;
   campId?: string;
+  customFields?: Array<{ key: string; label: string; type: string }>;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const parseEmailsFromCsv = (rawText: string): string[] => {
-  const normalized = rawText.replace(/\r/g, '\n');
-  const tokens = normalized
-    .split(/[\n,;\t ]+/)
-    .map((value) => value.replace(/^["']+|["']+$/g, '').trim().toLowerCase())
-    .filter(Boolean);
-
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const token of tokens) {
-    if (!seen.has(token)) {
-      deduped.push(token);
-      seen.add(token);
-    }
-  }
-
-  return deduped;
-};
-
-const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, campId }) => {
+const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, campId, customFields = [] }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [parsedEmails, setParsedEmails] = useState<string[]>([]);
-  const [invalidEmails, setInvalidEmails] = useState<string[]>([]);
+  const [preview, setPreview] = useState<any | null>(null);
+  const [csvColumns, setCsvColumns] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const validEmails = useMemo(
-    () => parsedEmails.filter((email) => EMAIL_REGEX.test(email)),
-    [parsedEmails]
-  );
-
   const resetState = () => {
     setSelectedFile(null);
-    setParsedEmails([]);
-    setInvalidEmails([]);
+    setPreview(null);
+    setCsvColumns([]);
+    setMapping({});
     setLoading(false);
     setError(null);
     setSuccess(null);
@@ -64,44 +41,51 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
 
     if (!file) {
       setSelectedFile(null);
-      setParsedEmails([]);
-      setInvalidEmails([]);
+      setPreview(null);
       return;
     }
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
       setError('Please upload a .csv file.');
       setSelectedFile(null);
-      setParsedEmails([]);
-      setInvalidEmails([]);
+      setPreview(null);
       return;
     }
-
+    setSelectedFile(file);
+    setPreview(null);
     try {
-      const content = await file.text();
-      const allEmails = parseEmailsFromCsv(content);
-      const invalid = allEmails.filter((email) => !EMAIL_REGEX.test(email));
-
-      setSelectedFile(file);
-      setParsedEmails(allEmails);
-      setInvalidEmails(invalid);
-    } catch (readError) {
-      console.error('Error reading CSV file:', readError);
-      setError('Could not read the CSV file. Please try again.');
-      setSelectedFile(null);
-      setParsedEmails([]);
-      setInvalidEmails([]);
+      const text = await file.text();
+      const headerLine = text.split(/\r?\n/).find((line) => line.trim().length > 0) || '';
+      const columns = headerLine.split(',').map((c) => c.trim().replace(/^"|"$/g, '')).filter(Boolean);
+      setCsvColumns(columns);
+      const initialMapping: Record<string, string> = {};
+      const matchColumn = (keys: string[]) =>
+        columns.find((c) => keys.includes(c.toLowerCase().replace(/\s+/g, '_')));
+      initialMapping.name = matchColumn(['name', 'full_name']) || '';
+      initialMapping.email = matchColumn(['email', 'email_address']) || '';
+      initialMapping.phone = matchColumn(['phone', 'phone_number']) || '';
+      initialMapping.role = matchColumn(['role']) || '';
+      initialMapping.tags = matchColumn(['tags']) || '';
+      initialMapping.playa_name = matchColumn(['playa_name', 'playaname']) || '';
+      customFields.forEach((field) => {
+        const byKey = matchColumn([field.key.toLowerCase()]);
+        const byLabel = matchColumn([field.label.toLowerCase().replace(/\s+/g, '_')]);
+        initialMapping[`cf_${field.key}`] = byKey || byLabel || '';
+      });
+      setMapping(initialMapping);
+    } catch (e) {
+      setCsvColumns([]);
+      setMapping({});
     }
   };
 
-  const handleImport = async () => {
+  const handlePreview = async () => {
     if (!campId) {
       setError('Camp ID is required');
       return;
     }
-
-    if (validEmails.length === 0) {
-      setError('No valid email addresses were found in the CSV file.');
+    if (!selectedFile) {
+      setError('Please select a CSV file first.');
       return;
     }
 
@@ -110,22 +94,41 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       setError(null);
       setSuccess(null);
 
-      const response = await api.sendInvites({
-        recipients: validEmails,
-        method: 'email',
-        campId
+      const response = await api.importMembersCsv({
+        file: selectedFile,
+        campId,
+        confirm: false
+        ,
+        mapping
       });
+      setPreview(response);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to generate CSV preview');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const summary = response?.summary || { sent: 0, failed: 0 };
-      const invalidCount = invalidEmails.length;
-      const duplicateOrSendFailures = summary.failed || 0;
-
+  const handleConfirmImport = async () => {
+    if (!campId || !selectedFile) {
+      setError('Camp ID and file are required');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.importMembersCsv({
+        file: selectedFile,
+        campId,
+        confirm: true,
+        mapping
+      });
       setSuccess(
-        `Import complete: ${summary.sent} invites sent, ${invalidCount} invalid emails, ${duplicateOrSendFailures} skipped/failed.`
+        `Import complete: ${response.createdCount || 0} created, ${response.skippedCount || 0} skipped, ${response.invalidCount || 0} invalid.`
       );
     } catch (err: any) {
-      console.error('Error importing roster CSV:', err);
-      setError(err.response?.data?.message || 'Failed to import roster CSV');
+      setError(err.response?.data?.message || 'Failed to import CSV roster');
     } finally {
       setLoading(false);
     }
@@ -161,30 +164,73 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
               className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white hover:file:bg-blue-700"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Include email addresses in one column or multiple columns. One email per cell works best.
+              Required columns: <strong>name</strong>, <strong>email</strong>. Optional: phone, role, tags, playa_name.
             </p>
             <p className="text-sm text-gray-700 mt-3">
-              Once you submit your file, each email address will receive an invitation to join your camp. You&apos;ll be notified of each application, and you can review them in your Applications section and move them to your roster.
+              CSV import is roster creation only. No invites or emails are sent from this flow.
             </p>
           </div>
 
-          {selectedFile && (
+          {selectedFile && csvColumns.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Column Mapping</h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Required: name, email. Optional fields can be mapped as needed.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  { key: 'name', label: 'Name (required)' },
+                  { key: 'email', label: 'Email (required)' },
+                  { key: 'phone', label: 'Phone' },
+                  { key: 'role', label: 'Role' },
+                  { key: 'tags', label: 'Tags' },
+                  { key: 'playa_name', label: 'Playa Name' }
+                ].map((field) => (
+                  <label key={field.key} className="text-xs text-gray-700">
+                    <span className="block mb-1">{field.label}</span>
+                    <select
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                      value={mapping[field.key] || ''}
+                      onChange={(e) => setMapping((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    >
+                      <option value="">-- Unmapped --</option>
+                      {csvColumns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                {customFields.map((field) => (
+                  <label key={field.key} className="text-xs text-gray-700">
+                    <span className="block mb-1">{field.label} (custom)</span>
+                    <select
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                      value={mapping[`cf_${field.key}`] || ''}
+                      onChange={(e) => setMapping((prev) => ({ ...prev, [`cf_${field.key}`]: e.target.value }))}
+                    >
+                      <option value="">-- Unmapped --</option>
+                      {csvColumns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedFile && preview && (
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-center gap-2 text-sm text-gray-700 mb-2">
                 <Upload className="w-4 h-4 text-gray-500" />
                 {selectedFile.name}
               </div>
               <div className="text-sm text-gray-700">
-                Parsed: <span className="font-semibold">{parsedEmails.length}</span> entries | Valid:{' '}
-                <span className="font-semibold text-green-700">{validEmails.length}</span> | Invalid:{' '}
-                <span className="font-semibold text-red-700">{invalidEmails.length}</span>
+                Parsed: <span className="font-semibold">{preview?.summary?.totalRows || 0}</span> rows | To create:{' '}
+                <span className="font-semibold text-green-700">{preview?.summary?.toCreate || 0}</span> | Invalid:{' '}
+                <span className="font-semibold text-red-700">{preview?.summary?.invalid || 0}</span> | Skipped:{' '}
+                <span className="font-semibold text-orange-700">{preview?.summary?.skipped || 0}</span>
               </div>
-              {invalidEmails.length > 0 && (
-                <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 max-h-24 overflow-auto">
-                  Invalid emails: {invalidEmails.slice(0, 20).join(', ')}
-                  {invalidEmails.length > 20 ? ' ...' : ''}
-                </div>
-              )}
             </div>
           )}
 
@@ -204,24 +250,25 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
             <Button variant="secondary" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleImport}
-              disabled={loading || validEmails.length === 0}
-              className="flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />
-                  Send Bulk Invites
-                </>
-              )}
-            </Button>
+            {!preview ? (
+              <Button
+                variant="primary"
+                onClick={handlePreview}
+                disabled={loading || !selectedFile}
+                className="flex items-center gap-2"
+              >
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : <><Upload className="w-4 h-4" />Preview Import</>}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handleConfirmImport}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Importing...</> : <><Upload className="w-4 h-4" />Confirm Import</>}
+              </Button>
+            )}
           </div>
         </div>
       </div>

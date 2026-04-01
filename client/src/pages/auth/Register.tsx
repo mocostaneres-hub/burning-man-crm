@@ -113,9 +113,13 @@ const Register: React.FC = () => {
       const pendingInvite = localStorage.getItem('pendingInvite');
       if (pendingInvite) {
         try {
-          const { campSlug, token } = JSON.parse(pendingInvite);
+          const { campSlug, token, mode } = JSON.parse(pendingInvite);
           if (campSlug && token) {
-            navigate(`/apply?invite_token=${token}`, { replace: true });
+            if (mode === 'shifts_only') {
+              navigate(`/onboarding/shifts-only?invite_token=${token}`, { replace: true });
+            } else {
+              navigate(`/apply?invite_token=${token}`, { replace: true });
+            }
             return;
           }
         } catch (err) {
@@ -190,10 +194,13 @@ const Register: React.FC = () => {
       const pendingInviteAfterSignup = localStorage.getItem('pendingInvite');
       if (pendingInviteAfterSignup) {
         try {
-          const { campSlug, token } = JSON.parse(pendingInviteAfterSignup);
-          console.log('🎟️ [Register] Redirecting to camp profile with invite:', { campSlug, token });
-          // Don't clear the invite yet - we'll need it for the profile completion modal
-          navigate(`/apply?invite_token=${token}`, { replace: true });
+          const { campSlug, token, mode } = JSON.parse(pendingInviteAfterSignup);
+          console.log('🎟️ [Register] Redirecting with invite:', { campSlug, token, mode });
+          if (mode === 'shifts_only') {
+            navigate(`/onboarding/shifts-only?invite_token=${token}`, { replace: true });
+          } else {
+            navigate(`/apply?invite_token=${token}`, { replace: true });
+          }
           return;
         } catch (err) {
           console.error('❌ [Register] Error parsing pending invite:', err);

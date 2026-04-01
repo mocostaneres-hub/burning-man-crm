@@ -92,6 +92,7 @@ const VolunteerShifts: React.FC = () => {
     email: string;
     isLead: boolean;
   }>>([]);
+  const [rosterOnlyMemberCount, setRosterOnlyMemberCount] = useState(0);
 
   // Check if user has admin/lead access (including Camp Leads)
   const isCampContext = user?.accountType === 'camp' 
@@ -199,7 +200,20 @@ const VolunteerShifts: React.FC = () => {
 
       if (!campId) {
         setRosterMembers([]);
+        setRosterOnlyMemberCount(0);
         return;
+      }
+
+      try {
+        const roster = await api.get(`/rosters/active?campId=${campId}`);
+        const count = (roster?.members || []).filter((entry: any) => {
+          const member = entry?.member;
+          const status = (member?.status || '').toString().toLowerCase();
+          return status === 'roster_only';
+        }).length;
+        setRosterOnlyMemberCount(count);
+      } catch (_error) {
+        setRosterOnlyMemberCount(0);
       }
 
       const response = await api.getCampMembers(campId.toString());
@@ -217,6 +231,7 @@ const VolunteerShifts: React.FC = () => {
     } catch (error) {
       console.error('Error loading roster members:', error);
       setRosterMembers([]);
+      setRosterOnlyMemberCount(0);
     }
   }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
 
@@ -1437,6 +1452,12 @@ const VolunteerShifts: React.FC = () => {
                   <div className="text-sm text-gray-600 mb-2">
                     Selected: {shift.selectedUserIds.length} / {rosterMembers.length}
                   </div>
+                  {rosterOnlyMemberCount > 0 && (
+                    <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      {rosterOnlyMemberCount} roster member(s) are in <strong>roster-only</strong> status and do not yet have user accounts.
+                      Use the Events invite flow to invite them first before assigning by person.
+                    </div>
+                  )}
                   <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
                     {rosterMembers.map((member) => {
                       const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;

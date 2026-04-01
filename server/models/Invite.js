@@ -35,6 +35,22 @@ const inviteSchema = new mongoose.Schema({
     enum: ['pending', 'sent', 'applied', 'expired'],
     default: 'pending'
   },
+  inviteType: {
+    type: String,
+    enum: ['standard', 'shifts_only'],
+    default: 'standard'
+  },
+  memberId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Member',
+    required: false,
+    index: true
+  },
+  signupSource: {
+    type: String,
+    enum: ['standard_invite', 'shifts_only_invite'],
+    default: 'standard_invite'
+  },
   
   // Secure token for redemption
   token: {

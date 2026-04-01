@@ -5,6 +5,9 @@ const { normalizeEmail } = require('../utils/emailUtils');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
+const ShiftAssignment = require('../models/ShiftAssignment');
+const ShiftSignup = require('../models/ShiftSignup');
+const Event = require('../models/Event');
 const { renderTemplate } = require('../utils/renderTemplate');
 const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 const { sendDuesEmail } = require('../services/emailService');
@@ -827,35 +830,39 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
       });
     }
     
-    // Find and update the member's application status to withdrawn (allows re-application)
-    if (member) {
-      console.log('🔄 [Roster Removal] Updating member and application status to "withdrawn"');
-      
-      // Update the member record to withdrawn status
-      await db.updateMember(memberId, { 
-        status: 'withdrawn',
-        reviewedAt: new Date(),
-        reviewedBy: req.user._id,
-        reviewNotes: 'Removed from active roster - eligible to reapply'
-      });
-      
-      // Also update the corresponding application record to withdrawn
-      const application = await db.findMemberApplication({ 
-        applicant: member.user, 
-        camp: camp._id 
+    // Release shift assignments/signups and remove member record.
+    if (member?.user) {
+      const userId = member.user.toString();
+      await ShiftAssignment.deleteMany({ campId: camp._id, userId });
+      await ShiftSignup.deleteMany({ campId: camp._id, userId });
+      await Event.updateMany(
+        { campId: camp._id },
+        { $pull: { 'shifts.$[].memberIds': member.user } }
+      );
+
+      const application = await db.findMemberApplication({
+        applicant: member.user,
+        camp: camp._id
       });
       if (application) {
         await db.updateMemberApplication(application._id, {
           status: 'withdrawn',
           reviewedAt: new Date(),
           reviewedBy: req.user._id,
-          reviewNotes: 'Removed from active roster - eligible to reapply'
+          reviewNotes: 'Removed from roster'
         });
-        console.log('✅ [Roster Removal] Application status updated to "withdrawn":', application._id);
       }
     }
 
-    res.json({ message: 'Member removed from roster and can now reapply' });
+    await db.deleteMembers({ _id: memberId });
+    await recordActivity('CAMP', camp._id, req.user._id, 'ENTITY_REMOVED', {
+      field: 'rosterMember',
+      memberId,
+      is_shifts_only: member?.isShiftsOnly === true,
+      signup_source: member?.signupSource || null
+    });
+
+    res.json({ message: 'Member removed from roster and shift allocations released' });
   } catch (error) {
     console.error('Remove member from roster error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -898,59 +905,41 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
-    // Check if user with this email already exists (normalized for global uniqueness)
+    // Shifts-only roster-first: create/update Member records without creating user accounts.
     const normalizedMemberEmail = normalizeEmail(memberData.email);
-    let user = await db.findUser({ email: normalizedMemberEmail });
-    
-    if (!user) {
-      // Create new user account
-      const newUser = {
-        firstName: memberData.firstName,
-        lastName: memberData.lastName,
-        email: normalizedMemberEmail,
-        password: 'TempPass123!', // Temporary password - user should reset
-        accountType: 'personal',
-        playaName: memberData.playaName || '',
-        city: memberData.city || '',
-        yearsBurned: memberData.yearsBurned || 0,
-        hasTicket: memberData.hasTicket,
-        hasVehiclePass: memberData.hasVehiclePass,
-        arrivalDate: memberData.arrivalDate || null,
-        departureDate: memberData.departureDate || null,
-        skills: memberData.skills || [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      user = await db.createUser(newUser);
-    }
+    let memberRecord = await db.findMember({ camp: camp._id, email: normalizedMemberEmail });
+    const mergedName = `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim();
+    const customFieldValues = memberData.customFieldValues && typeof memberData.customFieldValues === 'object'
+      ? memberData.customFieldValues
+      : {};
 
-    // Reuse existing Member record if one already exists for this user+camp.
-    // Prevents duplicate-key failures from unique index { camp, user }.
-    let memberRecord = await db.findMember({ user: user._id, camp: camp._id });
     if (!memberRecord) {
-      const newMember = {
-        user: user._id,
+      memberRecord = await db.createMember({
         camp: camp._id,
-        roster: rosterId,
-        addedAt: new Date(),
-        addedBy: req.user._id,
-        // Member model uses active/inactive lifecycle states.
-        status: 'active',
+        name: mergedName,
+        email: normalizedMemberEmail,
+        playaName: memberData.playaName || '',
+        phone: memberData.phone || '',
+        role: memberData.role === 'lead' ? 'camp-lead' : 'member',
+        tags: Array.isArray(memberData.tags) ? memberData.tags : [],
+        skills: Array.isArray(memberData.skills) ? memberData.skills : [],
+        customFieldValues,
+        status: 'roster_only',
+        isShiftsOnly: true,
+        signupSource: 'manual',
         dues: {
           paid: memberData.duesPaid === true,
           paidAt: memberData.duesPaid === true ? new Date() : null
         }
-      };
-      memberRecord = await db.createMember(newMember);
+      });
     } else {
-      // Ensure reused record is active/approved when manually re-added.
-      await db.updateMember(memberRecord._id, {
-        status: 'active',
-        dues: {
-          paid: memberData.duesPaid === true,
-          paidAt: memberData.duesPaid === true ? new Date() : null
-        }
+      memberRecord = await db.updateMember(memberRecord._id, {
+        name: mergedName || memberRecord.name,
+        phone: memberData.phone || memberRecord.phone || '',
+        playaName: memberData.playaName || memberRecord.playaName || '',
+        tags: Array.isArray(memberData.tags) ? memberData.tags : (memberRecord.tags || []),
+        skills: Array.isArray(memberData.skills) ? memberData.skills : (memberRecord.skills || []),
+        customFieldValues: { ...(memberRecord.customFieldValues || {}), ...customFieldValues }
       });
     }
 
@@ -971,15 +960,10 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       { duesStatus: memberData.duesPaid === true ? DUES_STATUS.PAID : DUES_STATUS.UNPAID }
     );
 
-    // Auto-assign newly added roster users to open shifts for this camp.
-    await autoAssignRosterUserToOpenShifts({
-      campId: camp._id,
-      userId: user._id,
-      assignedBy: req.user._id
-    });
-    
-    // Log member addition for both MEMBER and CAMP
-    await recordActivity('MEMBER', user._id, req.user._id, 'RESOURCE_ASSIGNED', {
+    // Auto-assignment requires linked user account; skip for roster-only records.
+
+    // Log member addition for CAMP and member audit trail.
+    await recordActivity('MEMBER', memberRecord._id, req.user._id, 'RESOURCE_ASSIGNED', {
       field: 'roster',
       rosterId: rosterId,
       rosterName: roster.name,
@@ -993,18 +977,62 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       rosterId: rosterId,
       rosterName: roster.name,
       memberId: memberRecord._id,
-      memberName: `${user.firstName} ${user.lastName}`,
-      memberEmail: user.email
+      memberName: memberRecord.name || mergedName,
+      memberEmail: memberRecord.email
     });
 
     res.status(201).json({
       message: 'Member added successfully',
-      member: memberRecord,
-      user: user
+      member: memberRecord
     });
   } catch (error) {
     console.error('Add member to roster error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/rosters/:rosterId/members/:memberId
+// @desc    Edit a roster member (shifts-only fields)
+// @access  Private (Camp admins/leads only)
+router.put('/:rosterId/members/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId, 10) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+
+    const member = await db.findMember({ _id: memberId, camp: camp._id });
+    if (!member) return res.status(404).json({ message: 'Member not found' });
+
+    const updates = {};
+    if (req.body.name !== undefined) updates.name = String(req.body.name || '').trim();
+    if (req.body.phone !== undefined) updates.phone = String(req.body.phone || '').trim();
+    if (req.body.playaName !== undefined) updates.playaName = String(req.body.playaName || '').trim();
+    if (req.body.role !== undefined) updates.role = req.body.role === 'lead' ? 'camp-lead' : 'member';
+    if (req.body.tags !== undefined) updates.tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+    if (req.body.skills !== undefined) updates.skills = Array.isArray(req.body.skills) ? req.body.skills : [];
+    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (req.body.customFieldValues !== undefined && typeof req.body.customFieldValues === 'object') {
+      updates.customFieldValues = req.body.customFieldValues;
+    }
+
+    const updated = await db.updateMember(memberId, updates);
+    await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+      field: 'rosterMember',
+      memberId,
+      updatedFields: Object.keys(updates),
+      is_shifts_only: updated?.isShiftsOnly === true,
+      signup_source: updated?.signupSource || null
+    });
+    res.json({ message: 'Roster member updated successfully', member: updated });
+  } catch (error) {
+    console.error('Update roster member error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -2216,6 +2244,56 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
       message: 'Server error revoking Camp Lead role',
       error: error.message
     });
+  }
+});
+
+// @route   GET /api/rosters/custom-fields
+// @desc    Get camp roster custom field schema
+// @access  Private (Camp admins/leads)
+router.get('/custom-fields', authenticateToken, async (req, res) => {
+  try {
+    const campId = req.query.campId || await getUserCampId(req);
+    if (!campId) return res.status(400).json({ message: 'campId is required' });
+    const hasAccess = await canManageCamp(req, campId);
+    if (!hasAccess) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    const camp = await db.findCamp({ _id: campId });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+    res.json({ customFields: camp.rosterCustomFields || [] });
+  } catch (error) {
+    console.error('Get roster custom fields error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/rosters/custom-fields
+// @desc    Update camp roster custom field schema (max 5)
+// @access  Private (Camp admins/leads)
+router.put('/custom-fields', authenticateToken, async (req, res) => {
+  try {
+    const campId = req.body?.campId || req.query?.campId || await getUserCampId(req);
+    const customFields = Array.isArray(req.body?.customFields) ? req.body.customFields : [];
+    if (!campId) return res.status(400).json({ message: 'campId is required' });
+    if (customFields.length > 5) return res.status(400).json({ message: 'A maximum of 5 custom fields is allowed' });
+    const hasAccess = await canManageCamp(req, campId);
+    if (!hasAccess) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+
+    const sanitized = customFields.map((field, index) => ({
+      key: String(field.key || `field_${index + 1}`).trim(),
+      label: String(field.label || '').trim(),
+      type: field.type,
+      options: Array.isArray(field.options) ? field.options.map((o) => String(o).trim()).filter(Boolean) : []
+    }));
+
+    const camp = await db.updateCampById(campId, { rosterCustomFields: sanitized });
+    await recordActivity('CAMP', campId, req.user._id, 'PROFILE_UPDATE', {
+      field: 'rosterCustomFields',
+      count: sanitized.length,
+      is_shifts_only: true
+    });
+    res.json({ message: 'Custom fields updated', customFields: camp?.rosterCustomFields || sanitized });
+  } catch (error) {
+    console.error('Update roster custom fields error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

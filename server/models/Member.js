@@ -75,7 +75,54 @@ const memberSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false
+  },
+  // Shifts-only roster identity fields (can exist before user account creation)
+  name: {
+    type: String,
+    trim: true
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
+  playaName: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
+  tags: {
+    type: [String],
+    default: []
+  },
+  inviteToken: {
+    type: String,
+    default: null
+  },
+  invitedAt: {
+    type: Date,
+    default: null
+  },
+  joinedAt: {
+    type: Date,
+    default: null
+  },
+  isShiftsOnly: {
+    type: Boolean,
+    default: true
+  },
+  signupSource: {
+    type: String,
+    enum: ['shifts_only_invite', 'standard_invite', 'application', 'manual'],
+    default: 'manual'
+  },
+  customFieldValues: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   
   // Member info
@@ -86,7 +133,7 @@ const memberSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'inactive', 'suspended', 'rejected'],
+    enum: ['roster_only', 'invited', 'pending', 'active', 'inactive', 'suspended', 'rejected', 'withdrawn'],
     default: 'pending'
   },
   
@@ -235,7 +282,20 @@ const memberSchema = new mongoose.Schema({
 });
 
 // Indexes
-memberSchema.index({ camp: 1, user: 1 }, { unique: true });
+memberSchema.index(
+  { camp: 1, user: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { user: { $exists: true, $ne: null } }
+  }
+);
+memberSchema.index(
+  { camp: 1, email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { email: { $exists: true, $ne: null } }
+  }
+);
 memberSchema.index({ camp: 1, role: 1 });
 memberSchema.index({ camp: 1, status: 1 });
 memberSchema.index({ user: 1 });

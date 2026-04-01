@@ -1,11 +1,50 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const csv = require('csv-parser');
+const { Readable } = require('stream');
 const Member = require('../models/Member');
 const Camp = require('../models/Camp');
+const { recordActivity } = require('../services/activityLogger');
 const { authenticateToken, requireCampMember, requireProjectLead } = require('../middleware/auth');
-const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+const normalizeCsvEmail = (value = '') => String(value || '').trim().toLowerCase();
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const resolveCsvCampId = async (req) => {
+  const requestedCampId = req.body?.campId || req.query?.campId;
+  if (requestedCampId) {
+    const hasAccess = await canManageCamp(req, requestedCampId);
+    return hasAccess ? requestedCampId : null;
+  }
+  if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
+    return getUserCampId(req);
+  }
+  if (req.user.isCampLead && req.user.campLeadCampId) {
+    const hasAccess = await canManageCamp(req, req.user.campLeadCampId);
+    return hasAccess ? req.user.campLeadCampId : null;
+  }
+  return null;
+};
+
+const parseCsvRows = async (fileBuffer) => {
+  const rows = [];
+  const headers = [];
+  await new Promise((resolve, reject) => {
+    const stream = Readable.from(fileBuffer);
+    stream
+      .pipe(csv())
+      .on('headers', (h) => headers.push(...h))
+      .on('data', (data) => rows.push(data))
+      .on('end', resolve)
+      .on('error', reject);
+  });
+  return { rows, headers };
+};
 
 // @route   POST /api/members/apply
 // @desc    Apply to join a camp
@@ -361,6 +400,195 @@ router.get('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get member error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/members/import-csv
+// @desc    Import shifts-only roster members from CSV (add-only, preview/confirm)
+// @access  Private (Camp admins and Camp Leads)
+router.post('/import-csv', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const campId = await resolveCsvCampId(req);
+    if (!campId) {
+      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    }
+    const camp = await Camp.findById(campId).select('rosterCustomFields');
+    if (!camp) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    if (!req.file?.buffer) {
+      return res.status(400).json({ message: 'CSV file is required' });
+    }
+
+    const confirmImport = String(req.body?.confirm || '').toLowerCase() === 'true';
+    const mappingRaw = req.body?.mapping;
+    let mapping = {};
+    if (mappingRaw) {
+      try {
+        mapping = typeof mappingRaw === 'string' ? JSON.parse(mappingRaw) : mappingRaw;
+      } catch (_e) {
+        return res.status(400).json({ message: 'Invalid mapping payload' });
+      }
+    }
+
+    const { rows, headers } = await parseCsvRows(req.file.buffer);
+    const getColumn = (row, canonical, fallback) => {
+      const mapped = mapping?.[canonical];
+      const key = mapped || fallback;
+      return row?.[key] ?? '';
+    };
+
+    const seenCsvEmails = new Set();
+    const validCandidates = [];
+    const invalidRows = [];
+    const skippedRows = [];
+    const preview = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i] || {};
+      const name = String(getColumn(row, 'name', 'name')).trim();
+      const email = normalizeCsvEmail(getColumn(row, 'email', 'email'));
+      const phone = String(getColumn(row, 'phone', 'phone')).trim();
+      const role = String(getColumn(row, 'role', 'role')).trim();
+      const playaName = String(getColumn(row, 'playa_name', 'playa_name')).trim();
+      const tagsRaw = String(getColumn(row, 'tags', 'tags')).trim();
+      const tags = tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : [];
+      const customFieldValues = {};
+      for (const field of camp.rosterCustomFields || []) {
+        const mappedColumn = mapping?.[`cf_${field.key}`];
+        if (!mappedColumn) continue;
+        const rawValue = row?.[mappedColumn];
+        if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') continue;
+        if (field.type === 'number') {
+          const asNum = Number(rawValue);
+          if (!Number.isNaN(asNum)) customFieldValues[field.key] = asNum;
+        } else if (field.type === 'checkbox') {
+          const valueStr = String(rawValue).trim().toLowerCase();
+          customFieldValues[field.key] = ['true', 'yes', '1', 'on'].includes(valueStr);
+        } else if (field.type === 'dropdown' || field.type === 'text') {
+          customFieldValues[field.key] = String(rawValue).trim();
+        }
+      }
+
+      const rowNumber = i + 2; // include header row
+
+      if (!name || !email) {
+        invalidRows.push({ row: rowNumber, reason: 'missing_required_fields', name, email });
+        continue;
+      }
+      if (!isValidEmail(email)) {
+        invalidRows.push({ row: rowNumber, reason: 'invalid_email', name, email });
+        continue;
+      }
+      if (seenCsvEmails.has(email)) {
+        skippedRows.push({ row: rowNumber, reason: 'duplicate_in_csv', name, email });
+        continue;
+      }
+      seenCsvEmails.add(email);
+
+      validCandidates.push({
+        name,
+        email,
+        phone,
+        role: role || 'member',
+        playaName,
+        tags,
+        customFieldValues
+      });
+    }
+
+    const existing = await Member.find({
+      camp: campId,
+      email: { $in: validCandidates.map((c) => c.email) }
+    }).select('email');
+    const existingEmailSet = new Set((existing || []).map((m) => normalizeCsvEmail(m.email)));
+
+    const toCreate = [];
+    for (const candidate of validCandidates) {
+      if (existingEmailSet.has(candidate.email)) {
+        skippedRows.push({
+          reason: 'skipped_duplicate',
+          name: candidate.name,
+          email: candidate.email
+        });
+        continue;
+      }
+      toCreate.push(candidate);
+    }
+
+    for (const item of toCreate.slice(0, 10)) {
+      preview.push({
+        name: item.name,
+        email: item.email,
+        phone: item.phone || '',
+        role: item.role || 'member',
+        playaName: item.playaName || '',
+        tags: item.tags || [],
+        customFieldValues: item.customFieldValues || {}
+      });
+    }
+
+    if (!confirmImport) {
+      return res.json({
+        mode: 'preview',
+        headers,
+        preview,
+        summary: {
+          totalRows: rows.length,
+          validRows: validCandidates.length,
+          toCreate: toCreate.length,
+          invalid: invalidRows.length,
+          skipped: skippedRows.length
+        },
+        invalidRows: invalidRows.slice(0, 100),
+        skippedRows: skippedRows.slice(0, 100)
+      });
+    }
+
+    if (toCreate.length === 0) {
+      return res.json({
+        mode: 'confirm',
+        message: 'No new members to import',
+        createdCount: 0,
+        skippedCount: skippedRows.length,
+        invalidCount: invalidRows.length
+      });
+    }
+
+    const insertDocs = toCreate.map((item) => ({
+      camp: campId,
+      name: item.name,
+      email: item.email,
+      phone: item.phone || '',
+      playaName: item.playaName || '',
+      role: item.role === 'lead' ? 'camp-lead' : 'member',
+      tags: item.tags || [],
+        customFieldValues: item.customFieldValues || {},
+      status: 'roster_only',
+      isShiftsOnly: true,
+      signupSource: 'shifts_only_invite'
+    }));
+
+    const created = await Member.insertMany(insertDocs, { ordered: false });
+    await recordActivity('CAMP', campId, req.user._id, 'DATA_ACTION', {
+      field: 'rosterImport',
+      action: 'import_csv',
+      createdCount: created.length,
+      skippedCount: skippedRows.length,
+      invalidCount: invalidRows.length,
+      isShiftsOnlyCamp: true
+    });
+    return res.json({
+      mode: 'confirm',
+      message: 'CSV import completed',
+      createdCount: created.length,
+      skippedCount: skippedRows.length,
+      invalidCount: invalidRows.length
+    });
+  } catch (error) {
+    console.error('Import members CSV error:', error);
+    return res.status(500).json({ message: 'Failed to import CSV roster' });
   }
 });
 
