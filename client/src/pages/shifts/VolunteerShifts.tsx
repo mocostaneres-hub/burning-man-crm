@@ -718,35 +718,13 @@ const VolunteerShifts: React.FC = () => {
       {activeTab === 'main' && (
         <div className="space-y-6">
           <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-lato-bold text-custom-text mb-2">
-                  Volunteer Events & Shifts
-                </h2>
-                <p className="text-gray-600">
-                  Manage your camp's volunteer events and shifts. Create new events or edit existing ones.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                {hasRoster && (
-                  <Button
-                    variant="primary"
-                    onClick={() => setShowBulkInviteModal(true)}
-                    disabled={bulkInviteLoading || !hasAvailableShifts}
-                    className="flex items-center gap-2"
-                  >
-                    Invite Entire Roster to All Shifts
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateModal(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Event
-                </Button>
-              </div>
+            <div className="mb-6">
+              <h2 className="text-xl font-lato-bold text-custom-text mb-2">
+                Volunteer Events & Shifts
+              </h2>
+              <p className="text-gray-600">
+                Manage your camp's volunteer events and shifts. Create new events or edit existing ones.
+              </p>
             </div>
 
             {events.length === 0 ? (

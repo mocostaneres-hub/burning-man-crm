@@ -175,6 +175,36 @@ const DEFAULT_TEMPLATE_DATA = {
     textContent:
       'Hi {{user_name}}, it has been {{time_since_signup}} and your {{camp_name}} application is incomplete. Finish now: {{invite_link}}',
     variables: DEFAULT_TEMPLATE_VARIABLES
+  },
+  [EMAIL_TEMPLATE_KEYS.SHIFT_BULK_INVITE_ALL]: {
+    key: EMAIL_TEMPLATE_KEYS.SHIFT_BULK_INVITE_ALL,
+    name: 'Bulk Shift Invite (All Shifts)',
+    description: 'Sent to approved roster members when a camp invites the entire roster to sign up for available shifts.',
+    subject: '{{camp_name}} invited you to sign up for available shifts',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Camp Shifts Are Open</h1>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9;">
+          <div style="background: white; padding: 20px; border-radius: 8px;">
+            <p>{{camp_name}} has volunteer shifts available that could use your help.</p>
+            <p>Click below to browse open shifts and sign up:</p>
+            <div style="margin: 20px 0; text-align: center;">
+              <a href="{{invite_link}}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                View Shifts
+              </a>
+            </div>
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              You can always see your current and available shifts from the My Shifts page.
+            </p>
+          </div>
+        </div>
+      </div>
+    `,
+    textContent:
+      '{{camp_name}} has volunteer shifts available that could use your help. View and sign up for shifts: {{invite_link}}',
+    variables: DEFAULT_TEMPLATE_VARIABLES
   }
 };
 

@@ -17,6 +17,11 @@ const {
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { sendEmail } = require('../services/emailService');
+const { EMAIL_TEMPLATE_KEYS } = require('../constants/emailTemplateKeys');
+const {
+  getTemplateByKey,
+  renderTemplateString
+} = require('../services/emailTemplateService');
 
 // Test route to verify this file is being loaded
 router.get('/debug-test', (req, res) => {
@@ -435,30 +440,22 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
     );
 
     const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+    const camp = await db.findCamp({ _id: campId });
+    const campName = (camp && (camp.name || camp.campName)) || 'your camp';
     const shiftsUrl = `${clientUrl}/my-shifts`;
-    const subject = 'Camp invited you to sign up for available shifts';
-    const textBody = `Your camp has open volunteer shifts available.\n\nVisit your shifts page to view and sign up: ${shiftsUrl}`;
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Camp Shifts Are Open</h1>
-        </div>
-        <div style="padding: 20px; background: #f9f9f9;">
-          <div style="background: white; padding: 20px; border-radius: 8px;">
-            <p>Your camp has volunteer shifts available that could use your help.</p>
-            <p>Click below to browse open shifts and sign up:</p>
-            <div style="margin: 20px 0; text-align: center;">
-              <a href="${shiftsUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-                View Shifts
-              </a>
-            </div>
-            <p style="color: #666; font-size: 14px; margin-top: 20px;">
-              You can always see your current and available shifts from the My Shifts page.
-            </p>
-          </div>
-        </div>
-      </div>
-    `;
+
+    const template = await getTemplateByKey(EMAIL_TEMPLATE_KEYS.SHIFT_BULK_INVITE_ALL);
+    const templateData = {
+      camp_name: campName,
+      invite_link: shiftsUrl,
+      user_name: ''
+    };
+
+    const subject = renderTemplateString(template?.subject, templateData);
+    const htmlBody = renderTemplateString(template?.htmlContent, templateData);
+    const textBody =
+      renderTemplateString(template?.textContent, templateData) ||
+      `${campName} has open volunteer shifts available.\n\nVisit your shifts page to view and sign up: ${shiftsUrl}`;
 
     // Send one email per user
     for (const userId of userIds) {
