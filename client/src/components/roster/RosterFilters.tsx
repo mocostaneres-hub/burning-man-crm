@@ -64,6 +64,42 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
   availableTags = [],
   customFieldOptions = []
 }) => {
+  const prettifyStatus = (status: string) =>
+    status
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const getFilterChipLabel = (filter: FilterType): string => {
+    const key = String(filter);
+    const baseLabels: Record<string, string> = {
+      'dues-paid': 'Dues: Paid',
+      'dues-unpaid': 'Dues: Unpaid',
+      'dues-instructed': 'Dues: Instructed',
+      'without-tickets': 'Tickets: No',
+      'with-tickets': 'Tickets: Yes',
+      'without-vp': 'Vehicle Pass: No',
+      'with-vp': 'Vehicle Pass: Yes',
+      'early-arrival': 'Logistics: Early Arrival',
+      'late-departure': 'Logistics: Late Departure',
+      virgin: 'Experience: First-Year',
+      veteran: 'Experience: Veteran'
+    };
+
+    if (baseLabels[key]) return baseLabels[key];
+    if (key.startsWith('status:')) {
+      return `Status: ${prettifyStatus(key.replace('status:', ''))}`;
+    }
+    if (key.startsWith('tag:')) {
+      return `Tag: ${key.replace('tag:', '')}`;
+    }
+    if (key.startsWith('cf:')) {
+      const [, fieldKey, fieldValue] = key.split(':');
+      const label = customFieldOptions.find((field) => field.key === fieldKey)?.label || fieldKey;
+      return `${label}: ${fieldValue}`;
+    }
+    return `Skill: ${key}`;
+  };
+
   const toggleFilter = (filterType: FilterType) => {
     if (filterType === 'all') {
       onFilterChange([]);
@@ -171,14 +207,14 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
         <div className="flex gap-1 mr-2">
           <span className="text-sm font-medium text-gray-600 self-center">Logistics:</span>
           <FilterButton
-            label="EA"
+            label="Early Arrival"
             filterType="early-arrival"
             isActive={activeFilters.includes('early-arrival')}
             onClick={() => toggleFilter('early-arrival')}
             variant="primary"
           />
           <FilterButton
-            label="LD"
+            label="Late Departure"
             filterType="late-departure"
             isActive={activeFilters.includes('late-departure')}
             onClick={() => toggleFilter('late-departure')}
@@ -190,14 +226,14 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
         <div className="flex gap-1 mr-2">
           <span className="text-sm font-medium text-gray-600 self-center">Experience:</span>
           <FilterButton
-            label="🔥 Virgin"
+            label="First-Year"
             filterType="virgin"
             isActive={activeFilters.includes('virgin')}
             onClick={() => toggleFilter('virgin')}
             variant="warning"
           />
           <FilterButton
-            label="🔥 Veteran"
+            label="Veteran"
             filterType="veteran"
             isActive={activeFilters.includes('veteran')}
             onClick={() => toggleFilter('veteran')}
@@ -224,20 +260,6 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
               </option>
             ))}
           </select>
-          
-          {/* Active Skills Tags */}
-          <div className="flex flex-wrap gap-1">
-            {activeFilters.filter(filter => availableSkills.includes(filter)).map(skill => (
-              <span
-                key={skill}
-                className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full cursor-pointer hover:bg-blue-200"
-                onClick={() => onFilterChange(activeFilters.filter(f => f !== skill))}
-              >
-                {skill}
-                <X className="ml-1 w-3 h-3" />
-              </span>
-            ))}
-          </div>
         </div>
 
         {availableStatuses.length > 0 && (
@@ -312,9 +334,23 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
 
       {hasActiveFilters && (
         <div className="mt-3 p-2 bg-blue-50 rounded-md">
-          <p className="text-sm text-blue-800">
+          <p className="text-sm text-blue-800 mb-2">
             <strong>{activeFilters.length}</strong> filter{activeFilters.length > 1 ? 's' : ''} active
           </p>
+          <div className="flex flex-wrap gap-2">
+            {activeFilters.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => onFilterChange(activeFilters.filter((entry) => entry !== filter))}
+                className="inline-flex items-center rounded-full bg-white border border-blue-200 px-2 py-1 text-xs font-medium text-blue-900 hover:bg-blue-100"
+                title="Remove filter"
+              >
+                {getFilterChipLabel(filter)}
+                <X className="ml-1 w-3 h-3" />
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

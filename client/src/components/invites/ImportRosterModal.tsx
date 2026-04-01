@@ -97,8 +97,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       const response = await api.importMembersCsv({
         file: selectedFile,
         campId,
-        confirm: false
-        ,
+        confirm: false,
         mapping
       });
       setPreview(response);
@@ -167,7 +166,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
               Required columns: <strong>name</strong>, <strong>email</strong>. Optional: phone, role, tags, playa_name.
             </p>
             <p className="text-sm text-gray-700 mt-3">
-              CSV import is roster creation only. No invites or emails are sent from this flow.
+              CSV import creates roster-only members. Invites and account emails are only sent from the Events page invite flow.
             </p>
           </div>
 
@@ -175,7 +174,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Column Mapping</h3>
               <p className="text-xs text-gray-600 mb-3">
-                Required: name, email. Optional fields can be mapped as needed.
+                Map your CSV headers to roster fields. Name and Email are required for import.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {[
@@ -226,7 +225,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
                 {selectedFile.name}
               </div>
               <div className="text-sm text-gray-700">
-                Parsed: <span className="font-semibold">{preview?.summary?.totalRows || 0}</span> rows | To create:{' '}
+                Parsed: <span className="font-semibold">{preview?.summary?.totalRows || 0}</span> rows | New members:{' '}
                 <span className="font-semibold text-green-700">{preview?.summary?.toCreate || 0}</span> | Invalid:{' '}
                 <span className="font-semibold text-red-700">{preview?.summary?.invalid || 0}</span> | Skipped:{' '}
                 <span className="font-semibold text-orange-700">{preview?.summary?.skipped || 0}</span>
@@ -266,7 +265,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
                 disabled={loading}
                 className="flex items-center gap-2"
               >
-                {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Importing...</> : <><Upload className="w-4 h-4" />Confirm Import</>}
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Importing...</> : <><Upload className="w-4 h-4" />Create Roster Members</>}
               </Button>
             )}
           </div>

@@ -1291,7 +1291,7 @@ const MemberRoster: React.FC = () => {
               variant="outline"
               onClick={() => setImportRosterModalOpen(true)}
               className="flex items-center gap-2 text-purple-600 border-purple-600 hover:bg-purple-50"
-              title="Upload a CSV file of email addresses to send multiple invitations at once."
+              title="Upload a CSV to create roster-only members (no invites are sent here)."
             >
               <Upload className="w-4 h-4" />
               Import Roster
@@ -1327,7 +1327,7 @@ const MemberRoster: React.FC = () => {
               variant="outline"
               className="flex items-center gap-2"
               onClick={() => setCustomFieldsModalOpen(true)}
-              title="Configure roster custom fields."
+              title="Configure up to 5 custom fields used across this roster."
             >
               Custom Fields
             </Button>
@@ -2772,17 +2772,28 @@ const MemberRoster: React.FC = () => {
         title="Roster Custom Fields"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Define up to 5 custom fields for this camp roster.</p>
+          <p className="text-sm text-gray-600">
+            Define up to 5 custom fields for this roster. Field keys should be unique and use letters, numbers, or underscores.
+          </p>
+          {customFields.length > 0 && (
+            <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-gray-500">
+              <span className="col-span-5">Label</span>
+              <span className="col-span-3">Type</span>
+              <span className="col-span-3">Key</span>
+              <span className="col-span-1 text-center">Remove</span>
+            </div>
+          )}
           {customFields.map((field, index) => (
             <div key={field.key} className="grid grid-cols-12 gap-2 items-center">
-              <Input
-                label=""
+              <input
+                type="text"
                 value={field.label}
                 onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, label: e.target.value } : f))}
-                className="col-span-5"
+                className="col-span-5 border border-gray-300 rounded px-2 py-2 text-sm"
+                placeholder="Display label"
               />
               <select
-                className="col-span-3 border border-gray-300 rounded px-2 py-2"
+                className="col-span-3 border border-gray-300 rounded px-2 py-2 text-sm"
                 value={field.type}
                 onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, type: e.target.value as any } : f))}
               >
@@ -2791,22 +2802,32 @@ const MemberRoster: React.FC = () => {
                 <option value="dropdown">Dropdown</option>
                 <option value="checkbox">Checkbox</option>
               </select>
-              <Input
-                label=""
+              <input
+                type="text"
                 value={field.key}
-                onChange={(e) => setCustomFields((prev) => prev.map((f, i) => i === index ? { ...f, key: e.target.value } : f))}
-                className="col-span-3"
+                onChange={(e) =>
+                  setCustomFields((prev) =>
+                    prev.map((f, i) =>
+                      i === index
+                        ? { ...f, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }
+                        : f
+                    )
+                  )
+                }
+                className="col-span-3 border border-gray-300 rounded px-2 py-2 text-sm"
+                placeholder="field_key"
               />
               <button
                 className="col-span-1 text-red-600 text-sm"
                 onClick={() => setCustomFields((prev) => prev.filter((_, i) => i !== index))}
+                title="Remove field"
               >
                 ✕
               </button>
               {field.type === 'dropdown' && (
                 <div className="col-span-12">
                   <Input
-                    label=""
+                    label="Dropdown options"
                     value={(field.options || []).join(', ')}
                     onChange={(e) =>
                       setCustomFields((prev) =>
@@ -2844,7 +2865,7 @@ const MemberRoster: React.FC = () => {
                 try {
                   setCustomFieldsSaving(true);
                   await api.updateRosterCustomFields(campId, customFields as any);
-                  alert('Custom fields updated');
+                  await fetchCustomFields();
                   setCustomFieldsModalOpen(false);
                 } catch (err: any) {
                   alert(err?.response?.data?.message || 'Failed to save custom fields');

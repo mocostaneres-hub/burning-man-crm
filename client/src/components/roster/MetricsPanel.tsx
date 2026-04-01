@@ -140,7 +140,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ members, customFields = [] 
           percentage={calculatePercentage(duesPaidCount)}
         />
         <MetricCard
-          title="Virgins"
+          title="First-Year Burners"
           count={virginsCount}
           icon={<User className="w-6 h-6 text-pink-600" />}
           colorClass="text-pink-600"
@@ -161,14 +161,14 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ members, customFields = [] 
           percentage={calculatePercentage(membersWithoutVP)}
         />
         <MetricCard
-          title="Early Arrival (EA)"
+          title="Early Arrival"
           count={earlyArrivalCount}
           icon={<Calendar className="w-6 h-6 text-blue-600" />}
           colorClass="text-blue-600"
           percentage={calculatePercentage(earlyArrivalCount)}
         />
         <MetricCard
-          title="Late Departure (LD)"
+          title="Late Departure"
           count={lateDepartureCount}
           icon={<Clock className="w-6 h-6 text-green-600" />}
           colorClass="text-green-600"
