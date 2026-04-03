@@ -1388,7 +1388,13 @@ const MemberRoster: React.FC = () => {
       )}
 
       {/* Metrics Panel - Only for admins/leads */}
-      {canViewMetrics && <MetricsPanel members={filteredMembers} customFields={customFields} />}
+      {canViewMetrics && (
+        <MetricsPanel
+          members={filteredMembers}
+          customFields={customFields}
+          hideBreakdownSection={user?.accountType === 'camp'}
+        />
+      )}
 
       {/* Filters - Only for admins/leads */}
       {canUseFilters && (
