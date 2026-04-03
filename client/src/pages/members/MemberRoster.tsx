@@ -719,11 +719,6 @@ const MemberRoster: React.FC = () => {
     return Array.from(allSkills).sort();
   }, [members]);
 
-  const availableStatuses = useMemo(
-    () => [...new Set(members.map((member) => (member.status || member.rosterStatus || '').toString()).filter(Boolean))],
-    [members]
-  );
-
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     members.forEach((member) => (member.tags || []).forEach((tag) => tagSet.add(String(tag))));
@@ -1402,7 +1397,6 @@ const MemberRoster: React.FC = () => {
           activeFilters={activeFilters}
           onFilterChange={handleFilterChange}
           availableSkills={availableSkills}
-          availableStatuses={availableStatuses}
           availableTags={availableTags}
           customFieldOptions={customFieldFilterOptions}
         />

@@ -8,7 +8,6 @@ interface RosterFiltersProps {
   activeFilters: FilterType[];
   onFilterChange: (filters: FilterType[]) => void;
   availableSkills: string[];
-  availableStatuses?: string[];
   availableTags?: string[];
   customFieldOptions?: Array<{ key: string; label: string; values: string[] }>;
 }
@@ -60,7 +59,6 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
   activeFilters,
   onFilterChange,
   availableSkills,
-  availableStatuses = [],
   availableTags = [],
   customFieldOptions = []
 }) => {
@@ -79,9 +77,9 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       'with-tickets': 'Tickets: Yes',
       'without-vp': 'Vehicle Pass: No',
       'with-vp': 'Vehicle Pass: Yes',
-      'early-arrival': 'Logistics: Early Arrival',
-      'late-departure': 'Logistics: Late Departure',
-      virgin: 'Experience: First-Year',
+      'early-arrival': 'Logistics: EA',
+      'late-departure': 'Logistics: LD',
+      virgin: 'Experience: Virgin',
       veteran: 'Experience: Veteran'
     };
 
@@ -207,14 +205,14 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
         <div className="flex gap-1 mr-2">
           <span className="text-sm font-medium text-gray-600 self-center">Logistics:</span>
           <FilterButton
-            label="Early Arrival"
+            label="EA"
             filterType="early-arrival"
             isActive={activeFilters.includes('early-arrival')}
             onClick={() => toggleFilter('early-arrival')}
             variant="primary"
           />
           <FilterButton
-            label="Late Departure"
+            label="LD"
             filterType="late-departure"
             isActive={activeFilters.includes('late-departure')}
             onClick={() => toggleFilter('late-departure')}
@@ -226,7 +224,7 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
         <div className="flex gap-1 mr-2">
           <span className="text-sm font-medium text-gray-600 self-center">Experience:</span>
           <FilterButton
-            label="First-Year"
+            label="Virgin"
             filterType="virgin"
             isActive={activeFilters.includes('virgin')}
             onClick={() => toggleFilter('virgin')}
@@ -261,29 +259,6 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
             ))}
           </select>
         </div>
-
-        {availableStatuses.length > 0 && (
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-gray-600">Status:</span>
-            <select
-              className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
-              value=""
-              onChange={(e) => {
-                const value = e.target.value;
-                if (!value) return;
-                const token = `status:${value}`;
-                if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
-              }}
-            >
-              <option value="">Select status...</option>
-              {availableStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {availableTags.length > 0 && (
           <div className="flex items-center gap-1">
