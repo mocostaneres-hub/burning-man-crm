@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, HelpCircle } from 'lucide-react';
+import { ChevronDown, HelpCircle, MessageCircle as MessageCircleIcon, Send, Loader2 } from 'lucide-react';
+import { Button, Input, Modal } from './ui';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 
@@ -8,6 +9,8 @@ interface FAQItem {
   question: string;
   answer: string;
 }
+
+type RequesterType = 'camp' | 'member' | 'other';
 
 const campFAQData: FAQItem[] = [
   {
@@ -200,6 +203,16 @@ const FAQ: React.FC = () => {
   const [expanded, setExpanded] = useState<string | false>(false);
   const [faqData, setFaqData] = useState<FAQItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showContactSuccessModal, setShowContactSuccessModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    requesterType: (user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : 'other') as RequesterType,
+    requesterEmail: user?.email || '',
+    requesterPhone: '',
+    subject: '',
+    message: ''
+  });
 
   const handleToggle = (panel: string) => {
     setExpanded(expanded === panel ? false : panel);
@@ -224,6 +237,34 @@ const FAQ: React.FC = () => {
 
     loadFAQs();
   }, [user?.accountType]);
+
+  useEffect(() => {
+    setContactForm((prev) => ({
+      ...prev,
+      requesterType: (user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : prev.requesterType) as RequesterType,
+      requesterEmail: user?.email || prev.requesterEmail
+    }));
+  }, [user]);
+
+  const handleContactSubmit = async () => {
+    try {
+      setSubmitting(true);
+      await apiService.post('/help/contact', contactForm);
+      setContactForm({
+        requesterType: user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : 'other',
+        requesterEmail: user?.email || '',
+        requesterPhone: '',
+        subject: '',
+        message: ''
+      });
+      setShowContactModal(false);
+      setShowContactSuccessModal(true);
+    } catch (error) {
+      console.error('Error submitting contact form:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="py-16 bg-custom-bg">
@@ -277,12 +318,146 @@ const FAQ: React.FC = () => {
           )}
         </div>
 
-        <div className="text-center mt-12">
-          <p className="text-body text-custom-text-secondary">
-            Contact us at info@g8road.com
-          </p>
+        <div className="max-w-4xl mx-auto mt-12">
+          <div className="rounded-3xl bg-white border border-gray-200 shadow-sm p-8">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageCircleIcon className="w-5 h-5 text-custom-primary" />
+            </div>
+            <p className="text-h4 text-custom-text-secondary mb-6">
+              Need to contact the G8Road Team?
+            </p>
+            <Button
+              variant="primary"
+              onClick={() => setShowContactModal(true)}
+              className="w-full"
+            >
+              Contact Support
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showContactModal}
+        onClose={() => setShowContactModal(false)}
+        title="Contact Support"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-custom-text-secondary">
+            Tell us what you need and we will email back as soon as possible.
+          </p>
+
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">I am a</label>
+            <select
+              value={contactForm.requesterType}
+              onChange={(e) => setContactForm({ ...contactForm, requesterType: e.target.value as RequesterType })}
+              className="w-full bg-white p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+            >
+              <option value="camp">Camp</option>
+              <option value="member">Member</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <Input
+            type="email"
+            label="Email Address"
+            value={contactForm.requesterEmail}
+            onChange={(e) => setContactForm({ ...contactForm, requesterEmail: e.target.value })}
+            placeholder="you@example.com"
+            className="bg-white"
+          />
+
+          <Input
+            type="tel"
+            label="Phone Number (Optional)"
+            value={contactForm.requesterPhone}
+            onChange={(e) => setContactForm({ ...contactForm, requesterPhone: e.target.value })}
+            placeholder="+1 (555) 123-4567"
+            className="bg-white"
+          />
+
+          <Input
+            type="text"
+            label="Subject"
+            value={contactForm.subject}
+            onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+            placeholder="What can we help you with?"
+            className="bg-white"
+          />
+
+          <div>
+            <label className="block text-label font-medium text-custom-text mb-2">Message</label>
+            <textarea
+              value={contactForm.message}
+              onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+              placeholder="Please describe your question or issue in detail..."
+              rows={5}
+              className="w-full bg-white p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowContactModal(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleContactSubmit}
+              disabled={
+                submitting ||
+                !contactForm.requesterType ||
+                !contactForm.requesterEmail.trim() ||
+                !contactForm.subject.trim() ||
+                !contactForm.message.trim()
+              }
+              className="flex-1 flex items-center justify-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <div className="w-4 h-4 animate-spin">
+                    <Loader2 className="w-full h-full" />
+                  </div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <div className="w-4 h-4">
+                    <Send className="w-full h-full" />
+                  </div>
+                  Send Request
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showContactSuccessModal}
+        onClose={() => setShowContactSuccessModal(false)}
+        title="Support Request Sent"
+      >
+        <div className="space-y-4">
+          <p className="text-body text-custom-text-secondary">
+            Your support request was sent successfully. We will follow up by email.
+          </p>
+          <div className="pt-2">
+            <Button
+              variant="primary"
+              onClick={() => setShowContactSuccessModal(false)}
+              className="w-full"
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

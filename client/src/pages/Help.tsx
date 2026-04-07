@@ -27,6 +27,7 @@ const Help: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showContactSuccessModal, setShowContactSuccessModal] = useState(false);
   const [contactForm, setContactForm] = useState({
     requesterType: 'other' as RequesterType,
     requesterEmail: '',
@@ -123,7 +124,7 @@ const Help: React.FC = () => {
         message: ''
       });
       setShowContactModal(false);
-      // Show success message
+      setShowContactSuccessModal(true);
     } catch (err) {
       console.error('Error submitting contact form:', err);
     } finally {
@@ -242,10 +243,9 @@ const Help: React.FC = () => {
           <Card className="p-4 sticky top-24">
             <div className="flex items-center gap-2 mb-2">
               <MessageCircleIcon className="w-4 h-4 text-custom-primary" />
-              <h3 className="text-sm font-semibold text-custom-text">Contact Support</h3>
             </div>
             <p className="text-sm text-custom-text-secondary mb-4">
-              Need help with something specific? Send us a message.
+              {user ? 'Need help with something specific? Send us a message.' : 'Need to contact the G8Road Team?'}
             </p>
             <Button
               variant="primary"
@@ -369,6 +369,27 @@ const Help: React.FC = () => {
       
       {/* Footer */}
       <Footer />
+
+      <Modal
+        isOpen={showContactSuccessModal}
+        onClose={() => setShowContactSuccessModal(false)}
+        title="Support Request Sent"
+      >
+        <div className="space-y-4">
+          <p className="text-body text-custom-text-secondary">
+            Your support request was sent successfully. We will follow up by email.
+          </p>
+          <div className="pt-2">
+            <Button
+              variant="primary"
+              onClick={() => setShowContactSuccessModal(false)}
+              className="w-full"
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

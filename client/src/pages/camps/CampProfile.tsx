@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Button, Input, Card, Badge } from '../../components/ui';
+import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import { Edit, Save as SaveIcon, X, MapPin, Globe, Camera, Loader2, CheckCircle, Home, Mail, Shield, AlertTriangle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -239,6 +239,82 @@ const CampProfile: React.FC = () => {
   const [credentialsSaving, setCredentialsSaving] = useState(false);
   const [credentialsSuccess, setCredentialsSuccess] = useState('');
   const [credentialsError, setCredentialsError] = useState('');
+  const [showDuesTemplatesModal, setShowDuesTemplatesModal] = useState(false);
+  const [duesTemplatesLoading, setDuesTemplatesLoading] = useState(false);
+  const [duesTemplatesForm, setDuesTemplatesForm] = useState({
+    instructionsSubject: '',
+    instructionsBody: '',
+    receiptSubject: '',
+    receiptBody: ''
+  });
+
+  const renderRichTextPreview = (body: string = '') => {
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const lines = String(body || '').split(/\r?\n/);
+    const html: string[] = [];
+    let inList = false;
+    const closeList = () => {
+      if (inList) {
+        html.push('</ul>');
+        inList = false;
+      }
+    };
+    const formatInline = (text: string) => {
+      let out = escapeHtml(text);
+      out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      return out;
+    };
+
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) {
+        closeList();
+        html.push('<div style="height:8px"></div>');
+        continue;
+      }
+
+      const titleMatch = line.match(/^(title|subtitle|section)\s*:\s*(.+)$/i);
+      if (titleMatch) {
+        closeList();
+        const text = formatInline(titleMatch[2]);
+        const level = titleMatch[1].toLowerCase() === 'title' ? 'h2' : titleMatch[1].toLowerCase() === 'subtitle' ? 'h3' : 'h4';
+        html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${text}</${level}>`);
+        continue;
+      }
+
+      const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+      if (headingMatch) {
+        closeList();
+        const level = headingMatch[1].length === 1 ? 'h2' : headingMatch[1].length === 2 ? 'h3' : 'h4';
+        html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${formatInline(headingMatch[2])}</${level}>`);
+        continue;
+      }
+
+      const listMatch = line.match(/^[-*•]\s+(.+)$/);
+      if (listMatch) {
+        if (!inList) {
+          html.push('<ul style="margin:6px 0 6px 18px;padding:0;list-style:disc;">');
+          inList = true;
+        }
+        html.push(`<li style="margin:2px 0;">${formatInline(listMatch[1])}</li>`);
+        continue;
+      }
+
+      closeList();
+      html.push(`<p style="margin:6px 0;line-height:1.5;">${formatInline(line)}</p>`);
+    }
+    closeList();
+
+    return html.join('');
+  };
 
   useEffect(() => {
     if (user && campIdentifier) {
@@ -640,6 +716,50 @@ const CampProfile: React.FC = () => {
       setCredentialsError(error.response?.data?.message || 'Failed to update credentials');
     } finally {
       setCredentialsSaving(false);
+    }
+  };
+
+  const handleOpenDuesTemplates = async () => {
+    if (!campId) return;
+    setDuesTemplatesLoading(true);
+    try {
+      const response = await api.getCampDuesTemplates(campId);
+      setDuesTemplatesForm({
+        instructionsSubject: response?.templates?.instructions?.subject || '',
+        instructionsBody: response?.templates?.instructions?.body || '',
+        receiptSubject: response?.templates?.receipt?.subject || '',
+        receiptBody: response?.templates?.receipt?.body || ''
+      });
+      setShowDuesTemplatesModal(true);
+    } catch (err) {
+      console.error('Failed to load dues templates:', err);
+      setError('Failed to load dues email templates');
+    } finally {
+      setDuesTemplatesLoading(false);
+    }
+  };
+
+  const handleSaveDuesTemplates = async () => {
+    if (!campId) return;
+    setDuesTemplatesLoading(true);
+    try {
+      await api.updateCampDuesTemplates(campId, {
+        instructions: {
+          subject: duesTemplatesForm.instructionsSubject,
+          body: duesTemplatesForm.instructionsBody
+        },
+        receipt: {
+          subject: duesTemplatesForm.receiptSubject,
+          body: duesTemplatesForm.receiptBody
+        }
+      });
+      setShowDuesTemplatesModal(false);
+      setSuccess('Dues email templates updated');
+    } catch (err) {
+      console.error('Failed to save dues templates:', err);
+      setError('Failed to save dues email templates');
+    } finally {
+      setDuesTemplatesLoading(false);
     }
   };
 
@@ -1262,6 +1382,29 @@ const CampProfile: React.FC = () => {
                 </p>
               )}
             </div>
+
+            {isEditing && (
+              <div className="pt-3 border-t border-gray-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-label font-medium text-custom-text mb-1">
+                      Dues Emails
+                    </label>
+                    <p className="text-sm text-gray-600">
+                      Configure default payment instructions and payment receipt templates.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenDuesTemplates}
+                    disabled={!campId || duesTemplatesLoading}
+                    className="whitespace-nowrap"
+                  >
+                    {duesTemplatesLoading ? 'Loading...' : 'Edit Dues Emails'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -1402,6 +1545,84 @@ const CampProfile: React.FC = () => {
           </Button>
         </div>
       )}
+
+      <Modal
+        isOpen={showDuesTemplatesModal}
+        onClose={() => !duesTemplatesLoading && setShowDuesTemplatesModal(false)}
+        title="Dues Email Template Defaults"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            These defaults are used for payment instructions and receipts when sending dues emails.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Subject</label>
+            <Input
+              value={duesTemplatesForm.instructionsSubject}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsSubject: e.target.value }))}
+              placeholder="Payment Instructions for {{camp_name}} Dues"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={duesTemplatesForm.instructionsBody}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsBody: e.target.value }))}
+            />
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.instructionsBody) }}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Subject</label>
+            <Input
+              value={duesTemplatesForm.receiptSubject}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptSubject: e.target.value }))}
+              placeholder="Payment Received - {{camp_name}}"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={duesTemplatesForm.receiptBody}
+              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptBody: e.target.value }))}
+            />
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.receiptBody) }}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDuesTemplatesModal(false)}
+              disabled={duesTemplatesLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveDuesTemplates}
+              disabled={duesTemplatesLoading}
+            >
+              {duesTemplatesLoading ? 'Saving...' : 'Save Defaults'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Invite Templates Section - Only show when not editing profile and user is authorized */}
       {!isEditing && campId && (user?.accountType === 'camp' || user?.accountType === 'admin') && (

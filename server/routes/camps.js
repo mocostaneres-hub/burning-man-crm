@@ -4,9 +4,10 @@ const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireCampLead, optionalAuth } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
-const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
+const { SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 
 // (moved below after router initialization)
 
@@ -599,6 +600,80 @@ router.get('/my-camp', authenticateToken, async (req, res) => {
     res.json(campResponse);
   } catch (error) {
     console.error('Get my camp error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/camps/:id/dues/templates
+// @desc    Get camp-level dues template defaults
+// @access  Private (Camp admins/leads)
+router.get('/:id/dues/templates', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    res.json({
+      templates: {
+        instructions: {
+          subject: camp.duesInstructionsSubject || '',
+          body: camp.duesInstructionsBody || '',
+          effectiveSubject: camp.duesInstructionsSubject || SYSTEM_DEFAULT_TEMPLATES.instructions.subject,
+          effectiveBody: camp.duesInstructionsBody || SYSTEM_DEFAULT_TEMPLATES.instructions.body
+        },
+        receipt: {
+          subject: camp.duesReceiptSubject || '',
+          body: camp.duesReceiptBody || '',
+          effectiveSubject: camp.duesReceiptSubject || SYSTEM_DEFAULT_TEMPLATES.receipt.subject,
+          effectiveBody: camp.duesReceiptBody || SYSTEM_DEFAULT_TEMPLATES.receipt.body
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get camp dues templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/camps/:id/dues/templates
+// @desc    Update camp-level dues template defaults
+// @access  Private (Camp admins/leads)
+router.put('/:id/dues/templates', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { instructions, receipt } = req.body || {};
+
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const normalizeField = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const updateData = {
+      duesInstructionsSubject: normalizeField(instructions?.subject),
+      duesInstructionsBody: normalizeField(instructions?.body),
+      duesReceiptSubject: normalizeField(receipt?.subject),
+      duesReceiptBody: normalizeField(receipt?.body)
+    };
+
+    await db.updateCamp({ _id: camp._id }, updateData);
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+      field: 'duesTemplates'
+    });
+
+    res.json({ message: 'Dues templates updated successfully' });
+  } catch (error) {
+    console.error('Update camp dues templates error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

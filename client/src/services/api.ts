@@ -811,6 +811,22 @@ class ApiService {
     return response.data;
   }
 
+  async getCampDuesTemplates(campId: string): Promise<any> {
+    const response = await this.api.get(`/camps/${campId}/dues/templates`);
+    return response.data;
+  }
+
+  async updateCampDuesTemplates(
+    campId: string,
+    payload: {
+      instructions: { subject?: string; body?: string };
+      receipt: { subject?: string; body?: string };
+    }
+  ): Promise<any> {
+    const response = await this.api.put(`/camps/${campId}/dues/templates`, payload);
+    return response.data;
+  }
+
   async getRosterCustomFields(campId: string): Promise<{ customFields: Array<{ key: string; label: string; type: string; options?: string[] }> }> {
     const response = await this.api.get('/rosters/custom-fields', { params: { campId } });
     return response.data;

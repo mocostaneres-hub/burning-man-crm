@@ -259,14 +259,6 @@ const MemberRoster: React.FC = () => {
     action: 'grant' | 'revoke';
   }>({ isOpen: false, member: null, action: 'grant' });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
-  const [showDuesTemplatesModal, setShowDuesTemplatesModal] = useState(false);
-  const [duesTemplatesLoading, setDuesTemplatesLoading] = useState(false);
-  const [duesTemplatesForm, setDuesTemplatesForm] = useState({
-    instructionsSubject: '',
-    instructionsBody: '',
-    receiptSubject: '',
-    receiptBody: ''
-  });
   const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
@@ -1125,50 +1117,6 @@ const MemberRoster: React.FC = () => {
     }
   };
 
-  const handleOpenDuesTemplates = async () => {
-    if (!rosterId) return;
-    setDuesTemplatesLoading(true);
-    try {
-      const response = await api.getDuesTemplates(rosterId);
-      setDuesTemplatesForm({
-        instructionsSubject: response?.templates?.instructions?.subject || '',
-        instructionsBody: response?.templates?.instructions?.body || '',
-        receiptSubject: response?.templates?.receipt?.subject || '',
-        receiptBody: response?.templates?.receipt?.body || ''
-      });
-      setShowDuesTemplatesModal(true);
-    } catch (error) {
-      console.error('Failed to load dues templates:', error);
-      alert('Failed to load dues template defaults.');
-    } finally {
-      setDuesTemplatesLoading(false);
-    }
-  };
-
-  const handleSaveDuesTemplates = async () => {
-    if (!rosterId) return;
-    setDuesTemplatesLoading(true);
-    try {
-      await api.updateDuesTemplates(rosterId, {
-        instructions: {
-          subject: duesTemplatesForm.instructionsSubject,
-          body: duesTemplatesForm.instructionsBody
-        },
-        receipt: {
-          subject: duesTemplatesForm.receiptSubject,
-          body: duesTemplatesForm.receiptBody
-        }
-      });
-      setShowDuesTemplatesModal(false);
-      alert('Dues template defaults saved.');
-    } catch (error) {
-      console.error('Failed to save dues templates:', error);
-      alert('Failed to save dues template defaults.');
-    } finally {
-      setDuesTemplatesLoading(false);
-    }
-  };
-
   // Using shared date formatting utility
 
   const formatArrivalDepartureDate = (dateString: string | Date) => {
@@ -1395,17 +1343,6 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && rosterId && (
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={handleOpenDuesTemplates}
-              disabled={duesTemplatesLoading}
-              title="Edit your dues instructions and receipt emails."
-            >
-              Dues Emails
-            </Button>
-          )}
           {canEdit && (
             <Button
               variant="outline"
@@ -2993,97 +2930,6 @@ const MemberRoster: React.FC = () => {
               }}
             >
               {customFieldsSaving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Camp-level Dues Template Defaults */}
-      <Modal
-        isOpen={showDuesTemplatesModal}
-        onClose={() => !duesTemplatesLoading && setShowDuesTemplatesModal(false)}
-        title="Dues Email Template Defaults"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            These defaults are used for payment instructions and receipts when sending dues emails.
-          </p>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Subject</label>
-            <Input
-              value={duesTemplatesForm.instructionsSubject}
-              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsSubject: e.target.value }))}
-              placeholder="Payment Instructions for {{camp_name}} Dues"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Body</label>
-            <textarea
-              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
-              value={duesTemplatesForm.instructionsBody}
-              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, instructionsBody: e.target.value }))}
-            />
-            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
-              <p className="font-medium text-gray-700">Rich text formatting help</p>
-              <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
-              <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
-              <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
-            </div>
-            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
-              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
-              <div
-                className="text-sm text-gray-700"
-                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.instructionsBody) }}
-              />
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Subject</label>
-            <Input
-              value={duesTemplatesForm.receiptSubject}
-              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptSubject: e.target.value }))}
-              placeholder="Payment Received - {{camp_name}}"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Body</label>
-            <textarea
-              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
-              value={duesTemplatesForm.receiptBody}
-              onChange={(e) => setDuesTemplatesForm(prev => ({ ...prev, receiptBody: e.target.value }))}
-            />
-            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
-              <p className="font-medium text-gray-700">Rich text formatting help</p>
-              <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
-              <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
-              <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
-            </div>
-            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
-              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
-              <div
-                className="text-sm text-gray-700"
-                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.receiptBody) }}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setShowDuesTemplatesModal(false)}
-              disabled={duesTemplatesLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSaveDuesTemplates}
-              disabled={duesTemplatesLoading}
-            >
-              {duesTemplatesLoading ? 'Saving...' : 'Save Defaults'}
             </Button>
           </div>
         </div>
