@@ -3,6 +3,7 @@ import { ChevronDown, HelpCircle, MessageCircle as MessageCircleIcon, Send, Load
 import { Button, Input, Modal } from './ui';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
+import { renderRichTextToHtml } from '../utils/richText';
 
 interface FAQItem {
   _id?: string;
@@ -308,9 +309,10 @@ const FAQ: React.FC = () => {
               </button>
               {expanded === `panel${index}` && (
                 <div className="px-6 pb-4">
-                  <p className="text-body text-custom-text-secondary leading-relaxed">
-                    {faq.answer}
-                  </p>
+                  <div
+                    className="text-body text-custom-text-secondary leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(faq.answer) }}
+                  />
                 </div>
               )}
             </div>

@@ -5,6 +5,7 @@ import { Send, MessageCircle as MessageCircleIcon, HelpCircle, Loader2 } from 'l
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
+import { renderRichTextToHtml } from '../utils/richText';
 
 interface FAQ {
   _id: string;
@@ -229,7 +230,10 @@ const Help: React.FC = () => {
                     {(faqsByCategory[category] || []).map((faq) => (
                       <Card key={faq._id} className="border border-gray-200">
                         <p className="text-h3 font-lato-bold text-custom-text mb-2">{faq.question}</p>
-                        <p className="text-body text-custom-text-secondary leading-relaxed">{faq.answer}</p>
+                        <div
+                          className="text-body text-custom-text-secondary leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(faq.answer) }}
+                        />
                       </Card>
                     ))}
                   </div>

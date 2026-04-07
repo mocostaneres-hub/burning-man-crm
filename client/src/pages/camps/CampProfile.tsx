@@ -9,6 +9,7 @@ import PhotoUpload from '../../components/profile/PhotoUpload';
 import { InviteTemplateEditor } from '../../components/invites';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { StructuredLocation } from '../../types';
+import { renderRichTextToHtml } from '../../utils/richText';
 
 interface CampCategory {
   _id: string;
@@ -247,74 +248,6 @@ const CampProfile: React.FC = () => {
     receiptSubject: '',
     receiptBody: ''
   });
-
-  const renderRichTextPreview = (body: string = '') => {
-    const escapeHtml = (value: string) =>
-      value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-    const lines = String(body || '').split(/\r?\n/);
-    const html: string[] = [];
-    let inList = false;
-    const closeList = () => {
-      if (inList) {
-        html.push('</ul>');
-        inList = false;
-      }
-    };
-    const formatInline = (text: string) => {
-      let out = escapeHtml(text);
-      out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      return out;
-    };
-
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) {
-        closeList();
-        html.push('<div style="height:8px"></div>');
-        continue;
-      }
-
-      const titleMatch = line.match(/^(title|subtitle|section)\s*:\s*(.+)$/i);
-      if (titleMatch) {
-        closeList();
-        const text = formatInline(titleMatch[2]);
-        const level = titleMatch[1].toLowerCase() === 'title' ? 'h2' : titleMatch[1].toLowerCase() === 'subtitle' ? 'h3' : 'h4';
-        html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${text}</${level}>`);
-        continue;
-      }
-
-      const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
-      if (headingMatch) {
-        closeList();
-        const level = headingMatch[1].length === 1 ? 'h2' : headingMatch[1].length === 2 ? 'h3' : 'h4';
-        html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${formatInline(headingMatch[2])}</${level}>`);
-        continue;
-      }
-
-      const listMatch = line.match(/^[-*•]\s+(.+)$/);
-      if (listMatch) {
-        if (!inList) {
-          html.push('<ul style="margin:6px 0 6px 18px;padding:0;list-style:disc;">');
-          inList = true;
-        }
-        html.push(`<li style="margin:2px 0;">${formatInline(listMatch[1])}</li>`);
-        continue;
-      }
-
-      closeList();
-      html.push(`<p style="margin:6px 0;line-height:1.5;">${formatInline(line)}</p>`);
-    }
-    closeList();
-
-    return html.join('');
-  };
 
   useEffect(() => {
     if (user && campIdentifier) {
@@ -1556,6 +1489,14 @@ const CampProfile: React.FC = () => {
           <p className="text-sm text-gray-600">
             These defaults are used for payment instructions and receipts when sending dues emails.
           </p>
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+            <p className="font-semibold text-gray-800">Rich text + variables guide</p>
+            <p>Formatting: <code># Heading</code>, <code>## Subheading</code>, <code>**bold**</code>, <code>*italic*</code>, and bullet lists with <code>- item</code>.</p>
+            <p>Insert camp name: <code>{'{{camp_name}}'}</code></p>
+            <p>Insert member name: <code>{'{{member_name}}'}</code></p>
+            <p>Insert today's date: <code>{'{{today_date}}'}</code></p>
+            <p className="text-gray-500">Other supported variables: <code>{'{{dues_amount}}'}</code>, <code>{'{{due_date}}'}</code>, <code>{'{{payment_link}}'}</code>, <code>{'{{payment_date}}'}</code>.</p>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Subject</label>
@@ -1576,7 +1517,17 @@ const CampProfile: React.FC = () => {
               <p className="text-xs text-gray-500 mb-1">Live Preview</p>
               <div
                 className="text-sm text-gray-700"
-                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.instructionsBody) }}
+                dangerouslySetInnerHTML={{
+                  __html: renderRichTextToHtml(duesTemplatesForm.instructionsBody, {
+                    camp_name: campData.campName || 'Your Camp',
+                    member_name: 'Member Name',
+                    today_date: new Date().toLocaleDateString('en-US'),
+                    dues_amount: 'USD 0',
+                    due_date: new Date().toLocaleDateString('en-US'),
+                    payment_link: campData.website || 'https://www.g8road.com',
+                    payment_date: new Date().toLocaleDateString('en-US')
+                  })
+                }}
               />
             </div>
           </div>
@@ -1600,7 +1551,17 @@ const CampProfile: React.FC = () => {
               <p className="text-xs text-gray-500 mb-1">Live Preview</p>
               <div
                 className="text-sm text-gray-700"
-                dangerouslySetInnerHTML={{ __html: renderRichTextPreview(duesTemplatesForm.receiptBody) }}
+                dangerouslySetInnerHTML={{
+                  __html: renderRichTextToHtml(duesTemplatesForm.receiptBody, {
+                    camp_name: campData.campName || 'Your Camp',
+                    member_name: 'Member Name',
+                    today_date: new Date().toLocaleDateString('en-US'),
+                    dues_amount: 'USD 0',
+                    due_date: new Date().toLocaleDateString('en-US'),
+                    payment_link: campData.website || 'https://www.g8road.com',
+                    payment_date: new Date().toLocaleDateString('en-US')
+                  })
+                }}
               />
             </div>
           </div>

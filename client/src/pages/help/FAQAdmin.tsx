@@ -3,6 +3,7 @@ import { Button, Card, Modal, Input, Badge } from '../../components/ui';
 import { Plus, Edit, Trash2, Save as SaveIcon, X, Loader2, HelpCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
+import { FAQ_RICH_TEXT_GUIDE, renderRichTextToHtml } from '../../utils/richText';
 
 interface FAQ {
   _id?: string;
@@ -252,9 +253,10 @@ const FAQAdmin: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-body text-custom-text-secondary line-clamp-3 mb-4">
-              {faq.answer}
-            </p>
+            <div
+              className="text-body text-custom-text-secondary line-clamp-3 mb-4"
+              dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(faq.answer) }}
+            />
 
             <div className="flex items-center justify-between text-sm text-custom-text-secondary">
               <span>Order: {faq.order}</span>
@@ -318,6 +320,19 @@ const FAQAdmin: React.FC = () => {
                 rows={6}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
               />
+              <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+                <p className="font-semibold text-gray-800">Rich text guide</p>
+                {FAQ_RICH_TEXT_GUIDE.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </div>
+              <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+                <div
+                  className="text-sm text-gray-700"
+                  dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(editingFAQ.answer) }}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -31,13 +31,15 @@ function getMemberEntryIndex(roster, memberId) {
 }
 
 function resolveDuesVariables({ memberUser, camp, campDues, paymentDate }) {
+  const todayDate = new Date().toLocaleDateString('en-US');
   return {
     member_name: `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim() || 'Member',
     camp_name: camp?.name || camp?.campName || 'Your Camp',
     dues_amount: campDues?.amount ? `${campDues.currency || 'USD'} ${campDues.amount}` : 'TBD',
     due_date: campDues?.dueDate ? new Date(campDues.dueDate).toLocaleDateString('en-US') : 'TBD',
     payment_link: campDues?.paymentLink || camp?.website || process.env.CLIENT_URL || 'https://www.g8road.com',
-    payment_date: paymentDate ? new Date(paymentDate).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US')
+    payment_date: paymentDate ? new Date(paymentDate).toLocaleDateString('en-US') : todayDate,
+    today_date: todayDate
   };
 }
 
