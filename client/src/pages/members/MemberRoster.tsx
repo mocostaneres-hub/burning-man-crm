@@ -2836,9 +2836,12 @@ const MemberRoster: React.FC = () => {
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <p className="font-semibold text-custom-text">Shifts-Only Roster</p>
+                <p className="font-semibold text-custom-text">Volunteer Shifts</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Best when your camp is not accepting full membership applications. Add roster records for shifts without sending application invites.
+                  Your camp wants to use G8Road only for volunteer shifts sign up and management.
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Invitations to sign up for shifts will be sent ONLY when you trigger them from the Events section, not now (and you have total control of who you invite).
                 </p>
               </button>
 
@@ -2853,7 +2856,16 @@ const MemberRoster: React.FC = () => {
               >
                 <p className="font-semibold text-custom-text">Full Membership Roster</p>
                 <p className="text-sm text-gray-600 mt-1">
-                  Best when your camp is accepting applications. Invite people to apply and join as full members in your standard camp flow.
+                  Your camp wants to use G8Road for everything:
+                </p>
+                <ul className="mt-1 ml-5 list-disc text-sm text-gray-600 space-y-1">
+                  <li>accept and manage member applications, manage roster</li>
+                  <li>send dues payments instructions, reminders and receipts</li>
+                  <li>volunteer shifts sign up and management</li>
+                  <li>tasks</li>
+                </ul>
+                <p className="text-sm text-gray-600 mt-2">
+                  Invitations to join your camp will be sent at the end of this process, and you'll be notified as they come in.
                 </p>
               </button>
             </div>
