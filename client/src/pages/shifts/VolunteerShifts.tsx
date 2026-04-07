@@ -265,6 +265,28 @@ const VolunteerShifts: React.FC = () => {
   }, [canAccessShifts, loadEvents, loadRosterMembers]);
 
   const hasRoster = rosterMembers.length > 0;
+  const getEffectiveEventFields = useCallback(() => {
+    const fallbackShiftDate = eventForm.shifts.find((shift) => !!shift.date)?.date || '';
+    const fallbackShiftStart = eventForm.shifts.find((shift) => !!shift.startTime)?.startTime || '';
+    const fallbackShiftEnd = eventForm.shifts.find((shift) => !!shift.endTime)?.endTime || '';
+    return {
+      eventDate: eventForm.eventDate || fallbackShiftDate,
+      startTime: eventForm.startTime || fallbackShiftStart,
+      endTime: eventForm.endTime || fallbackShiftEnd
+    };
+  }, [eventForm]);
+
+  const canSaveEvent = useMemo(() => {
+    const effective = getEffectiveEventFields();
+    return Boolean(
+      eventForm.eventName &&
+      effective.eventDate &&
+      effective.startTime &&
+      effective.endTime &&
+      eventForm.shifts.length > 0
+    );
+  }, [eventForm.eventName, eventForm.shifts.length, getEffectiveEventFields]);
+
   const hasAvailableShifts = useMemo(() => {
     return events.some(event =>
       (event.shifts || []).some(shift => {
@@ -308,12 +330,18 @@ const VolunteerShifts: React.FC = () => {
         return;
       }
 
+      const effective = getEffectiveEventFields();
+      if (!effective.eventDate || !effective.startTime || !effective.endTime) {
+        alert('Event date and time are required. Please add them or ensure at least one shift has date/time.');
+        return;
+      }
+
       const eventData = {
         eventName: eventForm.eventName,
         description: eventForm.description,
-        eventDate: eventForm.eventDate,
-        startTime: eventForm.startTime,
-        endTime: eventForm.endTime,
+        eventDate: effective.eventDate,
+        startTime: effective.startTime,
+        endTime: effective.endTime,
         ...(campId ? { campId } : {}),
         shifts: eventForm.shifts.map(shift => ({
           ...(shift._id ? { _id: shift._id } : {}),
@@ -472,12 +500,28 @@ const VolunteerShifts: React.FC = () => {
     }
 
     // Populate form with event data + assignment baseline from existing assignees
+    const toDateInput = (value: any) => {
+      if (!value) return '';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '';
+      return parsed.toISOString().split('T')[0];
+    };
+    const toTimeInput = (value: any) => {
+      if (!value) return '';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '';
+      return parsed.toTimeString().slice(0, 5);
+    };
+    const fallbackShiftDate = toDateInput(event.shifts.find((shift) => shift?.date)?.date);
+    const fallbackShiftStart = toTimeInput(event.shifts.find((shift) => shift?.startTime)?.startTime);
+    const fallbackShiftEnd = toTimeInput(event.shifts.find((shift) => shift?.endTime)?.endTime);
+
     setEventForm({
       eventName: event.eventName,
       description: event.description || '',
-      eventDate: event.eventDate ? new Date(event.eventDate).toISOString().split('T')[0] : '',
-      startTime: event.startTime ? new Date(event.startTime).toTimeString().slice(0, 5) : '',
-      endTime: event.endTime ? new Date(event.endTime).toTimeString().slice(0, 5) : '',
+      eventDate: toDateInput(event.eventDate) || fallbackShiftDate,
+      startTime: toTimeInput(event.startTime) || fallbackShiftStart,
+      endTime: toTimeInput(event.endTime) || fallbackShiftEnd,
       shifts: event.shifts.map((shift, index) => ({
         _id: shift._id?.toString(),
         title: shift.title,
@@ -1727,17 +1771,11 @@ const VolunteerShifts: React.FC = () => {
               <Button
                 variant="primary"
                 onClick={handleCreateEvent}
-                disabled={
-                  !eventForm.eventName || 
-                  !eventForm.eventDate ||
-                  !eventForm.startTime ||
-                  !eventForm.endTime ||
-                  eventForm.shifts.length === 0
-                }
+                disabled={!canSaveEvent}
                 className="flex-1 min-h-[44px]"
               >
                 <Save className="w-4 h-4 mr-2" />
-                {isEditMode ? 'Update Event' : 'Publish Event'}
+                {isEditMode ? 'Save' : 'Publish Event'}
               </Button>
             )}
           </div>
