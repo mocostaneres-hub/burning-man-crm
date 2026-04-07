@@ -208,16 +208,6 @@ const Help: React.FC = () => {
         </aside>
 
         <section className="lg:col-span-6 space-y-6">
-          <div className="text-center">
-            <div className="w-12 h-12 text-custom-primary mx-auto mb-4">
-              <HelpCircle className="w-full h-full" />
-            </div>
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-2">Frequently Asked Questions</h2>
-            <p className="text-body text-custom-text-secondary">
-              Answers are fully visible so you can scan quickly without expanding cards.
-            </p>
-          </div>
-
           {filteredFaqs.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 text-gray-400 mx-auto mb-4">
