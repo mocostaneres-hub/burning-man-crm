@@ -298,7 +298,11 @@ const MemberRoster: React.FC = () => {
     : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
       ? rosterModeState.mode
       : selectedRosterType || rosterModeState.mode;
-  const isFullMembershipRoster = hasActiveRoster && activeRosterType === 'full_membership';
+  const isFullMembershipRoster = hasActiveRoster && (
+    activeRosterType === 'full_membership'
+    || rosterModeState.mode === 'full_membership'
+    || rosterModeState.mode === 'mixed'
+  );
   const canViewMetrics = canAccessRoster && isFullMembershipRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
@@ -1404,7 +1408,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && hasActiveRoster && activeRosterType === 'shifts_only' && (
+          {canEdit && hasActiveRoster && activeRosterType === 'shifts_only' && !isFullMembershipRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1419,7 +1423,7 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && hasActiveRoster && activeRosterType === 'full_membership' && (
+          {canEdit && hasActiveRoster && isFullMembershipRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1431,7 +1435,7 @@ const MemberRoster: React.FC = () => {
                   : 'Enable applications on your camp profile to send full-membership invites.'}
               >
                 <Mail className="w-4 h-4" />
-                Import CSV & Send Invites (Full Membership)
+                Invite Members (Full Membership)
               </Button>
               <p className="text-[11px] text-gray-500 mt-1">
                 {campAcceptingApplications
@@ -1479,7 +1483,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {showAddMemberTile && canEdit && rosterId && (
+          {showAddMemberTile && canEdit && rosterId && !isFullMembershipRoster && (
             <Button
               variant="primary"
               className="flex items-center gap-2"
