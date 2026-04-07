@@ -1,25 +1,11 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { sendSupportContactEmail } = require('../services/emailService');
 
 const router = express.Router();
 const VALID_AUDIENCES = new Set(['both', 'camps', 'members', 'homepage', 'all']);
-
-// Optional authentication middleware
-const optionalAuth = (req, res, next) => {
-  // Try to authenticate, but don't fail if no token
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    // If token exists, use normal authentication
-    return authenticateToken(req, res, next);
-  } else {
-    // No token, continue without user
-    req.user = null;
-    next();
-  }
-};
 
 const normalizeAudience = (value) => {
   const audience = String(value || '').toLowerCase().trim();
@@ -75,10 +61,13 @@ router.get('/faqs', optionalAuth, async (req, res) => {
     // (camp/member/missing audience) are still displayed correctly.
     const allActiveFaqs = await db.findFAQs({ isActive: true });
     const faqs = allActiveFaqs
-      .map((faq) => ({
-        ...faq,
-        audience: normalizeAudience(faq.audience)
-      }))
+      .map((faq) => {
+        const plainFaq = typeof faq?.toObject === 'function' ? faq.toObject() : faq;
+        return {
+          ...plainFaq,
+          audience: normalizeAudience(plainFaq?.audience)
+        };
+      })
       .filter((faq) => audienceFilter.includes(faq.audience));
 
     res.json({ faqs, audienceFilter });
