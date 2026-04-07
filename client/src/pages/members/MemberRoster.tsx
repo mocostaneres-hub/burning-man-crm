@@ -24,6 +24,8 @@ interface RosterMember extends Member {
 }
 
 type RosterMode = 'none' | 'shifts_only' | 'full_membership' | 'mixed';
+const SOR_IMPLEMENTATION_CUTOFF_ISO = '2026-04-01T00:00:00.000Z';
+const SOR_IMPLEMENTATION_CUTOFF_MS = Date.parse(SOR_IMPLEMENTATION_CUTOFF_ISO);
 
 const deriveRosterMode = (roster: any): {
   mode: RosterMode;
@@ -35,11 +37,20 @@ const deriveRosterMode = (roster: any): {
   const analyzed = members.map((entry: any) => {
     const member = entry?.member || {};
     const signupSource = String(member?.signupSource || '').toLowerCase();
-    const isShiftsOnly = member?.isShiftsOnly === true || signupSource === 'shifts_only_invite' || member?.status === 'roster_only';
-    const isFullMembership = member?.isShiftsOnly === false
-      || signupSource === 'application'
+    const normalizedStatus = String(member?.status || '').toLowerCase();
+    const hasUserAccount = Boolean(member?.user);
+    const hasFullMembershipSignal = signupSource === 'application'
       || signupSource === 'standard_invite'
-      || (!isShiftsOnly && Boolean(member?.user));
+      || signupSource === 'manual';
+    const isShiftsOnly = signupSource === 'shifts_only_invite'
+      || (member?.isShiftsOnly === true
+        && normalizedStatus === 'roster_only'
+        && !hasUserAccount
+        && !hasFullMembershipSignal);
+    const isFullMembership = member?.isShiftsOnly === false
+      || hasFullMembershipSignal
+      || (!isShiftsOnly && hasUserAccount)
+      || (!isShiftsOnly && normalizedStatus !== 'roster_only');
     return { isShiftsOnly, isFullMembership };
   });
 
@@ -267,6 +278,7 @@ const MemberRoster: React.FC = () => {
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
   const [campAcceptingApplications, setCampAcceptingApplications] = useState(false);
+  const [campCreatedAtMs, setCampCreatedAtMs] = useState<number | null>(null);
   const [rosterModeState, setRosterModeState] = useState<{
     mode: RosterMode;
     hasShiftsOnlyRoster: boolean;
@@ -293,8 +305,11 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = isCampContext && isAdminOrLead;
   const canEdit = canAccessRoster;
+  const isLegacyPreSorCamp = campCreatedAtMs !== null && campCreatedAtMs < SOR_IMPLEMENTATION_CUTOFF_MS;
   const activeRosterType: RosterMode = !hasActiveRoster
     ? 'none'
+    : isLegacyPreSorCamp
+      ? 'full_membership'
     : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
       ? rosterModeState.mode
       : selectedRosterType || rosterModeState.mode;
@@ -612,8 +627,11 @@ const MemberRoster: React.FC = () => {
           const campResponse = await api.get(`/camps/${user.campLeadCampId}`);
           const camp = campResponse?.camp || campResponse;
           setCampAcceptingApplications(Boolean(camp?.acceptingApplications));
+          const createdAtMs = Date.parse(String(camp?.createdAt || ''));
+          setCampCreatedAtMs(Number.isNaN(createdAtMs) ? null : createdAtMs);
         } catch (_campError) {
           setCampAcceptingApplications(false);
+          setCampCreatedAtMs(null);
         }
         return;
       }
@@ -622,6 +640,8 @@ const MemberRoster: React.FC = () => {
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
       setCampAcceptingApplications(Boolean((campData as any)?.acceptingApplications));
+      const createdAtMs = Date.parse(String((campData as any)?.createdAt || ''));
+      setCampCreatedAtMs(Number.isNaN(createdAtMs) ? null : createdAtMs);
     } catch (err) {
       console.error('Error fetching camp data:', err);
       setError('Failed to load camp data');
