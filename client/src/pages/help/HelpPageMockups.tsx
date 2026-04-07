@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Button, Input } from '../../components/ui';
-import { BookOpen, Layers, LayoutGrid, MessageCircle, Search } from 'lucide-react';
+import { Book, LayoutDashboard, Users, MessageCircle, Search } from 'lucide-react';
 
 type FaqItem = {
   question: string;
@@ -67,7 +67,7 @@ const HelpPageMockups: React.FC = () => {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <LayoutGrid className="w-5 h-5 text-green-600" />
+            <LayoutDashboard className="w-5 h-5 text-green-600" />
             <h2 className="text-h2 font-lato-bold text-custom-text">Option 1 - Category Dashboard</h2>
           </div>
           <Button variant="outline">Choose Option 1</Button>
@@ -130,7 +130,7 @@ const HelpPageMockups: React.FC = () => {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-green-600" />
+            <Users className="w-5 h-5 text-green-600" />
             <h2 className="text-h2 font-lato-bold text-custom-text">Option 2 - Knowledge Base Sections</h2>
           </div>
           <Button variant="outline">Choose Option 2</Button>
@@ -175,7 +175,7 @@ const HelpPageMockups: React.FC = () => {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-green-600" />
+            <Book className="w-5 h-5 text-green-600" />
             <h2 className="text-h2 font-lato-bold text-custom-text">Option 3 - Magazine Category Cards</h2>
           </div>
           <Button variant="outline">Choose Option 3</Button>
