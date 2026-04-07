@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
-import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
+import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -214,6 +214,9 @@ const MemberRoster: React.FC = () => {
   const [hasActiveRoster, setHasActiveRoster] = useState(false); // Will be set to true if active roster is found
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [showRosterSetupModal, setShowRosterSetupModal] = useState(false);
+  const [rosterSetupStep, setRosterSetupStep] = useState<1 | 2>(1);
+  const [rosterSetupType, setRosterSetupType] = useState<'shifts_only' | 'full_membership' | null>(null);
   const [duesActionModal, setDuesActionModal] = useState<{
     isOpen: boolean;
     member: any;
@@ -289,8 +292,9 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = isCampContext && isAdminOrLead;
   const canEdit = canAccessRoster;
-  const canViewMetrics = canAccessRoster;
-  const canUseFilters = canAccessRoster;
+  const isFullMembershipRoster = hasActiveRoster && rosterModeState.mode === 'full_membership';
+  const canViewMetrics = canAccessRoster && isFullMembershipRoster;
+  const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
   useEffect(() => {
     if (duesActionModal.isOpen) {
@@ -863,24 +867,71 @@ const MemberRoster: React.FC = () => {
     }
   };
 
-  // Handle creating new roster
-  const handleCreateRoster = useCallback(async () => {
-    if (!campId || !canEdit) return;
+  // Create roster record
+  const createRosterRecord = useCallback(async (): Promise<boolean> => {
+    if (!campId || !canEdit) return false;
     
     try {
       setCreateLoading(true);
       await api.post(`/camps/${campId}/roster/create`);
       setHasActiveRoster(true);
-      // Refresh members data
       await fetchMembers();
-      alert('New roster created successfully!');
+      return true;
     } catch (error) {
       console.error('Error creating roster:', error);
       alert('Failed to create new roster');
+      return false;
     } finally {
       setCreateLoading(false);
     }
   }, [campId, canEdit, fetchMembers]);
+
+  // Backward-compatible direct create
+  const handleCreateRoster = useCallback(async () => {
+    const created = await createRosterRecord();
+    if (created) {
+      alert('New roster created successfully!');
+    }
+  }, [createRosterRecord]);
+
+  const handleOpenRosterSetupModal = () => {
+    setRosterSetupType('shifts_only');
+    setRosterSetupStep(1);
+    setShowRosterSetupModal(true);
+  };
+
+  const handleCloseRosterSetupModal = () => {
+    if (createLoading) return;
+    setShowRosterSetupModal(false);
+    setRosterSetupStep(1);
+    setRosterSetupType(null);
+  };
+
+  const handleRosterSetupContinue = async () => {
+    if (!rosterSetupType) return;
+    if (rosterSetupStep === 1) {
+      setRosterSetupStep(2);
+      return;
+    }
+
+    const created = await createRosterRecord();
+    if (!created) return;
+
+    setShowRosterSetupModal(false);
+    setRosterSetupStep(1);
+    setRosterSetupType(null);
+
+    if (rosterSetupType === 'shifts_only') {
+      setImportRosterModalOpen(true);
+      return;
+    }
+
+    if (campAcceptingApplications) {
+      setInviteModalOpen(true);
+    } else {
+      alert('Roster created. To send full-member invitations, enable applications in Camp Settings first.');
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1284,7 +1335,7 @@ const MemberRoster: React.FC = () => {
           {canEdit && !hasActiveRoster && (
             <Button
               variant="primary"
-              onClick={handleCreateRoster}
+              onClick={handleOpenRosterSetupModal}
               disabled={createLoading}
               className="flex items-center gap-2"
             >
@@ -1293,7 +1344,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && (
+          {canEdit && hasActiveRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1308,7 +1359,7 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && (
+          {canEdit && hasActiveRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1343,7 +1394,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && (
+          {canEdit && hasActiveRoster && rosterModeState.mode !== 'none' && (
             <Button
               variant="outline"
               className="flex items-center gap-2"
@@ -1367,17 +1418,6 @@ const MemberRoster: React.FC = () => {
               Archive Roster
             </Button>
           )}
-
-          <Button
-            variant="outline"
-            onClick={fetchMembers}
-            disabled={loading}
-            className="flex items-center gap-2"
-            title="Reload the roster data and latest updates."
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
 
           {showAddMemberTile && canEdit && rosterId && (
             <Button
@@ -1951,7 +1991,7 @@ const MemberRoster: React.FC = () => {
             {canEdit && (
               <Button
                 variant="primary"
-                onClick={handleCreateRoster}
+                onClick={handleOpenRosterSetupModal}
                 disabled={createLoading}
                 className="flex items-center gap-2 mx-auto"
               >
@@ -2738,6 +2778,100 @@ const MemberRoster: React.FC = () => {
         campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
         customFields={customFields}
       />
+
+      {/* Create Roster Setup Modal */}
+      <Modal
+        isOpen={showRosterSetupModal}
+        onClose={handleCloseRosterSetupModal}
+        title="Create New Roster"
+      >
+        <div className="space-y-4">
+          <div className="text-xs text-gray-500">
+            Step {rosterSetupStep} of 2
+          </div>
+
+          {rosterSetupStep === 1 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-700">
+                Choose the roster type for this camp. You can add people after creation.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setRosterSetupType('shifts_only')}
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  rosterSetupType === 'shifts_only'
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <p className="font-semibold text-custom-text">Shifts-Only Roster</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Best when your camp is not accepting full membership applications. Add roster records for shifts without sending application invites.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRosterSetupType('full_membership')}
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  rosterSetupType === 'full_membership'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <p className="font-semibold text-custom-text">Full Membership Roster</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Best when your camp is accepting applications. Invite people to apply and join as full members in your standard camp flow.
+                </p>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-700">
+                You selected <span className="font-semibold">{rosterSetupType === 'shifts_only' ? 'Shifts-Only Roster' : 'Full Membership Roster'}</span>.
+              </p>
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                {rosterSetupType === 'shifts_only' ? (
+                  <>
+                    Next: we will create the roster, then open CSV import for shifts-only members (no invites sent).
+                  </>
+                ) : (
+                  <>
+                    Next: we will create the roster, then open full-membership invite import.
+                    {!campAcceptingApplications && (
+                      <p className="mt-2 text-amber-700">
+                        Note: Applications are currently OFF. You can still create the roster, but invites will stay unavailable until applications are enabled.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={rosterSetupStep === 1 ? handleCloseRosterSetupModal : () => setRosterSetupStep(1)}
+              disabled={createLoading}
+            >
+              {rosterSetupStep === 1 ? 'Cancel' : 'Back'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleRosterSetupContinue}
+              disabled={createLoading || !rosterSetupType}
+            >
+              {createLoading
+                ? 'Creating...'
+                : rosterSetupStep === 1
+                  ? 'Continue'
+                  : 'Create and Continue'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Camp Lead Confirmation Modal */}
       <CampLeadConfirmModal
