@@ -27,6 +27,7 @@ interface SupportMessage {
 }
 
 type RequesterType = 'camp' | 'member' | 'other';
+type FAQAudienceTarget = 'camps' | 'members' | 'all' | 'both';
 const SHOW_SUPPORT_MESSAGES_SECTION = false;
 
 const Help: React.FC = () => {
@@ -48,7 +49,7 @@ const Help: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Determine the target audience based on URL
-  const getTargetAudience = () => {
+  const getTargetAudience = (): FAQAudienceTarget => {
     if (location.pathname === '/camp/help') return 'camps';
     if (location.pathname === '/member/help') return 'members';
     if (user?.accountType === 'admin' || user?.isSystemAdmin) return 'all';
@@ -88,27 +89,11 @@ const Help: React.FC = () => {
 
   const loadFAQs = async () => {
     try {
-      const response = await apiService.get('/help/faqs');
-      const allFaqs = response.faqs || [];
-      
-      // Filter FAQs based on target audience
       const targetAudience = getTargetAudience();
-      let filteredFaqs = allFaqs;
-      
-      if (targetAudience === 'camps') {
-        filteredFaqs = allFaqs.filter(
-          faq => faq.audience === 'camps' || faq.audience === 'both' || faq.audience === 'homepage'
-        );
-      } else if (targetAudience === 'members') {
-        filteredFaqs = allFaqs.filter(
-          faq => faq.audience === 'members' || faq.audience === 'both' || faq.audience === 'homepage'
-        );
-      } else if (targetAudience === 'both') {
-        filteredFaqs = allFaqs.filter(faq => faq.audience === 'both' || faq.audience === 'homepage');
-      }
-      // For 'all' (admin), show all FAQs
-      
-      setFaqs(filteredFaqs);
+      const response = await apiService.get('/help/faqs', {
+        params: { audience: targetAudience }
+      });
+      setFaqs(response.faqs || []);
     } catch (err) {
       console.error('Error loading FAQs:', err);
     }

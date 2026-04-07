@@ -2,10 +2,10 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { authenticateToken } = require('../middleware/auth');
-const FAQ = require('../models/FAQ');
 const { sendSupportContactEmail } = require('../services/emailService');
 
 const router = express.Router();
+const VALID_AUDIENCES = new Set(['both', 'camps', 'members', 'homepage', 'all']);
 
 // Optional authentication middleware
 const optionalAuth = (req, res, next) => {
@@ -21,31 +21,67 @@ const optionalAuth = (req, res, next) => {
   }
 };
 
+const normalizeAudience = (value) => {
+  const audience = String(value || '').toLowerCase().trim();
+  if (audience === 'camp' || audience === 'camps') return 'camps';
+  if (audience === 'member' || audience === 'members' || audience === 'personal') return 'members';
+  if (audience === 'homepage' || audience === 'home' || audience === 'public') return 'homepage';
+  if (audience === 'both' || audience === 'all' || audience === 'shared') return 'both';
+  return 'both';
+};
+
+const resolveRequestedAudience = (rawAudience) => {
+  const normalized = normalizeAudience(rawAudience);
+  if (String(rawAudience || '').toLowerCase().trim() === 'all') return 'all';
+  if (VALID_AUDIENCES.has(normalized)) return normalized;
+  return null;
+};
+
+const resolveAudienceFilter = ({ user, requestedAudience }) => {
+  if (!user) {
+    return ['both', 'homepage'];
+  }
+
+  const isAdmin = user.accountType === 'admin' || user.isSystemAdmin === true;
+  if (isAdmin) {
+    if (requestedAudience === 'camps') return ['both', 'camps', 'homepage'];
+    if (requestedAudience === 'members') return ['both', 'members', 'homepage'];
+    if (requestedAudience === 'homepage') return ['homepage'];
+    return ['both', 'camps', 'members', 'homepage'];
+  }
+
+  // Honor page context (camp/member help routes), not only accountType.
+  if (requestedAudience === 'camps') return ['both', 'camps', 'homepage'];
+  if (requestedAudience === 'members') return ['both', 'members', 'homepage'];
+  if (requestedAudience === 'homepage') return ['both', 'homepage'];
+
+  if (user.accountType === 'camp') return ['both', 'camps', 'homepage'];
+  if (user.accountType === 'personal') return ['both', 'members', 'homepage'];
+  return ['both', 'homepage'];
+};
+
 // @route   GET /api/help/faqs
 // @desc    Get all active FAQs filtered by account type
 // @access  Public (with optional authentication)
 router.get('/faqs', optionalAuth, async (req, res) => {
   try {
-    // Build audience filter based on user account type
-    let audienceFilter = ['both', 'homepage']; // Default for non-authenticated users
-    
-    if (req.user) {
-      if (req.user.accountType === 'admin') {
-        // Admin users see all FAQs
-        audienceFilter = ['both', 'camps', 'members', 'homepage'];
-      } else if (req.user.accountType === 'camp') {
-        audienceFilter = ['both', 'camps'];
-      } else if (req.user.accountType === 'personal') {
-        audienceFilter = ['both', 'members'];
-      }
-    }
-
-    const faqs = await db.findFAQs({
-      isActive: true,
-      audience: audienceFilter
+    const requestedAudience = resolveRequestedAudience(req.query?.audience);
+    const audienceFilter = resolveAudienceFilter({
+      user: req.user,
+      requestedAudience
     });
 
-    res.json({ faqs });
+    // Pull active FAQs and apply visibility rules here so legacy values
+    // (camp/member/missing audience) are still displayed correctly.
+    const allActiveFaqs = await db.findFAQs({ isActive: true });
+    const faqs = allActiveFaqs
+      .map((faq) => ({
+        ...faq,
+        audience: normalizeAudience(faq.audience)
+      }))
+      .filter((faq) => audienceFilter.includes(faq.audience));
+
+    res.json({ faqs, audienceFilter });
   } catch (error) {
     console.error('Get FAQs error:', error);
     res.status(500).json({ message: 'Server error' });
