@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button, Card, Input, Modal } from '../components/ui';
 import Footer from '../components/layout/Footer';
-import { Send, MessageCircle as MessageCircleIcon, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { Send, MessageCircle as MessageCircleIcon, HelpCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
@@ -16,28 +16,16 @@ interface FAQ {
   audience?: 'camps' | 'members' | 'both' | 'homepage';
 }
 
-interface SupportMessage {
-  _id: string;
-  subject: string;
-  message: string;
-  status: 'open' | 'in-progress' | 'resolved';
-  priority: 'low' | 'medium' | 'high';
-  createdAt: string;
-  updatedAt: string;
-}
-
 type RequesterType = 'camp' | 'member' | 'other';
 type FAQAudienceTarget = 'camps' | 'members' | 'all' | 'both';
-const SHOW_SUPPORT_MESSAGES_SECTION = false;
 
 const Help: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
-  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeCategory, setActiveCategory] = useState('All');
   const [showContactModal, setShowContactModal] = useState(false);
   const [contactForm, setContactForm] = useState({
     requesterType: 'other' as RequesterType,
@@ -49,12 +37,12 @@ const Help: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Determine the target audience based on URL
-  const getTargetAudience = (): FAQAudienceTarget => {
+  const getTargetAudience = useCallback((): FAQAudienceTarget => {
     if (location.pathname === '/camp/help') return 'camps';
     if (location.pathname === '/member/help') return 'members';
     if (user?.accountType === 'admin' || user?.isSystemAdmin) return 'all';
     return 'both'; // Default for non-authenticated users on /help
-  };
+  }, [location.pathname, user?.accountType, user?.isSystemAdmin]);
 
   // Redirect authenticated users from /help to their appropriate help page
   useEffect(() => {
@@ -68,26 +56,7 @@ const Help: React.FC = () => {
     }
   }, [location.pathname, user, navigate]);
 
-  useEffect(() => {
-    loadHelpData();
-  }, [location.pathname, user?.accountType]);
-
-  const loadHelpData = async () => {
-    try {
-      setLoading(true);
-      const requests: Promise<any>[] = [loadFAQs()];
-      if (SHOW_SUPPORT_MESSAGES_SECTION) {
-        requests.push(loadSupportMessages());
-      }
-      await Promise.all(requests);
-    } catch (err) {
-      console.error('Error loading help data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadFAQs = async () => {
+  const loadFAQs = useCallback(async () => {
     try {
       const targetAudience = getTargetAudience();
       const response = await apiService.get('/help/faqs', {
@@ -97,16 +66,50 @@ const Help: React.FC = () => {
     } catch (err) {
       console.error('Error loading FAQs:', err);
     }
-  };
+  }, [getTargetAudience]);
 
-  const loadSupportMessages = async () => {
-    try {
-      const response = await apiService.get('/help/support-messages');
-      setSupportMessages(response);
-    } catch (err) {
-      console.error('Error loading support messages:', err);
+  useEffect(() => {
+    const loadHelpData = async () => {
+      try {
+        setLoading(true);
+        await loadFAQs();
+      } catch (err) {
+        console.error('Error loading help data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHelpData();
+  }, [loadFAQs]);
+
+  const categories = useMemo(() => {
+    const values = Array.from(new Set(faqs.map((faq) => faq.category).filter(Boolean)));
+    return ['All', ...values];
+  }, [faqs]);
+
+  useEffect(() => {
+    if (!categories.includes(activeCategory)) {
+      setActiveCategory('All');
     }
-  };
+  }, [categories, activeCategory]);
+
+  const filteredFaqs = useMemo(() => {
+    if (activeCategory === 'All') return faqs;
+    return faqs.filter((faq) => faq.category === activeCategory);
+  }, [faqs, activeCategory]);
+
+  const faqsByCategory = useMemo(() => {
+    return filteredFaqs.reduce<Record<string, FAQ[]>>((acc, faq) => {
+      if (!acc[faq.category]) acc[faq.category] = [];
+      acc[faq.category].push(faq);
+      return acc;
+    }, {});
+  }, [filteredFaqs]);
+
+  const sortedCategoryKeys = useMemo(() => {
+    return Object.keys(faqsByCategory).sort((a, b) => a.localeCompare(b));
+  }, [faqsByCategory]);
 
   const handleContactSubmit = async () => {
     try {
@@ -168,210 +171,159 @@ const Help: React.FC = () => {
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {['FAQs', 'Contact Support'].map((tab, index) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(index)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === index
-                    ? 'border-custom-primary text-custom-primary'
-                    : 'border-transparent text-custom-text-secondary hover:text-custom-text hover:border-gray-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <aside className="lg:col-span-3">
+          <Card className="p-4 sticky top-24">
+            <p className="text-xs uppercase tracking-wide text-custom-text-secondary mb-3">Categories</p>
+            <div className="space-y-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setActiveCategory(category)}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm transition ${
+                    activeCategory === category
+                      ? 'bg-green-100 text-green-800 font-semibold'
+                      : 'bg-white text-custom-text border border-gray-200 hover:border-green-200 hover:bg-green-50'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </Card>
+        </aside>
 
-      {/* FAQs Tab */}
-      {activeTab === 0 && (
-        <div className="space-y-6">
+        <section className="lg:col-span-6 space-y-6">
           <div className="text-center">
             <div className="w-12 h-12 text-custom-primary mx-auto mb-4">
               <HelpCircle className="w-full h-full" />
             </div>
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              Frequently Asked Questions
-            </h2>
+            <h2 className="text-h2 font-lato-bold text-custom-text mb-2">Frequently Asked Questions</h2>
             <p className="text-body text-custom-text-secondary">
-              {(() => {
-                const targetAudience = getTargetAudience();
-                if (targetAudience === 'camps') {
-                  return 'Find quick answers to common questions about managing your camp';
-                } else if (targetAudience === 'members') {
-                  return 'Find quick answers to common questions about finding camps and your G8Road experience';
-                } else {
-                  return 'Find quick answers to common questions about using the G8Road CRM';
-                }
-              })()}
+              Answers are fully visible so you can scan quickly without expanding cards.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {faqs.map((faq) => (
-              <FAQCard key={faq._id} faq={faq} />
-            ))}
-          </div>
-
-          {faqs.length === 0 && (
+          {filteredFaqs.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 text-gray-400 mx-auto mb-4">
                 <HelpCircle className="w-full h-full" />
               </div>
-              <h3 className="text-h3 font-lato-bold text-custom-text-secondary mb-2">
-                No FAQs Available
-              </h3>
+              <h3 className="text-h3 font-lato-bold text-custom-text-secondary mb-2">No FAQs Available</h3>
               <p className="text-body text-custom-text-secondary">
                 Check back later for frequently asked questions and answers.
               </p>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Contact Support Tab */}
-      {activeTab === 1 && (
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 text-custom-primary mx-auto mb-4">
-              <MessageCircleIcon className="w-full h-full" />
-            </div>
-            <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
-              Contact Support
-            </h2>
-            <p className="text-body text-custom-text-secondary">
-              Can't find what you're looking for? Send us a message and we'll get back to you as soon as possible.
-            </p>
-          </div>
-
-          <Card className="p-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  I am a
-                </label>
-                <select
-                  value={contactForm.requesterType}
-                  onChange={(e) => setContactForm({ ...contactForm, requesterType: e.target.value as RequesterType })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-                >
-                  <option value="camp">Camp</option>
-                  <option value="member">Member</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  value={contactForm.requesterEmail}
-                  onChange={(e) => setContactForm({ ...contactForm, requesterEmail: e.target.value })}
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Phone Number <span className="text-custom-text-secondary">(Optional)</span>
-                </label>
-                <Input
-                  type="tel"
-                  value={contactForm.requesterPhone}
-                  onChange={(e) => setContactForm({ ...contactForm, requesterPhone: e.target.value })}
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Subject
-                </label>
-                <Input
-                  value={contactForm.subject}
-                  onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                  placeholder="What can we help you with?"
-                />
-              </div>
-
-              <div>
-                <label className="block text-label font-medium text-custom-text mb-2">
-                  Message
-                </label>
-                <textarea
-                  value={contactForm.message}
-                  onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                  placeholder="Please describe your question or issue in detail..."
-                  rows={6}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
-                />
-              </div>
-
-              <Button
-                variant="primary"
-                onClick={() => setShowContactModal(true)}
-                disabled={
-                  !contactForm.requesterType ||
-                  !contactForm.requesterEmail.trim() ||
-                  !contactForm.subject.trim() ||
-                  !contactForm.message.trim()
-                }
-                className="w-full flex items-center justify-center gap-2"
-              >
-                <div className="w-4 h-4">
-                  <Send className="w-full h-full" />
+          ) : (
+            <div className="space-y-5">
+              {sortedCategoryKeys.map((category) => (
+                <div key={category}>
+                  <div className="mb-3">
+                    <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                      {category}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {(faqsByCategory[category] || []).map((faq) => (
+                      <Card key={faq._id} className="border border-gray-200">
+                        <p className="text-h3 font-lato-bold text-custom-text mb-2">{faq.question}</p>
+                        <p className="text-body text-custom-text-secondary leading-relaxed">{faq.answer}</p>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
-                Send Message
-              </Button>
-            </div>
-          </Card>
-
-          {/* Support Messages History (deprecated - keep code behind flag for easy re-enable) */}
-          {SHOW_SUPPORT_MESSAGES_SECTION && supportMessages.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-h3 font-lato-bold text-custom-text mb-4">
-                Your Support Messages
-              </h3>
-              <div className="space-y-4">
-                {supportMessages.map((message) => (
-                  <Card key={message._id} className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-body font-medium text-custom-text">
-                          {message.subject}
-                        </h4>
-                        <p className="text-sm text-custom-text-secondary mt-1">
-                          {message.message.substring(0, 100)}...
-                        </p>
-                        <p className="text-xs text-custom-text-secondary mt-2">
-                          {new Date(message.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        message.status === 'resolved' 
-                          ? 'bg-green-100 text-green-800'
-                          : message.status === 'in-progress'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {message.status}
-                      </span>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+              ))}
             </div>
           )}
-        </div>
-      )}
+        </section>
+
+        <aside className="lg:col-span-3 space-y-4">
+          <Card className="p-4 sticky top-24">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageCircleIcon className="w-4 h-4 text-custom-primary" />
+              <h3 className="text-sm font-semibold text-custom-text">Contact Support</h3>
+            </div>
+            <p className="text-sm text-custom-text-secondary mb-4">
+              Need help with something specific? Send us a message.
+            </p>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setContactForm((prev) => ({
+                  ...prev,
+                  requesterType: user?.accountType === 'camp' ? 'camp' : user?.accountType === 'personal' ? 'member' : prev.requesterType,
+                  requesterEmail: user?.email || prev.requesterEmail
+                }));
+                setShowContactModal(true);
+              }}
+              className="w-full"
+            >
+              Contact Support
+            </Button>
+          </Card>
+        </aside>
+      </div>
+
+      <div className="mt-8">
+        <Card className="p-6 max-w-3xl mx-auto">
+          <h3 className="text-h3 font-lato-bold text-custom-text mb-4">Quick Support Form</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">I am a</label>
+              <select
+                value={contactForm.requesterType}
+                onChange={(e) => setContactForm({ ...contactForm, requesterType: e.target.value as RequesterType })}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+              >
+                <option value="camp">Camp</option>
+                <option value="member">Member</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <Input
+              type="email"
+              label="Email Address"
+              value={contactForm.requesterEmail}
+              onChange={(e) => setContactForm({ ...contactForm, requesterEmail: e.target.value })}
+              placeholder="you@example.com"
+            />
+            <Input
+              type="text"
+              label="Subject"
+              value={contactForm.subject}
+              onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+              placeholder="What can we help you with?"
+            />
+            <div>
+              <label className="block text-label font-medium text-custom-text mb-2">
+                Message
+              </label>
+              <textarea
+                value={contactForm.message}
+                onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                placeholder="Please describe your question or issue in detail..."
+                rows={5}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent resize-none"
+              />
+            </div>
+            <Button
+              variant="primary"
+              onClick={() => setShowContactModal(true)}
+              disabled={
+                !contactForm.requesterType ||
+                !contactForm.requesterEmail.trim() ||
+                !contactForm.subject.trim() ||
+                !contactForm.message.trim()
+              }
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              Send Message
+            </Button>
+          </div>
+        </Card>
+      </div>
 
       {/* Contact Confirmation Modal */}
       <Modal
@@ -448,42 +400,6 @@ const Help: React.FC = () => {
       {/* Footer */}
       <Footer />
     </div>
-  );
-};
-
-// FAQ Card Component
-const FAQCard: React.FC<{ faq: FAQ }> = ({ faq }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <Card className="p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h3 className="text-h3 font-lato-bold text-custom-text mb-2">
-            {faq.question}
-          </h3>
-          <p className="text-sm text-custom-text-secondary mb-2">
-            {faq.category}
-          </p>
-        </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="ml-4 p-2 text-custom-text-secondary hover:text-custom-text transition-colors"
-        >
-          <div className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-            <ChevronDown className="w-full h-full" />
-          </div>
-        </button>
-      </div>
-      
-      {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <p className="text-body text-custom-text-secondary">
-            {faq.answer}
-          </p>
-        </div>
-      )}
-    </Card>
   );
 };
 
