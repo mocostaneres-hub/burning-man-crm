@@ -209,7 +209,9 @@ const FAQ: React.FC = () => {
     const loadFAQs = async () => {
       try {
         setLoading(true);
-        const response = await apiService.get('/help/faqs');
+        const response = await apiService.get('/help/faqs', {
+          params: { audience: 'homepage' }
+        });
         const apiFaqs = response.faqs || [];
         setFaqData(apiFaqs);
       } catch (error) {
@@ -234,10 +236,7 @@ const FAQ: React.FC = () => {
             </h2>
           </div>
           <p className="text-h5 text-custom-text-secondary max-w-2xl mx-auto">
-            {user?.accountType === 'camp' 
-              ? 'Everything you need to know about managing your G8Road camp'
-              : 'Everything you need to know about how G8Road works: finding a camp or managing a camp you lead.'
-            }
+            Everything you need to know before joining G8Road.
           </p>
         </div>
 

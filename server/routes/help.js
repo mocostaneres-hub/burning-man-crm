@@ -25,6 +25,7 @@ const resolveRequestedAudience = (rawAudience) => {
 
 const resolveAudienceFilter = ({ user, requestedAudience }) => {
   if (!user) {
+    if (requestedAudience === 'homepage') return ['homepage'];
     return ['both', 'homepage'];
   }
 

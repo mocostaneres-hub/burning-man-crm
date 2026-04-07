@@ -158,8 +158,8 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {/* FAQ Section */}
-      <FAQ />
+      {/* FAQ Section (homepage visitors only) */}
+      {!isAuthenticated && <FAQ />}
 
       {/* Footer */}
       <Footer />
