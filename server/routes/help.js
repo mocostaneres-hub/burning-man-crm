@@ -31,20 +31,20 @@ const resolveAudienceFilter = ({ user, requestedAudience }) => {
 
   const isAdmin = user.accountType === 'admin' || user.isSystemAdmin === true;
   if (isAdmin) {
-    if (requestedAudience === 'camps') return ['both', 'camps', 'homepage'];
-    if (requestedAudience === 'members') return ['both', 'members', 'homepage'];
+    if (requestedAudience === 'camps') return ['both', 'camps'];
+    if (requestedAudience === 'members') return ['both', 'members'];
     if (requestedAudience === 'homepage') return ['homepage'];
     return ['both', 'camps', 'members', 'homepage'];
   }
 
   // Honor page context (camp/member help routes), not only accountType.
-  if (requestedAudience === 'camps') return ['both', 'camps', 'homepage'];
-  if (requestedAudience === 'members') return ['both', 'members', 'homepage'];
-  if (requestedAudience === 'homepage') return ['both', 'homepage'];
+  if (requestedAudience === 'camps') return ['both', 'camps'];
+  if (requestedAudience === 'members') return ['both', 'members'];
+  if (requestedAudience === 'homepage') return ['homepage'];
 
-  if (user.accountType === 'camp') return ['both', 'camps', 'homepage'];
-  if (user.accountType === 'personal') return ['both', 'members', 'homepage'];
-  return ['both', 'homepage'];
+  if (user.accountType === 'camp') return ['both', 'camps'];
+  if (user.accountType === 'personal') return ['both', 'members'];
+  return ['both'];
 };
 
 // @route   GET /api/help/faqs

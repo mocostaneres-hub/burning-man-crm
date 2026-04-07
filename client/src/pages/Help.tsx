@@ -3,7 +3,7 @@ import { Button, Card, Input, Modal } from '../components/ui';
 import Footer from '../components/layout/Footer';
 import { Send, MessageCircle as MessageCircleIcon, HelpCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import apiService from '../services/api';
 import { renderRichTextToHtml } from '../utils/richText';
 
@@ -24,6 +24,7 @@ const Help: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -91,11 +92,59 @@ const Help: React.FC = () => {
     return ['All', ...values];
   }, [faqs]);
 
+  const categoryToSlug = useCallback((category: string) => {
+    return String(category || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }, []);
+
+  const slugToCategory = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach((category) => {
+      map.set(categoryToSlug(category), category);
+    });
+    return map;
+  }, [categories, categoryToSlug]);
+
+  const getCategoryUrl = useCallback((category: string) => {
+    const slug = categoryToSlug(category);
+    if (!slug || category === 'All') return location.pathname;
+    return `${location.pathname}?category=${slug}`;
+  }, [categoryToSlug, location.pathname]);
+
+  const setCategoryWithUrl = useCallback((category: string) => {
+    setActiveCategory(category);
+    const nextParams = new URLSearchParams(searchParams);
+    if (category === 'All') {
+      nextParams.delete('category');
+    } else {
+      nextParams.set('category', categoryToSlug(category));
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [categoryToSlug, searchParams, setSearchParams]);
+
   useEffect(() => {
+    const requestedSlug = searchParams.get('category');
+    if (requestedSlug) {
+      const matchedCategory = slugToCategory.get(requestedSlug);
+      if (matchedCategory) {
+        if (matchedCategory !== activeCategory) {
+          setActiveCategory(matchedCategory);
+        }
+        return;
+      }
+      if (activeCategory !== 'All') {
+        setActiveCategory('All');
+      }
+      return;
+    }
+
     if (!categories.includes(activeCategory)) {
       setActiveCategory('All');
     }
-  }, [categories, activeCategory]);
+  }, [activeCategory, categories, searchParams, slugToCategory]);
 
   const filteredFaqs = useMemo(() => {
     if (activeCategory === 'All') return faqs;
@@ -193,7 +242,8 @@ const Help: React.FC = () => {
                 <button
                   key={category}
                   type="button"
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => setCategoryWithUrl(category)}
+                  title={getCategoryUrl(category)}
                   className={`w-full text-left rounded-lg px-3 py-2 text-sm transition ${
                     activeCategory === category
                       ? 'bg-green-100 text-green-800 font-semibold'

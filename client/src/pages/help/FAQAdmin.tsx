@@ -41,6 +41,7 @@ const FAQAdmin: React.FC = () => {
     'General',
     'Account Management',
     'Camp Management',
+    'Events and Shifts',
     'Applications',
     'Tasks',
     'Members',
