@@ -298,11 +298,14 @@ const MemberRoster: React.FC = () => {
     : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
       ? rosterModeState.mode
       : selectedRosterType || rosterModeState.mode;
-  const isFullMembershipRoster = hasActiveRoster && (
+  const isLikelyFullMembershipByCampSetting = hasActiveRoster
+    && campAcceptingApplications
+    && activeRosterType !== 'shifts_only';
+  const isFullMembershipRoster = (hasActiveRoster && (
     activeRosterType === 'full_membership'
     || rosterModeState.mode === 'full_membership'
     || rosterModeState.mode === 'mixed'
-  );
+  )) || isLikelyFullMembershipByCampSetting;
   const canViewMetrics = canAccessRoster && isFullMembershipRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
