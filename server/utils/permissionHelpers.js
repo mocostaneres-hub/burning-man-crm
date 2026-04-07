@@ -188,6 +188,15 @@ async function isCampLeadForCamp(req, targetCampId) {
     return false;
   }
 
+  // Fast-path from auth context for delegated Camp Leads.
+  if (req.user.isCampLead === true && req.user.campLeadCampId) {
+    const authCampLeadCampId = req.user.campLeadCampId.toString();
+    if (authCampLeadCampId === targetCampId.toString()) {
+      console.log('✅ [Permission] Camp Lead access granted via auth context');
+      return true;
+    }
+  }
+
   try {
     const currentUserId = req.user._id.toString();
     console.log('🔍 [Permission] Checking Camp Lead status for user:', currentUserId);
@@ -226,6 +235,21 @@ async function isCampLeadForCamp(req, targetCampId) {
 
     if (roster) {
       console.log('✅ [Permission] Camp Lead access granted via roster query');
+      return true;
+    }
+
+    // Secondary: explicit camp-lead role on Member record for this camp.
+    // This supports delegated camp admins that were granted role access
+    // outside of roster isCampLead flag synchronization.
+    const roleBasedCampLead = members.some((memberRecord) => {
+      const sameCamp = memberRecord.camp?.toString() === targetCampId.toString();
+      const hasLeadRole = memberRecord.role === 'camp-lead';
+      const isActiveLikeStatus = ['active', 'approved'].includes((memberRecord.status || '').toLowerCase());
+      return sameCamp && hasLeadRole && isActiveLikeStatus;
+    });
+
+    if (roleBasedCampLead) {
+      console.log('✅ [Permission] Camp Lead access granted via member role');
       return true;
     }
 

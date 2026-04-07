@@ -362,7 +362,7 @@ router.get('/active', authenticateToken, async (req, res) => {
 
 // @route   POST /api/rosters
 // @desc    Create a new roster
-// @access  Private (Camp owners only)
+// @access  Private (Camp admins/leads)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -371,19 +371,23 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Roster name is required' });
     }
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
+    // Resolve camp from explicit query/body for delegated camp admins first,
+    // then fallback to JWT ownership camp.
+    const requestedCampId = req.body?.campId || req.query?.campId;
+    let campId = requestedCampId || await getUserCampId(req);
+    if (!campId) return res.status(404).json({ message: 'Camp not found' });
 
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    let camp = await db.findCamp({ _id: campId });
+    if (!camp && !requestedCampId) {
+      // Fallback lookup for legacy camp accounts missing campId in JWT.
+      campId = await getUserCampId(req);
+      camp = campId ? await db.findCamp({ _id: campId }) : null;
     }
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
     }
 
     // Check if there's already an active roster
@@ -443,7 +447,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
 // @route   PUT /api/rosters/:id
 // @desc    Update a roster (rename)
-// @access  Private (Camp owners only)
+// @access  Private (Camp admins/leads)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -453,32 +457,24 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Roster name is required' });
     }
     
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-
     // Find roster - try as ObjectId first, then as integer (for legacy numeric IDs)
-    let roster;
-    roster = await db.findRoster({ _id: id, camp: camp._id });
+    let roster = await db.findRoster({ _id: id });
     
     if (!roster) {
       // Fallback: try parsing as integer for legacy numeric IDs
-      roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
+      roster = await db.findRoster({ _id: parseInt(id, 10) });
     }
     
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
+    }
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
     }
 
     // Use the roster's actual ID for the update (could be ObjectId string or integer)
@@ -493,42 +489,35 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
 // @route   PUT /api/rosters/:id/archive
 // @desc    Archive a roster
-// @access  Private (Camp owners only)
+// @access  Private (Camp admins/leads)
 router.put('/:id/archive', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-
-    let roster = await db.findRoster({ _id: id, camp: camp._id });
+    let roster = await db.findRoster({ _id: id });
     if (!roster) {
       const numericId = parseInt(id, 10);
       if (!Number.isNaN(numericId)) {
-        roster = await db.findRoster({ _id: numericId, camp: camp._id });
+        roster = await db.findRoster({ _id: numericId });
       }
     }
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
     }
 
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    }
+
     if (roster.isArchived) {
       return res.status(400).json({ message: 'Roster is already archived' });
     }
 
-    const archivedRoster = await db.archiveRoster(parseInt(id), req.user._id);
+    const archivedRoster = await db.archiveRoster(roster._id, req.user._id);
     
     // Log roster archiving for CAMP
     await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
@@ -1038,29 +1027,28 @@ router.put('/:rosterId/members/:memberId', authenticateToken, async (req, res) =
 
 // @route   GET /api/rosters/:id
 // @desc    Get a specific roster with members
-// @access  Private (Camp owners only)
+// @access  Private (Camp admins/leads)
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
 
-    // Get camp using helper (immutable campId)
-    const campId = await getUserCampId(req);
-    if (!campId) {
-      return res.status(404).json({ message: 'Camp not found' });
+    let roster = await db.findRoster({ _id: id });
+    if (!roster) {
+      const numericId = parseInt(id, 10);
+      if (!Number.isNaN(numericId)) {
+        roster = await db.findRoster({ _id: numericId });
+      }
     }
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) {
-      return res.status(404).json({ message: 'Camp not found' });
-    }
-
-    const roster = await db.findRoster({ _id: parseInt(id), camp: camp._id });
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
+    }
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
     }
 
     // Populate member details
