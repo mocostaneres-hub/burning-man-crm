@@ -294,6 +294,9 @@ router.post('/events', authenticateToken, async (req, res) => {
         startTime: new Date(`${shift.date}T${shift.startTime}`),
         endTime: new Date(`${shift.date}T${shift.endTime}`),
         maxSignUps: parseInt(shift.maxSignUps),
+        requiredSkills: Array.isArray(shift.requiredSkills)
+          ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
+          : [],
         memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
         currentSignups: 0,
         createdBy: req.user._id
@@ -351,6 +354,10 @@ router.post('/events', authenticateToken, async (req, res) => {
 // @access  Private (Camp admins/leads only)
 router.post('/events/invite-entire-roster', authenticateToken, async (req, res) => {
   try {
+    const previewOnly = req.body?.previewOnly === true;
+    const skipRecentDays = Math.max(parseInt(req.body?.skipRecentDays, 10) || 0, 0);
+    const scheduleAtRaw = req.body?.scheduleAt;
+    const scheduleAt = scheduleAtRaw ? new Date(scheduleAtRaw) : null;
     // Resolve camp context (camp accounts/admins vs Camp Leads)
     let campId;
     if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
@@ -456,6 +463,46 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
     const campName = (camp && (camp.name || camp.campName)) || 'your camp';
     const shiftsUrl = `${clientUrl}/my-shifts`;
 
+    if (skipRecentDays > 0) {
+      const windowStart = new Date(Date.now() - skipRecentDays * 24 * 60 * 60 * 1000);
+      const recentUserNotifications = await NotificationModel.find({
+        recipient: { $in: userIds },
+        campId,
+        type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
+        createdAt: { $gte: windowStart }
+      }).select('recipient').lean();
+      const recentlyInvitedUserIds = new Set(
+        recentUserNotifications.map((item) => (item.recipient ? item.recipient.toString() : null)).filter(Boolean)
+      );
+      for (const recentId of recentlyInvitedUserIds) {
+        rosterUserIds.delete(recentId);
+      }
+
+      const filteredRosterOnly = rosterOnlyRecipients.filter((recipient) => {
+        const member = activeRoster.members.find((entry) => {
+          const memberId = entry?.member?._id ? entry.member._id.toString() : entry?.member?.toString();
+          return memberId && recipient.memberId && memberId === recipient.memberId;
+        })?.member;
+        const invitedAt = member?.invitedAt ? new Date(member.invitedAt) : null;
+        return !invitedAt || invitedAt < windowStart;
+      });
+      rosterOnlyRecipients.length = 0;
+      rosterOnlyRecipients.push(...filteredRosterOnly);
+    }
+
+    if (previewOnly) {
+      return res.json({
+        message: 'Invite preview generated.',
+        invitedCount: 0,
+        availableShiftCount: availableShifts.length,
+        recipientPreview: {
+          existingUsers: rosterUserIds.size,
+          rosterOnly: rosterOnlyRecipients.length,
+          total: rosterUserIds.size + rosterOnlyRecipients.length
+        }
+      });
+    }
+
     const template = await getTemplateByKey(EMAIL_TEMPLATE_KEYS.SHIFT_BULK_INVITE_ALL);
     const templateData = {
       camp_name: campName,
@@ -469,86 +516,105 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
       renderTemplateString(template?.textContent, templateData) ||
       `${campName} has open volunteer shifts available.\n\nVisit your shifts page to view and sign up: ${shiftsUrl}`;
 
-    // Send one email per existing user account
-    for (const userId of userIds) {
-      const email = userEmailMap.get(userId);
-      if (!email) continue;
-      try {
-        await sendEmail({
-          to: email,
-          subject,
-          html: htmlBody,
-          text: textBody
-        });
-      } catch (emailError) {
-        console.error('Bulk shift invite email error for user', userId, emailError);
+    const executeBulkInvite = async () => {
+      const userIdsToSend = Array.from(rosterUserIds);
+      // Send one email per existing user account
+      for (const userId of userIdsToSend) {
+        const email = userEmailMap.get(userId);
+        if (!email) continue;
+        try {
+          await sendEmail({
+            to: email,
+            subject,
+            html: htmlBody,
+            text: textBody
+          });
+        } catch (emailError) {
+          console.error('Bulk shift invite email error for user', userId, emailError);
+        }
       }
-    }
 
-    // Send one email per roster-only member (no user account yet) with invite token.
-    for (const recipient of rosterOnlyRecipients) {
-      try {
-        const crypto = require('crypto');
-        const token = crypto.randomBytes(24).toString('hex');
-        const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
-        await db.createInvite({
-          campId,
-          senderId: req.user._id,
-          recipient: recipient.email,
-          method: 'email',
-          token,
-          status: 'sent',
-          inviteType: 'shifts_only',
-          signupSource: 'shifts_only_invite',
-          memberId: recipient.memberId
-        });
+      // Send one email per roster-only member (no user account yet) with invite token.
+      for (const recipient of rosterOnlyRecipients) {
+        try {
+          const crypto = require('crypto');
+          const token = crypto.randomBytes(24).toString('hex');
+          const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+          await db.createInvite({
+            campId,
+            senderId: req.user._id,
+            recipient: recipient.email,
+            method: 'email',
+            token,
+            status: 'sent',
+            inviteType: 'shifts_only',
+            signupSource: 'shifts_only_invite',
+            memberId: recipient.memberId
+          });
 
-        await db.updateMember(recipient.memberId, {
-          status: 'invited',
-          invitedAt: new Date(),
-          inviteToken: token,
-          isShiftsOnly: true,
-          signupSource: 'shifts_only_invite'
-        });
+          await db.updateMember(recipient.memberId, {
+            status: 'invited',
+            invitedAt: new Date(),
+            inviteToken: token,
+            isShiftsOnly: true,
+            signupSource: 'shifts_only_invite'
+          });
 
-        const inviteSubject = `${campName} invited you to sign up for available shifts`;
-        const inviteTextBody = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
-        const inviteHtmlBody = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>${campName} invited you to sign up for available shifts</h2>
-            <p>${campName} has volunteer shifts available that could use your help.</p>
-            <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
-          </div>
-        `;
-        await sendEmail({
-          to: recipient.email,
-          subject: inviteSubject,
-          html: inviteHtmlBody,
-          text: inviteTextBody
-        });
-      } catch (emailError) {
-        console.error('Bulk shifts-only invite email error for member', recipient.memberId, emailError);
+          const inviteSubject = `${campName} invited you to sign up for available shifts`;
+          const inviteTextBody = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
+          const inviteHtmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>${campName} invited you to sign up for available shifts</h2>
+              <p>${campName} has volunteer shifts available that could use your help.</p>
+              <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
+            </div>
+          `;
+          await sendEmail({
+            to: recipient.email,
+            subject: inviteSubject,
+            html: inviteHtmlBody,
+            text: inviteTextBody
+          });
+        } catch (emailError) {
+          console.error('Bulk shifts-only invite email error for member', recipient.memberId, emailError);
+        }
       }
-    }
 
-    // Create one in-app notification per user
-    await createBulkNotifications(userIds, {
-      actor: req.user._id,
-      campId,
-      type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
-      title: 'Camp invited you to sign up for shifts',
-      message: 'Your camp has volunteer shifts available. Visit My Shifts to browse and sign up.',
-      link: '/my-shifts',
-      metadata: {
-        scope: 'all_shifts',
+      // Create one in-app notification per user
+      await createBulkNotifications(userIdsToSend, {
+        actor: req.user._id,
         campId,
+        type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
+        title: 'Camp invited you to sign up for shifts',
+        message: 'Your camp has volunteer shifts available. Visit My Shifts to browse and sign up.',
+        link: '/my-shifts',
+        metadata: {
+          scope: 'all_shifts',
+          campId,
+          availableShiftCount: availableShifts.length
+        }
+      });
+    };
+
+    if (scheduleAt && !Number.isNaN(scheduleAt.getTime()) && scheduleAt.getTime() > Date.now()) {
+      const delayMs = scheduleAt.getTime() - Date.now();
+      setTimeout(() => {
+        executeBulkInvite().catch((error) => {
+          console.error('Scheduled bulk invite failed:', error);
+        });
+      }, delayMs);
+      return res.json({
+        message: `Bulk invite scheduled for ${scheduleAt.toISOString()}.`,
+        invitedCount: rosterUserIds.size + rosterOnlyRecipients.length,
         availableShiftCount: availableShifts.length
-      }
-    });
+      });
+    }
+
+    await executeBulkInvite();
 
     return res.json({
       message: 'Bulk invite sent to roster members.',
-      invitedCount: userIds.length + rosterOnlyRecipients.length,
+      invitedCount: rosterUserIds.size + rosterOnlyRecipients.length,
       availableShiftCount: availableShifts.length
     });
   } catch (error) {
@@ -1248,6 +1314,9 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
           startTime: new Date(`${shift.date}T${shift.startTime}`),
           endTime: new Date(`${shift.date}T${shift.endTime}`),
           maxSignUps: parseInt(shift.maxSignUps),
+          requiredSkills: Array.isArray(shift.requiredSkills)
+            ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
+            : [],
           memberIds: existingShift ? existingShift.memberIds : [], // Preserve existing sign-ups
           currentSignups: existingShift ? (existingShift.currentSignups || 0) : 0,
           createdBy: existingShift ? existingShift.createdBy : req.user._id,

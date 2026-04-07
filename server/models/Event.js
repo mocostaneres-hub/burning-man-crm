@@ -36,6 +36,10 @@ const shiftSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Member'
   }],
+  requiredSkills: {
+    type: [String],
+    default: []
+  },
   status: {
     type: String,
     enum: ['active', 'cancelled', 'completed'],

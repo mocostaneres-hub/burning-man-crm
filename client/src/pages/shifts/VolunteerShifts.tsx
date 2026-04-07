@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
 import { formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
+import { useSkills } from '../../hooks/useSkills';
 
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
@@ -64,6 +65,19 @@ const VolunteerShifts: React.FC = () => {
   const [eventShiftSortKey, setEventShiftSortKey] = useState<'title' | 'date' | 'filled' | 'capacity' | 'remaining'>('date');
   const [eventShiftSortDir, setEventShiftSortDir] = useState<'asc' | 'desc'>('asc');
   const [bulkInviteLoading, setBulkInviteLoading] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [bulkShiftSelection, setBulkShiftSelection] = useState<number[]>([]);
+  const [bulkMaxSignupsInput, setBulkMaxSignupsInput] = useState(1);
+  const [globalInviteMode, setGlobalInviteMode] = useState<'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS'>('ALL_ROSTER');
+  const [skipRecentDays, setSkipRecentDays] = useState(7);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [invitePreview, setInvitePreview] = useState<{ existingUsers: number; rosterOnly: number; total: number } | null>(null);
+  const { skills: skillOptions } = useSkills();
+  const shiftTemplates = [
+    { key: 'morning', label: 'Morning Setup', startTime: '08:00', durationHours: 3 },
+    { key: 'afternoon', label: 'Afternoon Ops', startTime: '13:00', durationHours: 4 },
+    { key: 'evening', label: 'Evening Strike', startTime: '18:00', durationHours: 3 }
+  ];
 
   // Form state for creating events
   const [eventForm, setEventForm] = useState({
@@ -83,6 +97,7 @@ const VolunteerShifts: React.FC = () => {
       currentSignups: number;
       assignmentMode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
       selectedUserIds: string[];
+      requiredSkills: string[];
     }>
   });
   const [rosterMembers, setRosterMembers] = useState<Array<{
@@ -91,8 +106,8 @@ const VolunteerShifts: React.FC = () => {
     lastName: string;
     email: string;
     isLead: boolean;
+    skills?: string[];
   }>>([]);
-  const [rosterOnlyMemberCount, setRosterOnlyMemberCount] = useState(0);
 
   // Check if user has admin/lead access (including Camp Leads)
   const isCampContext = user?.accountType === 'camp' 
@@ -200,20 +215,7 @@ const VolunteerShifts: React.FC = () => {
 
       if (!campId) {
         setRosterMembers([]);
-        setRosterOnlyMemberCount(0);
         return;
-      }
-
-      try {
-        const roster = await api.get(`/rosters/active?campId=${campId}`);
-        const count = (roster?.members || []).filter((entry: any) => {
-          const member = entry?.member;
-          const status = (member?.status || '').toString().toLowerCase();
-          return status === 'roster_only';
-        }).length;
-        setRosterOnlyMemberCount(count);
-      } catch (_error) {
-        setRosterOnlyMemberCount(0);
       }
 
       const response = await api.getCampMembers(campId.toString());
@@ -224,14 +226,14 @@ const VolunteerShifts: React.FC = () => {
           firstName: resolvedUser.firstName || '',
           lastName: resolvedUser.lastName || '',
           email: resolvedUser.email || '',
-          isLead: member?.isCampLead === true || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((member?.role || '').toLowerCase())
+          isLead: member?.isCampLead === true || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((member?.role || '').toLowerCase()),
+          skills: Array.isArray(resolvedUser.skills) ? resolvedUser.skills : []
         };
       });
       setRosterMembers(normalized);
     } catch (error) {
       console.error('Error loading roster members:', error);
       setRosterMembers([]);
-      setRosterOnlyMemberCount(0);
     }
   }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
 
@@ -321,6 +323,7 @@ const VolunteerShifts: React.FC = () => {
           startTime: shift.startTime,
           endTime: shift.endTime,
           maxSignUps: shift.maxSignUps,
+          requiredSkills: shift.requiredSkills || [],
           assignmentMode: shift.assignmentMode,
           selectedUserIds: shift.selectedUserIds,
           manualAddIds: shift.selectedUserIds.filter((id) => {
@@ -384,7 +387,31 @@ const VolunteerShifts: React.FC = () => {
         maxSignUps: 1,
         currentSignups: 0,
         assignmentMode: 'ALL_ROSTER',
-        selectedUserIds: allRosterIds
+        selectedUserIds: allRosterIds,
+        requiredSkills: []
+      }]
+    }));
+  };
+
+  const handleAddShiftFromTemplate = (template: { label: string; startTime: string; durationHours: number }) => {
+    const date = eventForm.eventDate || '';
+    const [startH, startM] = template.startTime.split(':').map((value) => parseInt(value, 10));
+    const end = new Date();
+    end.setHours(startH + template.durationHours, startM, 0, 0);
+    const endTime = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: [...prev.shifts, {
+        title: template.label,
+        description: '',
+        date,
+        startTime: template.startTime,
+        endTime,
+        maxSignUps: 1,
+        currentSignups: 0,
+        assignmentMode: 'ALL_ROSTER',
+        selectedUserIds: allRosterIds,
+        requiredSkills: []
       }]
     }));
   };
@@ -417,6 +444,9 @@ const VolunteerShifts: React.FC = () => {
     setLoadingExistingAssignments(false);
     setIsEditMode(false);
     setEventToEdit(null);
+    setWizardStep(1);
+    setBulkShiftSelection([]);
+    setGlobalInviteMode('ALL_ROSTER');
   };
 
   const handleEditEvent = async (event: Event) => {
@@ -460,11 +490,75 @@ const VolunteerShifts: React.FC = () => {
         assignmentMode: 'SELECTED_USERS',
         selectedUserIds: (assignmentResponses[index]?.assignedUsers || [])
           .map((assignedUser: any) => assignedUser?.userId?.toString())
-          .filter(Boolean)
+          .filter(Boolean),
+        requiredSkills: Array.isArray((shift as any).requiredSkills) ? (shift as any).requiredSkills : []
       }))
     });
     
     setShowCreateModal(true);
+  };
+
+  const toggleRequiredSkill = (shiftIndex: number, skill: string) => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((shift, index) => {
+        if (index !== shiftIndex) return shift;
+        const hasSkill = shift.requiredSkills.includes(skill);
+        return {
+          ...shift,
+          requiredSkills: hasSkill
+            ? shift.requiredSkills.filter((item) => item !== skill)
+            : [...shift.requiredSkills, skill]
+        };
+      })
+    }));
+  };
+
+  const toggleShiftSelection = (index: number) => {
+    setBulkShiftSelection((prev) => (prev.includes(index) ? prev.filter((item) => item !== index) : [...prev, index]));
+  };
+
+  const applyBulkMaxSignups = () => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((shift, index) =>
+        bulkShiftSelection.includes(index) ? { ...shift, maxSignUps: Math.max(1, bulkMaxSignupsInput) } : shift
+      )
+    }));
+  };
+
+  const duplicateSelectedShifts = () => {
+    setEventForm((prev) => {
+      const duplicates = bulkShiftSelection
+        .map((index) => prev.shifts[index])
+        .filter(Boolean)
+        .map((shift) => ({ ...shift, _id: undefined, title: `${shift.title} (copy)` }));
+      return { ...prev, shifts: [...prev.shifts, ...duplicates] };
+    });
+  };
+
+  const archiveSelectedShifts = () => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.filter((_, index) => !bulkShiftSelection.includes(index))
+    }));
+    setBulkShiftSelection([]);
+  };
+
+  const applyGlobalInviteMode = () => {
+    setEventForm((prev) => ({
+      ...prev,
+      shifts: prev.shifts.map((_, index) => {
+        const shift = prev.shifts[index];
+        if (globalInviteMode === 'ALL_ROSTER') {
+          return { ...shift, assignmentMode: 'ALL_ROSTER', selectedUserIds: allRosterIds };
+        }
+        if (globalInviteMode === 'LEADS_ONLY') {
+          return { ...shift, assignmentMode: 'LEADS_ONLY', selectedUserIds: leadRosterIds };
+        }
+        return { ...shift, assignmentMode: 'SELECTED_USERS', selectedUserIds: [] };
+      })
+    }));
   };
 
   const handleDeleteEvent = (event: Event) => {
@@ -656,7 +750,10 @@ const VolunteerShifts: React.FC = () => {
         campId = user.campLeadCampId;
       }
 
-      const response = await api.inviteEntireRosterToAllShifts(campId);
+      const response = await api.inviteEntireRosterToAllShifts(campId, {
+        skipRecentDays,
+        scheduleAt: scheduleAt || undefined
+      });
       alert(response.message);
       setShowBulkInviteModal(false);
     } catch (error: any) {
@@ -666,6 +763,31 @@ const VolunteerShifts: React.FC = () => {
       setBulkInviteLoading(false);
     }
   };
+
+  const loadBulkInvitePreview = useCallback(async () => {
+    try {
+      let campId: string | undefined;
+      if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
+        const camp = await api.get('/camps/my-camp');
+        campId = camp?._id;
+      } else if (user?.isCampLead && user?.campLeadCampId) {
+        campId = user.campLeadCampId;
+      }
+      const response = await api.inviteEntireRosterToAllShifts(campId, {
+        previewOnly: true,
+        skipRecentDays
+      });
+      setInvitePreview(response.recipientPreview || null);
+    } catch (_error) {
+      setInvitePreview(null);
+    }
+  }, [skipRecentDays, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
+
+  useEffect(() => {
+    if (showBulkInviteModal) {
+      loadBulkInvitePreview();
+    }
+  }, [showBulkInviteModal, loadBulkInvitePreview]);
 
 
   if (!canAccessShifts) {
@@ -693,23 +815,29 @@ const VolunteerShifts: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           {hasRoster && (
-            <Button
-              variant="primary"
-              onClick={() => setShowBulkInviteModal(true)}
-              disabled={bulkInviteLoading || !hasAvailableShifts}
-              className="flex items-center gap-2"
-            >
-              Invite Entire Roster to All Shifts
-            </Button>
+            <div>
+              <Button
+                variant="primary"
+                onClick={() => setShowBulkInviteModal(true)}
+                disabled={bulkInviteLoading || !hasAvailableShifts}
+                className="flex items-center gap-2 min-h-[44px]"
+              >
+                Notify Entire Roster
+              </Button>
+              <p className="text-[11px] text-gray-600 mt-1">Sends one generic invite to browse all open shifts.</p>
+            </div>
           )}
-          <Button
-            variant="outline"
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Create Event
-          </Button>
+          <div>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 min-h-[44px]"
+            >
+              <Plus className="w-4 h-4" />
+              Create Event
+            </Button>
+            <p className="text-[11px] text-gray-600 mt-1">Build event details, shifts, and invite strategy.</p>
+          </div>
         </div>
       </div>
 
@@ -764,6 +892,39 @@ const VolunteerShifts: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Coverage Timeline</h4>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Red blocks indicate coverage gaps. Green blocks indicate fully staffed shifts.
+                  </p>
+                  <div className="space-y-3">
+                    {events.slice(0, 6).map((event) => (
+                      <div key={`timeline-${event._id}`}>
+                        <div className="text-xs font-medium text-gray-700 mb-1">{event.eventName}</div>
+                        <div className="relative h-8 rounded bg-gray-100 overflow-hidden">
+                          {(event.shifts || []).map((shift) => {
+                            const start = new Date(shift.startTime).getHours() * 60 + new Date(shift.startTime).getMinutes();
+                            const end = new Date(shift.endTime).getHours() * 60 + new Date(shift.endTime).getMinutes();
+                            const left = `${(start / (24 * 60)) * 100}%`;
+                            const width = `${(Math.max(end - start, 30) / (24 * 60)) * 100}%`;
+                            const current = (shift.memberIds || []).length;
+                            const full = current >= (shift.maxSignUps || 0);
+                            return (
+                              <div
+                                key={shift._id}
+                                className={`absolute top-0 h-full border-r border-white text-[10px] px-1 truncate ${full ? 'bg-green-500 text-white' : 'bg-red-400 text-white'}`}
+                                style={{ left, width }}
+                                title={`${shift.title} (${current}/${shift.maxSignUps})`}
+                              >
+                                {shift.title}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 {events.map((event) => (
                   <div key={event._id} className="border rounded-lg p-4">
                     <div className="flex items-start justify-between mb-4">
@@ -1244,248 +1405,289 @@ const VolunteerShifts: React.FC = () => {
         size="lg"
       >
         <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Event Name *
-            </label>
-            <Input
-              value={eventForm.eventName}
-              onChange={(e) => setEventForm(prev => ({ ...prev, eventName: e.target.value }))}
-              placeholder="Enter event name"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              value={eventForm.description}
-              onChange={(e) => setEventForm(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
-              placeholder="Enter event description"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event Date *
-              </label>
-              <Input
-                type="date"
-                value={eventForm.eventDate}
-                onChange={(e) => setEventForm(prev => ({ ...prev, eventDate: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event Start Time *
-              </label>
-              <Input
-                type="time"
-                value={eventForm.startTime}
-                onChange={(e) => setEventForm(prev => ({ ...prev, startTime: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event End Time *
-              </label>
-              <Input
-                type="time"
-                value={eventForm.endTime}
-                onChange={(e) => setEventForm(prev => ({ ...prev, endTime: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Shifts</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAddShift}
-                className="flex items-center gap-1"
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { step: 1, label: 'Basics' },
+              { step: 2, label: 'Shifts' },
+              { step: 3, label: 'Invite Strategy' },
+              { step: 4, label: 'Review' }
+            ].map((item) => (
+              <button
+                key={item.step}
+                type="button"
+                onClick={() => setWizardStep(item.step as 1 | 2 | 3 | 4)}
+                className={`rounded border px-2 py-2 text-xs ${wizardStep === item.step ? 'border-custom-primary bg-orange-50 text-custom-primary font-semibold' : 'border-gray-200 text-gray-600'}`}
               >
-                <Plus className="w-4 h-4" />
-                Add Shift
-              </Button>
-            </div>
+                {item.step}. {item.label}
+              </button>
+            ))}
+          </div>
 
-            {isEditMode && eventForm.shifts.length > 0 && eventForm.shifts.every((shift) => shift.currentSignups >= shift.maxSignUps) && (
-              <div className="mb-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
-                This event is fully staffed. You can still edit all fields and invites.
+          {wizardStep === 1 && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Event Name *</label>
+                <Input
+                  value={eventForm.eventName}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, eventName: e.target.value }))}
+                  placeholder="Enter event name"
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent"
+                  placeholder="Enter event description"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date *</label>
+                  <Input type="date" value={eventForm.eventDate} onChange={(e) => setEventForm(prev => ({ ...prev, eventDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Start Time *</label>
+                  <Input type="time" value={eventForm.startTime} onChange={(e) => setEventForm(prev => ({ ...prev, startTime: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event End Time *</label>
+                  <Input type="time" value={eventForm.endTime} onChange={(e) => setEventForm(prev => ({ ...prev, endTime: e.target.value }))} />
+                </div>
+              </div>
+            </>
+          )}
 
-            {eventForm.shifts.map((shift, index) => {
-              const isFullyStaffed = isEditMode && shift.currentSignups >= shift.maxSignUps;
-              const staffedFieldClass = isFullyStaffed ? 'bg-gray-100' : '';
-              return (
-              <div key={index} className={`border rounded-lg p-4 mb-4 ${isFullyStaffed ? 'border-green-300 bg-green-50/40' : ''}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">Shift {index + 1}</h4>
-                    {isFullyStaffed && (
-                      <span className="text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
-                        Fully staffed
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRemoveShift(index)}
-                    className="text-red-600 border-red-600 hover:bg-red-50"
-                  >
-                    <X className="w-4 h-4" />
+          {wizardStep === 2 && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Shifts</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  {shiftTemplates.map((template) => (
+                    <Button
+                      key={template.key}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAddShiftFromTemplate(template)}
+                      className="min-h-[40px]"
+                    >
+                      {template.label}
+                    </Button>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={handleAddShift} className="flex items-center gap-1 min-h-[40px]">
+                    <Plus className="w-4 h-4" />
+                    Add Shift
                   </Button>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Title *
-                    </label>
-                    <Input
-                      value={shift.title}
-                      onChange={(e) => handleShiftChange(index, 'title', e.target.value)}
-                      placeholder="Shift title"
-                      className={staffedFieldClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Max Sign-ups *
-                    </label>
-                    <Input
-                      type="number"
-                      value={shift.maxSignUps}
-                      onChange={(e) => handleShiftChange(index, 'maxSignUps', parseInt(e.target.value) || 1)}
-                      min="1"
-                      className={staffedFieldClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date *
-                    </label>
-                    <Input
-                      type="date"
-                      value={shift.date}
-                      onChange={(e) => handleShiftChange(index, 'date', e.target.value)}
-                      className={staffedFieldClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Time *
-                    </label>
-                    <Input
-                      type="time"
-                      value={shift.startTime}
-                      onChange={(e) => handleShiftChange(index, 'startTime', e.target.value)}
-                      className={staffedFieldClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Time *
-                    </label>
-                    <Input
-                      type="time"
-                      value={shift.endTime}
-                      onChange={(e) => handleShiftChange(index, 'endTime', e.target.value)}
-                      className={staffedFieldClass}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={shift.description}
-                    onChange={(e) => handleShiftChange(index, 'description', e.target.value)}
-                    rows={2}
-                    className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent ${staffedFieldClass}`}
-                    placeholder="Shift description"
-                  />
-                </div>
-
-                <div className="border-t pt-4 mt-4">
-                  <h5 className="text-sm font-medium text-gray-900 mb-2">Invite To</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                      <input
-                        type="radio"
-                        className="mr-2"
-                        checked={shift.assignmentMode === 'ALL_ROSTER'}
-                        onChange={() => handleAssignmentModeChange(index, 'ALL_ROSTER')}
-                      />
-                      Entire Roster
-                    </label>
-                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'LEADS_ONLY' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                      <input
-                        type="radio"
-                        className="mr-2"
-                        checked={shift.assignmentMode === 'LEADS_ONLY'}
-                        onChange={() => handleAssignmentModeChange(index, 'LEADS_ONLY')}
-                      />
-                      Leads Only
-                    </label>
-                    <label className={`border rounded-lg p-2 cursor-pointer ${shift.assignmentMode === 'SELECTED_USERS' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
-                      <input
-                        type="radio"
-                        className="mr-2"
-                        checked={shift.assignmentMode === 'SELECTED_USERS'}
-                        onChange={() => handleAssignmentModeChange(index, 'SELECTED_USERS')}
-                      />
-                      Selected People
-                    </label>
-                  </div>
-
-                  <div className="text-sm text-gray-600 mb-2">
-                    Selected: {shift.selectedUserIds.length} / {rosterMembers.length}
-                  </div>
-                  {rosterOnlyMemberCount > 0 && (
-                    <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {rosterOnlyMemberCount} roster member(s) are in <strong>roster-only</strong> status and do not yet have user accounts.
-                      Use the Events invite flow to invite them first before assigning by person.
-                    </div>
-                  )}
-                  <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
-                    {rosterMembers.map((member) => {
-                      const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
-                      return (
-                        <label key={member._id} className="flex items-center justify-between">
-                          <span className="text-sm">
-                            {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={shift.selectedUserIds.includes(member._id)}
-                            onChange={() => toggleSelectedUser(index, member._id)}
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
-            );
-            })}
 
-            {eventForm.shifts.length === 0 && (
-              <p className="text-gray-500 text-center py-8">
-                No shifts added yet. Click "Add Shift" to create your first shift.
-              </p>
-            )}
-          </div>
+              {eventForm.shifts.length > 0 && (
+                <div className="mb-4 rounded border border-gray-200 p-3">
+                  <p className="text-xs font-semibold text-gray-700 mb-2">Bulk Actions</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="text-xs text-gray-600">Set max signups</label>
+                      <Input type="number" min="1" value={bulkMaxSignupsInput} onChange={(e) => setBulkMaxSignupsInput(parseInt(e.target.value) || 1)} />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={applyBulkMaxSignups} disabled={bulkShiftSelection.length === 0}>Apply</Button>
+                    <Button variant="outline" size="sm" onClick={duplicateSelectedShifts} disabled={bulkShiftSelection.length === 0}>Duplicate</Button>
+                    <Button variant="outline" size="sm" className="text-red-600 border-red-600 hover:bg-red-50" onClick={archiveSelectedShifts} disabled={bulkShiftSelection.length === 0}>Archive</Button>
+                  </div>
+                </div>
+              )}
+
+              {eventForm.shifts.map((shift, index) => {
+                const isFullyStaffed = isEditMode && shift.currentSignups >= shift.maxSignUps;
+                const staffedFieldClass = isFullyStaffed ? 'bg-gray-100' : '';
+                return (
+                  <div key={index} className={`border rounded-lg p-4 mb-4 ${isFullyStaffed ? 'border-green-300 bg-green-50/40' : ''}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={bulkShiftSelection.includes(index)}
+                          onChange={() => toggleShiftSelection(index)}
+                          aria-label={`Select Shift ${index + 1} for bulk actions`}
+                        />
+                        <h4 className="font-medium">Shift {index + 1}</h4>
+                        {isFullyStaffed && (
+                          <span className="text-xs font-medium text-green-800 bg-green-100 border border-green-200 rounded px-2 py-0.5">
+                            Fully staffed
+                          </span>
+                        )}
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handleRemoveShift(index)} className="text-red-600 border-red-600 hover:bg-red-50">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <Input value={shift.title} onChange={(e) => handleShiftChange(index, 'title', e.target.value)} placeholder="Shift title" className={staffedFieldClass} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Max Sign-ups *</label>
+                        <Input type="number" value={shift.maxSignUps} onChange={(e) => handleShiftChange(index, 'maxSignUps', parseInt(e.target.value) || 1)} min="1" className={staffedFieldClass} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                        <Input type="date" value={shift.date} onChange={(e) => handleShiftChange(index, 'date', e.target.value)} className={staffedFieldClass} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                        <Input type="time" value={shift.startTime} onChange={(e) => handleShiftChange(index, 'startTime', e.target.value)} className={staffedFieldClass} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time *</label>
+                        <Input type="time" value={shift.endTime} onChange={(e) => handleShiftChange(index, 'endTime', e.target.value)} className={staffedFieldClass} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <textarea
+                        value={shift.description}
+                        onChange={(e) => handleShiftChange(index, 'description', e.target.value)}
+                        rows={2}
+                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-custom-primary focus:border-transparent ${staffedFieldClass}`}
+                        placeholder="Shift description"
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-1">Required Skills (for best-fit matching)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {skillOptions.map((skill) => {
+                          const active = (shift.requiredSkills || []).includes(skill);
+                          return (
+                            <button
+                              key={`${index}-${skill}`}
+                              type="button"
+                              onClick={() => toggleRequiredSkill(index, skill)}
+                              className={`rounded-full border px-3 py-1 text-xs ${active ? 'bg-custom-primary border-custom-primary text-white' : 'bg-white border-gray-300 text-gray-700'}`}
+                            >
+                              {skill}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {wizardStep === 3 && (
+            <div className="space-y-4">
+              <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                <p className="font-medium">Choose a default invite strategy</p>
+                <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = place specific members onto a shift now.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant={globalInviteMode === 'ALL_ROSTER' ? 'primary' : 'outline'} size="sm" onClick={() => setGlobalInviteMode('ALL_ROSTER')}>
+                  Invite to Sign Up: Entire Roster
+                </Button>
+                <Button variant={globalInviteMode === 'LEADS_ONLY' ? 'primary' : 'outline'} size="sm" onClick={() => setGlobalInviteMode('LEADS_ONLY')}>
+                  Invite to Sign Up: Leads Only
+                </Button>
+                <Button variant={globalInviteMode === 'SELECTED_USERS' ? 'primary' : 'outline'} size="sm" onClick={() => setGlobalInviteMode('SELECTED_USERS')}>
+                  Assign Directly: Selected People
+                </Button>
+                <Button variant="outline" size="sm" onClick={applyGlobalInviteMode}>
+                  Apply to All Shifts
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {eventForm.shifts.map((shift, index) => (
+                  <div key={`invite-${index}`} className="rounded border border-gray-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium">{shift.title || `Shift ${index + 1}`}</p>
+                      <span className="text-xs text-gray-600">
+                        Selected: {shift.selectedUserIds.length}/{rosterMembers.length}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                      <label className={`border rounded-lg p-2 cursor-pointer text-sm ${shift.assignmentMode === 'ALL_ROSTER' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                        <input type="radio" className="mr-2" checked={shift.assignmentMode === 'ALL_ROSTER'} onChange={() => handleAssignmentModeChange(index, 'ALL_ROSTER')} />
+                        Invite to sign up (all)
+                      </label>
+                      <label className={`border rounded-lg p-2 cursor-pointer text-sm ${shift.assignmentMode === 'LEADS_ONLY' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                        <input type="radio" className="mr-2" checked={shift.assignmentMode === 'LEADS_ONLY'} onChange={() => handleAssignmentModeChange(index, 'LEADS_ONLY')} />
+                        Invite to sign up (leads)
+                      </label>
+                      <label className={`border rounded-lg p-2 cursor-pointer text-sm ${shift.assignmentMode === 'SELECTED_USERS' ? 'border-custom-primary bg-orange-50' : 'border-gray-200'}`}>
+                        <input type="radio" className="mr-2" checked={shift.assignmentMode === 'SELECTED_USERS'} onChange={() => handleAssignmentModeChange(index, 'SELECTED_USERS')} />
+                        Assign directly
+                      </label>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+                      {rosterMembers
+                        .map((member) => {
+                          const memberSkills = ((member as any).skills || []) as string[];
+                          const matchedSkills = (shift.requiredSkills || []).filter((skill) => memberSkills.includes(skill));
+                          const skillMatchPercent = (shift.requiredSkills || []).length > 0
+                            ? Math.round((matchedSkills.length / (shift.requiredSkills || []).length) * 100)
+                            : 0;
+                          const priorShiftCount = events.reduce((acc, evt) => acc + (evt.shifts || []).filter((evtShift) => (evtShift.memberIds || []).includes(member._id)).length, 0);
+                          const alreadyInvited = shift.selectedUserIds.includes(member._id);
+                          return {
+                            member,
+                            skillMatchPercent,
+                            priorShiftCount,
+                            alreadyInvited
+                          };
+                        })
+                        .sort((a, b) => (b.skillMatchPercent - a.skillMatchPercent) || (a.priorShiftCount - b.priorShiftCount))
+                        .map(({ member, skillMatchPercent, priorShiftCount, alreadyInvited }) => {
+                          const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
+                          return (
+                            <label key={`${index}-${member._id}`} className="flex items-center justify-between gap-2">
+                              <span className="text-sm">
+                                {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
+                                <span className="block text-[11px] text-gray-500">
+                                  Skill match {skillMatchPercent}% • Prior shifts {priorShiftCount} • {alreadyInvited ? 'Already invited' : 'Not invited'}
+                                </span>
+                              </span>
+                              <input type="checkbox" checked={shift.selectedUserIds.includes(member._id)} onChange={() => toggleSelectedUser(index, member._id)} />
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {wizardStep === 4 && (
+            <div className="space-y-4">
+              <div className="rounded border border-gray-200 p-4">
+                <h4 className="font-semibold text-gray-900 mb-2">Final Review Before Publish</h4>
+                <p className="text-sm text-gray-600">
+                  <strong>{eventForm.eventName || 'Untitled event'}</strong> on {eventForm.eventDate || 'TBD'} from {eventForm.startTime || '--:--'} to {eventForm.endTime || '--:--'}
+                </p>
+                <p className="text-sm text-gray-600 mt-1">{eventForm.shifts.length} shift(s) configured</p>
+              </div>
+              <div className="space-y-2">
+                {eventForm.shifts.map((shift, index) => (
+                  <div key={`review-${index}`} className="rounded border border-gray-200 p-3">
+                    <p className="text-sm font-medium">{shift.title || `Shift ${index + 1}`}</p>
+                    <p className="text-xs text-gray-600">
+                      {shift.date || 'TBD'} • {shift.startTime || '--:--'} - {shift.endTime || '--:--'} • Max {shift.maxSignUps}
+                    </p>
+                    <p className="text-xs text-gray-600">Invite strategy: {shift.assignmentMode}</p>
+                    {(shift.requiredSkills || []).length > 0 && (
+                      <p className="text-xs text-gray-600">Required skills: {(shift.requiredSkills || []).join(', ')}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {loadingExistingAssignments && isEditMode && (
             <div className="text-xs text-gray-500 mb-2">Loading existing assignments...</div>
@@ -1498,25 +1700,46 @@ const VolunteerShifts: React.FC = () => {
                 setShowCreateModal(false);
                 resetForm();
               }}
-              className="flex-1"
+              className="flex-1 min-h-[44px]"
             >
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreateEvent}
-              disabled={
-                !eventForm.eventName || 
-                !eventForm.eventDate ||
-                !eventForm.startTime ||
-                !eventForm.endTime ||
-                eventForm.shifts.length === 0
-              }
-              className="flex-1"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {isEditMode ? 'Update Event' : 'Create Event'}
-            </Button>
+            {wizardStep > 1 && (
+              <Button
+                variant="outline"
+                onClick={() => setWizardStep((prev) => (Math.max(prev - 1, 1) as 1 | 2 | 3 | 4))}
+                className="flex-1 min-h-[44px]"
+              >
+                Back
+              </Button>
+            )}
+            {wizardStep < 4 && (
+              <Button
+                variant="primary"
+                onClick={() => setWizardStep((prev) => (Math.min(prev + 1, 4) as 1 | 2 | 3 | 4))}
+                className="flex-1 min-h-[44px]"
+                disabled={wizardStep === 1 && (!eventForm.eventName || !eventForm.eventDate || !eventForm.startTime || !eventForm.endTime)}
+              >
+                Next
+              </Button>
+            )}
+            {wizardStep === 4 && (
+              <Button
+                variant="primary"
+                onClick={handleCreateEvent}
+                disabled={
+                  !eventForm.eventName || 
+                  !eventForm.eventDate ||
+                  !eventForm.startTime ||
+                  !eventForm.endTime ||
+                  eventForm.shifts.length === 0
+                }
+                className="flex-1 min-h-[44px]"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isEditMode ? 'Update Event' : 'Publish Event'}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
@@ -1528,16 +1751,43 @@ const VolunteerShifts: React.FC = () => {
           if (bulkInviteLoading) return;
           setShowBulkInviteModal(false);
         }}
-        title="Invite Entire Roster to All Shifts"
+        title="Notify Entire Roster"
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
-            Are you sure you want to invite the entire roster to sign up for all available shifts?
+            Notify the entire roster to sign up for available shifts.
           </p>
           <p className="text-xs text-gray-500">
             Each roster member will receive one generic email and one in-app notification with a link to the shifts page.
           </p>
+          <div className="grid grid-cols-1 gap-3">
+            <div className="rounded border border-gray-200 p-3">
+              <p className="text-xs text-gray-600 mb-1">Recipient preview</p>
+              <p className="text-sm text-gray-800">
+                Existing users: <strong>{invitePreview?.existingUsers ?? '-'}</strong> • Roster-only: <strong>{invitePreview?.rosterOnly ?? '-'}</strong> • Total: <strong>{invitePreview?.total ?? '-'}</strong>
+              </p>
+            </div>
+            <label className="text-sm text-gray-700">
+              Skip members invited in last N days
+              <Input
+                type="number"
+                min="0"
+                value={skipRecentDays}
+                onChange={(e) => setSkipRecentDays(parseInt(e.target.value) || 0)}
+                className="mt-1"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Schedule send time (optional)
+              <Input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="mt-1"
+              />
+            </label>
+          </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button
               variant="outline"
@@ -1551,7 +1801,7 @@ const VolunteerShifts: React.FC = () => {
               onClick={handleBulkInviteConfirm}
               disabled={bulkInviteLoading}
             >
-              {bulkInviteLoading ? 'Sending...' : 'Send Invites'}
+              {bulkInviteLoading ? 'Sending...' : scheduleAt ? 'Schedule Invites' : 'Send Invites'}
             </Button>
           </div>
         </div>
@@ -1598,8 +1848,9 @@ const VolunteerShifts: React.FC = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => openAssignmentModal(shift)}
+                            className="min-h-[40px]"
                           >
-                            Invite to Shift
+                            Assign Directly
                           </Button>
                         </div>
                       </div>
@@ -1607,6 +1858,7 @@ const VolunteerShifts: React.FC = () => {
                       <div className="text-sm text-gray-500">
                         <div>{formatDate(shift.date)}</div>
                         <div>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</div>
+                        <div className="text-[11px] mt-1">Assign directly places specific people onto this shift now.</div>
                       </div>
                     </div>
                   ))}
@@ -1635,7 +1887,7 @@ const VolunteerShifts: React.FC = () => {
           setSelectedShiftForAssignment(null);
           setPendingAddUserIds([]);
         }}
-        title={selectedShiftForAssignment ? `Invite to Shift: ${selectedShiftForAssignment.title}` : 'Invite to Shift'}
+        title={selectedShiftForAssignment ? `Assign Directly: ${selectedShiftForAssignment.title}` : 'Assign Directly'}
         size="lg"
       >
         <div className="space-y-4">
@@ -1645,6 +1897,7 @@ const VolunteerShifts: React.FC = () => {
             <>
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Current Assignees ({assignmentState.assignedUsers.length})</div>
+                <p className="text-xs text-gray-500 mb-2">Assign directly adds people immediately to this specific shift.</p>
                 <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
                   {assignmentState.assignedUsers.length === 0 ? (
                     <div className="text-sm text-gray-500">No assignees yet.</div>
@@ -1660,6 +1913,7 @@ const VolunteerShifts: React.FC = () => {
 
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Add More People</div>
+                <p className="text-xs text-gray-500 mb-2">Use "Invite to sign up" in event setup when you want members to choose their own shifts.</p>
                 <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
                   {assignmentState.unassignedUsers.length === 0 ? (
                     <div className="text-sm text-gray-500">No unassigned roster users available.</div>

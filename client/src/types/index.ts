@@ -455,6 +455,7 @@ export interface Shift {
   eventId: string;
   title: string;
   description: string;
+  requiredSkills?: string[];
   date: Date;
   startTime: Date;
   endTime: Date;
@@ -513,6 +514,7 @@ export interface MyShiftItem {
   campName: string;
   title: string;
   description?: string;
+  requiredSkills?: string[];
   date: string;
   startTime: string;
   endTime: string;
@@ -522,6 +524,7 @@ export interface MyShiftItem {
   isFull: boolean;
   memberIds: string[];
   coworkers: MyShiftCoworker[];
+  recommendationReason?: string;
 }
 
 export interface MyShiftsResponse {

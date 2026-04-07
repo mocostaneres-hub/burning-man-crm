@@ -290,6 +290,7 @@ async function buildMyShiftsPayload(userId) {
       campName,
       title: shift.title,
       description: shift.description || '',
+      requiredSkills: Array.isArray(shift.requiredSkills) ? shift.requiredSkills : [],
       date: shift.date,
       startTime: shift.startTime,
       endTime: shift.endTime,
