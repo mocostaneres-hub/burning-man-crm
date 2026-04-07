@@ -217,6 +217,7 @@ const MemberRoster: React.FC = () => {
   const [showRosterSetupModal, setShowRosterSetupModal] = useState(false);
   const [rosterSetupStep, setRosterSetupStep] = useState<1 | 2>(1);
   const [rosterSetupType, setRosterSetupType] = useState<'shifts_only' | 'full_membership' | null>(null);
+  const [selectedRosterType, setSelectedRosterType] = useState<'shifts_only' | 'full_membership' | null>(null);
   const [duesActionModal, setDuesActionModal] = useState<{
     isOpen: boolean;
     member: any;
@@ -292,9 +293,28 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = isCampContext && isAdminOrLead;
   const canEdit = canAccessRoster;
-  const isFullMembershipRoster = hasActiveRoster && rosterModeState.mode === 'full_membership';
+  const activeRosterType: RosterMode = !hasActiveRoster
+    ? 'none'
+    : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
+      ? rosterModeState.mode
+      : selectedRosterType || rosterModeState.mode;
+  const isFullMembershipRoster = hasActiveRoster && activeRosterType === 'full_membership';
   const canViewMetrics = canAccessRoster && isFullMembershipRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
+
+  useEffect(() => {
+    if (!campId) return;
+    try {
+      const stored = localStorage.getItem(`rosterType:${campId}`);
+      if (stored === 'shifts_only' || stored === 'full_membership') {
+        setSelectedRosterType(stored);
+      } else {
+        setSelectedRosterType(null);
+      }
+    } catch (_error) {
+      setSelectedRosterType(null);
+    }
+  }, [campId]);
 
   useEffect(() => {
     if (duesActionModal.isOpen) {
@@ -622,6 +642,12 @@ const MemberRoster: React.FC = () => {
         console.log('ℹ️ [MemberRoster] No active roster - camp needs to create one');
         setHasActiveRoster(false);
         setRosterModeState({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
+        setSelectedRosterType(null);
+        try {
+          localStorage.removeItem(`rosterType:${campId}`);
+        } catch (_error) {
+          // no-op for storage failures
+        }
         setMembers([]);
         setRosterId(null);
         setRosterName('Member Roster');
@@ -632,7 +658,16 @@ const MemberRoster: React.FC = () => {
       // Roster exists
       setHasActiveRoster(true);
       const roster = rosterResponse;
-      setRosterModeState(deriveRosterMode(roster));
+      const derivedMode = deriveRosterMode(roster);
+      setRosterModeState(derivedMode);
+      if (derivedMode.mode === 'shifts_only' || derivedMode.mode === 'full_membership') {
+        setSelectedRosterType(derivedMode.mode);
+        try {
+          localStorage.setItem(`rosterType:${campId}`, derivedMode.mode);
+        } catch (_error) {
+          // no-op for storage failures
+        }
+      }
       
       // Extract roster name and ID
       if (roster._id) {
@@ -905,6 +940,14 @@ const MemberRoster: React.FC = () => {
     setShowRosterSetupModal(false);
     setRosterSetupStep(1);
     setRosterSetupType(null);
+    setSelectedRosterType(rosterSetupType);
+    if (campId) {
+      try {
+        localStorage.setItem(`rosterType:${campId}`, rosterSetupType);
+      } catch (_error) {
+        // no-op for storage failures
+      }
+    }
   };
 
   const handleRosterSetupContinue = async () => {
@@ -940,20 +983,37 @@ const MemberRoster: React.FC = () => {
 
     const runAction = async () => {
       if (action === 'start_sor') {
+        setSelectedRosterType('shifts_only');
+        if (campId) {
+          try {
+            localStorage.setItem(`rosterType:${campId}`, 'shifts_only');
+          } catch (_error) {
+            // no-op for storage failures
+          }
+        }
         if (!hasActiveRoster) {
           await handleCreateRoster();
         }
         setImportRosterModalOpen(true);
       } else if (action === 'add_sor') {
+        setSelectedRosterType('shifts_only');
         setAddMemberModalOpen(true);
       } else if (action === 'invite_full') {
+        setSelectedRosterType('full_membership');
+        if (campId) {
+          try {
+            localStorage.setItem(`rosterType:${campId}`, 'full_membership');
+          } catch (_error) {
+            // no-op for storage failures
+          }
+        }
         setInviteModalOpen(true);
       }
       navigate(location.pathname, { replace: true });
     };
 
     runAction();
-  }, [location.search, location.pathname, canEdit, hasActiveRoster, navigate, handleCreateRoster]);
+  }, [location.search, location.pathname, canEdit, hasActiveRoster, navigate, handleCreateRoster, campId]);
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
@@ -1344,7 +1404,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && hasActiveRoster && (
+          {canEdit && hasActiveRoster && activeRosterType === 'shifts_only' && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1359,7 +1419,7 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && hasActiveRoster && (
+          {canEdit && hasActiveRoster && activeRosterType === 'full_membership' && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1394,7 +1454,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && hasActiveRoster && rosterModeState.mode !== 'none' && (
+          {canEdit && hasActiveRoster && activeRosterType !== 'none' && (
             <Button
               variant="outline"
               className="flex items-center gap-2"
@@ -1431,35 +1491,6 @@ const MemberRoster: React.FC = () => {
           )}
         </div>
       </div>
-
-      <Card className="p-4 mb-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-custom-text">
-              Roster Setup: {rosterModeState.mode === 'none'
-                ? 'Not Started'
-                : rosterModeState.mode === 'shifts_only'
-                  ? 'Shifts-Only'
-                  : rosterModeState.mode === 'full_membership'
-                    ? 'Full Membership'
-                    : 'Mixed'}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              Camp applications: {campAcceptingApplications ? 'ON' : 'OFF'} • Members in active roster: {rosterModeState.memberCount}
-            </p>
-          </div>
-          {canEdit && rosterModeState.hasShiftsOnlyRoster && !rosterModeState.hasFullMembershipRoster && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setAddMemberModalOpen(true)}>
-                Add One Person (SOR)
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setImportRosterModalOpen(true)}>
-                Import More CSV (SOR)
-              </Button>
-            </div>
-          )}
-        </div>
-      </Card>
 
       {!hasActiveRoster && canEdit && (
         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4" role="status" aria-live="polite">
