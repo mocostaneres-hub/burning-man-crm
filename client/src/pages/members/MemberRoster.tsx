@@ -6,7 +6,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Member, StructuredLocation } from '../../types';
 import { formatDate } from '../../utils/dateFormatters';
-import MetricsPanel from '../../components/roster/MetricsPanel';
 import RosterFilters, { FilterType } from '../../components/roster/RosterFilters';
 import { ImportRosterModal, InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
@@ -321,7 +320,6 @@ const MemberRoster: React.FC = () => {
     || rosterModeState.mode === 'full_membership'
     || rosterModeState.mode === 'mixed'
   )) || isLikelyFullMembershipByCampSetting;
-  const canViewMetrics = canAccessRoster && isFullMembershipRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
   useEffect(() => {
@@ -1533,15 +1531,6 @@ const MemberRoster: React.FC = () => {
         <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert">
           <span className="block sm:inline">{error}</span>
         </div>
-      )}
-
-      {/* Metrics Panel - Only for admins/leads */}
-      {canViewMetrics && (
-        <MetricsPanel
-          members={filteredMembers}
-          customFields={customFields}
-          hideBreakdownSection={user?.accountType === 'camp'}
-        />
       )}
 
       {/* Filters - Only for admins/leads */}
