@@ -26,6 +26,7 @@ import VolunteerShifts from './pages/shifts/VolunteerShifts';
 import MyShiftsPage from './pages/shifts/MyShiftsPage';
 import Help from './pages/Help';
 import FAQAdmin from './pages/help/FAQAdmin';
+import HelpPageMockups from './pages/help/HelpPageMockups';
 import Principles from './pages/Principles';
 import SupportInbox from './components/support/SupportInbox';
 import ApplicationManagementTable from './pages/applications/ApplicationManagementTable';
@@ -307,6 +308,11 @@ function App() {
                   <Route path="/help/admin" element={
                     <ProtectedRoute requireAdmin>
                       <FAQAdmin />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/help/mockups" element={
+                    <ProtectedRoute>
+                      <HelpPageMockups />
                     </ProtectedRoute>
                   } />
                   <Route path="/principles" element={<Principles />} />
