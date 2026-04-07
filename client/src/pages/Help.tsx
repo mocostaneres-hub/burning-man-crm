@@ -37,6 +37,7 @@ const Help: React.FC = () => {
     message: ''
   });
   const [submitting, setSubmitting] = useState(false);
+  const showFaqEditEntry = location.pathname === '/camp/help' && !!user && (user.isSystemAdmin || user.accountType === 'admin');
 
   // Determine the target audience based on URL
   const getTargetAudience = useCallback((): FAQAudienceTarget => {
@@ -171,6 +172,16 @@ const Help: React.FC = () => {
             }
           })()}
         </p>
+        {showFaqEditEntry && (
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/help/admin')}
+            >
+              Edit FAQs
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
