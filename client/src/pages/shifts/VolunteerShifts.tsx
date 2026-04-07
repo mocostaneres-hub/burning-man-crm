@@ -8,6 +8,26 @@ import { Event } from '../../types';
 import { formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
 import { useSkills } from '../../hooks/useSkills';
 
+const deriveRosterMeta = (roster: any) => {
+  const members = Array.isArray(roster?.members) ? roster.members : [];
+  const analyzed = members.map((entry: any) => {
+    const member = entry?.member || {};
+    const signupSource = String(member?.signupSource || '').toLowerCase();
+    const isShiftsOnly = member?.isShiftsOnly === true || signupSource === 'shifts_only_invite' || member?.status === 'roster_only';
+    const isFullMembership = member?.isShiftsOnly === false
+      || signupSource === 'application'
+      || signupSource === 'standard_invite'
+      || (!isShiftsOnly && Boolean(member?.user));
+    return { isShiftsOnly, isFullMembership };
+  });
+  return {
+    hasActiveRoster: Boolean(roster?._id),
+    memberCount: members.length,
+    hasShiftsOnlyRoster: analyzed.some((entry) => entry.isShiftsOnly),
+    hasFullMembershipRoster: analyzed.some((entry) => entry.isFullMembership)
+  };
+};
+
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -108,6 +128,12 @@ const VolunteerShifts: React.FC = () => {
     isLead: boolean;
     skills?: string[];
   }>>([]);
+  const [rosterMeta, setRosterMeta] = useState({
+    hasActiveRoster: false,
+    memberCount: 0,
+    hasShiftsOnlyRoster: false,
+    hasFullMembershipRoster: false
+  });
 
   // Check if user has admin/lead access (including Camp Leads)
   const isCampContext = user?.accountType === 'camp' 
@@ -215,7 +241,25 @@ const VolunteerShifts: React.FC = () => {
 
       if (!campId) {
         setRosterMembers([]);
+        setRosterMeta({
+          hasActiveRoster: false,
+          memberCount: 0,
+          hasShiftsOnlyRoster: false,
+          hasFullMembershipRoster: false
+        });
         return;
+      }
+
+      try {
+        const roster = await api.get(`/rosters/active?campId=${campId}`);
+        setRosterMeta(deriveRosterMeta(roster));
+      } catch (_rosterError) {
+        setRosterMeta({
+          hasActiveRoster: false,
+          memberCount: 0,
+          hasShiftsOnlyRoster: false,
+          hasFullMembershipRoster: false
+        });
       }
 
       const response = await api.getCampMembers(campId.toString());
@@ -234,6 +278,12 @@ const VolunteerShifts: React.FC = () => {
     } catch (error) {
       console.error('Error loading roster members:', error);
       setRosterMembers([]);
+      setRosterMeta({
+        hasActiveRoster: false,
+        memberCount: 0,
+        hasShiftsOnlyRoster: false,
+        hasFullMembershipRoster: false
+      });
     }
   }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
 
@@ -264,7 +314,7 @@ const VolunteerShifts: React.FC = () => {
     }
   }, [canAccessShifts, loadEvents, loadRosterMembers]);
 
-  const hasRoster = rosterMembers.length > 0;
+  const hasRoster = rosterMeta.memberCount > 0;
   const getEffectiveEventFields = useCallback(() => {
     const fallbackShiftDate = eventForm.shifts.find((shift) => !!shift.date)?.date || '';
     const fallbackShiftStart = eventForm.shifts.find((shift) => !!shift.startTime)?.startTime || '';
@@ -858,6 +908,25 @@ const VolunteerShifts: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {!rosterMeta.hasFullMembershipRoster && (
+            <div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const rosterPath = campIdentifier ? `/camp/${campIdentifier}/roster` : '/roster';
+                  navigate(`${rosterPath}?action=${rosterMeta.hasShiftsOnlyRoster ? 'add_sor' : 'start_sor'}`);
+                }}
+                className="flex items-center gap-2 min-h-[44px]"
+              >
+                {rosterMeta.hasShiftsOnlyRoster ? 'Add More People to SOR' : 'Start Shifts-Only Roster'}
+              </Button>
+              <p className="text-[11px] text-gray-600 mt-1">
+                {rosterMeta.hasShiftsOnlyRoster
+                  ? 'Open roster tools to add/import more shifts-only members.'
+                  : 'Set up shifts-only roster before sending shift invites.'}
+              </p>
+            </div>
+          )}
           {hasRoster && (
             <div>
               <Button
@@ -953,14 +1022,15 @@ const VolunteerShifts: React.FC = () => {
                             const width = `${(Math.max(end - start, 30) / (24 * 60)) * 100}%`;
                             const current = (shift.memberIds || []).length;
                             const full = current >= (shift.maxSignUps || 0);
+                            const coverageLabel = `${current}/${shift.maxSignUps || 0}`;
                             return (
                               <div
                                 key={shift._id}
                                 className={`absolute top-0 h-full border-r border-white text-[10px] px-1 truncate ${full ? 'bg-green-500 text-white' : 'bg-red-400 text-white'}`}
                                 style={{ left, width }}
-                                title={`${shift.title} (${current}/${shift.maxSignUps})`}
+                                title={`${shift.title} (${coverageLabel})`}
                               >
-                                {shift.title}
+                                {shift.title} {coverageLabel}
                               </div>
                             );
                           })}

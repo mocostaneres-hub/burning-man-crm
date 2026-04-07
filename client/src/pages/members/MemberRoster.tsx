@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import { User, Loader2, RefreshCw, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Member, StructuredLocation } from '../../types';
@@ -22,6 +22,42 @@ interface RosterMember extends Member {
   isCampLead?: boolean; // Camp Lead role
   rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
 }
+
+type RosterMode = 'none' | 'shifts_only' | 'full_membership' | 'mixed';
+
+const deriveRosterMode = (roster: any): {
+  mode: RosterMode;
+  hasShiftsOnlyRoster: boolean;
+  hasFullMembershipRoster: boolean;
+  memberCount: number;
+} => {
+  const members = Array.isArray(roster?.members) ? roster.members : [];
+  const analyzed = members.map((entry: any) => {
+    const member = entry?.member || {};
+    const signupSource = String(member?.signupSource || '').toLowerCase();
+    const isShiftsOnly = member?.isShiftsOnly === true || signupSource === 'shifts_only_invite' || member?.status === 'roster_only';
+    const isFullMembership = member?.isShiftsOnly === false
+      || signupSource === 'application'
+      || signupSource === 'standard_invite'
+      || (!isShiftsOnly && Boolean(member?.user));
+    return { isShiftsOnly, isFullMembership };
+  });
+
+  const hasShiftsOnlyRoster = analyzed.some((entry) => entry.isShiftsOnly);
+  const hasFullMembershipRoster = analyzed.some((entry) => entry.isFullMembership);
+
+  let mode: RosterMode = 'none';
+  if (hasShiftsOnlyRoster && hasFullMembershipRoster) mode = 'mixed';
+  else if (hasShiftsOnlyRoster) mode = 'shifts_only';
+  else if (hasFullMembershipRoster) mode = 'full_membership';
+
+  return {
+    mode,
+    hasShiftsOnlyRoster,
+    hasFullMembershipRoster,
+    memberCount: members.length
+  };
+};
 
 type DuesStatus = 'UNPAID' | 'INSTRUCTED' | 'PAID';
 
@@ -132,6 +168,7 @@ const toStructuredLocationOrNull = (location?: Partial<StructuredLocation> | nul
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const authUser = user;
   const { skills: systemSkills } = useSkills();
@@ -233,6 +270,13 @@ const MemberRoster: React.FC = () => {
   const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
+  const [campAcceptingApplications, setCampAcceptingApplications] = useState(false);
+  const [rosterModeState, setRosterModeState] = useState<{
+    mode: RosterMode;
+    hasShiftsOnlyRoster: boolean;
+    hasFullMembershipRoster: boolean;
+    memberCount: number;
+  }>({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
   const rosterTableScrollRef = useRef<HTMLDivElement | null>(null);
   const [rosterMaxScrollLeft, setRosterMaxScrollLeft] = useState(0);
   const [rosterScrollLeft, setRosterScrollLeft] = useState(0);
@@ -541,12 +585,20 @@ const MemberRoster: React.FC = () => {
       if (user?.isCampLead && user?.campLeadCampId) {
         console.log('🔍 [MemberRoster] Setting campId for Camp Lead:', user.campLeadCampId);
         setCampId(user.campLeadCampId);
+        try {
+          const campResponse = await api.get(`/camps/${user.campLeadCampId}`);
+          const camp = campResponse?.camp || campResponse;
+          setCampAcceptingApplications(Boolean(camp?.acceptingApplications));
+        } catch (_campError) {
+          setCampAcceptingApplications(false);
+        }
         return;
       }
       
       // For camp accounts and admins
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
+      setCampAcceptingApplications(Boolean((campData as any)?.acceptingApplications));
     } catch (err) {
       console.error('Error fetching camp data:', err);
       setError('Failed to load camp data');
@@ -573,6 +625,7 @@ const MemberRoster: React.FC = () => {
       if (!rosterResponse || !rosterResponse._id) {
         console.log('ℹ️ [MemberRoster] No active roster - camp needs to create one');
         setHasActiveRoster(false);
+        setRosterModeState({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
         setMembers([]);
         setRosterId(null);
         setRosterName('Member Roster');
@@ -583,6 +636,7 @@ const MemberRoster: React.FC = () => {
       // Roster exists
       setHasActiveRoster(true);
       const roster = rosterResponse;
+      setRosterModeState(deriveRosterMode(roster));
       
       // Extract roster name and ID
       if (roster._id) {
@@ -669,6 +723,7 @@ const MemberRoster: React.FC = () => {
       console.error('❌ [MemberRoster] Unexpected error fetching roster:', err);
       setError('An unexpected error occurred. Please try again.');
       setHasActiveRoster(false);
+      setRosterModeState({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
     } finally {
       setLoading(false);
     }
@@ -817,7 +872,7 @@ const MemberRoster: React.FC = () => {
   };
 
   // Handle creating new roster
-  const handleCreateRoster = async () => {
+  const handleCreateRoster = useCallback(async () => {
     if (!campId || !canEdit) return;
     
     try {
@@ -833,7 +888,29 @@ const MemberRoster: React.FC = () => {
     } finally {
       setCreateLoading(false);
     }
-  };
+  }, [campId, canEdit, fetchMembers]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const action = params.get('action');
+    if (!action || !canEdit) return;
+
+    const runAction = async () => {
+      if (action === 'start_sor') {
+        if (!hasActiveRoster) {
+          await handleCreateRoster();
+        }
+        setImportRosterModalOpen(true);
+      } else if (action === 'add_sor') {
+        setAddMemberModalOpen(true);
+      } else if (action === 'invite_full') {
+        setInviteModalOpen(true);
+      }
+      navigate(location.pathname, { replace: true });
+    };
+
+    runAction();
+  }, [location.search, location.pathname, canEdit, hasActiveRoster, navigate, handleCreateRoster]);
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
@@ -1268,29 +1345,41 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {/* Invite Member tile - camp admins/leads */}
           {canEdit && (
-            <Button
-              variant="outline"
-              onClick={() => setInviteModalOpen(true)}
-              className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
-              title="Send an invitation to a new member to apply to the camp."
-            >
-              <Mail className="w-4 h-4" />
-              Invite Member
-            </Button>
+            <div className="flex flex-col">
+              <Button
+                variant="outline"
+                onClick={() => setImportRosterModalOpen(true)}
+                className="flex items-center gap-2 text-purple-600 border-purple-600 hover:bg-purple-50"
+                title="Upload CSV to create shifts-only roster entries. No invitations are sent."
+              >
+                <Upload className="w-4 h-4" />
+                Import CSV (Shifts-Only)
+              </Button>
+              <p className="text-[11px] text-gray-500 mt-1">Creates roster records only. No invites sent.</p>
+            </div>
           )}
 
           {canEdit && (
-            <Button
-              variant="outline"
-              onClick={() => setImportRosterModalOpen(true)}
-              className="flex items-center gap-2 text-purple-600 border-purple-600 hover:bg-purple-50"
-              title="Upload a CSV to create roster-only members (no invites are sent here)."
-            >
-              <Upload className="w-4 h-4" />
-              Import Roster
-            </Button>
+            <div className="flex flex-col">
+              <Button
+                variant="outline"
+                onClick={() => setInviteModalOpen(true)}
+                disabled={!campAcceptingApplications}
+                className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+                title={campAcceptingApplications
+                  ? 'Upload/paste recipients and send full-membership invitations.'
+                  : 'Enable applications on your camp profile to send full-membership invites.'}
+              >
+                <Mail className="w-4 h-4" />
+                Import CSV & Send Invites (Full Membership)
+              </Button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {campAcceptingApplications
+                  ? 'Sends invitation emails for full membership applications.'
+                  : 'Full-member invites are unavailable while applications are off.'}
+              </p>
+            </div>
           )}
 
           {/* Export Roster button - Available for all users with roster access */}
@@ -1365,6 +1454,35 @@ const MemberRoster: React.FC = () => {
           )}
         </div>
       </div>
+
+      <Card className="p-4 mb-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-custom-text">
+              Roster Setup: {rosterModeState.mode === 'none'
+                ? 'Not Started'
+                : rosterModeState.mode === 'shifts_only'
+                  ? 'Shifts-Only'
+                  : rosterModeState.mode === 'full_membership'
+                    ? 'Full Membership'
+                    : 'Mixed'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Camp applications: {campAcceptingApplications ? 'ON' : 'OFF'} • Members in active roster: {rosterModeState.memberCount}
+            </p>
+          </div>
+          {canEdit && rosterModeState.hasShiftsOnlyRoster && !rosterModeState.hasFullMembershipRoster && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setAddMemberModalOpen(true)}>
+                Add One Person (SOR)
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setImportRosterModalOpen(true)}>
+                Import More CSV (SOR)
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {!hasActiveRoster && canEdit && (
         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4" role="status" aria-live="polite">

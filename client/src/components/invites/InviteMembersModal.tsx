@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Modal } from '../ui';
-import { Loader2, Mail, RefreshCw, Send, Users, X } from 'lucide-react';
+import { Loader2, Mail, RefreshCw, Send, Upload, Users, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatDate } from '../../utils/dateFormatters';
@@ -45,12 +45,20 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
   const [error, setError] = useState<string | null>(null);
   const [invitesError, setInvitesError] = useState<string | null>(null);
   const [campName, setCampName] = useState<string>('');
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
 
   const parseRecipients = (text: string): string[] => {
     return text
       .split(/[,\n\s]+/)
       .map((recipient) => recipient.trim().toLowerCase())
       .filter((recipient) => recipient.length > 0);
+  };
+
+  const extractEmailsFromCsv = (content: string): string[] => {
+    const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+    const matches = content.match(emailRegex);
+    if (!matches) return [];
+    return Array.from(new Set(matches.map((email: string) => email.trim().toLowerCase())));
   };
 
   const loadTemplates = useCallback(async () => {
@@ -165,12 +173,37 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
     }
   };
 
+  const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setError('Please upload a CSV file for bulk full-membership invites.');
+      return;
+    }
+    try {
+      const content = await file.text();
+      const emails = extractEmailsFromCsv(content);
+      if (emails.length === 0) {
+        setError('No valid email addresses found in the CSV.');
+        return;
+      }
+      const merged = [...new Set([...parseRecipients(recipients), ...emails])];
+      setRecipients(merged.join('\n'));
+      setCsvFileName(file.name);
+      setError(null);
+      setSuccess(`Loaded ${emails.length} email${emails.length === 1 ? '' : 's'} from CSV.`);
+    } catch (_error) {
+      setError('Failed to parse CSV file.');
+    }
+  };
+
   const handleClose = () => {
     setRecipients('');
     setError(null);
     setSuccess(null);
     setInvitesError(null);
     setActiveTab('invite');
+    setCsvFileName(null);
     onClose();
   };
 
@@ -225,7 +258,7 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-blue-600" />
-            Invite Members
+            Full Membership Invites
           </h2>
           <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close invite modal">
             <X className="w-6 h-6" />
@@ -240,7 +273,7 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
             }`}
             onClick={() => setActiveTab('invite')}
           >
-            Send Invites
+            Send Full-Membership Invites
           </button>
           <button
             type="button"
@@ -268,6 +301,27 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 required
               />
+              <p className="text-[11px] text-gray-500 mt-2">
+                Use this flow when your camp is accepting full member applications.
+              </p>
+              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <p className="text-xs text-gray-700 mb-2">Bulk import full-membership invites from CSV</p>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleCsvUpload}
+                  className="block w-full text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-white hover:file:bg-blue-700"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Extracts all email addresses in the file and adds them to recipients.
+                </p>
+                {csvFileName && (
+                  <p className="text-[11px] text-blue-700 mt-1 flex items-center gap-1">
+                    <Upload className="w-3 h-3" />
+                    Loaded: {csvFileName}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div>

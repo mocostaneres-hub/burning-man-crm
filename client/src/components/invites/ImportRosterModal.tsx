@@ -139,7 +139,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Upload className="w-6 h-6 text-blue-600" />
-            Import Roster
+            Import CSV (Shifts-Only Roster)
           </h2>
           <button
             onClick={handleClose}
