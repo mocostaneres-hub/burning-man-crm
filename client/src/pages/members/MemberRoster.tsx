@@ -1539,8 +1539,6 @@ const MemberRoster: React.FC = () => {
       {canViewMetrics && (
         <MetricsPanel
           members={filteredMembers}
-          customFields={customFields}
-          hideBreakdownSection={user?.accountType === 'camp'}
         />
       )}
 

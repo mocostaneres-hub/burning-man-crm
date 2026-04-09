@@ -5,8 +5,6 @@ import { Member } from '../../types';
 
 interface MetricsPanelProps {
   members: Member[];
-  customFields?: Array<{ key: string; label: string; type: string }>;
-  hideBreakdownSection?: boolean;
 }
 
 interface MetricCardProps {
@@ -42,9 +40,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, count, icon, colorClass,
 );
 
 const MetricsPanel: React.FC<MetricsPanelProps> = ({
-  members,
-  customFields = [],
-  hideBreakdownSection = false
+  members
 }) => {
   // Define camp standard dates (you can move these to environment variables)
   const CAMP_STANDARD_OPEN_DATE = new Date('2025-08-25');
@@ -93,33 +89,6 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   const duesPaidCount = members.filter(member => {
     return member.duesPaid === true;
   }).length;
-
-  const statusBreakdown = members.reduce<Record<string, number>>((acc, member) => {
-    const key = (member.status || 'unknown').toString();
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-
-  const skillsBreakdown = members.reduce<Record<string, number>>((acc, member) => {
-    const user = typeof member.user === 'object' ? member.user : null;
-    const skills = member.skills || user?.skills || [];
-    for (const skill of skills) {
-      if (!skill) continue;
-      acc[skill] = (acc[skill] || 0) + 1;
-    }
-    return acc;
-  }, {});
-
-  const customFieldBreakdown = customFields.map((field) => {
-    const counts: Record<string, number> = {};
-    members.forEach((member) => {
-      const value = (member.customFieldValues || {})[field.key];
-      if (value === undefined || value === null || value === '') return;
-      const asKey = String(value);
-      counts[asKey] = (counts[asKey] || 0) + 1;
-    });
-    return { key: field.key, label: field.label, counts };
-  });
 
   // Calculate percentages (rounded to nearest whole number)
   const totalMembers = members.length;
@@ -180,50 +149,6 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
           percentage={calculatePercentage(lateDepartureCount)}
         />
       </div>
-      {!hideBreakdownSection && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <Card className="p-4">
-            <p className="text-sm font-medium text-gray-600 mb-2">By Status</p>
-            <div className="space-y-1 text-sm">
-              {Object.entries(statusBreakdown).map(([status, count]) => (
-                <div key={status} className="flex justify-between">
-                  <span>{status}</span>
-                  <span className="font-semibold">{count}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm font-medium text-gray-600 mb-2">Top Skills</p>
-            <div className="space-y-1 text-sm">
-              {Object.entries(skillsBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([skill, count]) => (
-                <div key={skill} className="flex justify-between">
-                  <span>{skill}</span>
-                  <span className="font-semibold">{count}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm font-medium text-gray-600 mb-2">Custom Fields</p>
-            <div className="space-y-2 text-sm">
-              {customFieldBreakdown.length === 0 ? (
-                <span className="text-gray-500">No custom fields configured</span>
-              ) : customFieldBreakdown.map((field) => (
-                <div key={field.key}>
-                  <p className="font-medium">{field.label}</p>
-                  {Object.entries(field.counts).slice(0, 4).map(([value, count]) => (
-                    <div key={`${field.key}-${value}`} className="flex justify-between text-gray-600">
-                      <span>{value}</span>
-                      <span>{count}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };
