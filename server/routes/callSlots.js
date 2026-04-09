@@ -1,9 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const CallSlot = require('../models/CallSlot');
-const { authenticateToken, requireCampAccount } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
-const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
+const { canManageCamp } = require('../utils/permissionHelpers');
+
+async function ensureCampManagementAccess(req, res, campId) {
+  const hasAccess = await canManageCamp(req, campId);
+  if (!hasAccess) {
+    res.status(403).json({ message: 'Camp admin/lead access required' });
+    return false;
+  }
+  return true;
+}
 
 // @route   GET /api/call-slots/available/:campId
 // @desc    Get available call slots for a camp (for logged-in applicants)
@@ -32,21 +40,14 @@ router.get('/available/:campId', authenticateToken, async (req, res) => {
 router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
 
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper (immutable campId)
-    const hasAccess = await canAccessCamp(req, campId);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+    if (!(await ensureCampManagementAccess(req, res, campId))) {
+      return;
     }
 
     const callSlots = await db.findCallSlots({ campId });
@@ -62,11 +63,6 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 // @access  Private (Camp owners only)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const { campId, startTime, endTime, date, maxParticipants = 1 } = req.body;
 
     // Validate required fields
@@ -74,21 +70,13 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Check if user owns this camp
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
-    
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campId && camp._id.toString() === req.user.campId)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+
+    if (!(await ensureCampManagementAccess(req, res, campId))) {
+      return;
     }
 
     const callSlotData = {
@@ -117,31 +105,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const callSlot = await db.findCallSlot({ _id: id });
     if (!callSlot) {
       return res.status(404).json({ message: 'Call slot not found' });
     }
 
-    // Check if user owns this camp
     const camp = await db.findCamp({ _id: callSlot.campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
-    
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campId && camp._id.toString() === req.user.campId)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+
+    if (!(await ensureCampManagementAccess(req, res, callSlot.campId))) {
+      return;
     }
 
     const updatedCallSlot = await db.updateCallSlot(id, updates);
@@ -159,31 +134,18 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const callSlot = await db.findCallSlot({ _id: id });
     if (!callSlot) {
       return res.status(404).json({ message: 'Call slot not found' });
     }
 
-    // Check if user owns this camp
     const camp = await db.findCamp({ _id: callSlot.campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
-    
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campId && camp._id.toString() === req.user.campId)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+
+    if (!(await ensureCampManagementAccess(req, res, callSlot.campId))) {
+      return;
     }
 
     await db.deleteCallSlot(id);
@@ -221,31 +183,18 @@ router.get('/:id/details', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if user is camp owner
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp account required' });
-    }
-
     const callSlot = await db.findCallSlot({ _id: id });
     if (!callSlot) {
       return res.status(404).json({ message: 'Call slot not found' });
     }
 
-    // Check if user owns this camp
     const camp = await db.findCamp({ _id: callSlot.campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
-    
-    const isCampOwner = camp.contactEmail === req.user.email || 
-                        (req.user.campId && camp._id.toString() === req.user.campId.toString());
-    const isAdminWithAccess = req.user.accountType === 'admin' && (
-      (req.user.campId && camp._id.toString() === req.user.campId.toString()) ||
-      (req.user.campId && camp._id.toString() === req.user.campId)
-    );
-    
-    if (!isCampOwner && !isAdminWithAccess) {
-      return res.status(403).json({ message: 'Access denied' });
+
+    if (!(await ensureCampManagementAccess(req, res, callSlot.campId))) {
+      return;
     }
 
     // Find all applications that selected this call slot

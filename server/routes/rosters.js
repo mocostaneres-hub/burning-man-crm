@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { normalizeEmail } = require('../utils/emailUtils');
-const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canManageCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
 const ShiftAssignment = require('../models/ShiftAssignment');
@@ -1745,9 +1745,8 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 
     console.log('✅ [GET /api/rosters/camp/:campId] Camp found:', camp._id);
 
-    // Check if user is camp owner or member
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, camp._id);
+    // Check if user is camp manager (owner/admin/lead) or member
+    const isCampOwner = await canManageCamp(req, camp._id);
     const isCampMember = await db.findMember({ camp: camp._id, user: req.user._id, status: 'active' });
     
     console.log('🔐 [GET /api/rosters/camp/:campId] Access check:', { isCampOwner, isCampMember: !!isCampMember });

@@ -1296,23 +1296,15 @@ router.post('/upload-photo', authenticateToken, upload.single('photo'), async (r
 router.post('/:campId/roster/archive', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
-    
-    // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
 
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Verify user has access to this camp
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
-    
-    if (!isCampOwner && !isAdmin) {
+    // Verify delegated Camp Leads and camp/admin owners can manage this camp.
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
     }
 
@@ -1345,12 +1337,6 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
     
     console.log('🔍 [POST /api/camps/:campId/roster/create] Camp ID:', campId);
     console.log('🔍 [POST /api/camps/:campId/roster/create] User:', { _id: req.user._id, accountType: req.user.accountType, campId: req.user.campId });
-    
-    // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [POST /api/camps/:campId/roster/create] Not a camp or admin account');
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
 
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
@@ -1360,15 +1346,9 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
 
     console.log('✅ [POST /api/camps/:campId/roster/create] Camp found:', camp.name);
 
-    // Verify user has access to this camp
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
-    
-    console.log('🔍 [POST /api/camps/:campId/roster/create] Is camp owner?', isCampOwner);
-    console.log('🔍 [POST /api/camps/:campId/roster/create] Is admin?', isAdmin);
-    
-    if (!isCampOwner && !isAdmin) {
+    const hasPermission = await canManageCamp(req, camp._id);
+    console.log('🔍 [POST /api/camps/:campId/roster/create] Has management access?', hasPermission);
+    if (!hasPermission) {
       console.log('❌ [POST /api/camps/:campId/roster/create] Access denied');
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
     }
@@ -1421,23 +1401,14 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
 router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req, res) => {
   try {
     const { campId, memberId } = req.params;
-    
-    // Check if user is camp owner/admin
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      return res.status(403).json({ message: 'Camp admin/lead access required' });
-    }
 
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Verify user has access to this camp
-    // Check camp ownership using helper
-    const isCampOwner = await canAccessCamp(req, camp._id);
-    const isAdmin = req.user.accountType === 'admin' && req.user.campId === camp._id.toString();
-    
-    if (!isCampOwner && !isAdmin) {
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
       return res.status(403).json({ message: 'Access denied - camp admin/lead required' });
     }
 
