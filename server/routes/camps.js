@@ -1417,6 +1417,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     if (!member) {
       return res.status(404).json({ message: 'Member not found' });
     }
+    const memberUserId = member.user?._id?.toString?.() || member.user?.toString?.() || member.user;
 
     // Find the active roster for this camp
     const activeRoster = await db.findActiveRoster({ camp: campId });
@@ -1424,26 +1425,50 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
       return res.status(404).json({ message: 'No active roster found' });
     }
 
-    // Remove member from roster
-    await db.removeMemberFromRoster(activeRoster._id, memberId);
-
-    // CRITICAL: Clear camp affiliation from user profile
-    // Step 1: Find and update the user's profile to remove camp affiliation
-    const userProfile = await db.findUser({ _id: member.user });
-    if (userProfile) {
-      await db.updateUser(member.user, {
-        campName: null, // Clear camp name from user profile
-        updatedAt: new Date()
-      });
+    // Remove ALL roster entries for this user's member record(s) in this camp.
+    // This handles legacy duplicate member docs and ensures the user fully disappears from roster UI.
+    const relatedMemberDocs = memberUserId
+      ? await db.findMembers({ camp: campId, user: memberUserId })
+      : [member];
+    const memberIdsToRemove = Array.from(new Set(
+      [memberId, ...(relatedMemberDocs || []).map((m) => m?._id?.toString?.()).filter(Boolean)]
+    ));
+    for (const rosterMemberId of memberIdsToRemove) {
+      await db.removeMemberFromRoster(activeRoster._id, rosterMemberId);
     }
 
-    // Step 2: Update the member record to 'deleted' status
-    await db.updateMember(memberId, { 
-      status: 'deleted',
-      reviewedAt: new Date(),
-      reviewedBy: req.user._id,
-      reviewNotes: 'Removed from roster - application reset for re-application'
-    });
+    // CRITICAL: Clear camp affiliation from user profile
+    // Step 1: Find and update the user's profile camp label when needed.
+    const userProfile = memberUserId ? await db.findUser({ _id: memberUserId }) : null;
+    if (userProfile) {
+      // Recalculate whether user still has an active/approved membership elsewhere.
+      const remainingMembership = await db.findMember({
+        user: memberUserId,
+        status: { $in: ['active', 'approved', 'pending', 'invited', 'roster_only'] }
+      });
+      if (!remainingMembership) {
+        await db.updateUser(memberUserId, {
+          campName: null, // Clear stale camp label in admin users table.
+          updatedAt: new Date()
+        });
+      } else if (remainingMembership.camp) {
+        const remainingCamp = await db.findCamp({ _id: remainingMembership.camp });
+        await db.updateUser(memberUserId, {
+          campName: remainingCamp?.name || remainingCamp?.campName || null,
+          updatedAt: new Date()
+        });
+      }
+    }
+
+    // Step 2: Mark all related member docs as rejected so they don't appear as active roster members.
+    for (const relatedMember of (relatedMemberDocs || [member])) {
+      await db.updateMember(relatedMember._id, {
+        status: 'rejected',
+        reviewedAt: new Date(),
+        reviewedBy: req.user._id,
+        reviewNotes: 'Removed from roster - moved to rejected queue'
+      });
+    }
 
     // Step 3: Find and reset the corresponding application record
     const application = await db.findMemberApplication({ 
@@ -1457,12 +1482,12 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     });
 
     if (application) {
-      // Reset application to allow re-application within the same calendar year
+      // Keep application visible in Rejected queue after roster removal.
       await db.updateMemberApplication(application._id, {
-        status: 'deleted',
+        status: 'rejected',
         reviewedAt: new Date(),
         reviewedBy: req.user._id,
-        reviewNotes: 'Application reset - member removed from roster, can re-apply',
+        reviewNotes: 'Application moved to rejected after roster removal',
         // Remove the member linkage to allow fresh application
         memberId: null
       });

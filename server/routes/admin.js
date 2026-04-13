@@ -300,12 +300,14 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     // Enrich users with camp name when possible
     const usersWithCamp = await Promise.all(users.map(async (user) => {
       const userObj = user?.toObject ? user.toObject() : user;
-
-      if (userObj?.campName) {
-        return userObj;
-      }
+      const isPersonalUser = userObj?.accountType === 'personal';
 
       try {
+        // Camp account records keep their own immutable camp identity.
+        if (userObj?.accountType === 'camp') {
+          return userObj;
+        }
+
         // Primary: resolve via campId
         if (userObj?.campId) {
           const camp = await db.findCamp({ _id: userObj.campId });
@@ -313,6 +315,31 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
             const campObj = camp?.toObject ? camp.toObject() : camp;
             return { ...userObj, campName: campObj?.name || campObj?.campName };
           }
+        }
+
+        // For personal users, do not trust stale user.campName.
+        // Recalculate from active member/camp affiliations only.
+        if (isPersonalUser) {
+          const activeMembership = await Member.findOne({
+            user: userObj?._id,
+            status: { $in: ['active', 'approved', 'pending', 'invited', 'roster_only'] }
+          }).select('camp role');
+
+          if (activeMembership?.camp) {
+            const activeCamp = await db.findCamp({ _id: activeMembership.camp });
+            if (activeCamp) {
+              const activeCampObj = activeCamp?.toObject ? activeCamp.toObject() : activeCamp;
+              return {
+                ...userObj,
+                campName: activeCampObj?.name || activeCampObj?.campName || null
+              };
+            }
+          }
+
+          return {
+            ...userObj,
+            campName: null
+          };
         }
 
         // Secondary: resolve roster association (Mongo only)

@@ -768,7 +768,12 @@ const MemberRoster: React.FC = () => {
             customFieldValues: memberData.customFieldValues || {}
           };
         })
-        .filter((member: any) => member._id); // Filter out any members without a valid ID
+        .filter((member: any) => member._id) // Filter out any members without a valid ID
+        .filter((member: any) => {
+          const normalizedStatus = String(member?.status || '').toLowerCase();
+          // Defensive UI guard: removed/rejected members should never remain visible in roster grid.
+          return !['deleted', 'rejected', 'withdrawn'].includes(normalizedStatus);
+        });
       
       console.log('✅ [MemberRoster] Enhanced members:', enhancedMembers);
       
