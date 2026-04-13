@@ -53,6 +53,19 @@ const Contact360View: React.FC = () => {
   if (!data) return null;
 
   const { user, rosterHistory, applications, tasks, volunteerShifts, activityLog } = data;
+  const safeUser = user || {};
+  const toIdString = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    try {
+      return String(value);
+    } catch (_error) {
+      return '';
+    }
+  };
+  const getApplicationIdLabel = (application: any): string => {
+    const id = toIdString(application?._id);
+    return id ? `Application #${id.slice(-6)}` : 'Application';
+  };
   const skillBadges = Array.isArray(user?.skills) ? user.skills.slice(0, 5) : [];
   const rosterHistoryItems = Array.isArray(rosterHistory) ? rosterHistory : [];
   const applicationItems = Array.isArray(applications) ? applications : [];
@@ -67,9 +80,9 @@ const Contact360View: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-lato-bold text-custom-text">
-              {user.firstName} {user.lastName} {user.playaName && <span className="text-custom-text-secondary">({user.playaName})</span>}
+              {safeUser.firstName || 'Unknown'} {safeUser.lastName || 'User'} {safeUser.playaName && <span className="text-custom-text-secondary">({safeUser.playaName})</span>}
             </h1>
-            <p className="text-sm text-custom-text-secondary">{user.email}</p>
+            <p className="text-sm text-custom-text-secondary">{safeUser.email || '-'}</p>
           </div>
           <div className="flex gap-2">
             {skillBadges.map((s: string) => (
@@ -86,8 +99,8 @@ const Contact360View: React.FC = () => {
           <p className="text-custom-text-secondary">No roster entries found.</p>
         ) : (
           <ul className="space-y-3">
-            {rosterHistoryItems.map((r) => (
-              <li key={`${r.rosterId}-${r.joinedAt}`} className="border-b pb-2">
+            {rosterHistoryItems.map((r, index) => (
+              <li key={`${toIdString(r.rosterId) || 'roster'}-${toIdString(r.joinedAt) || index}`} className="border-b pb-2">
                 <div className="font-medium">{r.name || 'Roster'}</div>
                 <div className="text-sm text-custom-text-secondary">
                   Year: {r.year || 'N/A'} · Dues: <span className={r.duesStatus === 'Paid' ? 'text-green-600 font-medium' : 'text-red-600'}>{r.duesStatus || 'Unpaid'}</span>
@@ -114,12 +127,12 @@ const Contact360View: React.FC = () => {
           <p className="text-custom-text-secondary">No applications for this camp.</p>
         ) : (
           <div className="space-y-4">
-            {applicationItems.map((application) => (
-              <div key={application._id} className="border rounded-lg p-4">
+            {applicationItems.map((application, index) => (
+              <div key={toIdString(application?._id) || `application-${index}`} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-custom-text">
-                      Application #{application._id.slice(-6)}
+                      {getApplicationIdLabel(application)}
                     </h3>
                     <p className="text-sm text-custom-text-secondary">
                       Submitted: {application.appliedAt ? new Date(application.appliedAt).toLocaleDateString() : '-'}
@@ -167,8 +180,8 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {taskItems.map((t) => (
-                  <tr key={t._id} className="border-t">
+                {taskItems.map((t, index) => (
+                  <tr key={toIdString(t?._id) || `task-${index}`} className="border-t">
                     <td className="px-4 py-2 text-sm">{t.title}</td>
                     <td className="px-4 py-2 text-sm"><Badge variant={t.status === 'completed' ? 'success' : t.status === 'in_progress' ? 'info' : 'warning'}>{t.status}</Badge></td>
                     <td className="px-4 py-2 text-sm">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}</td>
@@ -198,8 +211,8 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {volunteerShiftItems.map((s) => (
-                  <tr key={s.shiftId} className="border-t">
+                {volunteerShiftItems.map((s, index) => (
+                  <tr key={toIdString(s?.shiftId) || `shift-${index}`} className="border-t">
                     <td className="px-4 py-2 text-sm font-medium">{s.eventName}</td>
                     <td className="px-4 py-2 text-sm">{s.title}</td>
                     <td className="px-4 py-2 text-sm">{s.date ? new Date(s.date).toLocaleDateString() : '-'}</td>
@@ -229,8 +242,8 @@ const Contact360View: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {activityItems.map((log) => (
-                  <tr key={log._id} className="border-t">
+                {activityItems.map((log, index) => (
+                  <tr key={toIdString(log?._id) || `activity-${index}`} className="border-t">
                     <td className="px-4 py-2 text-sm">
                       {log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}
                     </td>
