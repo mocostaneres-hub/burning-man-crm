@@ -26,6 +26,14 @@ interface RosterMember extends Member {
 type RosterMode = 'none' | 'shifts_only' | 'full_membership' | 'mixed';
 const SOR_IMPLEMENTATION_CUTOFF_ISO = '2026-04-01T00:00:00.000Z';
 const SOR_IMPLEMENTATION_CUTOFF_MS = Date.parse(SOR_IMPLEMENTATION_CUTOFF_ISO);
+const getObjectIdTimestampMs = (value?: string | null): number | null => {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!/^[a-fA-F0-9]{24}$/.test(trimmed)) return null;
+  const epochSeconds = Number.parseInt(trimmed.slice(0, 8), 16);
+  if (Number.isNaN(epochSeconds)) return null;
+  return epochSeconds * 1000;
+};
 
 const deriveRosterMode = (roster: any): {
   mode: RosterMode;
@@ -305,7 +313,8 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = isCampContext && isAdminOrLead;
   const canEdit = canAccessRoster;
-  const isLegacyPreSorCamp = campCreatedAtMs !== null && campCreatedAtMs < SOR_IMPLEMENTATION_CUTOFF_MS;
+  const inferredCampCreatedAtMs = campCreatedAtMs ?? getObjectIdTimestampMs(campId);
+  const isLegacyPreSorCamp = inferredCampCreatedAtMs !== null && inferredCampCreatedAtMs < SOR_IMPLEMENTATION_CUTOFF_MS;
   const activeRosterType: RosterMode = !hasActiveRoster
     ? 'none'
     : isLegacyPreSorCamp
