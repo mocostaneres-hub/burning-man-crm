@@ -321,6 +321,7 @@ const MemberRoster: React.FC = () => {
     || rosterModeState.mode === 'full_membership'
     || rosterModeState.mode === 'mixed'
   )) || isLikelyFullMembershipByCampSetting;
+  const canManageFullMembershipInvites = campAcceptingApplications || authUser?.isCampLead === true;
   const canViewMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
@@ -1001,7 +1002,7 @@ const MemberRoster: React.FC = () => {
       return;
     }
 
-    if (campAcceptingApplications) {
+    if (canManageFullMembershipInvites) {
       setInviteModalOpen(true);
     } else {
       alert('Roster created. To send full-member invitations, enable applications in Camp Settings first.');
@@ -1456,9 +1457,9 @@ const MemberRoster: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => setInviteModalOpen(true)}
-                disabled={!campAcceptingApplications}
+                disabled={!canManageFullMembershipInvites}
                 className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
-                title={campAcceptingApplications
+                title={canManageFullMembershipInvites
                   ? 'Upload/paste recipients and send full-membership invitations.'
                   : 'Enable applications on your camp profile to send full-membership invites.'}
               >
@@ -1466,7 +1467,7 @@ const MemberRoster: React.FC = () => {
                 Invite Members (Full Membership)
               </Button>
               <p className="text-[11px] text-gray-500 mt-1">
-                {campAcceptingApplications
+                {canManageFullMembershipInvites
                   ? 'Sends invitation emails for full membership applications.'
                   : 'Full-member invites are unavailable while applications are off.'}
               </p>
@@ -2720,7 +2721,7 @@ const MemberRoster: React.FC = () => {
           )}
           {duesActionModal.member && (() => {
             const duesStatus = normalizeDuesStatus(duesActionModal.member.duesStatus);
-            const canMarkUnpaid = user?.accountType === 'camp' || user?.accountType === 'admin';
+            const canMarkUnpaid = canEdit;
             return (
               <>
                 {duesStatus === 'UNPAID' && (
@@ -2912,7 +2913,7 @@ const MemberRoster: React.FC = () => {
                 ) : (
                   <>
                     Next: we will create the roster, then open full-membership invite import.
-                    {!campAcceptingApplications && (
+                    {!canManageFullMembershipInvites && (
                       <p className="mt-2 text-amber-700">
                         Note: Applications are currently OFF. You can still create the roster, but invites will stay unavailable until applications are enabled.
                       </p>

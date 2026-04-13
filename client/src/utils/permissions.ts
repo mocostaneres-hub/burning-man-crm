@@ -134,8 +134,8 @@ export function canAssignCampLeadRole(user: User | null, campId: string | undefi
     targetCampIdType: typeof campId
   });
 
-  // Only camp owners can assign roles
-  const result = isCampOwner(user, campId);
+  // Camp management parity: camp owners, camp-affiliated admins, and Camp Leads can assign roles.
+  const result = canManageCamp(user, campId);
   console.log('🔍 [canAssignCampLeadRole] Result:', result);
   return result;
 }

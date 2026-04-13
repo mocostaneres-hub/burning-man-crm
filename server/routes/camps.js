@@ -695,9 +695,16 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check if camp is public or user has access
-    if (!camp.isPublic && (!req.user || camp.contactEmail !== req.user.email)) {
-      return res.status(403).json({ message: 'Camp not accessible' });
+    // Check if camp is public or requester has management access.
+    if (!camp.isPublic) {
+      if (!req.user) {
+        return res.status(403).json({ message: 'Camp not accessible' });
+      }
+      const hasManagementAccess = await canManageCamp(req, camp._id);
+      const isLegacyOwnerByEmail = camp.contactEmail && camp.contactEmail === req.user.email;
+      if (!hasManagementAccess && !isLegacyOwnerByEmail) {
+        return res.status(403).json({ message: 'Camp not accessible' });
+      }
     }
 
     // Process photos array

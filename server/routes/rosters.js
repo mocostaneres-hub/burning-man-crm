@@ -1985,17 +1985,14 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
   try {
     const { memberId } = req.params;
     console.log('🎖️ [GRANT CAMP LEAD] Starting role assignment for memberId:', memberId);
-
-    // Only camp owners can grant Camp Lead role (not Camp Leads themselves)
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [GRANT CAMP LEAD] Permission denied - user not camp owner');
-      return res.status(403).json({ message: 'Only camp owners can assign Camp Lead role' });
-    }
-
-    // Get camp ID from user context
-    const campId = await getUserCampId(req);
+    const campId = req.user?.campLeadCampId || await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Camp not found' });
+    }
+    const hasPermission = await canManageCamp(req, campId);
+    if (!hasPermission) {
+      console.log('❌ [GRANT CAMP LEAD] Permission denied - cannot manage this camp');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     console.log('🏕️ [GRANT CAMP LEAD] Camp ID resolved:', campId);
@@ -2125,17 +2122,14 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
   try {
     const { memberId } = req.params;
     console.log('🚫 [REVOKE CAMP LEAD] Starting role revocation for memberId:', memberId);
-
-    // Only camp owners can revoke Camp Lead role (not Camp Leads themselves)
-    if (req.user.accountType !== 'camp' && !(req.user.accountType === 'admin' && req.user.campId)) {
-      console.log('❌ [REVOKE CAMP LEAD] Permission denied - user not camp owner');
-      return res.status(403).json({ message: 'Only camp owners can revoke Camp Lead role' });
-    }
-
-    // Get camp ID from user context
-    const campId = await getUserCampId(req);
+    const campId = req.user?.campLeadCampId || await getUserCampId(req);
     if (!campId) {
       return res.status(404).json({ message: 'Camp not found' });
+    }
+    const hasPermission = await canManageCamp(req, campId);
+    if (!hasPermission) {
+      console.log('❌ [REVOKE CAMP LEAD] Permission denied - cannot manage this camp');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
     console.log('🏕️ [REVOKE CAMP LEAD] Camp ID resolved:', campId);
