@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AppleOAuth from '../../components/auth/AppleOAuth';
 import GoogleOAuth from '../../components/auth/GoogleOAuth';
@@ -24,11 +24,15 @@ const Login: React.FC = () => {
   const { login, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const requestedRedirect = searchParams.get('redirect');
+  const safeRedirect =
+    requestedRedirect && requestedRedirect.startsWith('/') ? requestedRedirect : '/dashboard';
 
   const {
     register,
@@ -64,13 +68,13 @@ const Login: React.FC = () => {
       // Redirect based on account type
       if (user.accountType === 'camp') {
         console.log('✅ [Login] Redirecting to camp dashboard...');
-        navigate('/dashboard', { replace: true });
+        navigate(safeRedirect, { replace: true });
       } else {
         console.log('✅ [Login] Redirecting to member dashboard...');
-        navigate('/dashboard', { replace: true });
+        navigate(safeRedirect, { replace: true });
       }
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, safeRedirect]);
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -90,7 +94,7 @@ const Login: React.FC = () => {
         navigate('/camp/edit', { replace: true });
       } else {
         // Otherwise, redirect based on the from path or default to /dashboard
-        const from = location.state?.from?.pathname || '/dashboard';
+        const from = location.state?.from?.pathname || safeRedirect;
         navigate(from, { replace: true });
       }
     } catch (err: any) {
@@ -148,7 +152,7 @@ const Login: React.FC = () => {
       }
       
       // Existing user - redirect to dashboard like email/password login
-      const from = location.state?.from?.pathname || '/dashboard';
+      const from = location.state?.from?.pathname || safeRedirect;
       console.log('✅ [Login] Existing user, redirecting to:', from);
       window.location.href = from;
     }, 100); // 100ms delay to ensure localStorage write completes
@@ -285,7 +289,9 @@ const Login: React.FC = () => {
               Don't have an account?
             </p>
             <RouterLink
-              to="/register"
+              to={safeRedirect !== '/dashboard'
+                ? `/register?redirect=${encodeURIComponent(safeRedirect)}`
+                : '/register'}
               className="block"
             >
               <Button

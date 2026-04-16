@@ -47,6 +47,9 @@ const Register: React.FC = () => {
   // Capture invitation context from URL
   const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
   const campSlug = searchParams.get('camp');
+  const redirectPath = searchParams.get('redirect');
+  const safeRedirect =
+    redirectPath && redirectPath.startsWith('/') ? redirectPath : '/dashboard';
 
   const {
     register,
@@ -136,9 +139,9 @@ const Register: React.FC = () => {
       
       // Redirect to dashboard
       console.log('✅ [Register] Redirecting to dashboard...');
-      navigate('/dashboard', { replace: true });
+      navigate(safeRedirect, { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, safeRedirect]);
 
   const password = watch('password');
   const confirmPassword = watch('confirmPassword');
@@ -215,7 +218,7 @@ const Register: React.FC = () => {
       }
       
       // Fallback redirect (should not happen with new users)
-      navigate('/user/profile');
+      navigate(safeRedirect);
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -267,7 +270,7 @@ const Register: React.FC = () => {
       } else {
         // Existing user who clicked "Sign up" instead of "Sign in" - go to dashboard
         console.log('✅ [Register] Existing user, redirecting to dashboard...');
-        window.location.href = '/dashboard';
+        window.location.href = safeRedirect;
       }
     }, 100); // 100ms delay to ensure localStorage write completes
   };
@@ -434,7 +437,9 @@ const Register: React.FC = () => {
                 Already have an account?
               </p>
               <RouterLink
-                to="/login"
+                to={safeRedirect !== '/dashboard'
+                  ? `/login?redirect=${encodeURIComponent(safeRedirect)}`
+                  : '/login'}
                 className="block"
               >
                 <Button

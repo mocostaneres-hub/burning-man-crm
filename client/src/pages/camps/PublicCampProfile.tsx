@@ -132,9 +132,11 @@ const PublicCampProfile: React.FC = () => {
   const [applicationSuccess, setApplicationSuccess] = useState(false);
   const [availableCallSlots, setAvailableCallSlots] = useState<any[]>([]);
   const [showProfileCompletionModal, setShowProfileCompletionModal] = useState(false);
+  const [hasAutoOpenedApply, setHasAutoOpenedApply] = useState(false);
   
   // Capture invite token from URL if present
   const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
+  const shouldAutoApply = searchParams.get('apply') === '1';
   
   // Application form state
   const [applicationData, setApplicationData] = useState({
@@ -149,7 +151,7 @@ const PublicCampProfile: React.FC = () => {
       fetchCamp();
     }
   }, [slug]);
-  
+
   // Log invite token detection for debugging
   useEffect(() => {
     if (inviteToken) {
@@ -221,11 +223,19 @@ const PublicCampProfile: React.FC = () => {
   
   const handleApplyNow = async () => {
     if (!user) {
-      // Redirect non-authenticated users to registration page with camp context
-      const currentUrl = new URL(window.location.href);
-      const campSlug = currentUrl.pathname.split('/').pop();
-      const inviteParam = inviteToken ? `&invite_token=${inviteToken}` : '';
-      window.location.href = `https://www.g8road.com/register?camp=${campSlug}${inviteParam}`;
+      const baseCampPath = `/camps/${slug || camp?.slug || camp?._id}`;
+      const params = new URLSearchParams();
+      params.set('apply', '1');
+      if (inviteToken) {
+        params.set('invite_token', inviteToken);
+      }
+      const redirectTarget = `${baseCampPath}?${params.toString()}`;
+      const wantsToCreateAccount = window.confirm(
+        'To apply to this camp, you need an account.\n\nPress OK to create an account, or Cancel to log in.'
+      );
+      window.location.href = wantsToCreateAccount
+        ? `/register?redirect=${encodeURIComponent(redirectTarget)}`
+        : `/login?redirect=${encodeURIComponent(redirectTarget)}`;
       return;
     }
     
@@ -263,6 +273,14 @@ const PublicCampProfile: React.FC = () => {
     
     setShowApplicationModal(true);
   };
+
+  useEffect(() => {
+    if (hasAutoOpenedApply || !camp || !shouldAutoApply || !user || user.accountType !== 'personal') {
+      return;
+    }
+    setHasAutoOpenedApply(true);
+    void handleApplyNow();
+  }, [camp, hasAutoOpenedApply, shouldAutoApply, user]);
 
   const handleSubmitApplication = async () => {
     try {

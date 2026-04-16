@@ -44,6 +44,9 @@ class ApiService {
           '/auth/forgot-password',
           '/auth/reset-password',
           '/invites/validate',
+          '/camps',
+          '/categories',
+          '/perks',
           '/cities',
           '/oauth/config',
           '/health'
@@ -86,6 +89,10 @@ class ApiService {
             console.warn('⚠️ [API Interceptor] No token found - protected endpoint may fail');
           }
         } else {
+          // Ensure public endpoints never carry stale Authorization headers.
+          if (config.headers?.Authorization) {
+            delete config.headers.Authorization;
+          }
           console.log('🔓 [API Interceptor] Public endpoint - no auth required:', config.url);
         }
         

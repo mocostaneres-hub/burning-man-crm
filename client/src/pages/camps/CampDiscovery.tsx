@@ -92,11 +92,17 @@ const CampDiscovery: React.FC = () => {
   // Handle Apply Now button click
   const handleApplyNow = (camp: Camp) => {
     if (!user) {
-      // Redirect to registration page for unauthenticated users
-      window.location.href = 'https://www.g8road.com/register';
+      const campSlug = camp.slug || camp._id;
+      const redirectTarget = `/camps/${campSlug}?apply=1`;
+      const wantsToCreateAccount = window.confirm(
+        'To apply to this camp, you need an account.\n\nPress OK to create an account, or Cancel to log in.'
+      );
+      window.location.href = wantsToCreateAccount
+        ? `/register?redirect=${encodeURIComponent(redirectTarget)}`
+        : `/login?redirect=${encodeURIComponent(redirectTarget)}`;
     } else {
       // For authenticated users, navigate to camp profile or application page
-      navigate(`/camps/${camp.slug}`);
+      navigate(`/camps/${camp.slug || camp._id}`);
     }
   };
 
