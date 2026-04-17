@@ -17,6 +17,7 @@ const router = express.Router();
 
 const PASSWORD_RESET_EXPIRY_HOURS = parseInt(process.env.PASSWORD_RESET_EXPIRY_HOURS || '1', 10);
 const PASSWORD_MIN_LENGTH = 6;
+const FORGOT_PASSWORD_SUCCESS_MESSAGE = 'If an account exists for that email, we sent a reset link. Check your inbox and spam folder.';
 
 // Stricter rate limit for forgot-password (per IP)
 const forgotPasswordLimiter = rateLimit({
@@ -26,6 +27,9 @@ const forgotPasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+const normalizeInviteRecipient = (value) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
 
 // Generate JWT token with rich claims
 const generateToken = (user) => {
@@ -85,6 +89,13 @@ router.post('/register', [
       const invite = await db.findInvite({ token: inviteToken });
       if (!invite) {
         return res.status(400).json({ message: 'Invitation link is invalid' });
+      }
+      const normalizedInviteRecipient = normalizeInviteRecipient(invite.recipient);
+      if (invite.method === 'email' && normalizedInviteRecipient && normalizedInviteRecipient !== normalizedEmail) {
+        return res.status(403).json({ message: 'This invitation was sent to a different email address' });
+      }
+      if (invite.invitedUserId || invite.status === 'applied' || invite.appliedBy || invite.appliedAt) {
+        return res.status(400).json({ message: 'This invitation has already been used' });
       }
       inviteRecord = invite;
 
@@ -470,11 +481,11 @@ router.post('/forgot-password', forgotPasswordLimiter, [
 
     const user = await User.findOne({ email: normalizedEmail }).select('_id email firstName authProviders');
     if (!user) {
-      return res.status(404).json({ message: 'No account found with that email address.' });
+      return res.json({ message: FORGOT_PASSWORD_SUCCESS_MESSAGE });
     }
 
     if (!user.authProviders || !user.authProviders.includes('password')) {
-      return res.status(404).json({ message: 'No account found with that email address.' });
+      return res.json({ message: FORGOT_PASSWORD_SUCCESS_MESSAGE });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
@@ -502,7 +513,7 @@ router.post('/forgot-password', forgotPasswordLimiter, [
       note: 'Password reset email requested'
     });
 
-    res.json({ message: 'We sent a reset link to that email address. Check your inbox and spam folder.' });
+    res.json({ message: FORGOT_PASSWORD_SUCCESS_MESSAGE });
   } catch (error) {
     console.error('Forgot password error:', error.message);
     res.status(500).json({ message: 'Server error' });

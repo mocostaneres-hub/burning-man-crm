@@ -47,6 +47,7 @@ const Register: React.FC = () => {
   // Capture invitation context from URL
   const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
   const campSlug = searchParams.get('camp');
+  const isShiftsOnlyInviteFromQuery = searchParams.get('shifts_only') === '1';
   const redirectPath = searchParams.get('redirect');
   const safeRedirect =
     redirectPath && redirectPath.startsWith('/') ? redirectPath : '/dashboard';
@@ -81,7 +82,11 @@ const Register: React.FC = () => {
 
         localStorage.setItem(
           'pendingInvite',
-          JSON.stringify({ token: inviteToken, campSlug: resolvedCampSlug })
+          JSON.stringify({
+            token: inviteToken,
+            campSlug: resolvedCampSlug,
+            mode: response?.isShiftsOnlyInvite || isShiftsOnlyInviteFromQuery ? 'shifts_only' : 'standard'
+          })
         );
         setError('');
       } catch (err: any) {
@@ -96,7 +101,7 @@ const Register: React.FC = () => {
     return () => {
       isActive = false;
     };
-  }, [inviteToken, campSlug, navigate]);
+  }, [inviteToken, campSlug, navigate, isShiftsOnlyInviteFromQuery]);
 
   // Redirect authenticated users away from register page
   useEffect(() => {
@@ -252,9 +257,11 @@ const Register: React.FC = () => {
       const pendingInvite = localStorage.getItem('pendingInvite');
       if (pendingInvite) {
         try {
-          const { campSlug, token } = JSON.parse(pendingInvite);
+          const { campSlug, token, mode } = JSON.parse(pendingInvite);
           if (campSlug && token) {
-            window.location.href = `/apply?invite_token=${token}`;
+            window.location.href = mode === 'shifts_only'
+              ? `/onboarding/shifts-only?invite_token=${token}`
+              : `/apply?invite_token=${token}`;
             return;
           }
         } catch (err) {

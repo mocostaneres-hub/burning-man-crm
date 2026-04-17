@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sun and Sand Realtor | Southern California Homes</title>
+    <meta
+      name="description"
+      content="Sun and Sand Realtor helps buyers and sellers across Southern California. Browse featured listings, meet our team, and schedule a consultation."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Source+Sans+3:wght@400;500;600;700&family=Montserrat:wght@500;600;700;800&family=Work+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="#" class="logo" aria-label="Sun and Sand Realtor home">
+          <span class="logo-mark">SS</span>
+          <span class="logo-text">Sun and Sand Realtor</span>
+        </a>
+
+        <button class="menu-toggle" aria-label="Open menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <nav class="main-nav">
+          <a href="#listings">Listings</a>
+          <a href="#agents">Agents</a>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
+          <a href="#contact" class="btn btn-small">Book Consultation</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-content">
+          <p class="eyebrow">Serving Southern California</p>
+          <h1>Find your ideal home near the coast and beyond.</h1>
+          <p class="hero-copy">
+            From first-time buyers to luxury sellers, we combine local market insight and
+            personalized guidance to help you move with confidence throughout Southern
+            California.
+          </p>
+          <div class="hero-actions">
+            <a href="#listings" class="btn">Browse Listings</a>
+            <a href="#contact" class="btn btn-secondary">Sell Your Home</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="search-panel container">
+        <div class="theme-switcher" aria-label="Theme options">
+          <span class="theme-switcher-label">Preview look and feel:</span>
+          <div class="theme-buttons" role="group" aria-label="Select design theme">
+            <button
+              class="theme-btn theme-btn--coastal is-active"
+              data-theme="coastal"
+              type="button"
+            >
+              Coastal Luxury
+            </button>
+            <button class="theme-btn theme-btn--modern" data-theme="modern" type="button">
+              Modern Minimal
+            </button>
+            <button class="theme-btn theme-btn--sun" data-theme="sun" type="button">
+              Sun-Kissed
+            </button>
+          </div>
+        </div>
+        <h2>Start your home search</h2>
+        <div class="filter-buttons" role="group" aria-label="Filter property type">
+          <button class="filter-btn is-active" data-type="all">All</button>
+          <button class="filter-btn" data-type="house">Houses</button>
+          <button class="filter-btn" data-type="condo">Condos</button>
+          <button class="filter-btn" data-type="townhome">Townhomes</button>
+        </div>
+      </section>
+
+      <section id="listings" class="section container">
+        <div class="section-header">
+          <p class="eyebrow">Featured Listings</p>
+          <h2>Homes available now</h2>
+        </div>
+
+        <div class="listing-grid">
+          <article class="listing-card" data-type="house">
+            <img
+              src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=1200&q=80"
+              alt="Modern suburban house with landscaped yard"
+            />
+            <div class="listing-content">
+              <h3>4821 Pine Crest Ave</h3>
+              <p class="listing-meta">4 Beds • 3 Baths • 2,650 Sq Ft</p>
+              <p class="listing-price">$875,000</p>
+            </div>
+          </article>
+
+          <article class="listing-card" data-type="condo">
+            <img
+              src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
+              alt="City condo with skyline view"
+            />
+            <div class="listing-content">
+              <h3>17 Harbor Loft #805</h3>
+              <p class="listing-meta">2 Beds • 2 Baths • 1,240 Sq Ft</p>
+              <p class="listing-price">$640,000</p>
+            </div>
+          </article>
+
+          <article class="listing-card" data-type="townhome">
+            <img
+              src="https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1200&q=80"
+              alt="Row of modern townhomes at sunset"
+            />
+            <div class="listing-content">
+              <h3>233 Lakeview Row</h3>
+              <p class="listing-meta">3 Beds • 2.5 Baths • 1,980 Sq Ft</p>
+              <p class="listing-price">$715,000</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="agents" class="section section-alt">
+        <div class="container">
+          <div class="section-header">
+            <p class="eyebrow">Meet the Team</p>
+            <h2>Agents who know Southern California</h2>
+          </div>
+          <figure class="team-photo">
+            <img
+              src="./assets/team-photo.png"
+              alt="Sun and Sand Realtor team members meeting with clients"
+            />
+          </figure>
+          <div class="agent-grid">
+            <article class="agent-card">
+              <h3>Daniel Brooks</h3>
+              <p>Broker / Owner</p>
+            </article>
+            <article class="agent-card">
+              <h3>Ava Martinez</h3>
+              <p>Buyer Specialist</p>
+            </article>
+            <article class="agent-card">
+              <h3>Marcus Lee</h3>
+              <p>Listing Specialist</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section container">
+        <div class="section-header">
+          <p class="eyebrow">What Clients Say</p>
+          <h2>Real stories, real results</h2>
+        </div>
+        <div class="testimonial-grid">
+          <blockquote class="testimonial">
+            “Sun and Sand negotiated an amazing deal on our first home and made the process
+            simple from start to finish.”
+            <cite>— Priya & Matt</cite>
+          </blockquote>
+          <blockquote class="testimonial">
+            “They staged and marketed our property perfectly. We had multiple offers in
+            one weekend.”
+            <cite>— Elena R.</cite>
+          </blockquote>
+        </div>
+      </section>
+
+      <section id="about" class="section section-alt">
+        <div class="container about">
+          <div>
+            <p class="eyebrow">Why Sun and Sand</p>
+            <h2>Local expertise. Modern strategy.</h2>
+            <p>
+              We blend neighborhood-level insights with data-backed pricing and digital
+              marketing to deliver a smoother and more profitable experience for buyers and
+              sellers.
+            </p>
+          </div>
+          <ul class="about-points">
+            <li>25+ years of combined experience</li>
+            <li>In-house staging and listing media support</li>
+            <li>Fast response and proactive communication</li>
+            <li>End-to-end support from search to close</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="contact" class="section container">
+        <div class="section-header">
+          <p class="eyebrow">Get Started</p>
+          <h2>Book your free consultation</h2>
+        </div>
+        <form class="contact-form" id="contact-form">
+          <label>
+            Full Name
+            <input type="text" name="name" required />
+          </label>
+          <label>
+            Email
+            <input type="email" name="email" required />
+          </label>
+          <label>
+            Phone
+            <input type="tel" name="phone" />
+          </label>
+          <label>
+            I am interested in
+            <select name="interest" required>
+              <option value="">Select one</option>
+              <option>Buying a home</option>
+              <option>Selling a home</option>
+              <option>Both</option>
+            </select>
+          </label>
+          <label class="full-width">
+            Message
+            <textarea name="message" rows="4" placeholder="Tell us what you're looking for..."></textarea>
+          </label>
+          <button class="btn full-width" type="submit">Send Inquiry</button>
+          <p id="form-message" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <p>© <span id="year"></span> Sun and Sand Realtor. All rights reserved.</p>
+        <p>Southern California • (555) 123-4567</p>
+      </div>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

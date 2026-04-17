@@ -10,6 +10,9 @@ const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService')
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 
+const normalizeInviteRecipient = (value) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
 // Helper function to validate if personal profile is complete
 // This validation must match the fields collected in ProfileCompletionModal.tsx
 const isPersonalProfileComplete = (user) => {
@@ -177,11 +180,6 @@ router.post('/apply', authenticateToken, [
       });
     }
 
-    // Additional validation: Check if campId is valid and numeric
-    if (!campId || isNaN(parseInt(campId))) {
-      return res.status(400).json({ message: 'Invalid camp ID provided' });
-    }
-
     // Get burning plans from user profile (if exists in freshUser or from applicationData)
     const burningPlans = applicationData.burningPlans || freshUser.burningPlans || 'confirmed';
     
@@ -339,6 +337,18 @@ router.post('/apply', authenticateToken, [
         const invite = await db.findInvite({ token: inviteToken, campId });
         
         if (invite) {
+          const normalizedInviteRecipient = normalizeInviteRecipient(invite.recipient);
+          const normalizedUserEmail = normalizeInviteRecipient(freshUser.email);
+          const canClaimInvite =
+            invite.method !== 'email' ||
+            !normalizedInviteRecipient ||
+            normalizedInviteRecipient === normalizedUserEmail;
+
+          if (!canClaimInvite) {
+            console.warn(
+              `⚠️ [Applications] Ignoring invite token ${inviteToken} for user ${freshUser.email} - recipient mismatch (${invite.recipient})`
+            );
+          } else {
           console.log(`🎟️ [Applications] Found matching invite for token: ${inviteToken}`);
           
           // Update invite status to 'applied'
@@ -351,6 +361,7 @@ router.post('/apply', authenticateToken, [
           });
           
           console.log(`✅ [Applications] Invite ${invite._id} marked as 'applied'`);
+          }
         } else {
           console.log(`⚠️  [Applications] No invite found for token: ${inviteToken}, trying email fallback...`);
           

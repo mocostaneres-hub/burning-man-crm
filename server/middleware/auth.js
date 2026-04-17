@@ -9,21 +9,15 @@ const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-    console.log('🔐 Auth header:', authHeader);
-    console.log('🔐 Extracted token:', token ? `${token.substring(0, 20)}...` : 'null');
-    console.log('🔐 Token length:', token ? token.length : 0);
-
     if (!token) {
       return res.status(401).json({ message: 'Access token required' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('🔐 JWT decoded userId:', decoded.userId, 'type:', typeof decoded.userId);
     
     // Use userId as-is (works for both numeric IDs and MongoDB ObjectId strings)
     const userId = decoded.userId;
     const user = await db.findUser({ _id: userId });
-    console.log('🔐 User found:', user ? `ID: ${user._id} (${typeof user._id})` : 'null');
     
     if (!user) {
       return res.status(401).json({ message: 'Invalid token' });

@@ -1,6 +1,36 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation, NotificationListResponse, MyShiftsResponse } from '../types';
 
+const SENSITIVE_LOG_KEYS = new Set([
+  'password',
+  'newPassword',
+  'currentPassword',
+  'token',
+  'authorization',
+  'accessToken',
+  'idToken'
+]);
+
+const sanitizeForLog = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLog(item));
+  }
+
+  if (value && typeof value === 'object') {
+    const sanitized: Record<string, any> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (SENSITIVE_LOG_KEYS.has(key)) {
+        sanitized[key] = '[REDACTED]';
+      } else {
+        sanitized[key] = sanitizeForLog(nestedValue);
+      }
+    }
+    return sanitized;
+  }
+
+  return value;
+};
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -35,25 +65,34 @@ class ApiService {
           }
         }
 
-        // Define public endpoints that don't require authentication
-        const publicEndpoints = [
+        // Define public endpoints that don't require authentication.
+        // IMPORTANT: Use exact or narrow prefix matching only.
+        // Broad prefixes (e.g. "/camps") can accidentally strip auth headers from protected routes
+        // like "/camps/my-camp", causing login loops.
+        const requestPath = (config.url || '').split('?')[0];
+        const publicExactEndpoints = new Set([
           '/auth/register',
           '/auth/login',
           '/auth/google',
           '/auth/apple',
           '/auth/forgot-password',
           '/auth/reset-password',
-          '/invites/validate',
-          '/camps',
+          '/oauth/config',
+          '/health',
+          '/camps'
+        ]);
+        const publicPrefixEndpoints = [
+          '/invites/validate/',
           '/categories',
           '/perks',
           '/cities',
-          '/oauth/config',
-          '/health'
+          '/camps/public/'
         ];
 
         // Check if this is a public endpoint
-        const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.startsWith(endpoint));
+        const isPublicEndpoint =
+          publicExactEndpoints.has(requestPath) ||
+          publicPrefixEndpoints.some((prefix) => requestPath.startsWith(prefix));
 
         // Only add token for non-public endpoints
         if (!isPublicEndpoint) {
@@ -109,7 +148,7 @@ class ApiService {
               }
             }
           } else {
-            console.log('🔄 [API Interceptor] Request Data:', JSON.stringify(config.data, null, 2));
+            console.log('🔄 [API Interceptor] Request Data:', JSON.stringify(sanitizeForLog(config.data), null, 2));
           }
         }
         return config;

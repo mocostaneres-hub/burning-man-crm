@@ -9,16 +9,36 @@ require('dotenv').config();
 
 const app = express();
 const server = createServer(app);
+const socketAllowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.CORS_ORIGIN,
+  'https://g8road.com',
+  'https://www.g8road.com',
+  'https://burning-man-crm.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001'
+].filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: [
-      process.env.CLIENT_URL,
-      process.env.CORS_ORIGIN,
-      'https://g8road.com',
-      'https://www.g8road.com',
-      'https://burning-man-crm.vercel.app',
-      'http://localhost:3000'
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      // Allow non-browser clients and same-origin requests.
+      if (!origin) return callback(null, true);
+
+      const isAllowed =
+        socketAllowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app');
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      console.log('❌ Socket CORS blocked origin:', origin);
+      console.log('✅ Socket allowed origins:', socketAllowedOrigins);
+      return callback(new Error('Not allowed by Socket CORS'));
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
