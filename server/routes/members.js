@@ -2,9 +2,10 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const csv = require('csv-parser');
-const { Readable } = require('stream');
+const { PassThrough } = require('stream');
 const Member = require('../models/Member');
 const Camp = require('../models/Camp');
+const db = require('../database/databaseAdapter');
 const { recordActivity } = require('../services/activityLogger');
 const { authenticateToken, requireCampMember, requireProjectLead } = require('../middleware/auth');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
@@ -35,7 +36,8 @@ const parseCsvRows = async (fileBuffer) => {
   const rows = [];
   const headers = [];
   await new Promise((resolve, reject) => {
-    const stream = Readable.from(fileBuffer);
+    const stream = new PassThrough();
+    stream.end(fileBuffer);
     stream
       .pipe(csv())
       .on('headers', (h) => headers.push(...h))
@@ -421,6 +423,13 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
       return res.status(400).json({ message: 'CSV file is required' });
     }
 
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (activeRoster?.rosterType === 'full_membership') {
+      return res.status(409).json({
+        message: 'Shifts-only CSV import is unavailable while a full-membership roster is active. Archive the current roster first.'
+      });
+    }
+
     const confirmImport = String(req.body?.confirm || '').toLowerCase() === 'true';
     const mappingRaw = req.body?.mapping;
     let mapping = {};
@@ -570,11 +579,69 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
       signupSource: 'shifts_only_invite'
     }));
 
-    const created = await Member.insertMany(insertDocs, { ordered: false });
+    let createdCount = 0;
+    let duplicateInsertConflicts = 0;
+    try {
+      const created = await Member.insertMany(insertDocs, { ordered: false });
+      createdCount = created.length;
+    } catch (insertError) {
+      const writeErrors = Array.isArray(insertError?.writeErrors) ? insertError.writeErrors : [];
+      const nonDuplicateErrors = writeErrors.filter((err) => err?.code !== 11000);
+      if (nonDuplicateErrors.length > 0) {
+        throw insertError;
+      }
+
+      duplicateInsertConflicts = writeErrors.length;
+      createdCount =
+        insertError?.result?.result?.nInserted ||
+        insertError?.result?.nInserted ||
+        (Array.isArray(insertError?.insertedDocs) ? insertError.insertedDocs.length : 0);
+
+      for (const writeError of writeErrors) {
+        const duplicateEmail = normalizeCsvEmail(
+          writeError?.err?.op?.email ||
+          writeError?.op?.email ||
+          writeError?.errmsg?.match(/email.*?["']([^"']+)["']/i)?.[1] ||
+          ''
+        );
+        skippedRows.push({
+          reason: 'skipped_duplicate',
+          email: duplicateEmail || undefined
+        });
+      }
+    }
+
+    if (createdCount > 0) {
+      let rosterForImport = activeRoster;
+      if (!rosterForImport?._id) {
+        rosterForImport = await db.createRoster({
+          camp: campId,
+          name: `${new Date().getFullYear()} Roster`,
+          description: 'Active shifts-only roster',
+          rosterType: 'shifts_only',
+          isActive: true,
+          createdBy: req.user._id
+        });
+      }
+
+      if (rosterForImport?._id) {
+        const importedEmails = toCreate.map((item) => item.email).filter(Boolean);
+        if (importedEmails.length > 0) {
+          const importedMembers = await Member.find({
+            camp: campId,
+            email: { $in: importedEmails }
+          }).select('_id');
+          for (const importedMember of importedMembers) {
+            await db.addMemberToRoster(rosterForImport._id, importedMember._id, req.user._id);
+          }
+        }
+      }
+    }
+
     await recordActivity('CAMP', campId, req.user._id, 'DATA_ACTION', {
       field: 'rosterImport',
       action: 'import_csv',
-      createdCount: created.length,
+      createdCount,
       skippedCount: skippedRows.length,
       invalidCount: invalidRows.length,
       isShiftsOnlyCamp: true
@@ -582,9 +649,10 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
     return res.json({
       mode: 'confirm',
       message: 'CSV import completed',
-      createdCount: created.length,
+      createdCount,
       skippedCount: skippedRows.length,
-      invalidCount: invalidRows.length
+      invalidCount: invalidRows.length,
+      duplicateInsertConflicts
     });
   } catch (error) {
     console.error('Import members CSV error:', error);

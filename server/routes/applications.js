@@ -799,6 +799,7 @@ router.put('/:applicationId/status', authenticateToken, [
           camp: camp._id,
           name: `${new Date().getFullYear()} Roster`,
           description: 'Active camp roster (auto-created on first approval)',
+          rosterType: 'full_membership',
           isActive: true,
           createdBy: req.user._id
         });
