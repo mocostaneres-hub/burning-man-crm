@@ -41,6 +41,9 @@ const deriveRosterMode = (roster: any): {
   hasFullMembershipRoster: boolean;
   memberCount: number;
 } => {
+  const explicitRosterType = roster?.rosterType === 'shifts_only' || roster?.rosterType === 'full_membership'
+    ? roster.rosterType
+    : null;
   const members = Array.isArray(roster?.members) ? roster.members : [];
   const analyzed = members.map((entry: any) => {
     const member = entry?.member || {};
@@ -66,14 +69,16 @@ const deriveRosterMode = (roster: any): {
   const hasFullMembershipRoster = analyzed.some((entry) => entry.isFullMembership);
 
   let mode: RosterMode = 'none';
-  if (hasShiftsOnlyRoster && hasFullMembershipRoster) mode = 'mixed';
+  if (explicitRosterType) {
+    mode = explicitRosterType;
+  } else if (hasShiftsOnlyRoster && hasFullMembershipRoster) mode = 'mixed';
   else if (hasShiftsOnlyRoster) mode = 'shifts_only';
   else if (hasFullMembershipRoster) mode = 'full_membership';
 
   return {
     mode,
-    hasShiftsOnlyRoster,
-    hasFullMembershipRoster,
+    hasShiftsOnlyRoster: explicitRosterType === 'shifts_only' ? true : hasShiftsOnlyRoster,
+    hasFullMembershipRoster: explicitRosterType === 'full_membership' ? true : hasFullMembershipRoster,
     memberCount: members.length
   };
 };
@@ -237,6 +242,7 @@ const MemberRoster: React.FC = () => {
   const [rosterSetupStep, setRosterSetupStep] = useState<1 | 2>(1);
   const [rosterSetupType, setRosterSetupType] = useState<'shifts_only' | 'full_membership' | null>(null);
   const [selectedRosterType, setSelectedRosterType] = useState<'shifts_only' | 'full_membership' | null>(null);
+  const [pendingRosterBootstrapType, setPendingRosterBootstrapType] = useState<'shifts_only' | null>(null);
   const [duesActionModal, setDuesActionModal] = useState<{
     isOpen: boolean;
     member: any;
@@ -322,13 +328,18 @@ const MemberRoster: React.FC = () => {
     : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
       ? rosterModeState.mode
       : selectedRosterType || rosterModeState.mode;
+  const hasShiftsOnlyRoster = hasActiveRoster && (
+    activeRosterType === 'shifts_only'
+    || rosterModeState.mode === 'shifts_only'
+    || rosterModeState.mode === 'mixed'
+  );
   const isLikelyFullMembershipByCampSetting = hasActiveRoster
     && campAcceptingApplications
-    && activeRosterType !== 'shifts_only';
+    && !hasShiftsOnlyRoster;
   const isFullMembershipRoster = (hasActiveRoster && (
     activeRosterType === 'full_membership'
     || rosterModeState.mode === 'full_membership'
-    || rosterModeState.mode === 'mixed'
+    || (rosterModeState.mode === 'mixed' && !hasShiftsOnlyRoster)
   )) || isLikelyFullMembershipByCampSetting;
   const canManageFullMembershipInvites = campAcceptingApplications || authUser?.isCampLead === true;
   const canViewMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
@@ -945,31 +956,24 @@ const MemberRoster: React.FC = () => {
   };
 
   // Create roster record
-  const createRosterRecord = useCallback(async (): Promise<boolean> => {
+  const createRosterRecord = useCallback(async (rosterType: 'shifts_only' | 'full_membership'): Promise<boolean> => {
     if (!campId || !canEdit) return false;
     
     try {
       setCreateLoading(true);
-      await api.post(`/camps/${campId}/roster/create`);
+      await api.post(`/camps/${campId}/roster/create`, { rosterType });
       setHasActiveRoster(true);
+      setSelectedRosterType(rosterType);
       await fetchMembers();
       return true;
     } catch (error) {
       console.error('Error creating roster:', error);
-      alert('Failed to create new roster');
+      alert((error as any)?.response?.data?.message || 'Failed to create new roster');
       return false;
     } finally {
       setCreateLoading(false);
     }
   }, [campId, canEdit, fetchMembers]);
-
-  // Backward-compatible direct create
-  const handleCreateRoster = useCallback(async () => {
-    const created = await createRosterRecord();
-    if (created) {
-      alert('New roster created successfully!');
-    }
-  }, [createRosterRecord]);
 
   const handleOpenRosterSetupModal = () => {
     setRosterSetupType('shifts_only');
@@ -998,18 +1002,21 @@ const MemberRoster: React.FC = () => {
       setRosterSetupStep(2);
       return;
     }
+    if (rosterSetupType === 'shifts_only') {
+      setShowRosterSetupModal(false);
+      setRosterSetupStep(1);
+      setRosterSetupType(null);
+      setPendingRosterBootstrapType('shifts_only');
+      setImportRosterModalOpen(true);
+      return;
+    }
 
-    const created = await createRosterRecord();
+    const created = await createRosterRecord('full_membership');
     if (!created) return;
 
     setShowRosterSetupModal(false);
     setRosterSetupStep(1);
     setRosterSetupType(null);
-
-    if (rosterSetupType === 'shifts_only') {
-      setImportRosterModalOpen(true);
-      return;
-    }
 
     if (canManageFullMembershipInvites) {
       setInviteModalOpen(true);
@@ -1034,13 +1041,18 @@ const MemberRoster: React.FC = () => {
           }
         }
         if (!hasActiveRoster) {
-          await handleCreateRoster();
+          setPendingRosterBootstrapType('shifts_only');
         }
         setImportRosterModalOpen(true);
       } else if (action === 'add_sor') {
         setSelectedRosterType('shifts_only');
         setAddMemberModalOpen(true);
       } else if (action === 'invite_full') {
+        if (hasShiftsOnlyRoster) {
+          alert('Full-membership invites are unavailable while a shifts-only roster is active. Archive the current roster first.');
+          navigate(location.pathname, { replace: true });
+          return;
+        }
         setSelectedRosterType('full_membership');
         if (campId) {
           try {
@@ -1055,7 +1067,25 @@ const MemberRoster: React.FC = () => {
     };
 
     runAction();
-  }, [location.search, location.pathname, canEdit, hasActiveRoster, navigate, handleCreateRoster, campId]);
+  }, [location.search, location.pathname, canEdit, hasActiveRoster, hasShiftsOnlyRoster, navigate, campId]);
+
+  const handleShiftsOnlyImportCompleted = useCallback(async (summary: { createdCount?: number }) => {
+    await fetchMembers();
+    if (pendingRosterBootstrapType !== 'shifts_only') return;
+
+    const createdCount = Number(summary?.createdCount || 0);
+    if (createdCount <= 0) {
+      setPendingRosterBootstrapType(null);
+      alert('No roster members were created from this import. Camp remains roster-less.');
+      return;
+    }
+
+    const created = await createRosterRecord('shifts_only');
+    if (created) {
+      alert('Shifts-only roster created successfully.');
+    }
+    setPendingRosterBootstrapType(null);
+  }, [createRosterRecord, fetchMembers, pendingRosterBootstrapType]);
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
@@ -1461,7 +1491,7 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && hasActiveRoster && isFullMembershipRoster && (
+          {canEdit && hasActiveRoster && isFullMembershipRoster && !hasShiftsOnlyRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -1479,6 +1509,23 @@ const MemberRoster: React.FC = () => {
                 {canManageFullMembershipInvites
                   ? 'Sends invitation emails for full membership applications.'
                   : 'Full-member invites are unavailable while applications are off.'}
+              </p>
+            </div>
+          )}
+
+          {canEdit && hasActiveRoster && hasShiftsOnlyRoster && (
+            <div className="flex flex-col">
+              <Button
+                variant="outline"
+                disabled
+                className="flex items-center gap-2 text-gray-400 border-gray-300 cursor-not-allowed"
+                title="Archive the current shifts-only roster before creating a full-membership roster."
+              >
+                <Mail className="w-4 h-4" />
+                Invite Members (Full Membership)
+              </Button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Archive the active SOR first to return to roster-less mode, then create an FMR.
               </p>
             </div>
           )}
@@ -2845,9 +2892,15 @@ const MemberRoster: React.FC = () => {
       {/* Import Roster Modal */}
       <ImportRosterModal
         isOpen={importRosterModalOpen}
-        onClose={() => setImportRosterModalOpen(false)}
+        onClose={() => {
+          setImportRosterModalOpen(false);
+          if (pendingRosterBootstrapType === 'shifts_only') {
+            setPendingRosterBootstrapType(null);
+          }
+        }}
         campId={campId || user?.campId?.toString() || user?._id?.toString() || ''}
         customFields={customFields}
+        onImportCompleted={handleShiftsOnlyImportCompleted}
       />
 
       {/* Create Roster Setup Modal */}

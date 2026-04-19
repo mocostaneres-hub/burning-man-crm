@@ -8,9 +8,10 @@ interface ImportRosterModalProps {
   onClose: () => void;
   campId?: string;
   customFields?: Array<{ key: string; label: string; type: string }>;
+  onImportCompleted?: (summary: { createdCount?: number; skippedCount?: number; invalidCount?: number }) => void | Promise<void>;
 }
 
-const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, campId, customFields = [] }) => {
+const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, campId, customFields = [], onImportCompleted }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<any | null>(null);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
@@ -126,6 +127,13 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       setSuccess(
         `Import complete: ${response.createdCount || 0} created, ${response.skippedCount || 0} skipped, ${response.invalidCount || 0} invalid.`
       );
+      if (onImportCompleted) {
+        await onImportCompleted({
+          createdCount: response.createdCount || 0,
+          skippedCount: response.skippedCount || 0,
+          invalidCount: response.invalidCount || 0
+        });
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to import CSV roster');
     } finally {

@@ -16,6 +16,11 @@ const rosterSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  rosterType: {
+    type: String,
+    enum: ['shifts_only', 'full_membership'],
+    default: 'full_membership'
+  },
   isActive: {
     type: Boolean,
     default: true

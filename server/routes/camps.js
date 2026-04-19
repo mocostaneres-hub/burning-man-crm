@@ -1341,6 +1341,7 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
   try {
     const { campId } = req.params;
     const { name = `${new Date().getFullYear()} Roster`, description = 'Active camp roster' } = req.body;
+    const requestedRosterType = req.body?.rosterType === 'shifts_only' ? 'shifts_only' : 'full_membership';
     
     console.log('🔍 [POST /api/camps/:campId/roster/create] Camp ID:', campId);
     console.log('🔍 [POST /api/camps/:campId/roster/create] User:', { _id: req.user._id, accountType: req.user.accountType, campId: req.user.campId });
@@ -1364,7 +1365,10 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
     const existingActiveRoster = await db.findActiveRoster({ camp: campId });
     
     if (existingActiveRoster) {
-      console.log('ℹ️ [POST /api/camps/:campId/roster/create] Existing active roster found, will archive it');
+      const existingType = existingActiveRoster.rosterType || 'full_membership';
+      return res.status(409).json({
+        message: `An active ${existingType.replace('_', '-')} roster already exists. Archive it before creating a new roster.`
+      });
     }
     
     // Create the roster
@@ -1373,17 +1377,12 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
       camp: campId,
       name,
       description,
+      rosterType: requestedRosterType,
       isActive: true,
       createdBy: req.user._id
     });
 
     console.log('✅ [POST /api/camps/:campId/roster/create] Roster created:', roster._id);
-
-    // If there was an existing active roster, archive it
-    if (existingActiveRoster) {
-      await db.archiveRoster(existingActiveRoster._id, req.user._id);
-      console.log('✅ [POST /api/camps/:campId/roster/create] Archived previous roster');
-    }
 
     // Roster starts empty - members will be added when applications are approved
     console.log('✅ [POST /api/camps/:campId/roster/create] Roster created with 0 members (will add via application approval)');

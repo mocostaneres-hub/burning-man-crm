@@ -11,6 +11,37 @@ const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
+const resolveRosterMode = async (activeRoster) => {
+  if (!activeRoster) return 'none';
+  if (activeRoster.rosterType === 'shifts_only' || activeRoster.rosterType === 'full_membership') {
+    return activeRoster.rosterType;
+  }
+
+  let hasShiftsOnly = false;
+  let hasFullMembership = false;
+  for (const entry of activeRoster.members || []) {
+    const memberRef = entry?.member;
+    const member = memberRef && typeof memberRef === 'object' && memberRef._id
+      ? memberRef
+      : memberRef
+        ? await db.findMember({ _id: memberRef })
+        : null;
+    if (!member) continue;
+
+    const signupSource = String(member.signupSource || '').toLowerCase();
+    const isShiftsOnly = member.isShiftsOnly === true
+      || signupSource === 'shifts_only_invite'
+      || String(member.status || '').toLowerCase() === 'roster_only';
+    if (isShiftsOnly) hasShiftsOnly = true;
+    else hasFullMembership = true;
+  }
+
+  if (hasShiftsOnly && hasFullMembership) return 'mixed';
+  if (hasShiftsOnly) return 'shifts_only';
+  if (hasFullMembership) return 'full_membership';
+  return 'none';
+};
+
 // @route   GET /api/invites/validate/:token
 // @desc    Validate an invitation token for signup/apply flows
 // @access  Public
@@ -263,6 +294,14 @@ router.post('/invites',
       const camp = await db.findCamp({ _id: campId });
       if (!camp) {
         return res.status(404).json({ message: 'Camp not found' });
+      }
+
+      const activeRoster = await db.findActiveRoster({ camp: campId });
+      const rosterMode = await resolveRosterMode(activeRoster);
+      if (rosterMode === 'shifts_only' || rosterMode === 'mixed') {
+        return res.status(409).json({
+          message: 'Full-membership invites are unavailable while a shifts-only roster is active. Archive the current roster first to return to roster-less mode.'
+        });
       }
       
       const invitesSent = [];
