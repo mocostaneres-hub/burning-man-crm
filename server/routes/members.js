@@ -5,6 +5,7 @@ const csv = require('csv-parser');
 const { PassThrough } = require('stream');
 const Member = require('../models/Member');
 const Camp = require('../models/Camp');
+const db = require('../database/databaseAdapter');
 const { recordActivity } = require('../services/activityLogger');
 const { authenticateToken, requireCampMember, requireProjectLead } = require('../middleware/auth');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
@@ -422,6 +423,13 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
       return res.status(400).json({ message: 'CSV file is required' });
     }
 
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (activeRoster?.rosterType === 'full_membership') {
+      return res.status(409).json({
+        message: 'Shifts-only CSV import is unavailable while a full-membership roster is active. Archive the current roster first.'
+      });
+    }
+
     const confirmImport = String(req.body?.confirm || '').toLowerCase() === 'true';
     const mappingRaw = req.body?.mapping;
     let mapping = {};
@@ -604,8 +612,19 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
     }
 
     if (createdCount > 0) {
-      const activeRoster = await db.findActiveRoster({ camp: campId });
-      if (activeRoster?._id) {
+      let rosterForImport = activeRoster;
+      if (!rosterForImport?._id) {
+        rosterForImport = await db.createRoster({
+          camp: campId,
+          name: `${new Date().getFullYear()} Roster`,
+          description: 'Active shifts-only roster',
+          rosterType: 'shifts_only',
+          isActive: true,
+          createdBy: req.user._id
+        });
+      }
+
+      if (rosterForImport?._id) {
         const importedEmails = toCreate.map((item) => item.email).filter(Boolean);
         if (importedEmails.length > 0) {
           const importedMembers = await Member.find({
@@ -613,7 +632,7 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
             email: { $in: importedEmails }
           }).select('_id');
           for (const importedMember of importedMembers) {
-            await db.addMemberToRoster(activeRoster._id, importedMember._id, req.user._id);
+            await db.addMemberToRoster(rosterForImport._id, importedMember._id, req.user._id);
           }
         }
       }

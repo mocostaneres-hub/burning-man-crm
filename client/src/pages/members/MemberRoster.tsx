@@ -1080,12 +1080,9 @@ const MemberRoster: React.FC = () => {
       return;
     }
 
-    const created = await createRosterRecord('shifts_only');
-    if (created) {
-      alert('Shifts-only roster created successfully.');
-    }
+    alert('Shifts-only roster created successfully.');
     setPendingRosterBootstrapType(null);
-  }, [createRosterRecord, fetchMembers, pendingRosterBootstrapType]);
+  }, [fetchMembers, pendingRosterBootstrapType]);
 
   const handleDuesClick = (member: any) => {
     if (!canEdit) return; // Only allow admins/leads to toggle dues
