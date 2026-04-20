@@ -341,7 +341,7 @@ class DatabaseAdapter {
       const Member = require('../models/Member');
       const User = require('../models/User');
       
-      return await Roster.findOne({ ...query, isActive: true, isArchived: false })
+      return await Roster.findOne({ ...query, isActive: true, isArchived: { $ne: true } })
         .populate({
           path: 'members.member',
           populate: { 

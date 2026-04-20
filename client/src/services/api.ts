@@ -417,7 +417,7 @@ class ApiService {
     if (params.confirm) formData.append('confirm', 'true');
     if (params.mapping) formData.append('mapping', JSON.stringify(params.mapping));
     const response = await this.api.post('/members/import-csv', formData, {
-      transformRequest: [(data) => data]
+      headers: { 'Content-Type': undefined },
     });
     return response.data;
   }

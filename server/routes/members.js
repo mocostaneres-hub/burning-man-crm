@@ -405,10 +405,21 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Multer error handler — converts file-upload errors to proper 400 responses.
+const handleUpload = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('❌ [import-csv] Multer/upload error:', err?.message);
+      return res.status(400).json({ message: `File upload error: ${err?.message || 'Unknown upload error'}` });
+    }
+    next();
+  });
+};
+
 // @route   POST /api/members/import-csv
 // @desc    Import shifts-only roster members from CSV (add-only, preview/confirm)
 // @access  Private (Camp admins and Camp Leads)
-router.post('/import-csv', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => {
   try {
     const campId = await resolveCsvCampId(req);
     if (!campId) {
@@ -614,14 +625,25 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
     if (createdCount > 0) {
       let rosterForImport = activeRoster;
       if (!rosterForImport?._id) {
-        rosterForImport = await db.createRoster({
-          camp: campId,
-          name: `${new Date().getFullYear()} Roster`,
-          description: 'Active shifts-only roster',
-          rosterType: 'shifts_only',
-          isActive: true,
-          createdBy: req.user._id
-        });
+        try {
+          rosterForImport = await db.createRoster({
+            camp: campId,
+            name: `${new Date().getFullYear()} Roster`,
+            description: 'Active shifts-only roster',
+            rosterType: 'shifts_only',
+            isActive: true,
+            createdBy: req.user._id
+          });
+        } catch (rosterCreateErr) {
+          // E11000: a roster already became active between our check and create (race or stale record).
+          // Recover by re-fetching the existing active roster.
+          if (rosterCreateErr?.code === 11000) {
+            console.warn('⚠️ [import-csv] E11000 on createRoster — fetching existing active roster as fallback');
+            rosterForImport = await db.findActiveRoster({ camp: campId });
+          } else {
+            throw rosterCreateErr;
+          }
+        }
       }
 
       if (rosterForImport?._id) {
@@ -655,8 +677,13 @@ router.post('/import-csv', authenticateToken, upload.single('file'), async (req,
       duplicateInsertConflicts
     });
   } catch (error) {
-    console.error('Import members CSV error:', error);
-    return res.status(500).json({ message: 'Failed to import CSV roster' });
+    console.error('❌ [import-csv] Unhandled error:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: error?.stack?.split('\n').slice(0, 5).join(' | ')
+    });
+    return res.status(500).json({ message: 'Failed to import CSV roster', detail: error?.message });
   }
 });
 
