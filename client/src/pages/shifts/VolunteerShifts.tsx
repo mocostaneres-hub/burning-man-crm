@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, Card, Modal, Input } from '../../components/ui';
+import { Button, Card, Modal, Input, TimePicker } from '../../components/ui';
 import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1568,11 +1568,11 @@ const VolunteerShifts: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Start Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
-                  <Input type="time" value={eventForm.startTime} onChange={(e) => setEventForm(prev => ({ ...prev, startTime: e.target.value }))} />
+                  <TimePicker value={eventForm.startTime} onChange={(v) => setEventForm(prev => ({ ...prev, startTime: v }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">End Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
-                  <Input type="time" value={eventForm.endTime} onChange={(e) => setEventForm(prev => ({ ...prev, endTime: e.target.value }))} />
+                  <TimePicker value={eventForm.endTime} onChange={(v) => setEventForm(prev => ({ ...prev, endTime: v }))} />
                 </div>
               </div>
             </>
@@ -1656,11 +1656,11 @@ const VolunteerShifts: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Start Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
-                        <Input type="time" value={shift.startTime} onChange={(e) => handleShiftChange(index, 'startTime', e.target.value)} className={staffedFieldClass} />
+                        <TimePicker value={shift.startTime} onChange={(v) => handleShiftChange(index, 'startTime', v)} disabled={isFullyStaffed} />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">End Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
-                        <Input type="time" value={shift.endTime} onChange={(e) => handleShiftChange(index, 'endTime', e.target.value)} className={staffedFieldClass} />
+                        <TimePicker value={shift.endTime} onChange={(v) => handleShiftChange(index, 'endTime', v)} disabled={isFullyStaffed} />
                       </div>
                     </div>
 
