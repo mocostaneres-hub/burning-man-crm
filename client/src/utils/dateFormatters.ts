@@ -34,7 +34,7 @@ export const formatDate = (dateString: string | Date): string => {
 
 /**
  * Formats arrival/departure dates and other event dates
- * Output: "Sun, 06/15"
+ * Output: "Sun, Mar 15"
  * Uses PDT timezone so dates align with Black Rock City Time.
  */
 export const formatArrivalDepartureDate = (dateString: string | Date): string => {
@@ -62,12 +62,11 @@ export const formatArrivalDepartureDate = (dateString: string | Date): string =>
       return 'Not specified';
     }
 
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: PDT_TIMEZONE
-    }).replace(/(\w+),\s*(\d+)\/(\d+)/, '$1, $2/$3');
+    // "Thu, Mar 26"
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: PDT_TIMEZONE });
+    const month   = date.toLocaleDateString('en-US', { month: 'short',   timeZone: PDT_TIMEZONE });
+    const day     = date.toLocaleDateString('en-US', { day: 'numeric',   timeZone: PDT_TIMEZONE });
+    return `${weekday}, ${month} ${day}`;
   } catch (error) {
     return 'Not specified';
   }
@@ -106,7 +105,7 @@ export const formatTime = (timeString: string | Date): string => {
 
 /**
  * Formats date for shifts in PDT (Black Rock City Time)
- * Output: "Sun, 06/15"
+ * Output: "Sun, Mar 15"
  */
 export const formatShiftDate = (dateString: string | Date): string => {
   if (!dateString) return 'Not specified';
@@ -115,12 +114,11 @@ export const formatShiftDate = (dateString: string | Date): string => {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
     if (isNaN(date.getTime())) return 'Not specified';
 
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: PDT_TIMEZONE
-    }).replace(/(\w+),\s*(\d+)\/(\d+)/, '$1, $2/$3');
+    // "Thu, Mar 26"
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: PDT_TIMEZONE });
+    const month   = date.toLocaleDateString('en-US', { month: 'short',   timeZone: PDT_TIMEZONE });
+    const day     = date.toLocaleDateString('en-US', { day: 'numeric',   timeZone: PDT_TIMEZONE });
+    return `${weekday}, ${month} ${day}`;
   } catch (error) {
     return 'Not specified';
   }
