@@ -5,7 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
-import { formatShiftDate, formatShiftTime, formatDate } from '../../utils/dateFormatters';
+import { formatShiftDate, formatShiftTime, formatDate, utcToPdtDateInput, utcToPdtTimeInput, PDT_LABEL } from '../../utils/dateFormatters';
 import { useSkills } from '../../hooks/useSkills';
 
 const deriveRosterMeta = (roster: any) => {
@@ -549,36 +549,26 @@ const VolunteerShifts: React.FC = () => {
       setLoadingExistingAssignments(false);
     }
 
-    // Populate form with event data + assignment baseline from existing assignees
-    const toDateInput = (value: any) => {
-      if (!value) return '';
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) return '';
-      return parsed.toISOString().split('T')[0];
-    };
-    const toTimeInput = (value: any) => {
-      if (!value) return '';
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) return '';
-      return parsed.toTimeString().slice(0, 5);
-    };
-    const fallbackShiftDate = toDateInput(event.shifts.find((shift) => shift?.date)?.date);
-    const fallbackShiftStart = toTimeInput(event.shifts.find((shift) => shift?.startTime)?.startTime);
-    const fallbackShiftEnd = toTimeInput(event.shifts.find((shift) => shift?.endTime)?.endTime);
+    // Populate form with event data + assignment baseline from existing assignees.
+    // utcToPdtDateInput / utcToPdtTimeInput convert stored UTC timestamps back to PDT
+    // so the form inputs show Black Rock City Time correctly regardless of the user's browser timezone.
+    const fallbackShiftDate = utcToPdtDateInput(event.shifts.find((shift) => shift?.date)?.date);
+    const fallbackShiftStart = utcToPdtTimeInput(event.shifts.find((shift) => shift?.startTime)?.startTime);
+    const fallbackShiftEnd = utcToPdtTimeInput(event.shifts.find((shift) => shift?.endTime)?.endTime);
 
     setEventForm({
       eventName: event.eventName,
       description: event.description || '',
-      eventDate: toDateInput(event.eventDate) || fallbackShiftDate,
-      startTime: toTimeInput(event.startTime) || fallbackShiftStart,
-      endTime: toTimeInput(event.endTime) || fallbackShiftEnd,
+      eventDate: utcToPdtDateInput(event.eventDate) || fallbackShiftDate,
+      startTime: utcToPdtTimeInput(event.startTime) || fallbackShiftStart,
+      endTime: utcToPdtTimeInput(event.endTime) || fallbackShiftEnd,
       shifts: event.shifts.map((shift, index) => ({
         _id: shift._id?.toString(),
         title: shift.title,
         description: shift.description || '',
-        date: new Date(shift.date).toISOString().split('T')[0], // Convert to YYYY-MM-DD format
-        startTime: new Date(shift.startTime).toTimeString().slice(0, 5), // Convert to HH:MM format
-        endTime: new Date(shift.endTime).toTimeString().slice(0, 5), // Convert to HH:MM format
+        date: utcToPdtDateInput(shift.date),
+        startTime: utcToPdtTimeInput(shift.startTime),
+        endTime: utcToPdtTimeInput(shift.endTime),
         maxSignUps: shift.maxSignUps,
         currentSignups: shift.memberIds?.length || 0,
         assignmentMode: 'SELECTED_USERS',
@@ -981,6 +971,9 @@ const VolunteerShifts: React.FC = () => {
               <p className="text-gray-600">
                 Manage your camp's volunteer events and shifts. Create new events or edit existing ones.
               </p>
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1 mt-2 inline-block">
+                🕐 All dates and times are in <strong>{PDT_LABEL}</strong>
+              </p>
             </div>
 
             {events.length === 0 ? (
@@ -1016,8 +1009,13 @@ const VolunteerShifts: React.FC = () => {
                         <div className="text-xs font-medium text-gray-700 mb-1">{event.eventName}</div>
                         <div className="relative h-8 rounded bg-gray-100 overflow-hidden">
                           {(event.shifts || []).map((shift) => {
-                            const start = new Date(shift.startTime).getHours() * 60 + new Date(shift.startTime).getMinutes();
-                            const end = new Date(shift.endTime).getHours() * 60 + new Date(shift.endTime).getMinutes();
+                            const toPdtMinutes = (ts: any) => {
+                              const d = new Date(ts);
+                              const [h, m] = d.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false }).split(':').map(Number);
+                              return h * 60 + m;
+                            };
+                            const start = toPdtMinutes(shift.startTime);
+                            const end = toPdtMinutes(shift.endTime);
                             const left = `${(start / (24 * 60)) * 100}%`;
                             const width = `${(Math.max(end - start, 30) / (24 * 60)) * 100}%`;
                             const current = (shift.memberIds || []).length;
@@ -1136,6 +1134,9 @@ const VolunteerShifts: React.FC = () => {
               </h2>
               <p className="text-gray-600">
                 View participation and assignment data for all volunteer shifts.
+              </p>
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1 mt-2 inline-block">
+                🕐 All dates and times are in <strong>{PDT_LABEL}</strong>
               </p>
             </div>
 
@@ -1539,6 +1540,9 @@ const VolunteerShifts: React.FC = () => {
 
           {wizardStep === 1 && (
             <>
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                🕐 All dates and times are in <strong>{PDT_LABEL}</strong>. If an event runs past midnight, set the end time on the following date&apos;s shift — the system will advance it automatically.
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Event Name *</label>
                 <Input
@@ -1559,15 +1563,15 @@ const VolunteerShifts: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Date * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                   <Input type="date" value={eventForm.eventDate} onChange={(e) => setEventForm(prev => ({ ...prev, eventDate: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Start Time *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                   <Input type="time" value={eventForm.startTime} onChange={(e) => setEventForm(prev => ({ ...prev, startTime: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event End Time *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                   <Input type="time" value={eventForm.endTime} onChange={(e) => setEventForm(prev => ({ ...prev, endTime: e.target.value }))} />
                 </div>
               </div>
@@ -1647,15 +1651,15 @@ const VolunteerShifts: React.FC = () => {
                         <Input type="number" value={shift.maxSignUps} onChange={(e) => handleShiftChange(index, 'maxSignUps', parseInt(e.target.value) || 1)} min="1" className={staffedFieldClass} />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                         <Input type="date" value={shift.date} onChange={(e) => handleShiftChange(index, 'date', e.target.value)} className={staffedFieldClass} />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                         <Input type="time" value={shift.startTime} onChange={(e) => handleShiftChange(index, 'startTime', e.target.value)} className={staffedFieldClass} />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">End Time * <span className="text-xs font-normal text-amber-700">(PDT)</span></label>
                         <Input type="time" value={shift.endTime} onChange={(e) => handleShiftChange(index, 'endTime', e.target.value)} className={staffedFieldClass} />
                       </div>
                     </div>
@@ -1779,10 +1783,20 @@ const VolunteerShifts: React.FC = () => {
 
           {wizardStep === 4 && (
             <div className="space-y-4">
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                🕐 All times shown in <strong>{PDT_LABEL}</strong>
+              </div>
               <div className="rounded border border-gray-200 p-4">
                 <h4 className="font-semibold text-gray-900 mb-2">Final Review Before Publish</h4>
                 <p className="text-sm text-gray-600">
-                  <strong>{eventForm.eventName || 'Untitled event'}</strong> on {eventForm.eventDate || 'TBD'} from {eventForm.startTime || '--:--'} to {eventForm.endTime || '--:--'}
+                  <strong>{eventForm.eventName || 'Untitled event'}</strong> on {eventForm.eventDate || 'TBD'} from{' '}
+                  {eventForm.startTime
+                    ? new Date(`1970-01-01T${eventForm.startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                    : '--'}
+                  {' '}to{' '}
+                  {eventForm.endTime
+                    ? new Date(`1970-01-01T${eventForm.endTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                    : '--'}{' '}PDT
                 </p>
                 <p className="text-sm text-gray-600 mt-1">{eventForm.shifts.length} shift(s) configured</p>
               </div>
@@ -1791,7 +1805,13 @@ const VolunteerShifts: React.FC = () => {
                   <div key={`review-${index}`} className="rounded border border-gray-200 p-3">
                     <p className="text-sm font-medium">{shift.title || `Shift ${index + 1}`}</p>
                     <p className="text-xs text-gray-600">
-                      {shift.date || 'TBD'} • {shift.startTime || '--:--'} - {shift.endTime || '--:--'} • Max {shift.maxSignUps}
+                      {shift.date || 'TBD'} •{' '}
+                      {shift.startTime
+                        ? new Date(`1970-01-01T${shift.startTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                        : '--'}{' '}–{' '}
+                      {shift.endTime
+                        ? new Date(`1970-01-01T${shift.endTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                        : '--'}{' '}PDT • Max {shift.maxSignUps}
                     </p>
                     <p className="text-xs text-gray-600">Invite strategy: {shift.assignmentMode}</p>
                     {(shift.requiredSkills || []).length > 0 && (
@@ -1932,12 +1952,13 @@ const VolunteerShifts: React.FC = () => {
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedEvent.eventDate ? formatDate(selectedEvent.eventDate) : 'Date TBD'}
                     {selectedEvent.startTime && selectedEvent.endTime
-                      ? ` • ${formatShiftTime(selectedEvent.startTime)} - ${formatShiftTime(selectedEvent.endTime)}`
+                      ? ` • ${formatShiftTime(selectedEvent.startTime)} – ${formatShiftTime(selectedEvent.endTime)} PDT`
                       : ''}
                   </p>
                 )}
+                <p className="text-xs text-amber-700 mt-1">🕐 Times shown in {PDT_LABEL}</p>
                 <p className="text-sm text-gray-500 mt-2">
-                  Created: {new Date(selectedEvent.createdAt).toLocaleDateString()}
+                  Created: {new Date(selectedEvent.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
                 </p>
               </div>
 

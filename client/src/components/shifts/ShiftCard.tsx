@@ -50,7 +50,7 @@ const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, 
             </div>
             <div className="flex items-center gap-1">
               <Clock size={14} />
-              <span>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</span>
+              <span>{formatShiftTime(shift.startTime)} – {formatShiftTime(shift.endTime)} <span className="text-xs text-amber-700">PDT</span></span>
             </div>
             <div className="flex items-center gap-1">
               <Users size={14} />

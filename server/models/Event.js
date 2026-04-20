@@ -83,6 +83,10 @@ const eventSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'cancelled', 'completed'],
     default: 'active'
+  },
+  pdtMigrated: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

@@ -1,6 +1,42 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
+
+/**
+ * All event and shift dates/times are stored in UTC, but interpreted as PDT (UTC-7, America/Los_Angeles).
+ * Burning Man takes place in late August / early September, which is always PDT.
+ * Using the fixed offset -07:00 is correct for this event window.
+ */
+const PDT_OFFSET = '-07:00';
+
+/**
+ * Parses a date string (YYYY-MM-DD) + time string (HH:MM) as PDT and returns a UTC Date.
+ * If endTime < startTime (overnight), the end date is bumped forward one day automatically.
+ */
+const parsePdtDateTime = (dateStr, timeStr, { referenceStartIso = null } = {}) => {
+  if (!dateStr || !timeStr) return null;
+  const iso = `${dateStr}T${timeStr}:00${PDT_OFFSET}`;
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return null;
+  // Auto-advance end-of-day past midnight if end is before or equal to start
+  if (referenceStartIso) {
+    const startDt = new Date(referenceStartIso);
+    if (!isNaN(startDt.getTime()) && dt.getTime() <= startDt.getTime()) {
+      return new Date(dt.getTime() + 24 * 60 * 60 * 1000);
+    }
+  }
+  return dt;
+};
+
+/**
+ * Parses a date-only string (YYYY-MM-DD) as noon PDT to safely represent the calendar day
+ * without risk of rolling to the previous day due to timezone conversion.
+ */
+const parsePdtDate = (dateStr) => {
+  if (!dateStr) return null;
+  const dt = new Date(`${dateStr}T12:00:00${PDT_OFFSET}`);
+  return isNaN(dt.getTime()) ? null : dt;
+};
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
@@ -278,29 +314,37 @@ router.post('/events', authenticateToken, async (req, res) => {
       }
     }
 
+    // Parse event-level times as PDT
+    const eventStartIso = parsePdtDateTime(eventDate, startTime);
+    const eventEndIso = parsePdtDateTime(eventDate, endTime, { referenceStartIso: eventStartIso });
+
     // Create event
     const event = await db.createEvent({
       eventName,
       description,
-      eventDate: new Date(eventDate),
-      startTime: new Date(`${eventDate}T${startTime}`),
-      endTime: new Date(`${eventDate}T${endTime}`),
+      eventDate: parsePdtDate(eventDate),
+      startTime: eventStartIso,
+      endTime: eventEndIso,
       campId,
       createdBy: req.user._id,
-      shifts: shifts.map(shift => ({
-        title: shift.title,
-        description: shift.description || '',
-        date: new Date(shift.date),
-        startTime: new Date(`${shift.date}T${shift.startTime}`),
-        endTime: new Date(`${shift.date}T${shift.endTime}`),
-        maxSignUps: parseInt(shift.maxSignUps),
-        requiredSkills: Array.isArray(shift.requiredSkills)
-          ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
-          : [],
-        memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
-        currentSignups: 0,
-        createdBy: req.user._id
-      }))
+      shifts: shifts.map(shift => {
+        const shiftStart = parsePdtDateTime(shift.date, shift.startTime);
+        const shiftEnd = parsePdtDateTime(shift.date, shift.endTime, { referenceStartIso: shiftStart });
+        return {
+          title: shift.title,
+          description: shift.description || '',
+          date: parsePdtDate(shift.date),
+          startTime: shiftStart,
+          endTime: shiftEnd,
+          maxSignUps: parseInt(shift.maxSignUps),
+          requiredSkills: Array.isArray(shift.requiredSkills)
+            ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
+            : [],
+          memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
+          currentSignups: 0,
+          createdBy: req.user._id
+        };
+      })
     });
 
     // Create shift assignments.
@@ -1122,7 +1166,7 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
               email: user.email,
               date: shift.date,
               eventName: event.eventName,
-              shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`,
+              shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' })}`,
               description: shift.description
             });
           }
@@ -1224,7 +1268,7 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
             email: user.email,
             date: shift.date,
             eventName: event.eventName,
-            shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`,
+            shiftTime: `${new Date(shift.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' })} – ${new Date(shift.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' })}`,
             description: shift.description
           });
         }
@@ -1291,33 +1335,38 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     );
     const removedShiftIds = [...existingShiftIds].filter((id) => !incomingShiftIds.has(id));
 
+    // Parse event-level times as PDT
+    const updEventStart = parsePdtDateTime(eventDate, startTime);
+    const updEventEnd = parsePdtDateTime(eventDate, endTime, { referenceStartIso: updEventStart });
+
     // Update event
     const updatedEvent = await db.updateEvent(eventId, {
       eventName,
       description,
-      eventDate: new Date(eventDate),
-      startTime: new Date(`${eventDate}T${startTime}`),
-      endTime: new Date(`${eventDate}T${endTime}`),
+      eventDate: parsePdtDate(eventDate),
+      startTime: updEventStart,
+      endTime: updEventEnd,
       shifts: shifts.map((shift) => {
-        // Preserve existing shift IDs if they exist, otherwise generate one.
         const existingShift = shift._id
           ? existingEvent.shifts.find((item) => item._id.toString() === shift._id.toString())
           : null;
         const shiftId = existingShift ? existingShift._id : new mongoose.Types.ObjectId();
-        
+        const shiftStart = parsePdtDateTime(shift.date, shift.startTime);
+        const shiftEnd = parsePdtDateTime(shift.date, shift.endTime, { referenceStartIso: shiftStart });
+
         return {
           _id: shiftId,
           eventId: eventId,
           title: shift.title,
           description: shift.description || '',
-          date: new Date(shift.date),
-          startTime: new Date(`${shift.date}T${shift.startTime}`),
-          endTime: new Date(`${shift.date}T${shift.endTime}`),
+          date: parsePdtDate(shift.date),
+          startTime: shiftStart,
+          endTime: shiftEnd,
           maxSignUps: parseInt(shift.maxSignUps),
           requiredSkills: Array.isArray(shift.requiredSkills)
             ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
             : [],
-          memberIds: existingShift ? existingShift.memberIds : [], // Preserve existing sign-ups
+          memberIds: existingShift ? existingShift.memberIds : [],
           currentSignups: existingShift ? (existingShift.currentSignups || 0) : 0,
           createdBy: existingShift ? existingShift.createdBy : req.user._id,
           createdAt: existingShift ? existingShift.createdAt : new Date().toISOString(),

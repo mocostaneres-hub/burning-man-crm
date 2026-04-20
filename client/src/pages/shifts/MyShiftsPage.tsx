@@ -179,6 +179,9 @@ const MyShiftsPage: React.FC = () => {
       <div>
         <h1 className="text-h1 font-lato-bold text-custom-text">My Shifts</h1>
         <p className="text-sm text-gray-600 mt-1">Upcoming shifts first, with conflict alerts and recommendations tailored to your profile.</p>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1 mt-2 inline-block">
+          🕐 All dates and times are in <strong>PDT (Black Rock City Time)</strong>
+        </p>
       </div>
 
       {error && (
