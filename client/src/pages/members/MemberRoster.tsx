@@ -945,7 +945,8 @@ const MemberRoster: React.FC = () => {
       setArchiveLoading(true);
       await api.post(`/camps/${campId}/roster/archive`);
       setHasActiveRoster(false);
-      // Show success message or refresh data
+      setRosterId(null);
+      await fetchMembers();
       alert('Roster archived successfully!');
     } catch (error) {
       console.error('Error archiving roster:', error);
@@ -1527,8 +1528,8 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {/* Export Roster button - Available for all users with roster access */}
-          {rosterId && (
+          {/* Export Roster button - Only available when an active roster exists */}
+          {rosterId && hasActiveRoster && (
             <Button
               variant="outline"
               onClick={handleExportRoster}
