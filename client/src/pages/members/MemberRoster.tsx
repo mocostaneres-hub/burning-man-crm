@@ -1682,7 +1682,6 @@ const MemberRoster: React.FC = () => {
             members={filteredMembers as any}
             canEdit={canEdit}
             canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
-            onView={(m) => handleViewMember(m as any)}
             onEdit={(memberId) => handleStartEdit(memberId)}
             onDelete={(m) => handleDeleteMember(m as any)}
             onToggleCampLead={(m, curr) => handleCampLeadToggle(m as any, curr)}

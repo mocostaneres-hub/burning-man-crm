@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Edit, Trash2, Eye, CheckCircle, Mail } from 'lucide-react';
+import { Bell, Edit, Trash2, CheckCircle, Mail } from 'lucide-react';
 import { Button } from '../ui';
 import apiService from '../../services/api';
 
@@ -41,7 +41,6 @@ interface Props {
   members: SorMemberRow[];
   canEdit: boolean;
   canAssignCampLead: boolean;
-  onView: (member: SorMemberRow) => void;
   onEdit: (memberId: string) => void;
   onDelete: (member: SorMemberRow) => void;
   onToggleCampLead: (member: SorMemberRow, currentStatus: boolean) => void;
@@ -103,7 +102,6 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   members,
   canEdit,
   canAssignCampLead,
-  onView,
   onEdit,
   onDelete,
   onToggleCampLead,
@@ -404,15 +402,6 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                   )}
                   <td className="px-4 py-4 text-sm">
                     <div className="flex gap-2 flex-wrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        onClick={() => onView(member)}
-                      >
-                        <Eye className="w-3 h-3" />
-                        View
-                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
