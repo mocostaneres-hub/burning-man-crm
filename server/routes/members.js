@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const csv = require('csv-parser');
@@ -745,9 +746,15 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
     let invitesSent = 0;
 
     if (toUpdate.length > 0) {
+      // bulkWrite does NOT auto-cast filter values — explicitly convert campId to
+      // ObjectId so the { camp, email } compound filter matches stored documents.
+      const campOid = mongoose.Types.ObjectId.isValid(campId)
+        ? new mongoose.Types.ObjectId(campId)
+        : campId;
+
       const bulkUpdateOps = toUpdate.map((item) => ({
         updateOne: {
-          filter: { camp: campId, email: item.email },
+          filter: { camp: campOid, email: item.email },
           update: {
             $set: {
               name: item.name,
@@ -764,11 +771,14 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
 
       try {
         const updateResult = await Member.bulkWrite(bulkUpdateOps, { ordered: false });
-        updatedCount = updateResult.modifiedCount ?? 0;
-        console.log(`✅ [import-csv] Step 1b — updated ${updatedCount} members (matched=${updateResult.matchedCount})`);
+        // Use matchedCount (not modifiedCount) so re-importing the same data still
+        // counts as "processed" — modifiedCount is 0 when field values haven't changed.
+        updatedCount = updateResult.matchedCount ?? updateResult.modifiedCount ?? 0;
+        console.log(`✅ [import-csv] Step 1b — matched=${updateResult.matchedCount} modified=${updateResult.modifiedCount}`);
       } catch (updateError) {
         console.error('❌ [import-csv] Step 1b — bulkWrite error:', updateError?.message);
-        // Non-fatal: log and continue so the insert results aren't lost.
+        // Non-fatal: fall back to toUpdate.length so Steps 2/3 still run.
+        updatedCount = toUpdate.length;
       }
     }
 
@@ -783,7 +793,11 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
     const totalAffected = createdCount + updatedCount;
 
     // ── Step 2: create / fetch roster ────────────────────────────────────────
-    if (totalAffected > 0) {
+    // Run Steps 2/3 whenever there were valid candidates — even if createdCount
+    // and updatedCount are both 0 (e.g. bulkWrite matched 0 due to casting, or
+    // modifiedCount was 0 because field values were unchanged). This ensures
+    // roster creation and member-linking always happen when CSV rows are valid.
+    if (createdCount > 0 || toUpdate.length > 0) {
       console.log(`ℹ️ [import-csv] Step 2 — resolving roster for ${createdCount} new members`);
       let rosterForImport = activeRoster;
 
