@@ -864,49 +864,50 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
 // @desc    Manually add a new member to roster
 // @access  Private (Camp admins/leads only)
 router.post('/:rosterId/members', authenticateToken, async (req, res) => {
+  let step = 'init';
   try {
+    step = 'validate_input';
     const { rosterId } = req.params;
     const memberData = req.body;
 
-    // Validate required fields
     if (!memberData.firstName || !memberData.lastName || !memberData.email) {
       return res.status(400).json({ message: 'First name, last name, and email are required' });
     }
-
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(memberData.email)) {
       return res.status(400).json({ message: 'Invalid email address' });
     }
 
-    // Resolve roster and camp to avoid relying on JWT campLead fields
+    step = 'find_roster';
     const roster = await db.findRoster({ _id: rosterId });
     if (!roster) {
       return res.status(404).json({ message: 'Roster not found' });
     }
-    
+
+    step = 'find_camp';
     const campId = roster.camp;
     const camp = await db.findCamp({ _id: campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
+    step = 'check_permission';
     const hasPermission = await canManageCamp(req, camp._id);
     if (!hasPermission) {
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
     }
 
-    // Shifts-only roster-first: create/update Member records without creating user accounts.
+    step = 'resolve_member';
     const normalizedMemberEmail = normalizeEmail(memberData.email);
-    let memberRecord = await db.findMember({ camp: camp._id, email: normalizedMemberEmail });
     const mergedName = `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim();
     const customFieldValues = memberData.customFieldValues && typeof memberData.customFieldValues === 'object'
       ? memberData.customFieldValues
       : {};
 
-    const isNewMember = !memberRecord;
+    let memberRecord = await db.findMember({ camp: camp._id, email: normalizedMemberEmail });
 
     if (!memberRecord) {
+      step = 'create_member';
       memberRecord = await db.createMember({
         camp: camp._id,
         name: mergedName,
@@ -919,8 +920,6 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         customFieldValues,
         status: 'roster_only',
         isShiftsOnly: true,
-        // Use shifts_only_invite (not 'manual') so deriveRosterMode correctly
-        // identifies this member as shifts-only, not full-membership.
         signupSource: 'shifts_only_invite',
         dues: {
           paid: memberData.duesPaid === true,
@@ -928,17 +927,30 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         }
       });
     } else {
-      memberRecord = await db.updateMember(memberRecord._id, {
-        name: mergedName || memberRecord.name,
-        phone: memberData.phone || memberRecord.phone || '',
-        playaName: memberData.playaName || memberRecord.playaName || '',
-        tags: Array.isArray(memberData.tags) ? memberData.tags : (memberRecord.tags || []),
-        skills: Array.isArray(memberData.skills) ? memberData.skills : (memberRecord.skills || []),
-        customFieldValues: { ...(memberRecord.customFieldValues || {}), ...customFieldValues }
-      });
+      step = 'update_member';
+      // Use explicit $set so Mongoose never tries to overwrite the document.
+      const Member = require('../models/Member');
+      memberRecord = await Member.findByIdAndUpdate(
+        memberRecord._id,
+        {
+          $set: {
+            name: mergedName || memberRecord.name,
+            phone: memberData.phone || memberRecord.phone || '',
+            playaName: memberData.playaName || memberRecord.playaName || '',
+            tags: Array.isArray(memberData.tags) ? memberData.tags : (memberRecord.tags || []),
+            skills: Array.isArray(memberData.skills) ? memberData.skills : (memberRecord.skills || []),
+            customFieldValues: { ...(memberRecord.customFieldValues || {}), ...customFieldValues }
+          }
+        },
+        { new: true }
+      );
     }
 
-    // Check if this member record is already in this roster
+    if (!memberRecord) {
+      return res.status(500).json({ message: 'Failed to create or retrieve member record' });
+    }
+
+    step = 'check_duplicate';
     const isAlreadyMember = roster.members.some(m =>
       m.member?.toString() === memberRecord._id.toString() ||
       m.member?._id?.toString() === memberRecord._id.toString()
@@ -947,7 +959,7 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'User is already a member of this roster' });
     }
 
-    // Add member to roster
+    step = 'add_to_roster';
     await db.addMemberToRoster(
       rosterId,
       memberRecord._id,
@@ -956,13 +968,12 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
     );
 
     // ── Invite email (parity with CSV import Step 1c) ────────────────────────
-    // Send a SOR invite email to the member so they can create their account and
-    // browse shifts. Mirrors the exact same logic used by POST /import-csv.
-    // Conditions for sending:
-    //   • member has no existing inviteToken (never invited before)
-    //   • member has no linked user account (not already registered)
+    // Send a SOR invite email so the member can create their account and browse
+    // shifts. Same pattern as POST /import-csv and /shifts/events/invite-entire-roster.
+    // Conditions: no existing inviteToken (never invited) AND no linked user account.
+    step = 'send_invite';
     let inviteSent = false;
-    if (!memberRecord.inviteToken && !memberRecord.user) {
+    if (!memberRecord.inviteToken && !memberRecord.user && memberRecord.email) {
       try {
         const crypto = require('crypto');
         const { sendEmail } = require('../services/emailService');
@@ -980,19 +991,22 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
           status: 'sent',
           inviteType: 'shifts_only',
           signupSource: 'shifts_only_invite',
-          memberId: memberRecord._id.toString()
+          memberId: memberRecord._id
         });
 
-        await db.updateMember(memberRecord._id, {
-          status: 'invited',
-          invitedAt: new Date(),
-          inviteToken: token,
-          isShiftsOnly: true,
-          signupSource: 'shifts_only_invite'
+        const Member = require('../models/Member');
+        await Member.findByIdAndUpdate(memberRecord._id, {
+          $set: {
+            status: 'invited',
+            invitedAt: new Date(),
+            inviteToken: token,
+            isShiftsOnly: true,
+            signupSource: 'shifts_only_invite'
+          }
         });
 
         const inviteSubject = `${campName} invited you to sign up for available shifts`;
-        const inviteText = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
+        const inviteText = `${campName} has volunteer shifts available.\n\nCreate your account and browse shifts: ${signupUrl}`;
         const inviteHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>${campName} invited you to sign up for available shifts</h2>
@@ -1005,40 +1019,43 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         inviteSent = true;
         console.log(`✅ [manual-add] Invite sent → ${memberRecord.email} (member ${memberRecord._id})`);
       } catch (inviteErr) {
-        // Non-fatal: a failed invite email must never roll back the member addition.
+        // Non-fatal: email failures must never roll back a successful member addition.
         console.error(`❌ [manual-add] Invite failed for ${memberRecord.email}:`, inviteErr?.message);
       }
     } else {
-      console.log(`ℹ️ [manual-add] Invite skipped for ${memberRecord.email} — ${memberRecord.inviteToken ? 'already invited' : 'has account'}`);
+      const skipReason = !memberRecord.email ? 'no_email' : memberRecord.inviteToken ? 'already_invited' : 'has_account';
+      console.log(`ℹ️ [manual-add] Invite skipped (${skipReason}) for member ${memberRecord._id}`);
     }
 
-    // Log member addition for CAMP and member audit trail.
+    step = 'record_activity';
     await recordActivity('MEMBER', memberRecord._id, req.user._id, 'RESOURCE_ASSIGNED', {
       field: 'roster',
-      rosterId: rosterId,
+      rosterId,
       rosterName: roster.name,
       campId: camp._id,
       campName: camp.name || camp.campName,
       memberId: memberRecord._id
     });
-    
     await recordActivity('CAMP', camp._id, req.user._id, 'RESOURCE_ASSIGNED', {
       field: 'roster',
-      rosterId: rosterId,
+      rosterId,
       rosterName: roster.name,
       memberId: memberRecord._id,
       memberName: memberRecord.name || mergedName,
       memberEmail: memberRecord.email
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Member added successfully',
       member: memberRecord,
       inviteSent
     });
   } catch (error) {
-    console.error('Add member to roster error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error(`❌ [manual-add] 500 at step="${step}":`, error?.message, error?.stack?.split('\n')[1]);
+    return res.status(500).json({
+      message: `Failed to add member (step: ${step})`,
+      detail: error?.message
+    });
   }
 });
 
