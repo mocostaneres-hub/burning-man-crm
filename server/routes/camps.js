@@ -180,7 +180,111 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// 360 Contact Aggregation
+// 360 Contact Aggregation — member-id variant (SOR / no linked user account)
+// @route   GET /api/camps/:campId/contacts/member/:memberId
+// @desc    Aggregate a shifts-only roster member's data (no User account required)
+// @access  Private (camp_admin or camp_lead)
+router.get('/:campId/contacts/member/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { campId, memberId } = req.params;
+
+    const { canManageCamp } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageCamp(req, campId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied - camp admin or Camp Lead required' });
+    }
+
+    const Member = require('../models/Member');
+    const memberDoc = await Member.findOne({ _id: memberId, camp: campId }).lean();
+    if (!memberDoc) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    // If this member now has a linked User account, redirect to the user-based route
+    // so the caller always gets the richest available view.
+    if (memberDoc.user) {
+      return res.json({ redirect: `/camps/${campId}/contacts/${memberDoc.user}` });
+    }
+
+    // Build a synthetic "user" object from the Member document so the frontend
+    // can render the 360 view without modification.
+    const [firstName, ...lastParts] = (memberDoc.name || '').split(' ').filter(Boolean);
+    const syntheticUser = {
+      _id: memberDoc._id,
+      firstName: firstName || '',
+      lastName: lastParts.join(' ') || '',
+      email: memberDoc.email || '',
+      playaName: memberDoc.playaName || '',
+      phone: memberDoc.phone || '',
+      tags: memberDoc.tags || [],
+      isSorMember: true,
+    };
+
+    // Roster history — rosters that contain this member
+    let rosterHistory = [];
+    try {
+      const rosters = await db.findRosters({ camp: campId, 'members.member': memberId });
+      for (const roster of rosters || []) {
+        const entry = (roster.members || []).find(
+          (m) => m?.member?.toString?.() === memberId || m?.member === memberId
+        );
+        if (entry) {
+          rosterHistory.push({
+            rosterId: roster._id,
+            name: roster.name,
+            rosterType: roster.rosterType,
+            joinedAt: entry.addedAt || roster.createdAt,
+            addedAt: entry.addedAt,
+            duesStatus: entry.duesStatus || 'UNPAID',
+            overrides: entry.overrides || null,
+            addedVia: 'csv_import',
+          });
+        }
+      }
+    } catch (rosterErr) {
+      console.error('❌ [360 Member] Error loading rosters:', rosterErr);
+    }
+
+    // Volunteer shifts — events where this memberId appears in shift.memberIds
+    const volunteerShifts = [];
+    try {
+      const events = await db.findEvents({ camp: campId });
+      for (const ev of events || []) {
+        for (const shift of ev.shifts || []) {
+          const ids = (shift.memberIds || []).map((id) => id.toString());
+          if (ids.includes(memberId.toString())) {
+            volunteerShifts.push({
+              eventId: ev._id,
+              eventName: ev.name,
+              shiftId: shift._id,
+              title: shift.title,
+              date: shift.date,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+            });
+          }
+        }
+      }
+    } catch (eventErr) {
+      console.error('❌ [360 Member] Error loading events:', eventErr);
+    }
+
+    return res.json({
+      user: syntheticUser,
+      rosterHistory: rosterHistory.sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt)),
+      applications: [],
+      tasks: [],
+      volunteerShifts,
+      activityLog: [],
+      isMemberBased: true,
+    });
+  } catch (error) {
+    console.error('❌ [360 Member] Contact aggregation error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// 360 Contact Aggregation — user-id variant (FMR / linked account)
 // @route   GET /api/camps/:campId/contacts/:userId
 // @desc    Aggregate a user's profile, roster history, applications, tasks, and volunteer shifts for a camp
 // @access  Private (camp_admin or camp_lead)

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { Card, Badge } from '../../components/ui';
 import { Loader2 } from 'lucide-react';
@@ -14,7 +14,11 @@ interface AggregatedData {
 }
 
 const Contact360View: React.FC = () => {
-  const { campId, userId } = useParams();
+  // Supports two route shapes:
+  //   /camp/:campId/contacts/:userId       → user-based (FMR / linked account)
+  //   /camp/:campId/contacts/member/:memberId → member-based (SOR / no account)
+  const { campId, userId, memberId } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<AggregatedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,10 +27,18 @@ const Contact360View: React.FC = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const res = await api.get(`/camps/${campId}/contacts/${userId}`);
-        console.log('🔍 [Contact360View] API Response:', res);
-        console.log('🔍 [Contact360View] Applications data:', res.applications);
-        console.log('🔍 [Contact360View] Applications length:', res.applications?.length);
+        let res: any;
+        if (memberId) {
+          res = await api.get(`/camps/${campId}/contacts/member/${memberId}`);
+          // Server may signal that this member now has a user account — follow the redirect.
+          if (res?.redirect) {
+            const newUserId = res.redirect.split('/').pop();
+            navigate(`/camp/${campId}/contacts/${newUserId}`, { replace: true });
+            return;
+          }
+        } else {
+          res = await api.get(`/camps/${campId}/contacts/${userId}`);
+        }
         setData(res);
       } catch (e: any) {
         console.error('❌ [Contact360View] Error loading contact:', e);
@@ -35,8 +47,8 @@ const Contact360View: React.FC = () => {
         setLoading(false);
       }
     };
-    if (campId && userId) load();
-  }, [campId, userId]);
+    if (campId && (userId || memberId)) load();
+  }, [campId, userId, memberId, navigate]);
 
   if (loading) {
     return (

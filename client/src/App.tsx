@@ -264,6 +264,11 @@ function App() {
                       <TaskDetailsPage />
                     </ProtectedRoute>
                   } />
+                  <Route path="/camp/:campId/contacts/member/:memberId" element={
+                    <ProtectedRoute requireCampAccount>
+                      <Contact360View />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/camp/:campId/contacts/:userId" element={
                     <ProtectedRoute requireCampAccount>
                       <Contact360View />

@@ -1680,10 +1680,18 @@ const MemberRoster: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredMembers.map((member, index) => {
-                // Handle the nested structure: member.member.user
+                // memberData is the raw populated Member document (from Mongoose).
+                // member.user is the NORMALIZED user: real User doc when present,
+                // or a fallbackUser built from memberData.name/email for SOR members.
                 const memberData = member.member || member;
-                const user = typeof memberData.user === 'object' ? memberData.user : null;
-                const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown User';
+                const user = (member as any).user || (typeof memberData.user === 'object' ? memberData.user : null);
+                // realUserId: only set when an actual User account is linked (FMR/invited).
+                const realUserId = (memberData.user as any)?._id ?? null;
+                const csvName = (memberData as any).name || '';
+                const derivedName = user
+                  ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                  : '';
+                const userName = derivedName || csvName || 'Unknown';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
                 
@@ -1714,8 +1722,14 @@ const MemberRoster: React.FC = () => {
                         <div className="ml-4">
                           <div className="flex items-center gap-2">
                             <div className="text-sm font-medium text-gray-900">
-                              {canAccessRoster && campId && (user?._id) ? (
-                                <Link to={`/camp/${campId}/contacts/${(user as any)._id}`} className="text-black hover:underline">
+                              {canAccessRoster && campId && realUserId ? (
+                                // FMR / linked-account member → full Contact 360 view
+                                <Link to={`/camp/${campId}/contacts/${realUserId}`} className="text-black hover:underline">
+                                  {userName}
+                                </Link>
+                              ) : canAccessRoster && campId && member._id ? (
+                                // SOR member (no user account yet) → member-based 360 view
+                                <Link to={`/camp/${campId}/contacts/member/${member._id}`} className="text-black hover:underline">
                                   {userName}
                                 </Link>
                               ) : (
@@ -2201,15 +2215,23 @@ const MemberRoster: React.FC = () => {
                       )}
                     <div className="flex-1">
                       <h3 className="text-h3 font-lato-bold text-custom-text">
-                            {user?.firstName || 'Unknown'} {user?.lastName || 'User'}
+                            {(() => {
+                              const panelMemberData = (selectedMember as any)?.member || selectedMember;
+                              const panelUser = (selectedMember as any)?.user || (typeof (panelMemberData as any)?.user === 'object' ? (panelMemberData as any)?.user : null);
+                              const panelCsvName = (panelMemberData as any)?.name || '';
+                              const panelDerivedName = panelUser
+                                ? `${panelUser.firstName || ''} ${panelUser.lastName || ''}`.trim()
+                                : '';
+                              return panelDerivedName || panelCsvName || 'Unknown';
+                            })()}
                       </h3>
-                          {user?.playaName && (
+                          {(user?.playaName || (selectedMember?.member as any)?.playaName) && (
                             <p className="text-body text-orange-600 font-medium">
-                              "{user.playaName}"
+                              "{user?.playaName || (selectedMember?.member as any)?.playaName}"
                             </p>
                           )}
                       <p className="text-body text-custom-text-secondary">
-                            {user?.email || 'No email'}
+                            {user?.email || (selectedMember?.member as any)?.email || 'No email'}
                           </p>
                           
                           {/* City and Social Media */}

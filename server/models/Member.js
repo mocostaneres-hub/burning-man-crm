@@ -300,12 +300,13 @@ memberSchema.index({ camp: 1, role: 1 });
 memberSchema.index({ camp: 1, status: 1 });
 memberSchema.index({ user: 1 });
 
-// Virtual for full name
+// Virtual for full name.
+// Priority: linked User account name → CSV/manual name field → nickname → 'Unknown'
 memberSchema.virtual('fullName').get(function() {
   if (this.user && this.user.firstName && this.user.lastName) {
     return `${this.user.firstName} ${this.user.lastName}`;
   }
-  return this.nickname || 'Unknown';
+  return this.name || this.nickname || 'Unknown';
 });
 
 // Virtual for total contributions
