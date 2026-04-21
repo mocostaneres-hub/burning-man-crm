@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
+import ShiftsOnlyRosterTable from '../../components/roster/ShiftsOnlyRosterTable';
 import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -23,7 +24,11 @@ interface RosterMember extends Member {
   rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
 }
 
-type RosterMode = 'none' | 'shifts_only' | 'full_membership' | 'mixed';
+// Rosters are strictly one of these modes. The server-side Mongoose schema
+// (server/models/Roster.js) enforces `rosterType: enum ['shifts_only',
+// 'full_membership']`, so 'mixed' is not a persistable state. We keep 'none'
+// for the UI-only case where a camp has no active roster yet.
+type RosterMode = 'none' | 'shifts_only' | 'full_membership';
 const SOR_IMPLEMENTATION_CUTOFF_ISO = '2026-04-01T00:00:00.000Z';
 const SOR_IMPLEMENTATION_CUTOFF_MS = Date.parse(SOR_IMPLEMENTATION_CUTOFF_ISO);
 const getObjectIdTimestampMs = (value?: string | null): number | null => {
@@ -35,54 +40,84 @@ const getObjectIdTimestampMs = (value?: string | null): number | null => {
   return epochSeconds * 1000;
 };
 
+/**
+ * Determine the mode of a roster.
+ *
+ * The server-side Roster schema enforces `rosterType: enum ['shifts_only',
+ * 'full_membership']`, so that field is the single source of truth whenever
+ * it's present. We only fall back to member-level heuristics (signupSource /
+ * isShiftsOnly / status) for edge cases where `rosterType` is missing from
+ * the response — e.g. legacy documents predating the field. Heuristic
+ * disagreement with `rosterType` is treated as a data-integrity issue: we
+ * trust the schema value and log a warning.
+ */
 const deriveRosterMode = (roster: any): {
   mode: RosterMode;
   hasShiftsOnlyRoster: boolean;
   hasFullMembershipRoster: boolean;
   memberCount: number;
 } => {
-  const explicitRosterType = roster?.rosterType === 'shifts_only' || roster?.rosterType === 'full_membership'
-    ? roster.rosterType
-    : null;
+  const explicitRosterType: RosterMode | null =
+    roster?.rosterType === 'shifts_only' || roster?.rosterType === 'full_membership'
+      ? roster.rosterType
+      : null;
   const members = Array.isArray(roster?.members) ? roster.members : [];
+
+  // Member-level heuristic — used only when rosterType is missing, or to
+  // detect schema/data inconsistencies when it IS present.
   const analyzed = members.map((entry: any) => {
     const member = entry?.member || {};
     const signupSource = String(member?.signupSource || '').toLowerCase();
     const normalizedStatus = String(member?.status || '').toLowerCase();
     const hasUserAccount = Boolean(member?.user);
-    const hasFullMembershipSignal = signupSource === 'application'
-      || signupSource === 'standard_invite';
-    // 'manual' is NOT a full-membership signal — manually added members in a
-    // SOR are shifts-only. Previously treating 'manual' as full-membership
-    // caused SOR rosters to be mislabelled as 'mixed' after any manual add,
-    // which blocked CSV imports (409) and showed the wrong UI.
-    const isShiftsOnly = signupSource === 'shifts_only_invite'
+    const hasFullMembershipSignal =
+      signupSource === 'application' || signupSource === 'standard_invite';
+    // 'manual' means "added via the SOR manual-add button" — still shifts-only.
+    const isShiftsOnly =
+      signupSource === 'shifts_only_invite'
       || signupSource === 'manual'
       || (member?.isShiftsOnly === true
         && normalizedStatus === 'roster_only'
         && !hasUserAccount
         && !hasFullMembershipSignal);
-    const isFullMembership = member?.isShiftsOnly === false
+    const isFullMembership =
+      member?.isShiftsOnly === false
       || hasFullMembershipSignal
       || (!isShiftsOnly && hasUserAccount)
       || (!isShiftsOnly && normalizedStatus !== 'roster_only');
     return { isShiftsOnly, isFullMembership };
   });
-
-  const hasShiftsOnlyRoster = analyzed.some((entry) => entry.isShiftsOnly);
-  const hasFullMembershipRoster = analyzed.some((entry) => entry.isFullMembership);
+  const heuristicHasShiftsOnly = analyzed.some((e) => e.isShiftsOnly);
+  const heuristicHasFullMembership = analyzed.some((e) => e.isFullMembership);
 
   let mode: RosterMode = 'none';
   if (explicitRosterType) {
+    // Trust the schema. If heuristics disagree, log once — this indicates
+    // stale signupSource values that a data migration should fix.
     mode = explicitRosterType;
-  } else if (hasShiftsOnlyRoster && hasFullMembershipRoster) mode = 'mixed';
-  else if (hasShiftsOnlyRoster) mode = 'shifts_only';
-  else if (hasFullMembershipRoster) mode = 'full_membership';
+    const heuristicSuggestsSor = heuristicHasShiftsOnly && !heuristicHasFullMembership;
+    const heuristicSuggestsFmr = heuristicHasFullMembership && !heuristicHasShiftsOnly;
+    if (
+      (explicitRosterType === 'shifts_only' && heuristicSuggestsFmr)
+      || (explicitRosterType === 'full_membership' && heuristicSuggestsSor)
+    ) {
+      console.warn(
+        `⚠️ [deriveRosterMode] Member heuristic disagrees with roster.rosterType='${explicitRosterType}'. ` +
+          `Trusting schema. Data may need migration (check signupSource / isShiftsOnly on members).`
+      );
+    }
+  } else if (heuristicHasShiftsOnly) {
+    // No rosterType — legacy fallback. Favor shifts_only if ANY member looks SOR,
+    // since FMR cannot coexist with SOR under current product rules.
+    mode = 'shifts_only';
+  } else if (heuristicHasFullMembership) {
+    mode = 'full_membership';
+  }
 
   return {
     mode,
-    hasShiftsOnlyRoster: explicitRosterType === 'shifts_only' ? true : hasShiftsOnlyRoster,
-    hasFullMembershipRoster: explicitRosterType === 'full_membership' ? true : hasFullMembershipRoster,
+    hasShiftsOnlyRoster: mode === 'shifts_only',
+    hasFullMembershipRoster: mode === 'full_membership',
     memberCount: members.length
   };
 };
@@ -332,10 +367,13 @@ const MemberRoster: React.FC = () => {
     : (rosterModeState.mode === 'shifts_only' || rosterModeState.mode === 'full_membership')
       ? rosterModeState.mode
       : selectedRosterType || rosterModeState.mode;
+  // Rosters are strictly SOR or FMR — these booleans follow directly from the
+  // resolved `activeRosterType` (which in turn prefers the schema-enforced
+  // `roster.rosterType`). We also consult `rosterModeState.mode` to handle
+  // the transient window where `activeRosterType` has not yet been refreshed.
   const hasShiftsOnlyRoster = hasActiveRoster && (
     activeRosterType === 'shifts_only'
     || rosterModeState.mode === 'shifts_only'
-    || rosterModeState.mode === 'mixed'
   );
   const isLikelyFullMembershipByCampSetting = hasActiveRoster
     && campAcceptingApplications
@@ -343,7 +381,6 @@ const MemberRoster: React.FC = () => {
   const isFullMembershipRoster = (hasActiveRoster && (
     activeRosterType === 'full_membership'
     || rosterModeState.mode === 'full_membership'
-    || (rosterModeState.mode === 'mixed' && !hasShiftsOnlyRoster)
   )) || isLikelyFullMembershipByCampSetting;
   const canManageFullMembershipInvites = campAcceptingApplications || authUser?.isCampLead === true;
   const canViewMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
@@ -1638,6 +1675,21 @@ const MemberRoster: React.FC = () => {
             />
           </div>
         )}
+        {activeRosterType === 'shifts_only' ? (
+          <ShiftsOnlyRosterTable
+            rosterId={rosterId}
+            campId={campId}
+            members={filteredMembers as any}
+            canEdit={canEdit}
+            canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
+            onView={(m) => handleViewMember(m as any)}
+            onEdit={(memberId) => handleStartEdit(memberId)}
+            onDelete={(m) => handleDeleteMember(m as any)}
+            onToggleCampLead={(m, curr) => handleCampLeadToggle(m as any, curr)}
+            campLeadLoadingId={campLeadLoading}
+            onReminderSent={fetchMembers}
+          />
+        ) : (
         <div ref={rosterTableScrollRef} className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
@@ -2099,18 +2151,28 @@ const MemberRoster: React.FC = () => {
             </tbody>
           </table>
         </div>
+        )}
 
-        {/* Count indicator */}
-        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
-          <p className="text-sm text-gray-600">
-            Showing <strong>{filteredMembers.length}</strong> of <strong>{members.length}</strong> members
-            {activeFilters.length > 0 && (
-              <span className="ml-2 text-blue-600">
-                ({activeFilters.length} filter{activeFilters.length > 1 ? 's' : ''} applied)
-              </span>
-            )}
-          </p>
-        </div>
+        {/* Count indicator — hidden for SOR (the SOR component renders its own empty state). */}
+        {activeRosterType !== 'shifts_only' && (
+          <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <p className="text-sm text-gray-600">
+              Showing <strong>{filteredMembers.length}</strong> of <strong>{members.length}</strong> members
+              {activeFilters.length > 0 && (
+                <span className="ml-2 text-blue-600">
+                  ({activeFilters.length} filter{activeFilters.length > 1 ? 's' : ''} applied)
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+        {activeRosterType === 'shifts_only' && members.length > 0 && (
+          <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <p className="text-sm text-gray-600">
+              Showing <strong>{filteredMembers.length}</strong> of <strong>{members.length}</strong> members
+            </p>
+          </div>
+        )}
 
         {/* Empty states */}
         {members.length === 0 && !hasActiveRoster && (
@@ -2145,7 +2207,7 @@ const MemberRoster: React.FC = () => {
           </div>
         )}
         
-        {members.length === 0 && hasActiveRoster && (
+        {members.length === 0 && hasActiveRoster && activeRosterType !== 'shifts_only' && (
           <div className="text-center py-12">
             <h3 className="text-h3 font-lato-bold text-custom-text-secondary mb-2">
               Roster is Empty

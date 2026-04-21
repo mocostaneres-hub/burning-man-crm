@@ -111,6 +111,12 @@ const memberSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Shifts-Only Roster reminder throttling. Enforces a 24-hour cooldown
+  // between reminder emails for a given member. Null = never reminded.
+  lastReminderAt: {
+    type: Date,
+    default: null
+  },
   isShiftsOnly: {
     type: Boolean,
     default: true

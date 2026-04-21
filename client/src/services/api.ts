@@ -890,6 +890,37 @@ class ApiService {
     const response = await this.api.put(`/rosters/${rosterId}/members/${memberId}`, payload);
     return response.data;
   }
+
+  // ── Shifts-Only Roster reminders ──────────────────────────────────────────
+  // Single-member reminder. Backend enforces a 24h cooldown per member and
+  // branches on whether the member has linked a user account (Active) or
+  // not yet (Invited) to send the appropriate email variant.
+  async remindRosterMember(
+    rosterId: string,
+    memberId: string
+  ): Promise<{ message: string; reminderType: 'shift_signup' | 'invite'; lastReminderAt: string }> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/remind`);
+    return response.data;
+  }
+
+  async bulkRemindRosterMembers(
+    rosterId: string,
+    memberIds: string[]
+  ): Promise<{
+    message: string;
+    summary: { sent: number; cooldown: number; skipped: number; failed: number; total: number };
+    results: Array<{
+      memberId: string;
+      status: 'sent' | 'cooldown' | 'skipped' | 'failed';
+      lastReminderAt?: string;
+      nextAllowedAt?: string;
+      reason?: string;
+      reminderType?: 'shift_signup' | 'invite';
+    }>;
+  }> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/bulk-remind`, { memberIds });
+    return response.data;
+  }
 }
 
 const apiService = new ApiService();

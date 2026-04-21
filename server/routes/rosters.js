@@ -344,17 +344,59 @@ router.get('/active', authenticateToken, async (req, res) => {
     }
 
     const roster = await db.findActiveRoster({ camp: campId });
-    
-    // Debug: Log the roster data before sending
-    console.log('🔍 [GET /api/rosters/active] Roster data:', JSON.stringify(roster, null, 2));
-    if (roster && roster.members && roster.members.length > 0) {
-      console.log('🔍 [GET /api/rosters/active] First member data:', JSON.stringify(roster.members[0], null, 2));
-      if (roster.members[0].user) {
-        console.log('🔍 [GET /api/rosters/active] First member user data:', JSON.stringify(roster.members[0].user, null, 2));
-        console.log('🔍 [GET /api/rosters/active] First member playaName:', roster.members[0].user.playaName);
+
+    // For SOR rosters, enrich each member with two extra signals used by the
+    // Shifts-Only Roster table: (1) how many shifts they've signed up for
+    // and (2) when they were last reminded. Both are safe to compute for any
+    // roster type — we only attach them when rosterType === 'shifts_only' to
+    // avoid changing the shape of the response for FMR consumers.
+    if (roster && roster.rosterType === 'shifts_only' && Array.isArray(roster.members)) {
+      try {
+        const ShiftSignup = require('../models/ShiftSignup');
+
+        // Collect the user IDs of every SOR member that has linked an account.
+        const userIds = [];
+        for (const entry of roster.members) {
+          const userRef = entry?.member?.user;
+          if (userRef) {
+            const id = typeof userRef === 'object' ? userRef._id : userRef;
+            if (id) userIds.push(id);
+          }
+        }
+
+        // Aggregate signup counts by userId for this camp — one query, not N.
+        const counts = userIds.length
+          ? await ShiftSignup.aggregate([
+              { $match: { userId: { $in: userIds }, campId } },
+              { $group: { _id: '$userId', count: { $sum: 1 } } }
+            ])
+          : [];
+        const countByUserId = new Map(counts.map((c) => [c._id.toString(), c.count]));
+
+        // Attach per-member enrichment. We set fields on the populated member
+        // subdoc so the frontend's existing `memberEntry.member.*` accessors
+        // continue to work without modification.
+        for (const entry of roster.members) {
+          if (!entry?.member || typeof entry.member !== 'object') continue;
+          const userRef = entry.member.user;
+          const userIdStr =
+            userRef && typeof userRef === 'object'
+              ? userRef._id?.toString()
+              : userRef?.toString();
+          entry.member.shiftSignupCount = userIdStr ? countByUserId.get(userIdStr) || 0 : 0;
+          // lastReminderAt already lives on the Member document, but ensure
+          // it's serialized (populate on findActiveRoster returns full docs
+          // so this is usually a no-op — included here for safety).
+          if (entry.member.lastReminderAt === undefined) {
+            entry.member.lastReminderAt = null;
+          }
+        }
+      } catch (enrichErr) {
+        // Non-fatal: roster data is still returned even if enrichment fails.
+        console.error('⚠️  [GET /api/rosters/active] SOR enrichment failed:', enrichErr?.message);
       }
     }
-    
+
     res.json(roster);
   } catch (error) {
     console.error('Get active roster error:', error);
@@ -1170,6 +1212,291 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       detail: error?.message,
       code: error?.code || error?.name
     });
+  }
+});
+
+// ── SOR reminder helpers ────────────────────────────────────────────────────
+// These power the per-row "Remind" button and the bulk-remind action in the
+// Shifts-Only Roster table. Two distinct email variants are sent:
+//   • status 'invited'  → friendly reminder of the original invite (same
+//                         signup link; regenerates an invite/token if none
+//                         exists so the member can still register).
+//   • status 'active'   → reminder to claim shifts (links to /my-shifts).
+// A 24-hour cooldown is enforced server-side via Member.lastReminderAt.
+
+const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function buildInvitedReminderEmail(campName, signupUrl) {
+  const subject = `Friendly reminder: ${campName} invited you to sign up for shifts`;
+  const text =
+    `Hi! This is a friendly reminder that ${campName} invited you to sign up ` +
+    `for volunteer shifts. Your invite is still active.\n\n` +
+    `Create your account and browse shifts: ${signupUrl}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Friendly reminder: ${campName} invited you to sign up for shifts</h2>
+      <p>Hi! This is a friendly reminder that <strong>${campName}</strong> invited you to sign up for volunteer shifts. Your invite link is still active and we'd love to have you join.</p>
+      <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
+      <p style="color: #666; font-size: 13px;">If you've already signed up, you can ignore this email.</p>
+    </div>
+  `;
+  return { subject, text, html };
+}
+
+function buildActiveReminderEmail(campName, shiftsUrl) {
+  const subject = `Reminder: Sign up for shifts at ${campName}`;
+  const text =
+    `Hi! ${campName} still has volunteer shifts available and we'd love your help ` +
+    `filling them.\n\nBrowse and sign up: ${shiftsUrl}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Reminder: Sign up for shifts at ${campName}</h2>
+      <p>Hi! <strong>${campName}</strong> still has volunteer shifts available and we'd love your help filling them.</p>
+      <p><a href="${shiftsUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Browse and Sign Up for Shifts</a></p>
+      <p style="color: #666; font-size: 13px;">You can sign up for multiple shifts — every hour helps.</p>
+    </div>
+  `;
+  return { subject, text, html };
+}
+
+/**
+ * Core reminder logic — shared by both single and bulk endpoints.
+ * Returns { status: 'sent'|'cooldown'|'skipped'|'failed', ... } per member.
+ */
+async function sendSorReminder({ member, camp, senderUser, Member, reqUser }) {
+  const now = new Date();
+
+  // Cooldown enforcement.
+  if (member.lastReminderAt) {
+    const elapsed = now.getTime() - new Date(member.lastReminderAt).getTime();
+    if (elapsed < REMINDER_COOLDOWN_MS) {
+      const nextAllowedAt = new Date(new Date(member.lastReminderAt).getTime() + REMINDER_COOLDOWN_MS);
+      return {
+        memberId: member._id,
+        email: member.email,
+        status: 'cooldown',
+        nextAllowedAt,
+        reason: 'Reminder was sent within the last 24 hours'
+      };
+    }
+  }
+
+  if (!member.email) {
+    return { memberId: member._id, status: 'skipped', reason: 'Member has no email address' };
+  }
+
+  const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+  const campName = camp.name || camp.campName || 'Your camp';
+  const isActive = !!member.user;
+  let emailPayload;
+
+  try {
+    if (isActive) {
+      // Active (signed-up) member → "claim a shift" reminder.
+      const shiftsUrl = `${clientUrl}/my-shifts?campId=${camp._id}`;
+      emailPayload = buildActiveReminderEmail(campName, shiftsUrl);
+    } else {
+      // Invited (no account yet) member → friendly re-invite.
+      // Reuse existing invite token; if absent (edge case — member was added
+      // long ago without an invite), regenerate one and persist it.
+      let token = member.inviteToken;
+      if (!token) {
+        const crypto = require('crypto');
+        token = crypto.randomBytes(24).toString('hex');
+        await db.createInvite({
+          campId: camp._id,
+          senderId: reqUser._id,
+          recipient: member.email,
+          method: 'email',
+          token,
+          status: 'sent',
+          inviteType: 'shifts_only',
+          signupSource: 'shifts_only_invite',
+          memberId: member._id
+        });
+        await Member.findByIdAndUpdate(member._id, {
+          $set: {
+            inviteToken: token,
+            invitedAt: now,
+            status: 'invited',
+            isShiftsOnly: true,
+            signupSource: 'shifts_only_invite'
+          }
+        });
+      }
+      const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+      emailPayload = buildInvitedReminderEmail(campName, signupUrl);
+    }
+
+    const { sendEmail } = require('../services/emailService');
+    await sendEmail({
+      to: member.email,
+      subject: emailPayload.subject,
+      html: emailPayload.html,
+      text: emailPayload.text
+    });
+
+    // Persist cooldown timestamp — ONLY on successful send.
+    await Member.findByIdAndUpdate(member._id, { $set: { lastReminderAt: now } });
+
+    // Audit trail.
+    try {
+      await recordActivity('MEMBER', member._id, reqUser._id, 'REMINDER_SENT', {
+        campId: camp._id,
+        reminderType: isActive ? 'shift_signup' : 'invite',
+        field: 'reminder',
+        recipient: member.email,
+        note: isActive
+          ? 'Reminder to claim a shift sent to active SOR member'
+          : 'Friendly re-invite reminder sent to pending SOR member'
+      });
+    } catch (auditErr) {
+      console.warn('⚠️ [SOR reminder] Activity log failed:', auditErr?.message);
+    }
+
+    return {
+      memberId: member._id,
+      email: member.email,
+      status: 'sent',
+      reminderType: isActive ? 'shift_signup' : 'invite',
+      lastReminderAt: now
+    };
+  } catch (err) {
+    console.error(`❌ [SOR reminder] Failed for ${member.email}:`, err?.message);
+    return {
+      memberId: member._id,
+      email: member.email,
+      status: 'failed',
+      reason: err?.message || 'Email send failed'
+    };
+  }
+}
+
+// @route   POST /api/rosters/:rosterId/members/:memberId/remind
+// @desc    Send a reminder email to one SOR member (24h cooldown enforced)
+// @access  Private (Camp admins/leads only)
+router.post('/:rosterId/members/:memberId/remind', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const Member = require('../models/Member');
+
+    const roster = await db.findRoster({ _id: rosterId });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    // Confirm membership actually belongs to this roster before sending.
+    const inRoster = (roster.members || []).some((m) => {
+      if (!m?.member) return false;
+      if (typeof m.member === 'object' && m.member._id) return m.member._id.toString() === memberId;
+      return m.member.toString() === memberId;
+    });
+    if (!inRoster) return res.status(404).json({ message: 'Member is not in this roster' });
+
+    const member = await Member.findById(memberId);
+    if (!member) return res.status(404).json({ message: 'Member record not found' });
+
+    const result = await sendSorReminder({ member, camp, Member, reqUser: req.user });
+
+    if (result.status === 'cooldown') {
+      return res.status(429).json({
+        message: 'Reminder already sent within the last 24 hours',
+        nextAllowedAt: result.nextAllowedAt
+      });
+    }
+    if (result.status === 'skipped') {
+      return res.status(400).json({ message: result.reason });
+    }
+    if (result.status === 'failed') {
+      return res.status(500).json({ message: 'Failed to send reminder', detail: result.reason });
+    }
+    return res.json({
+      message: 'Reminder sent',
+      reminderType: result.reminderType,
+      lastReminderAt: result.lastReminderAt
+    });
+  } catch (error) {
+    console.error('❌ [SOR reminder] Route error:', error);
+    return res.status(500).json({ message: 'Server error', detail: error?.message });
+  }
+});
+
+// @route   POST /api/rosters/:rosterId/members/bulk-remind
+// @desc    Send reminder emails to multiple SOR members (24h cooldown per member)
+// @access  Private (Camp admins/leads only)
+router.post('/:rosterId/members/bulk-remind', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+    const { memberIds } = req.body || {};
+    if (!Array.isArray(memberIds) || memberIds.length === 0) {
+      return res.status(400).json({ message: 'memberIds must be a non-empty array' });
+    }
+    if (memberIds.length > 500) {
+      return res.status(400).json({ message: 'Cannot send more than 500 reminders in one request' });
+    }
+
+    const Member = require('../models/Member');
+
+    const roster = await db.findRoster({ _id: rosterId });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    // Verify every memberId belongs to this roster; drop any that don't.
+    const rosterMemberIdSet = new Set(
+      (roster.members || [])
+        .map((m) => {
+          if (!m?.member) return null;
+          if (typeof m.member === 'object' && m.member._id) return m.member._id.toString();
+          return m.member.toString();
+        })
+        .filter(Boolean)
+    );
+    const validIds = memberIds.filter((id) => rosterMemberIdSet.has(id.toString()));
+    const invalidIds = memberIds.filter((id) => !rosterMemberIdSet.has(id.toString()));
+
+    const members = await Member.find({ _id: { $in: validIds } });
+    const results = [];
+    for (const member of members) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await sendSorReminder({ member, camp, Member, reqUser: req.user });
+      results.push(r);
+    }
+    for (const id of invalidIds) {
+      results.push({ memberId: id, status: 'skipped', reason: 'Member not in this roster' });
+    }
+
+    const sent = results.filter((r) => r.status === 'sent');
+    const cooldown = results.filter((r) => r.status === 'cooldown');
+    const skipped = results.filter((r) => r.status === 'skipped');
+    const failed = results.filter((r) => r.status === 'failed');
+
+    return res.json({
+      message: `Bulk reminder complete: ${sent.length} sent, ${cooldown.length} on cooldown, ${skipped.length} skipped, ${failed.length} failed`,
+      summary: {
+        sent: sent.length,
+        cooldown: cooldown.length,
+        skipped: skipped.length,
+        failed: failed.length,
+        total: results.length
+      },
+      results
+    });
+  } catch (error) {
+    console.error('❌ [SOR bulk-remind] Route error:', error);
+    return res.status(500).json({ message: 'Server error', detail: error?.message });
   }
 });
 

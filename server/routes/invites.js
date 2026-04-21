@@ -11,34 +11,26 @@ const { recordActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
-const resolveRosterMode = async (activeRoster) => {
+/**
+ * Resolve the mode of the active roster.
+ *
+ * Under the current product rules, a roster is strictly one of SOR or FMR —
+ * there is no "mixed" state. The Mongoose schema enforces this via the
+ * `rosterType` enum (see server/models/Roster.js). We therefore read that
+ * field directly and treat anything else (missing / legacy / corrupt doc) as
+ * 'none' rather than re-deriving it from member heuristics.
+ */
+const resolveRosterMode = (activeRoster) => {
   if (!activeRoster) return 'none';
   if (activeRoster.rosterType === 'shifts_only' || activeRoster.rosterType === 'full_membership') {
     return activeRoster.rosterType;
   }
-
-  let hasShiftsOnly = false;
-  let hasFullMembership = false;
-  for (const entry of activeRoster.members || []) {
-    const memberRef = entry?.member;
-    const member = memberRef && typeof memberRef === 'object' && memberRef._id
-      ? memberRef
-      : memberRef
-        ? await db.findMember({ _id: memberRef })
-        : null;
-    if (!member) continue;
-
-    const signupSource = String(member.signupSource || '').toLowerCase();
-    const isShiftsOnly = member.isShiftsOnly === true
-      || signupSource === 'shifts_only_invite'
-      || String(member.status || '').toLowerCase() === 'roster_only';
-    if (isShiftsOnly) hasShiftsOnly = true;
-    else hasFullMembership = true;
-  }
-
-  if (hasShiftsOnly && hasFullMembership) return 'mixed';
-  if (hasShiftsOnly) return 'shifts_only';
-  if (hasFullMembership) return 'full_membership';
+  // Legacy / malformed roster — no reliable type. Surface a warning so a
+  // migration can be triggered rather than silently guessing.
+  console.warn(
+    '⚠️  [resolveRosterMode] Active roster is missing a valid rosterType',
+    { rosterId: activeRoster._id, rosterType: activeRoster.rosterType }
+  );
   return 'none';
 };
 
@@ -297,8 +289,8 @@ router.post('/invites',
       }
 
       const activeRoster = await db.findActiveRoster({ camp: campId });
-      const rosterMode = await resolveRosterMode(activeRoster);
-      if (rosterMode === 'shifts_only' || rosterMode === 'mixed') {
+      const rosterMode = resolveRosterMode(activeRoster);
+      if (rosterMode === 'shifts_only') {
         return res.status(409).json({
           message: 'Full-membership invites are unavailable while a shifts-only roster is active. Archive the current roster first to return to roster-less mode.'
         });
