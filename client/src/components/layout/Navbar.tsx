@@ -29,6 +29,17 @@ const Navbar: React.FC = () => {
   const [campIdFromCamp, setCampIdFromCamp] = useState<string | null>(null);
   const [campSlugLoading, setCampSlugLoading] = useState(false);
   const [campLookupAttempted, setCampLookupAttempted] = useState(false);
+  // Active roster type for the current camp. Drives whether we show the
+  // "Applications" nav link: SOR camps don't use the Applications flow
+  // (no join-the-camp application is ever submitted for a shifts-only
+  // invite), so the link is hidden when rosterType === 'shifts_only'.
+  // Values: 'shifts_only' | 'full_membership' | 'none' (no roster yet) |
+  // null (not yet fetched — we default to showing the link so FMR camps
+  // are never surprised by a missing nav entry during the brief loading
+  // window).
+  const [activeRosterType, setActiveRosterType] = useState<
+    'shifts_only' | 'full_membership' | 'none' | null
+  >(null);
 
   const handleLogout = () => {
     logout();
@@ -94,6 +105,56 @@ const Navbar: React.FC = () => {
     fetchCampSlug();
   }, [user, campSlugLoading, campLookupAttempted]);
 
+  // ============================================================================
+  // Fetch active roster type so we can hide nav items that are irrelevant
+  // for SOR camps (currently just "Applications"). We look up the roster for
+  // whichever camp identifier applies to this user:
+  //   • Camp Leads → user.campLeadCampId
+  //   • Camp / Admin accounts → campIdFromCamp (from /camps/my-camp) ||
+  //     user.campId (fallback)
+  // A 404 from /rosters/active is the expected "camp has no roster yet"
+  // state, which we record as 'none' (Applications stays visible so
+  // roster-less camps can still access the page).
+  // ============================================================================
+  useEffect(() => {
+    if (!user) {
+      setActiveRosterType(null);
+      return;
+    }
+
+    const campIdForRosterLookup = user?.isCampLead && user?.campLeadCampId
+      ? user.campLeadCampId.toString()
+      : (campIdFromCamp || (user?.campId ? user.campId.toString() : null));
+
+    if (!campIdForRosterLookup) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await api.get(`/rosters/active?campId=${campIdForRosterLookup}`);
+        if (cancelled) return;
+        if (response && response.rosterType === 'shifts_only') {
+          setActiveRosterType('shifts_only');
+        } else if (response && response.rosterType === 'full_membership') {
+          setActiveRosterType('full_membership');
+        } else if (response && response._id) {
+          // Roster exists but has an unexpected rosterType — treat as FMR
+          // (the safe default) so no nav items are accidentally hidden.
+          setActiveRosterType('full_membership');
+        } else {
+          setActiveRosterType('none');
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        // 404 = no active roster, which is a valid state.
+        if (err?.response?.status === 404) setActiveRosterType('none');
+        else setActiveRosterType(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [user, campIdFromCamp]);
+
   // Define navigation items based on user type
   const getNavItems = () => {
     if (!isAuthenticated) return [];
@@ -118,15 +179,26 @@ const Navbar: React.FC = () => {
       
       console.log('✅ [Navbar] User is Camp Lead, showing camp management navigation');
       
-      return [
+      const campLeadItems = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
         { label: 'Camp Profile', path: `/camps/${campSlug}`, icon: <HomeIcon size={18} /> },
-        { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
-        { label: 'Applications', path: `/camp/${campIdentifier}/applications`, icon: <Assignment size={18} /> },
+        { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> }
+      ];
+      // Applications is FMR-only — SOR camps never receive join-the-camp
+      // applications via invite, so hide the link in that case.
+      if (activeRosterType !== 'shifts_only') {
+        campLeadItems.push({
+          label: 'Applications',
+          path: `/camp/${campIdentifier}/applications`,
+          icon: <Assignment size={18} />
+        });
+      }
+      campLeadItems.push(
         { label: 'Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
         { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> },
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
-      ];
+      );
+      return campLeadItems;
     }
 
     // Camp/Admin accounts navigation (ordered as requested)
@@ -175,9 +247,16 @@ const Navbar: React.FC = () => {
       navItems.push(
         { label: 'Roster', path: campIdentifier ? `/camp/${campIdentifier}/roster` : '/camp/rosters', icon: <People size={18} /> }
       );
-      navItems.push(
-        { label: 'Applications', path: campIdentifier ? `/camp/${campIdentifier}/applications` : '/camp/applications', icon: <Assignment size={18} /> }
-      );
+      // Applications is FMR-only — SOR camps never receive join-the-camp
+      // applications via invite, so hide the link in that case. We still
+      // show it when rosterType is 'none' (roster-less) or 'full_membership',
+      // and also during the brief pre-fetch window (activeRosterType === null)
+      // to avoid a flash of missing nav on FMR camps.
+      if (activeRosterType !== 'shifts_only') {
+        navItems.push(
+          { label: 'Applications', path: campIdentifier ? `/camp/${campIdentifier}/applications` : '/camp/applications', icon: <Assignment size={18} /> }
+        );
+      }
       navItems.push(
         { label: 'Tasks', path: campIdentifier ? `/camp/${campIdentifier}/tasks` : '/camp/tasks', icon: <Task size={18} /> }
       );
