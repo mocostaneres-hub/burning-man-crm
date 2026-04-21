@@ -742,6 +742,7 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
     // the CSV. Does NOT touch status, user reference, or signupSource.
     console.log(`ℹ️ [import-csv] Step 1b — updating ${toUpdate.length} existing members`);
     let updatedCount = 0;
+    let invitesSent = 0;
 
     if (toUpdate.length > 0) {
       const bulkUpdateOps = toUpdate.map((item) => ({
@@ -848,6 +849,87 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
           console.log(`✅ [import-csv] Step 3 — linked ${linkedCount} members (${linkErrorCount} errors)`);
         }
       }
+
+      // ── Step 1c: send SOR invite emails ────────────────────────────────────
+      // Reuses the same invite pattern as POST /shifts/events/invite-entire-roster.
+      // Conditions for sending:
+      //   - Member has no existing inviteToken (never been invited)
+      //   - Member has no linked User account (not yet registered)
+      // This runs for both newly-created AND re-imported-but-uninvited members,
+      // ensuring no duplicate invites are sent on subsequent CSV imports.
+      const allImportEmails = [...toCreate, ...toUpdate].map((c) => c.email).filter(Boolean);
+      if (allImportEmails.length > 0) {
+        try {
+          const crypto = require('crypto');
+          const { sendEmail } = require('../services/emailService');
+          const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+          const campForInvite = await Camp.findById(campId).select('name campName').lean();
+          const campName = campForInvite?.name || campForInvite?.campName || 'Your camp';
+
+          const eligibleMembers = await Member.find({
+            camp: campId,
+            email: { $in: allImportEmails }
+          }).select('_id email inviteToken user').lean();
+
+          for (const member of eligibleMembers) {
+            if (member.inviteToken) {
+              console.log(`ℹ️ [import-csv] Step 1c — invite skipped (already invited): ${member.email}`);
+              continue;
+            }
+            if (member.user) {
+              console.log(`ℹ️ [import-csv] Step 1c — invite skipped (has account): ${member.email}`);
+              continue;
+            }
+
+            try {
+              const token = crypto.randomBytes(24).toString('hex');
+              const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+
+              await db.createInvite({
+                campId,
+                senderId: req.user._id,
+                recipient: member.email,
+                method: 'email',
+                token,
+                status: 'sent',
+                inviteType: 'shifts_only',
+                signupSource: 'shifts_only_invite',
+                memberId: member._id.toString()
+              });
+
+              await db.updateMember(member._id.toString(), {
+                status: 'invited',
+                invitedAt: new Date(),
+                inviteToken: token,
+                isShiftsOnly: true,
+                signupSource: 'shifts_only_invite'
+              });
+
+              const inviteSubject = `${campName} invited you to sign up for available shifts`;
+              const inviteText = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
+              const inviteHtml = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2>${campName} invited you to sign up for available shifts</h2>
+                  <p>${campName} has volunteer shifts available that could use your help.</p>
+                  <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
+                </div>
+              `;
+
+              await sendEmail({ to: member.email, subject: inviteSubject, html: inviteHtml, text: inviteText });
+              invitesSent++;
+              console.log(`✅ [import-csv] Step 1c — invite sent → ${member.email} (member ${member._id})`);
+            } catch (perMemberErr) {
+              // Non-fatal: log and continue so a single email failure never aborts the import.
+              console.error(`❌ [import-csv] Step 1c — invite failed for ${member.email} (${member._id}):`, perMemberErr?.message);
+            }
+          }
+
+          console.log(`ℹ️ [import-csv] Step 1c — done: invitesSent=${invitesSent} of ${eligibleMembers.length} checked`);
+        } catch (inviteSetupErr) {
+          // Non-fatal: email service unavailability must not roll back a successful import.
+          console.error('❌ [import-csv] Step 1c — invite setup error (non-fatal):', inviteSetupErr?.message);
+        }
+      }
     }
 
     // ── Step 4: activity log ────────────────────────────────────────────────
@@ -856,16 +938,18 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       action: 'import_csv',
       createdCount,
       updatedCount,
+      invitesSent,
       skippedCount: skippedRows.length,
       invalidCount: invalidRows.length,
       isShiftsOnlyCamp: true
     });
-    console.log(`✅ [import-csv] Done — created=${createdCount} updated=${updatedCount} invalid=${invalidRows.length}`);
+    console.log(`✅ [import-csv] Done — created=${createdCount} updated=${updatedCount} invitesSent=${invitesSent} invalid=${invalidRows.length}`);
     return res.json({
       mode: 'confirm',
       message: 'CSV import completed',
       createdCount,
       updatedCount,
+      invitesSent,
       skippedCount: skippedRows.length,
       invalidCount: invalidRows.length,
       duplicateInsertConflicts

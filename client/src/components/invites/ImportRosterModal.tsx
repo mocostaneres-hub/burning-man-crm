@@ -127,6 +127,7 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       const parts: string[] = [];
       if (response.createdCount) parts.push(`${response.createdCount} added`);
       if (response.updatedCount) parts.push(`${response.updatedCount} updated`);
+      if (response.invitesSent) parts.push(`${response.invitesSent} invite${response.invitesSent === 1 ? '' : 's'} sent`);
       if (response.invalidCount) parts.push(`${response.invalidCount} invalid`);
       setSuccess(`Import complete: ${parts.length ? parts.join(', ') : 'no changes'}.`);
       if (onImportCompleted) {
