@@ -467,6 +467,14 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
 
     const { rows: rawRows, headers: rawHeaders } = await parseCsvRows(req.file.buffer);
 
+    // ── TRACE A: raw parse result ────────────────────────────────────────────
+    console.log('[CSV-TRACE A] raw parse', {
+      rawHeaderCount: rawHeaders.length,
+      rawHeaders,
+      rawRowCount: rawRows.length,
+      sampleRawRow: rawRows[0] ?? null,
+    });
+
     // Normalize every header key: trim → lowercase → spaces→underscores.
     // This makes the import pipeline completely case-insensitive:
     //   "NAME"       → "name"
@@ -498,6 +506,14 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       const key = mapped || fallback;
       return row?.[key] ?? '';
     };
+
+    // ── TRACE B: post-normalization state ────────────────────────────────────
+    console.log('[CSV-TRACE B] after normalization', {
+      normalizedHeaders: headers,
+      normalizedRowCount: rows.length,
+      sampleNormalizedRow: rows[0] ?? null,
+      normalizedMapping,
+    });
 
     const seenCsvEmails = new Set();
     const validCandidates = [];
@@ -533,6 +549,19 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
 
       const rowNumber = i + 2; // include header row
 
+      // ── TRACE C: per-row validation ────────────────────────────────────────
+      const rowErrors = [];
+      if (!name)            rowErrors.push('name_empty');
+      if (!email)           rowErrors.push('email_empty');
+      if (email && !isValidEmail(email)) rowErrors.push('email_invalid');
+      if (seenCsvEmails.has(email))      rowErrors.push('duplicate_in_csv');
+      console.log(`[CSV-TRACE C] row ${rowNumber}`, {
+        rawRow: rows[i],
+        name, email, playaName,
+        valid: rowErrors.length === 0,
+        errors: rowErrors,
+      });
+
       if (!name || !email) {
         invalidRows.push({ row: rowNumber, reason: 'missing_required_fields', name, email });
         continue;
@@ -558,11 +587,26 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       });
     }
 
+    // ── TRACE D: post-validation summary ────────────────────────────────────
+    console.log('[CSV-TRACE D] validation complete', {
+      parsedRowCount: rows.length,
+      validCandidateCount: validCandidates.length,
+      invalidRowCount: invalidRows.length,
+      invalidRows,
+      skippedRowCount: skippedRows.length,
+    });
+
     const existing = await Member.find({
       camp: campId,
       email: { $in: validCandidates.map((c) => c.email) }
     }).select('email');
     const existingEmailSet = new Set((existing || []).map((m) => normalizeCsvEmail(m.email)));
+
+    // ── TRACE E: DB duplicate check ──────────────────────────────────────────
+    console.log('[CSV-TRACE E] DB duplicate check', {
+      queriedEmails: validCandidates.map((c) => c.email),
+      existingInDB: [...existingEmailSet],
+    });
 
     const toCreate = [];
     for (const candidate of validCandidates) {
@@ -576,6 +620,13 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       }
       toCreate.push(candidate);
     }
+
+    // ── TRACE F: pre-insert summary ──────────────────────────────────────────
+    console.log('[CSV-TRACE F] pre-insert', {
+      toCreateCount: toCreate.length,
+      toCreateEmails: toCreate.map((c) => c.email),
+      allSkipped: toCreate.length === 0 ? skippedRows : [],
+    });
 
     for (const item of toCreate.slice(0, 10)) {
       preview.push({
@@ -638,13 +689,22 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       signupSource: 'shifts_only_invite'
     }));
 
-    // ── Step 1: insert members ───────────────────────────────────────────────
+    // ── Step 1 / TRACE G: insert members ────────────────────────────────────
+    console.log('[CSV-TRACE G] insert payload', {
+      docCount: insertDocs.length,
+      docs: insertDocs.map((d) => ({ camp: d.camp, email: d.email, name: d.name, status: d.status, isShiftsOnly: d.isShiftsOnly })),
+    });
     console.log(`ℹ️ [import-csv] Step 1 — inserting ${insertDocs.length} member docs`);
     let createdCount = 0;
     let duplicateInsertConflicts = 0;
     try {
       const created = await Member.insertMany(insertDocs, { ordered: false });
       createdCount = created.length;
+      // ── TRACE H: insert success ──────────────────────────────────────────
+      console.log('[CSV-TRACE H] insertMany succeeded', {
+        createdCount,
+        createdIds: created.map((d) => d._id),
+      });
       console.log(`✅ [import-csv] Step 1 — insertMany succeeded: ${createdCount} created`);
     } catch (insertError) {
       // ordered:false → MongoDB sends as many writes as possible and collects errors.
@@ -677,6 +737,18 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
         insertError?.result?.nInserted ??
         (Array.isArray(insertError?.insertedDocs) ? insertError.insertedDocs.length : 0);
 
+      // ── TRACE I: insert partial/error ────────────────────────────────────
+      console.log('[CSV-TRACE I] insertMany catch block', {
+        errorName: insertError?.name,
+        errorMessage: insertError?.message,
+        errorCode: insertError?.code,
+        writeErrorCount: writeErrors.length,
+        writeErrorCodes: writeErrors.map((e) => e?.code),
+        resultInsertedCount: insertError?.result?.insertedCount,
+        resultNInserted: insertError?.result?.result?.nInserted,
+        createdCount,
+        duplicateInsertConflicts,
+      });
       console.log(`⚠️ [import-csv] Step 1 — insertMany partial: createdCount=${createdCount}, duplicates=${duplicateInsertConflicts}`);
 
       for (const writeError of writeErrors) {
@@ -688,6 +760,18 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
         );
         skippedRows.push({ reason: 'skipped_duplicate', email: duplicateEmail || undefined });
       }
+    }
+
+    // ── TRACE J: critical guard ──────────────────────────────────────────────
+    if (insertDocs.length > 0 && createdCount === 0) {
+      console.error('[CSV-TRACE J] ⚠️ CRITICAL — docs were submitted but createdCount=0', {
+        insertDocCount: insertDocs.length,
+        insertEmails: insertDocs.map((d) => d.email),
+        existingInDB: [...existingEmailSet],
+        validCandidateCount: validCandidates.length,
+        invalidRowCount: invalidRows.length,
+        skippedRowCount: skippedRows.length,
+      });
     }
 
     // ── Step 2: create / fetch roster ────────────────────────────────────────
