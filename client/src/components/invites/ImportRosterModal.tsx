@@ -131,8 +131,12 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       if (response.invalidCount) parts.push(`${response.invalidCount} invalid`);
       setSuccess(`Import complete: ${parts.length ? parts.join(', ') : 'no changes'}.`);
       if (onImportCompleted) {
+        // Use linkedCount (members actually attached to the roster) as the definitive
+        // success signal. Fall back to created+updated if linkedCount is absent.
+        const processedCount =
+          response.linkedCount ?? ((response.createdCount || 0) + (response.updatedCount || 0));
         await onImportCompleted({
-          createdCount: (response.createdCount || 0) + (response.updatedCount || 0),
+          createdCount: processedCount,
           skippedCount: response.skippedCount || 0,
           invalidCount: response.invalidCount || 0
         });
