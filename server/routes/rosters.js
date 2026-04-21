@@ -904,6 +904,8 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       ? memberData.customFieldValues
       : {};
 
+    const isNewMember = !memberRecord;
+
     if (!memberRecord) {
       memberRecord = await db.createMember({
         camp: camp._id,
@@ -917,7 +919,9 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         customFieldValues,
         status: 'roster_only',
         isShiftsOnly: true,
-        signupSource: 'manual',
+        // Use shifts_only_invite (not 'manual') so deriveRosterMode correctly
+        // identifies this member as shifts-only, not full-membership.
+        signupSource: 'shifts_only_invite',
         dues: {
           paid: memberData.duesPaid === true,
           paidAt: memberData.duesPaid === true ? new Date() : null
@@ -951,7 +955,62 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       { duesStatus: memberData.duesPaid === true ? DUES_STATUS.PAID : DUES_STATUS.UNPAID }
     );
 
-    // Auto-assignment requires linked user account; skip for roster-only records.
+    // ── Invite email (parity with CSV import Step 1c) ────────────────────────
+    // Send a SOR invite email to the member so they can create their account and
+    // browse shifts. Mirrors the exact same logic used by POST /import-csv.
+    // Conditions for sending:
+    //   • member has no existing inviteToken (never invited before)
+    //   • member has no linked user account (not already registered)
+    let inviteSent = false;
+    if (!memberRecord.inviteToken && !memberRecord.user) {
+      try {
+        const crypto = require('crypto');
+        const { sendEmail } = require('../services/emailService');
+        const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+        const campName = camp.name || camp.campName || 'Your camp';
+        const token = crypto.randomBytes(24).toString('hex');
+        const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+
+        await db.createInvite({
+          campId: camp._id,
+          senderId: req.user._id,
+          recipient: memberRecord.email,
+          method: 'email',
+          token,
+          status: 'sent',
+          inviteType: 'shifts_only',
+          signupSource: 'shifts_only_invite',
+          memberId: memberRecord._id.toString()
+        });
+
+        await db.updateMember(memberRecord._id, {
+          status: 'invited',
+          invitedAt: new Date(),
+          inviteToken: token,
+          isShiftsOnly: true,
+          signupSource: 'shifts_only_invite'
+        });
+
+        const inviteSubject = `${campName} invited you to sign up for available shifts`;
+        const inviteText = `${campName} has volunteer shifts available that could use your help.\n\nCreate your account and browse shifts: ${signupUrl}`;
+        const inviteHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>${campName} invited you to sign up for available shifts</h2>
+            <p>${campName} has volunteer shifts available that could use your help.</p>
+            <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
+          </div>
+        `;
+
+        await sendEmail({ to: memberRecord.email, subject: inviteSubject, html: inviteHtml, text: inviteText });
+        inviteSent = true;
+        console.log(`✅ [manual-add] Invite sent → ${memberRecord.email} (member ${memberRecord._id})`);
+      } catch (inviteErr) {
+        // Non-fatal: a failed invite email must never roll back the member addition.
+        console.error(`❌ [manual-add] Invite failed for ${memberRecord.email}:`, inviteErr?.message);
+      }
+    } else {
+      console.log(`ℹ️ [manual-add] Invite skipped for ${memberRecord.email} — ${memberRecord.inviteToken ? 'already invited' : 'has account'}`);
+    }
 
     // Log member addition for CAMP and member audit trail.
     await recordActivity('MEMBER', memberRecord._id, req.user._id, 'RESOURCE_ASSIGNED', {
@@ -974,7 +1033,8 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
 
     res.status(201).json({
       message: 'Member added successfully',
-      member: memberRecord
+      member: memberRecord,
+      inviteSent
     });
   } catch (error) {
     console.error('Add member to roster error:', error);

@@ -51,9 +51,13 @@ const deriveRosterMode = (roster: any): {
     const normalizedStatus = String(member?.status || '').toLowerCase();
     const hasUserAccount = Boolean(member?.user);
     const hasFullMembershipSignal = signupSource === 'application'
-      || signupSource === 'standard_invite'
-      || signupSource === 'manual';
+      || signupSource === 'standard_invite';
+    // 'manual' is NOT a full-membership signal — manually added members in a
+    // SOR are shifts-only. Previously treating 'manual' as full-membership
+    // caused SOR rosters to be mislabelled as 'mixed' after any manual add,
+    // which blocked CSV imports (409) and showed the wrong UI.
     const isShiftsOnly = signupSource === 'shifts_only_invite'
+      || signupSource === 'manual'
       || (member?.isShiftsOnly === true
         && normalizedStatus === 'roster_only'
         && !hasUserAccount
