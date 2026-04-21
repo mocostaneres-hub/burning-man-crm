@@ -904,17 +904,19 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       ? memberData.customFieldValues
       : {};
 
-    // ── Atomic upsert ───────────────────────────────────────────────────────
-    // Using findOneAndUpdate + upsert instead of findOne → create/update because:
-    //   1. Eliminates the race-condition window between the find and the write.
-    //   2. Prevents E11000 duplicate-key errors that occurred when findMember()
-    //      returned null (due to ObjectId/string type mismatch or email-case
-    //      difference) but the member already existed for this camp+email.
-    //   3. Handles re-importing previously archived roster members transparently.
-    //
-    // $setOnInsert  → only written when a NEW document is created.
-    // $set          → applied on both create and update (surface-level fields).
-    // Existing customFieldValues are fetched first so we can deep-merge them.
+    // ── Atomic upsert (safe-path variant) ───────────────────────────────────
+    // Why this shape:
+    //   • Mongoose schema declares nested defaults (dues.currency, contactPrefs.*,
+    //     settings.*, attendance.*). If we combine `setDefaultsOnInsert: true`
+    //     with a whole-object write like `$setOnInsert.dues = { paid, paidAt }`,
+    //     MongoDB throws "Updating the path 'dues.currency' would create a
+    //     conflict at 'dues'" because the driver already generated dotted-path
+    //     defaults for the same subdoc. We avoid that by:
+    //       1. Writing ONLY dotted paths inside $setOnInsert (no parent objects).
+    //       2. NOT using `setDefaultsOnInsert` — we supply every field we care
+    //          about explicitly, and Mongoose schema defaults are still applied
+    //          at Model-level when the doc is instantiated on read.
+    //   • findOneAndUpdate + upsert remains atomic, so no E11000 race.
     step = 'upsert_member';
     const Member = require('../models/Member');
 
@@ -926,32 +928,77 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       ? { ...(existingForMerge.customFieldValues || {}), ...customFieldValues }
       : customFieldValues;
 
-    let memberRecord = await Member.findOneAndUpdate(
-      { camp: camp._id, email: normalizedMemberEmail },
-      {
-        $set: {
-          name: mergedName,
-          playaName: memberData.playaName || '',
-          phone: memberData.phone || '',
-          role: memberData.role === 'lead' ? 'camp-lead' : 'member',
-          tags: Array.isArray(memberData.tags) ? memberData.tags : [],
-          skills: Array.isArray(memberData.skills) ? memberData.skills : [],
-          customFieldValues: mergedCustomFields,
-        },
-        $setOnInsert: {
-          camp: camp._id,
-          email: normalizedMemberEmail,
-          status: 'roster_only',
-          isShiftsOnly: true,
-          signupSource: 'shifts_only_invite',
-          dues: {
-            paid: memberData.duesPaid === true,
-            paidAt: memberData.duesPaid === true ? new Date() : null
+    const now = new Date();
+    let memberRecord;
+    try {
+      memberRecord = await Member.findOneAndUpdate(
+        { camp: camp._id, email: normalizedMemberEmail },
+        {
+          $set: {
+            name: mergedName,
+            playaName: memberData.playaName || '',
+            phone: memberData.phone || '',
+            role: memberData.role === 'lead' ? 'camp-lead' : 'member',
+            tags: Array.isArray(memberData.tags) ? memberData.tags : [],
+            skills: Array.isArray(memberData.skills) ? memberData.skills : [],
+            customFieldValues: mergedCustomFields
+          },
+          $setOnInsert: {
+            camp: camp._id,
+            email: normalizedMemberEmail,
+            status: 'roster_only',
+            isShiftsOnly: true,
+            signupSource: 'shifts_only_invite',
+            'dues.paid': memberData.duesPaid === true,
+            'dues.paidAt': memberData.duesPaid === true ? now : null
           }
+        },
+        { upsert: true, new: true }
+      );
+    } catch (upsertErr) {
+      // Surface the actual Mongo/Mongoose failure to the client so we can
+      // diagnose immediately rather than guessing at "Server error".
+      console.error('❌ [manual-add] upsert_member failed:', {
+        name: upsertErr?.name,
+        code: upsertErr?.code,
+        codeName: upsertErr?.codeName,
+        message: upsertErr?.message,
+        keyPattern: upsertErr?.keyPattern,
+        keyValue: upsertErr?.keyValue,
+        errors: upsertErr?.errors && Object.keys(upsertErr.errors)
+      });
+
+      // Mongoose validation error → 400 (client-fixable input).
+      if (upsertErr?.name === 'ValidationError') {
+        const fieldErrors = Object.entries(upsertErr.errors || {}).map(
+          ([field, err]) => `${field}: ${err?.message || 'invalid'}`
+        );
+        return res.status(400).json({
+          message: 'Member data failed validation',
+          errors: fieldErrors
+        });
+      }
+
+      // Duplicate-key fallback — retry a plain find in case the doc was
+      // inserted concurrently by another request.
+      if (upsertErr?.code === 11000) {
+        memberRecord = await Member.findOne({ camp: camp._id, email: normalizedMemberEmail });
+        if (!memberRecord) {
+          return res.status(409).json({
+            message: 'A member with this email already exists for this camp but could not be retrieved',
+            keyValue: upsertErr.keyValue
+          });
         }
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+      } else {
+        // Everything else is a real 500. Include the raw detail so the
+        // frontend console shows what actually went wrong.
+        return res.status(500).json({
+          message: 'Failed to add member (step: upsert_member)',
+          detail: upsertErr?.message,
+          code: upsertErr?.code || upsertErr?.name
+        });
+      }
+    }
 
     if (!memberRecord) {
       return res.status(500).json({ message: 'Failed to create or retrieve member record' });
@@ -1058,10 +1105,19 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       inviteSent
     });
   } catch (error) {
-    console.error(`❌ [manual-add] 500 at step="${step}":`, error?.message, error?.stack?.split('\n')[1]);
+    console.error(`❌ [manual-add] 500 at step="${step}":`, {
+      name: error?.name,
+      code: error?.code,
+      codeName: error?.codeName,
+      message: error?.message,
+      keyPattern: error?.keyPattern,
+      keyValue: error?.keyValue,
+      stack: error?.stack?.split('\n').slice(0, 4).join(' | ')
+    });
     return res.status(500).json({
       message: `Failed to add member (step: ${step})`,
-      detail: error?.message
+      detail: error?.message,
+      code: error?.code || error?.name
     });
   }
 });
