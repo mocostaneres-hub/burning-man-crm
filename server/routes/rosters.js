@@ -904,47 +904,54 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       ? memberData.customFieldValues
       : {};
 
-    let memberRecord = await db.findMember({ camp: camp._id, email: normalizedMemberEmail });
+    // ── Atomic upsert ───────────────────────────────────────────────────────
+    // Using findOneAndUpdate + upsert instead of findOne → create/update because:
+    //   1. Eliminates the race-condition window between the find and the write.
+    //   2. Prevents E11000 duplicate-key errors that occurred when findMember()
+    //      returned null (due to ObjectId/string type mismatch or email-case
+    //      difference) but the member already existed for this camp+email.
+    //   3. Handles re-importing previously archived roster members transparently.
+    //
+    // $setOnInsert  → only written when a NEW document is created.
+    // $set          → applied on both create and update (surface-level fields).
+    // Existing customFieldValues are fetched first so we can deep-merge them.
+    step = 'upsert_member';
+    const Member = require('../models/Member');
 
-    if (!memberRecord) {
-      step = 'create_member';
-      memberRecord = await db.createMember({
-        camp: camp._id,
-        name: mergedName,
-        email: normalizedMemberEmail,
-        playaName: memberData.playaName || '',
-        phone: memberData.phone || '',
-        role: memberData.role === 'lead' ? 'camp-lead' : 'member',
-        tags: Array.isArray(memberData.tags) ? memberData.tags : [],
-        skills: Array.isArray(memberData.skills) ? memberData.skills : [],
-        customFieldValues,
-        status: 'roster_only',
-        isShiftsOnly: true,
-        signupSource: 'shifts_only_invite',
-        dues: {
-          paid: memberData.duesPaid === true,
-          paidAt: memberData.duesPaid === true ? new Date() : null
-        }
-      });
-    } else {
-      step = 'update_member';
-      // Use explicit $set so Mongoose never tries to overwrite the document.
-      const Member = require('../models/Member');
-      memberRecord = await Member.findByIdAndUpdate(
-        memberRecord._id,
-        {
-          $set: {
-            name: mergedName || memberRecord.name,
-            phone: memberData.phone || memberRecord.phone || '',
-            playaName: memberData.playaName || memberRecord.playaName || '',
-            tags: Array.isArray(memberData.tags) ? memberData.tags : (memberRecord.tags || []),
-            skills: Array.isArray(memberData.skills) ? memberData.skills : (memberRecord.skills || []),
-            customFieldValues: { ...(memberRecord.customFieldValues || {}), ...customFieldValues }
-          }
+    const existingForMerge = await Member.findOne(
+      { camp: camp._id, email: normalizedMemberEmail },
+      { customFieldValues: 1 }
+    ).lean();
+    const mergedCustomFields = existingForMerge
+      ? { ...(existingForMerge.customFieldValues || {}), ...customFieldValues }
+      : customFieldValues;
+
+    let memberRecord = await Member.findOneAndUpdate(
+      { camp: camp._id, email: normalizedMemberEmail },
+      {
+        $set: {
+          name: mergedName,
+          playaName: memberData.playaName || '',
+          phone: memberData.phone || '',
+          role: memberData.role === 'lead' ? 'camp-lead' : 'member',
+          tags: Array.isArray(memberData.tags) ? memberData.tags : [],
+          skills: Array.isArray(memberData.skills) ? memberData.skills : [],
+          customFieldValues: mergedCustomFields,
         },
-        { new: true }
-      );
-    }
+        $setOnInsert: {
+          camp: camp._id,
+          email: normalizedMemberEmail,
+          status: 'roster_only',
+          isShiftsOnly: true,
+          signupSource: 'shifts_only_invite',
+          dues: {
+            paid: memberData.duesPaid === true,
+            paidAt: memberData.duesPaid === true ? new Date() : null
+          }
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     if (!memberRecord) {
       return res.status(500).json({ message: 'Failed to create or retrieve member record' });
