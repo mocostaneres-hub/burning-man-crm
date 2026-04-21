@@ -153,6 +153,16 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] Email template initialization failed:', templateError.message);
   }
 
+  // Drop legacy Member indexes that aren't in the current schema. Prevents
+  // phantom E11000 errors where MongoDB rejects INSERTs due to stale indexes
+  // left over from earlier schema revisions (e.g. a plain { email: 1 } unique).
+  try {
+    const { syncMemberIndexes } = require('./startup/syncMemberIndexes');
+    await syncMemberIndexes();
+  } catch (indexError) {
+    console.error('⚠️  [Startup] Member index sync failed:', indexError.message);
+  }
+
   // Start reminder worker (hourly cadence).
   try {
     const { startOnboardingReminderWorker } = require('./startup/startOnboardingReminderWorker');

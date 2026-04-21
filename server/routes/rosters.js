@@ -979,14 +979,65 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
         });
       }
 
-      // Duplicate-key fallback — retry a plain find in case the doc was
-      // inserted concurrently by another request.
+      // Duplicate-key fallback — use the ACTUAL keyPattern/keyValue from the
+      // error, not a hard-coded { camp, email } assumption. Previously we
+      // returned "already exists but could not be retrieved" whenever any
+      // index collided, which was misleading for two real failure modes:
+      //
+      //   (a) Legitimate conflict on { camp, email } → retrieve and reuse the
+      //       existing member so the request still succeeds. This is the
+      //       normal "re-add a previously-archived member" path.
+      //
+      //   (b) Collision on a legacy/stale MongoDB index (e.g. a pre-refactor
+      //       { email: 1 } unique that was never dropped) → surface a clear,
+      //       actionable error with the exact keyPattern/keyValue so a DB
+      //       admin can drop the orphaned index. This is what the user was
+      //       hitting when adding members with different full emails at the
+      //       same domain: the email collision was *not* on email itself.
       if (upsertErr?.code === 11000) {
-        memberRecord = await Member.findOne({ camp: camp._id, email: normalizedMemberEmail });
-        if (!memberRecord) {
+        const keyPattern = upsertErr.keyPattern || {};
+        const keyValue = upsertErr.keyValue || {};
+        const indexedFields = Object.keys(keyPattern);
+
+        // Only the schema's expected compound index qualifies as a legit
+        // same-camp-same-email conflict.
+        const isExpectedCampEmailIndex =
+          indexedFields.length === 2 &&
+          indexedFields.includes('camp') &&
+          indexedFields.includes('email');
+
+        if (isExpectedCampEmailIndex) {
+          memberRecord = await Member.findOne({
+            camp: camp._id,
+            email: normalizedMemberEmail
+          });
+          if (memberRecord) {
+            console.log(
+              `ℹ️ [manual-add] Reused existing member ${memberRecord._id} (camp+email match)`
+            );
+          } else {
+            return res.status(409).json({
+              message:
+                'A member with this email already exists for this camp but could not be retrieved',
+              keyPattern,
+              keyValue
+            });
+          }
+        } else {
+          // Legacy / unexpected index — this is a stale DB index, not a
+          // legitimate "same email" conflict. Tell the operator exactly
+          // which index is the culprit.
+          console.error(
+            '❌ [manual-add] E11000 on UNEXPECTED index — likely a stale DB index left from an older schema:',
+            { keyPattern, keyValue }
+          );
           return res.status(409).json({
-            message: 'A member with this email already exists for this camp but could not be retrieved',
-            keyValue: upsertErr.keyValue
+            message:
+              'Cannot add member: a stale database index is reporting a false conflict. Contact support to drop the orphaned index.',
+            conflictingIndex: keyPattern,
+            conflictingValue: keyValue,
+            hint:
+              "Run the migration: `db.members.getIndexes()` to inspect, then drop any legacy index that isn't in the current schema."
           });
         }
       } else {
