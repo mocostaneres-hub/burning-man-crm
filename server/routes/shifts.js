@@ -54,6 +54,7 @@ const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { sendEmail } = require('../services/emailService');
 const { EMAIL_TEMPLATE_KEYS } = require('../constants/emailTemplateKeys');
+const { recordActivity } = require('../services/activityLogger');
 const {
   getTemplateByKey,
   renderTemplateString
@@ -1085,6 +1086,31 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
       } catch (notificationError) {
         console.error('Shift spot-opened notification error:', notificationError);
       }
+    }
+
+    // Audit trail: record cancellation against both the User and the Member.
+    try {
+      const activityDetails = {
+        field: 'shift',
+        campId: event.campId?._id || event.campId,
+        eventId: event._id,
+        eventName: event.eventName || event.name,
+        shiftId: shift._id,
+        shiftTitle: shift.title,
+        shiftDate: shift.date,
+        note: 'Member cancelled their shift signup'
+      };
+      await recordActivity('MEMBER', req.user._id, req.user._id, 'SHIFT_UNSIGNUP', activityDetails);
+      // Best-effort: look up the Member document in this camp for this user.
+      const campScopedMember = await db.findMember({
+        camp: event.campId?._id || event.campId,
+        user: req.user._id
+      });
+      if (campScopedMember?._id) {
+        await recordActivity('MEMBER', campScopedMember._id, req.user._id, 'SHIFT_UNSIGNUP', activityDetails);
+      }
+    } catch (auditErr) {
+      console.error('⚠️ [SHIFT UNSIGNUP] Activity log failed (non-fatal):', auditErr?.message);
     }
 
     res.json({
@@ -2153,6 +2179,30 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       });
     } catch (notificationError) {
       console.error('Shift signup notification error:', notificationError);
+    }
+
+    // Audit trail: record signup against BOTH the User and the Member so the
+    // camp's 360 view surfaces it whether rendered via user-id (FMR) or
+    // member-id (SOR pre-signup history) lookups. Failures are non-fatal.
+    try {
+      const activityDetails = {
+        field: 'shift',
+        campId: targetEvent.campId?._id || targetEvent.campId,
+        eventId: targetEvent._id,
+        eventName: targetEvent.eventName || targetEvent.name,
+        shiftId: targetShift._id,
+        shiftTitle: targetShift.title,
+        shiftDate: targetShift.date,
+        shiftStartTime: targetShift.startTime,
+        shiftEndTime: targetShift.endTime,
+        note: 'Member signed up for a shift'
+      };
+      await recordActivity('MEMBER', userId, userId, 'SHIFT_SIGNUP', activityDetails);
+      if (userMember?._id) {
+        await recordActivity('MEMBER', userMember._id, userId, 'SHIFT_SIGNUP', activityDetails);
+      }
+    } catch (auditErr) {
+      console.error('⚠️ [SHIFT SIGNUP] Activity log failed (non-fatal):', auditErr?.message);
     }
 
     console.log('🎉 [SHIFT SIGNUP] Sign-up process completed successfully');

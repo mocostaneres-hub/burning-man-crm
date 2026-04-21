@@ -223,7 +223,7 @@ router.post('/register', [
         console.error('⚠️ [Auth] Failed to send welcome email:', emailError);
       });
 
-    // Audit: account signup
+    // Audit: account signup (logged against the User).
     await recordActivity('MEMBER', user._id, user._id, 'ACCOUNT_CREATED', {
       field: 'account',
       newValue: effectiveAccountType,
@@ -231,6 +231,31 @@ router.post('/register', [
         ? 'User signed up via invitation link'
         : 'User signed up via email/password'
     });
+
+    // If this signup came from a shifts-only invite, ALSO log the event
+    // against the pre-existing Member document so the camp's 360 view has a
+    // continuous history: "manually added → invited → account created" all
+    // appear in chronological order. Without this, signup activity for a
+    // SOR member would only surface under the user-id entity and be missing
+    // from the camp-side member-id view.
+    if (inviteToken) {
+      try {
+        const inviteForAudit = await db.findInvite({ token: inviteToken });
+        if (inviteForAudit?.memberId && (inviteForAudit.inviteType || 'standard') === 'shifts_only') {
+          await recordActivity('MEMBER', inviteForAudit.memberId, user._id, 'ACCOUNT_CREATED', {
+            field: 'account',
+            campId: inviteForAudit.campId,
+            newValue: effectiveAccountType,
+            note: 'Member completed signup via shifts-only invite',
+            inviteId: inviteForAudit._id,
+            linkedUserId: user._id
+          });
+        }
+      } catch (auditErr) {
+        // Non-fatal: activity audit must never break registration.
+        console.error('⚠️ [Auth] Failed to log SOR signup activity against member:', auditErr?.message);
+      }
+    }
 
     res.status(201).json({
       message: 'User registered successfully',

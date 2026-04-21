@@ -269,13 +269,32 @@ router.get('/:campId/contacts/member/:memberId', authenticateToken, async (req, 
       console.error('❌ [360 Member] Error loading events:', eventErr);
     }
 
+    // Activity log — pull everything logged against this Member document.
+    // Manual add, CSV import, invite sent, dues updates, etc. all record against
+    // entityType='MEMBER' with entityId=memberId, so a single query surfaces
+    // the full audit trail for a SOR member that hasn't yet linked a user.
+    let activityLog = [];
+    try {
+      const { getActivityLog } = require('../services/activityLogger');
+      const rawLogs = await getActivityLog('MEMBER', memberId, { limit: null });
+      activityLog = (rawLogs || []).filter((log) => {
+        const logCampId = log?.details?.campId;
+        // Keep logs that either explicitly tag this camp or have no camp scope
+        // at all (older entries predating the campId tag).
+        return !logCampId || logCampId.toString() === campId.toString();
+      });
+    } catch (logError) {
+      console.error('❌ [360 Member] Error loading activity log:', logError);
+      activityLog = [];
+    }
+
     return res.json({
       user: syntheticUser,
       rosterHistory: rosterHistory.sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt)),
       applications: [],
       tasks: [],
       volunteerShifts,
-      activityLog: [],
+      activityLog,
       isMemberBased: true,
     });
   } catch (error) {
@@ -447,14 +466,43 @@ router.get('/:campId/contacts/:userId', authenticateToken, async (req, res) => {
       }
     }
 
+    // Activity log — unify pre-signup history (logged against Member._id) with
+    // post-signup history (logged against User._id).
+    //
+    // Why: before a SOR-invited person signs up, every activity (manual add,
+    // CSV import, invite sent, dues changes) is recorded against the Member
+    // document. After signup, the Member gets linked to a User, and
+    // account-level activities (ACCOUNT_CREATED, LOGIN_SUCCESS, shift signup)
+    // are recorded against the User. Without this union, the 360 page would
+    // silently drop everything that happened before signup.
     let activityLog = [];
     try {
       const { getActivityLog } = require('../services/activityLogger');
-      const rawLogs = await getActivityLog('MEMBER', userId, { limit: null });
-      activityLog = (rawLogs || []).filter(log => {
-        const logCampId = log?.details?.campId;
-        return logCampId && logCampId.toString() === campId.toString();
-      });
+
+      const entityIds = [userId, ...memberIds].filter(Boolean);
+      const logBatches = await Promise.all(
+        entityIds.map((id) => getActivityLog('MEMBER', id, { limit: null }).catch(() => []))
+      );
+      const merged = [].concat(...logBatches);
+
+      // Deduplicate by _id (a log can't legitimately appear twice, but guard
+      // against any future refactor that logs against both IDs simultaneously).
+      const seen = new Set();
+      const deduped = [];
+      for (const log of merged) {
+        const key = log?._id?.toString();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(log);
+      }
+
+      activityLog = deduped
+        .filter((log) => {
+          const logCampId = log?.details?.campId;
+          // Keep entries scoped to this camp or unscoped (legacy entries).
+          return !logCampId || logCampId.toString() === campId.toString();
+        })
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     } catch (logError) {
       console.error('❌ [360 Contact] Error loading activity log:', logError);
       activityLog = [];
