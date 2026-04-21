@@ -10,6 +10,15 @@ interface AddMemberModalProps {
   rosterId: string;
   onMemberAdded: () => void;
   customFields?: Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>;
+  /**
+   * Shifts-Only Rosters collect only the minimum viable data at add time
+   * (First Name, Last Name, Email, Playa Name); all other fields — city,
+   * years burned, ticket/VP status, arrival/departure, skills, dues,
+   * custom fields — are FMR-specific and are hidden when this is set to
+   * `'shifts_only'`. When omitted or `'full_membership'` the full FMR
+   * form renders and behaves exactly as before.
+   */
+  rosterType?: 'shifts_only' | 'full_membership';
 }
 
 interface MemberFormData {
@@ -33,8 +42,10 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
   onClose,
   rosterId,
   onMemberAdded,
-  customFields = []
+  customFields = [],
+  rosterType = 'full_membership'
 }) => {
+  const isShiftsOnly = rosterType === 'shifts_only';
   const { skills: SKILLS_OPTIONS, loading: skillsLoading } = useSkills();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -113,7 +124,19 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
 
     try {
       setLoading(true);
-      await apiService.post(`/rosters/${rosterId}/members`, formData);
+      // For SOR we deliberately ship only the four fields the form collects.
+      // Anything else is FMR-specific; sending stale empty/zero values would
+      // pollute the Member document (e.g. yearsBurned: 0, hasTicket: null)
+      // even though the UI never asked the camp lead about them.
+      const payload = isShiftsOnly
+        ? {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            playaName: formData.playaName
+          }
+        : formData;
+      await apiService.post(`/rosters/${rosterId}/members`, payload);
       
       // Reset form
       setFormData({
@@ -143,7 +166,11 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Member to Roster">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isShiftsOnly ? 'Add Member to Shifts-Only Roster' : 'Add New Member to Roster'}
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -188,24 +215,28 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             onChange={handleInputChange}
           />
 
-          <Input
-            label="City"
-            name="city"
-            value={formData.city}
-            onChange={handleInputChange}
-          />
+          {!isShiftsOnly && (
+            <>
+              <Input
+                label="City"
+                name="city"
+                value={formData.city}
+                onChange={handleInputChange}
+              />
 
-          <Input
-            label="Years Burned"
-            name="yearsBurned"
-            type="number"
-            min="0"
-            value={formData.yearsBurned}
-            onChange={handleInputChange}
-          />
+              <Input
+                label="Years Burned"
+                name="yearsBurned"
+                type="number"
+                min="0"
+                value={formData.yearsBurned}
+                onChange={handleInputChange}
+              />
+            </>
+          )}
         </div>
 
-        {customFields.length > 0 && (
+        {!isShiftsOnly && customFields.length > 0 && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Custom Fields</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -266,6 +297,8 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
           </div>
         )}
 
+        {!isShiftsOnly && (
+        <>
         {/* Ticket & VP Status */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Logistics</h3>
@@ -421,6 +454,8 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             <span className="text-sm font-medium text-gray-700">Dues Paid</span>
           </label>
         </div>
+        </>
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4 border-t">

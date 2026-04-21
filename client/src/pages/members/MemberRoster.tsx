@@ -3170,6 +3170,7 @@ const MemberRoster: React.FC = () => {
           rosterId={rosterId}
           onMemberAdded={fetchMembers}
           customFields={customFields}
+          rosterType={activeRosterType === 'shifts_only' ? 'shifts_only' : 'full_membership'}
         />
       )}
 
