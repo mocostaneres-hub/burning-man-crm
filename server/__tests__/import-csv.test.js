@@ -274,6 +274,191 @@ describe('extractCreatedCount from BulkWriteError', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Header + row key normalization (the core fix for this issue)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const normalizeKey = (h) => String(h || '').trim().toLowerCase().replace(/\s+/g, '_');
+
+function normalizeRows(rawRows, rawHeaders) {
+  const headers = rawHeaders.map(normalizeKey);
+  const rows = rawRows.map((rawRow) => {
+    const out = {};
+    for (const [k, v] of Object.entries(rawRow)) {
+      out[normalizeKey(k)] = v;
+    }
+    return out;
+  });
+  return { headers, rows };
+}
+
+function normalizeMapping(mapping) {
+  const out = {};
+  for (const [field, csvCol] of Object.entries(mapping)) {
+    out[field] = csvCol ? normalizeKey(csvCol) : '';
+  }
+  return out;
+}
+
+function getColumn(row, normalizedMap, canonical, fallback) {
+  const mapped = normalizedMap?.[canonical];
+  const key = mapped || fallback;
+  return row?.[key] ?? '';
+}
+
+describe('Header + row key normalization', () => {
+  test('normalizeKey: uppercase → lowercase', () => {
+    expect(normalizeKey('NAME')).toBe('name');
+    expect(normalizeKey('EMAIL')).toBe('email');
+  });
+
+  test('normalizeKey: spaces → underscores', () => {
+    expect(normalizeKey('PLAYA NAME')).toBe('playa_name');
+    expect(normalizeKey('Full Name')).toBe('full_name');
+  });
+
+  test('normalizeKey: trims leading/trailing whitespace', () => {
+    expect(normalizeKey('  NAME  ')).toBe('name');
+  });
+
+  test('normalizeKey: handles empty / null gracefully', () => {
+    expect(normalizeKey('')).toBe('');
+    expect(normalizeKey(null)).toBe('');
+  });
+
+  test('normalizeRows: remaps all row keys', () => {
+    const rawRows = [{ NAME: 'Alice', 'PLAYA NAME': 'Dusty', EMAIL: 'alice@example.com' }];
+    const rawHeaders = ['NAME', 'PLAYA NAME', 'EMAIL'];
+    const { headers, rows } = normalizeRows(rawRows, rawHeaders);
+
+    expect(headers).toEqual(['name', 'playa_name', 'email']);
+    expect(rows[0]).toEqual({ name: 'Alice', playa_name: 'Dusty', email: 'alice@example.com' });
+  });
+
+  test('normalizeRows: mixed-case headers', () => {
+    const rawRows = [{ Name: 'Bob', Email: 'bob@example.com' }];
+    const { rows } = normalizeRows(rawRows, ['Name', 'Email']);
+    expect(rows[0].name).toBe('Bob');
+    expect(rows[0].email).toBe('bob@example.com');
+  });
+
+  test('normalizeMapping: maps frontend "NAME" → "name" so getColumn can resolve it', () => {
+    const frontendMapping = { name: 'NAME', email: 'EMAIL', playa_name: 'PLAYA NAME', phone: '' };
+    const nm = normalizeMapping(frontendMapping);
+    expect(nm.name).toBe('name');
+    expect(nm.email).toBe('email');
+    expect(nm.playa_name).toBe('playa_name');
+    expect(nm.phone).toBe('');
+  });
+});
+
+describe('getColumn resolves correctly after normalization', () => {
+  const rawRows = [{ NAME: 'John Doe', 'PLAYA NAME': 'Dusty', EMAIL: 'john@example.com' }];
+  const { rows } = normalizeRows(rawRows, ['NAME', 'PLAYA NAME', 'EMAIL']);
+  const row = rows[0];
+
+  test('resolves name via explicit mapping', () => {
+    const nm = normalizeMapping({ name: 'NAME', email: 'EMAIL', playa_name: '' });
+    expect(getColumn(row, nm, 'name', 'name')).toBe('John Doe');
+  });
+
+  test('resolves email via explicit mapping', () => {
+    const nm = normalizeMapping({ name: 'NAME', email: 'EMAIL' });
+    expect(getColumn(row, nm, 'email', 'email')).toBe('john@example.com');
+  });
+
+  test('resolves playa_name via explicit mapping', () => {
+    const nm = normalizeMapping({ playa_name: 'PLAYA NAME' });
+    expect(getColumn(row, nm, 'playa_name', 'playa_name')).toBe('Dusty');
+  });
+
+  test('falls back to canonical key when mapping is empty', () => {
+    // No mapping at all — works because row keys are already normalized
+    const nm = normalizeMapping({});
+    expect(getColumn(row, nm, 'name', 'name')).toBe('John Doe');
+    expect(getColumn(row, nm, 'email', 'email')).toBe('john@example.com');
+    expect(getColumn(row, nm, 'playa_name', 'playa_name')).toBe('Dusty');
+  });
+
+  test('returns empty string for a column that is not in the CSV', () => {
+    const nm = normalizeMapping({});
+    expect(getColumn(row, nm, 'phone', 'phone')).toBe('');
+  });
+});
+
+describe('Full end-to-end: parse + normalize + validate', () => {
+  async function simulateImport(csvText) {
+    const buf = Buffer.from(csvText, 'utf-8');
+    const { rows: rawRows, headers: rawHeaders } = await parseCsvRows(buf);
+    const { headers, rows } = normalizeRows(rawRows, rawHeaders);
+    const nm = normalizeMapping({}); // no explicit mapping → rely on fallback
+
+    const validCandidates = [];
+    const invalidRows = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const name = String(getColumn(row, nm, 'name', 'name')).trim();
+      const email = normalizeCsvEmail(getColumn(row, nm, 'email', 'email'));
+
+      if (!name || !email) {
+        invalidRows.push({ row: i + 2, reason: 'missing_required_fields', name, email });
+        continue;
+      }
+      if (!isValidEmail(email)) {
+        invalidRows.push({ row: i + 2, reason: 'invalid_email', name, email });
+        continue;
+      }
+      validCandidates.push({ name, email, playa_name: getColumn(row, nm, 'playa_name', 'playa_name') });
+    }
+    return { headers, validCandidates, invalidRows };
+  }
+
+  test('CSV with NAME, PLAYA NAME, EMAIL headers — all members valid', async () => {
+    const csv = 'NAME,PLAYA NAME,EMAIL\nJohn Doe,Dusty,john@example.com\nJane Doe,Sunset,jane@example.com\n';
+    const { validCandidates, invalidRows } = await simulateImport(csv);
+    expect(validCandidates).toHaveLength(2);
+    expect(invalidRows).toHaveLength(0);
+    expect(validCandidates[0].name).toBe('John Doe');
+    expect(validCandidates[0].playa_name).toBe('Dusty');
+    expect(validCandidates[1].email).toBe('jane@example.com');
+  });
+
+  test('CSV with BOM + NAME, PLAYA NAME, EMAIL — still valid', async () => {
+    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    const content = Buffer.from('NAME,PLAYA NAME,EMAIL\nDust Devil,Dusty,dust@example.com\n', 'utf-8');
+    const buf = Buffer.concat([bom, content]);
+    const { rows: rawRows, headers: rawHeaders } = await parseCsvRows(buf);
+    const { headers, rows } = normalizeRows(rawRows, rawHeaders);
+    const nm = normalizeMapping({});
+
+    expect(headers[0]).toBe('name');
+    const name = getColumn(rows[0], nm, 'name', 'name');
+    expect(name).toBe('Dust Devil');
+  });
+
+  test('CSV with mixed-case headers — valid', async () => {
+    const csv = 'Name,Email\nAlice,alice@example.com\n';
+    const { validCandidates } = await simulateImport(csv);
+    expect(validCandidates).toHaveLength(1);
+    expect(validCandidates[0].name).toBe('Alice');
+  });
+
+  test('CSV missing email column — rows marked invalid', async () => {
+    const csv = 'NAME\nJohn Doe\n';
+    const { validCandidates, invalidRows } = await simulateImport(csv);
+    expect(validCandidates).toHaveLength(0);
+    expect(invalidRows[0].reason).toBe('missing_required_fields');
+  });
+
+  test('CSV with invalid email — row marked invalid_email', async () => {
+    const csv = 'NAME,EMAIL\nBob,not-an-email\n';
+    const { validCandidates, invalidRows } = await simulateImport(csv);
+    expect(validCandidates).toHaveLength(0);
+    expect(invalidRows[0].reason).toBe('invalid_email');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BOM edge cases
 // ─────────────────────────────────────────────────────────────────────────────
 describe('BOM stripping edge cases', () => {

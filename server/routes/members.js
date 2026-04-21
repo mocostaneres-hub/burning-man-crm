@@ -465,9 +465,36 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       }
     }
 
-    const { rows, headers } = await parseCsvRows(req.file.buffer);
+    const { rows: rawRows, headers: rawHeaders } = await parseCsvRows(req.file.buffer);
+
+    // Normalize every header key: trim → lowercase → spaces→underscores.
+    // This makes the import pipeline completely case-insensitive:
+    //   "NAME"       → "name"
+    //   "PLAYA NAME" → "playa_name"
+    //   "EMAIL"      → "email"
+    // Normalization happens once here so all downstream code sees clean keys.
+    const normalizeKey = (h) => String(h || '').trim().toLowerCase().replace(/\s+/g, '_');
+
+    const headers = rawHeaders.map(normalizeKey);
+    const rows = rawRows.map((rawRow) => {
+      const normalized = {};
+      for (const [k, v] of Object.entries(rawRow)) {
+        normalized[normalizeKey(k)] = v;
+      }
+      return normalized;
+    });
+
+    // Also normalize mapping VALUES so that a frontend mapping like
+    // { name: "NAME" } correctly resolves to the normalized key "name".
+    const normalizedMapping = {};
+    for (const [field, csvCol] of Object.entries(mapping)) {
+      normalizedMapping[field] = csvCol ? normalizeKey(csvCol) : '';
+    }
+
+    // Resolve a canonical field from a normalized row.
+    // Priority: explicit mapping → lowercase fallback that matches the normalized key.
     const getColumn = (row, canonical, fallback) => {
-      const mapped = mapping?.[canonical];
+      const mapped = normalizedMapping?.[canonical];
       const key = mapped || fallback;
       return row?.[key] ?? '';
     };
@@ -489,7 +516,7 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       const tags = tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : [];
       const customFieldValues = {};
       for (const field of camp.rosterCustomFields || []) {
-        const mappedColumn = mapping?.[`cf_${field.key}`];
+        const mappedColumn = normalizedMapping?.[`cf_${field.key}`];
         if (!mappedColumn) continue;
         const rawValue = row?.[mappedColumn];
         if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') continue;
@@ -562,6 +589,9 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       });
     }
 
+    console.log(`ℹ️ [import-csv] Parsed ${rows.length} rows — valid=${validCandidates.length} invalid=${invalidRows.length} skipped=${skippedRows.length}`);
+    console.log(`ℹ️ [import-csv] Normalized headers:`, headers);
+
     if (!confirmImport) {
       return res.json({
         mode: 'preview',
@@ -580,12 +610,17 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
     }
 
     if (toCreate.length === 0) {
+      const allFailed = invalidRows.length > 0 && validCandidates.length === 0;
       return res.json({
         mode: 'confirm',
-        message: 'No new members to import',
+        message: allFailed
+          ? `No members could be imported — ${invalidRows.length} row(s) failed validation. Check that your CSV has "name" and "email" columns with valid values.`
+          : 'No new members to import',
         createdCount: 0,
         skippedCount: skippedRows.length,
-        invalidCount: invalidRows.length
+        invalidCount: invalidRows.length,
+        invalidRows: allFailed ? invalidRows.slice(0, 20) : undefined,
+        normalizedHeaders: allFailed ? headers : undefined
       });
     }
 
