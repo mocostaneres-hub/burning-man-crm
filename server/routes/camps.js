@@ -630,11 +630,39 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       }
     }
     
-    console.log('🔍 [GET /api/camps/public/:slug] Is camp admin?', isCampAdmin, 'Is system admin?', isSystemAdmin);
+    // ── Camp Lead admin-view bypass ────────────────────────────────────────
+    // The `isCampAdmin` check above identifies camp-owner / camp-account
+    // users, but it does NOT cover delegated Camp Leads (personal accounts
+    // with `isCampLead && campLeadCampId` pointing at this camp, or users
+    // flagged `camp-lead` in the active roster). Without this bypass, a
+    // Camp Lead opening the "My Camp" link on a private camp (including
+    // any newly-created SOR camp, which defaults to private) gets a 403
+    // and loses the entry point for changing camp account settings and
+    // login credentials. `canManageCamp` already covers owners, system
+    // admins, and Camp Leads in every variant the codebase supports, so
+    // we delegate to it — keeping this route aligned with the rest of
+    // the camp-management endpoints.
+    let isCampLeadForThisCamp = false;
+    if (req.user && !isCampAdmin && !isSystemAdmin) {
+      try {
+        isCampLeadForThisCamp = await canManageCamp(req, camp._id);
+      } catch (err) {
+        console.warn('⚠️ [GET /api/camps/public/:slug] canManageCamp threw, treating as non-admin:', err?.message);
+        isCampLeadForThisCamp = false;
+      }
+    }
 
-    // Visibility: Camp Lead (owner) and System Admin can always view. Others need public visibility.
-    // Canonical field is isPubliclyVisible; fall back to legacy isPublic for older records.
-    const canViewAsAdmin = isCampAdmin || isSystemAdmin;
+    console.log('🔍 [GET /api/camps/public/:slug] Access flags:', {
+      isCampAdmin,
+      isSystemAdmin,
+      isCampLeadForThisCamp
+    });
+
+    // Visibility: Camp owners, Camp Leads, and System Admins can always
+    // view their own camp profile. Everyone else needs public visibility.
+    // Canonical field is isPubliclyVisible; fall back to legacy isPublic
+    // for older records written before the schema rename.
+    const canViewAsAdmin = isCampAdmin || isSystemAdmin || isCampLeadForThisCamp;
     const isPubliclyVisible = camp.isPubliclyVisible !== undefined
       ? camp.isPubliclyVisible
       : camp.isPublic === true;
