@@ -69,6 +69,19 @@ class ApiService {
         // IMPORTANT: Use exact or narrow prefix matching only.
         // Broad prefixes (e.g. "/camps") can accidentally strip auth headers from protected routes
         // like "/camps/my-camp", causing login loops.
+        //
+        // Three tiers:
+        //   • publicExactEndpoints / publicPrefixEndpoints — strictly public. No
+        //     token is attached even if one exists in localStorage. Use for
+        //     auth-flow endpoints where stale tokens could cause login loops.
+        //   • optionalAuthPrefixEndpoints — the backend's `optionalAuth`
+        //     middleware accepts both anonymous and authenticated requests,
+        //     AND the response differs when the user is authenticated (e.g.
+        //     /camps/public/:slug returns 403 for private camps to
+        //     anonymous users but returns the full profile to the camp's
+        //     owner / Camp Lead / system admin). For these we attach the
+        //     token if present but stay quiet when it isn't, so anonymous
+        //     visitors don't spam a "no token" warning on every request.
         const requestPath = (config.url || '').split('?')[0];
         const publicExactEndpoints = new Set([
           '/auth/register',
@@ -85,17 +98,34 @@ class ApiService {
           '/invites/validate/',
           '/categories',
           '/perks',
-          '/cities',
+          '/cities'
+        ];
+        const optionalAuthPrefixEndpoints = [
           '/camps/public/'
         ];
 
-        // Check if this is a public endpoint
-        const isPublicEndpoint =
+        // Check endpoint classification
+        const isStrictlyPublicEndpoint =
           publicExactEndpoints.has(requestPath) ||
           publicPrefixEndpoints.some((prefix) => requestPath.startsWith(prefix));
+        const isOptionalAuthEndpoint =
+          optionalAuthPrefixEndpoints.some((prefix) => requestPath.startsWith(prefix));
 
-        // Only add token for non-public endpoints
-        if (!isPublicEndpoint) {
+        // Strictly-public endpoints: never attach a token (avoids stale-token login loops).
+        // Optional-auth endpoints: attach if we have one, stay quiet if we don't.
+        // Everything else: attach if we have one, warn if we don't (the endpoint likely requires it).
+        if (isStrictlyPublicEndpoint) {
+          // Ensure public endpoints never carry stale Authorization headers.
+          if (config.headers?.Authorization) {
+            delete config.headers.Authorization;
+          }
+          console.log('🔓 [API Interceptor] Public endpoint - no auth required:', config.url);
+        } else if (isOptionalAuthEndpoint) {
+          const token = localStorage.getItem('token');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        } else {
           const token = localStorage.getItem('token');
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -127,12 +157,6 @@ class ApiService {
           } else {
             console.warn('⚠️ [API Interceptor] No token found - protected endpoint may fail');
           }
-        } else {
-          // Ensure public endpoints never carry stale Authorization headers.
-          if (config.headers?.Authorization) {
-            delete config.headers.Authorization;
-          }
-          console.log('🔓 [API Interceptor] Public endpoint - no auth required:', config.url);
         }
         
         console.log('🔄 [API Interceptor] Request:', config.method?.toUpperCase(), config.url);
