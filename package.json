@@ -10,7 +10,12 @@
     "build": "cd client && npm install && CI=false npm run build && cd .. && mv client/build build",
     "install-all": "npm install && cd client && npm install",
     "start": "node server/index.js",
-    "railway:start": "node server/index.js"
+    "railway:start": "node server/index.js",
+    "test": "jest --testPathPatterns=server/__tests__ --forceExit"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/server/__tests__/**/*.test.js"]
   },
   "keywords": [
     "g8road",
@@ -49,6 +54,7 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.0",
+    "jest": "^30.3.0",
     "nodemon": "^3.0.1"
   }
 }

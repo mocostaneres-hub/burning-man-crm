@@ -35,15 +35,28 @@ const resolveCsvCampId = async (req) => {
 const parseCsvRows = async (fileBuffer) => {
   const rows = [];
   const headers = [];
+
+  // Strip UTF-8 BOM (\xEF\xBB\xBF) that Excel often prepends to CSV exports.
+  // Without this the first column header contains the BOM character, breaking
+  // all column-mapping logic silently.
+  let buf = fileBuffer;
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    buf = buf.slice(3);
+    console.log('ℹ️ [import-csv] Stripped UTF-8 BOM from CSV buffer');
+  }
+
   await new Promise((resolve, reject) => {
     const stream = new PassThrough();
-    stream.end(fileBuffer);
+    stream.end(buf);
     stream
       .pipe(csv())
       .on('headers', (h) => headers.push(...h))
       .on('data', (data) => rows.push(data))
       .on('end', resolve)
-      .on('error', reject);
+      .on('error', (err) => {
+        console.error('❌ [import-csv] csv-parser stream error:', err?.message);
+        reject(err);
+      });
   });
   return { rows, headers };
 };
@@ -584,29 +597,52 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       playaName: item.playaName || '',
       role: item.role === 'lead' ? 'camp-lead' : 'member',
       tags: item.tags || [],
-        customFieldValues: item.customFieldValues || {},
+      customFieldValues: item.customFieldValues || {},
       status: 'roster_only',
       isShiftsOnly: true,
       signupSource: 'shifts_only_invite'
     }));
 
+    // ── Step 1: insert members ───────────────────────────────────────────────
+    console.log(`ℹ️ [import-csv] Step 1 — inserting ${insertDocs.length} member docs`);
     let createdCount = 0;
     let duplicateInsertConflicts = 0;
     try {
       const created = await Member.insertMany(insertDocs, { ordered: false });
       createdCount = created.length;
+      console.log(`✅ [import-csv] Step 1 — insertMany succeeded: ${createdCount} created`);
     } catch (insertError) {
+      // ordered:false → MongoDB sends as many writes as possible and collects errors.
+      // We recover from duplicate-key (E11000 / E11001) errors; anything else is fatal.
       const writeErrors = Array.isArray(insertError?.writeErrors) ? insertError.writeErrors : [];
-      const nonDuplicateErrors = writeErrors.filter((err) => err?.code !== 11000);
-      if (nonDuplicateErrors.length > 0) {
-        throw insertError;
+      const isDuplicateOnlyError = writeErrors.length > 0 &&
+        writeErrors.every((e) => e?.code === 11000 || e?.code === 11001);
+
+      if (!isDuplicateOnlyError && writeErrors.length === 0) {
+        // No writeErrors at all → some other error (CastError, network, etc.)
+        // Log and treat as zero inserts rather than throwing a 500.
+        console.error('❌ [import-csv] Step 1 — insertMany non-bulk error:', {
+          name: insertError?.name,
+          message: insertError?.message,
+          code: insertError?.code,
+        });
+      } else if (!isDuplicateOnlyError) {
+        // There are non-duplicate write errors — log them but don't crash.
+        const nonDupErrors = writeErrors.filter((e) => e?.code !== 11000 && e?.code !== 11001);
+        console.error('❌ [import-csv] Step 1 — insertMany non-duplicate write errors:', nonDupErrors.map((e) => ({ code: e?.code, msg: e?.errmsg })));
       }
 
-      duplicateInsertConflicts = writeErrors.length;
+      // Extract inserted count from the bulk write result.
+      // Mongoose 7.x / MongoDB driver 5.x: error.result.insertedCount
+      // Older drivers:                      error.result.result.nInserted or error.result.nInserted
+      duplicateInsertConflicts = writeErrors.filter((e) => e?.code === 11000 || e?.code === 11001).length;
       createdCount =
-        insertError?.result?.result?.nInserted ||
-        insertError?.result?.nInserted ||
+        insertError?.result?.insertedCount ??
+        insertError?.result?.result?.nInserted ??
+        insertError?.result?.nInserted ??
         (Array.isArray(insertError?.insertedDocs) ? insertError.insertedDocs.length : 0);
+
+      console.log(`⚠️ [import-csv] Step 1 — insertMany partial: createdCount=${createdCount}, duplicates=${duplicateInsertConflicts}`);
 
       for (const writeError of writeErrors) {
         const duplicateEmail = normalizeCsvEmail(
@@ -615,15 +651,15 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
           writeError?.errmsg?.match(/email.*?["']([^"']+)["']/i)?.[1] ||
           ''
         );
-        skippedRows.push({
-          reason: 'skipped_duplicate',
-          email: duplicateEmail || undefined
-        });
+        skippedRows.push({ reason: 'skipped_duplicate', email: duplicateEmail || undefined });
       }
     }
 
+    // ── Step 2: create / fetch roster ────────────────────────────────────────
     if (createdCount > 0) {
+      console.log(`ℹ️ [import-csv] Step 2 — resolving roster for ${createdCount} new members`);
       let rosterForImport = activeRoster;
+
       if (!rosterForImport?._id) {
         try {
           rosterForImport = await db.createRoster({
@@ -634,32 +670,59 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
             isActive: true,
             createdBy: req.user._id
           });
+          console.log(`✅ [import-csv] Step 2 — roster created: ${rosterForImport?._id}`);
         } catch (rosterCreateErr) {
-          // E11000: a roster already became active between our check and create (race or stale record).
-          // Recover by re-fetching the existing active roster.
-          if (rosterCreateErr?.code === 11000) {
-            console.warn('⚠️ [import-csv] E11000 on createRoster — fetching existing active roster as fallback');
+          // Recovery for any error: if a roster already exists (race condition, stale
+          // isArchived field, or any other duplicate/conflict), re-fetch it rather
+          // than surfacing a 500. We only propagate if the fetch also fails.
+          console.warn(`⚠️ [import-csv] Step 2 — createRoster failed (code=${rosterCreateErr?.code}), attempting recovery fetch:`, rosterCreateErr?.message);
+          try {
             rosterForImport = await db.findActiveRoster({ camp: campId });
-          } else {
-            throw rosterCreateErr;
+            if (rosterForImport?._id) {
+              console.log(`✅ [import-csv] Step 2 — recovered existing roster: ${rosterForImport._id}`);
+            } else {
+              console.error('❌ [import-csv] Step 2 — recovery fetch found no active roster; members were inserted but will not be linked to a roster');
+            }
+          } catch (fetchErr) {
+            console.error('❌ [import-csv] Step 2 — roster recovery fetch also failed:', fetchErr?.message);
+            // Continue without a roster rather than returning 500 — members were inserted.
+            rosterForImport = null;
           }
         }
       }
 
+      // ── Step 3: link members to the roster ───────────────────────────────
       if (rosterForImport?._id) {
+        console.log(`ℹ️ [import-csv] Step 3 — linking members to roster ${rosterForImport._id}`);
         const importedEmails = toCreate.map((item) => item.email).filter(Boolean);
         if (importedEmails.length > 0) {
-          const importedMembers = await Member.find({
-            camp: campId,
-            email: { $in: importedEmails }
-          }).select('_id');
-          for (const importedMember of importedMembers) {
-            await db.addMemberToRoster(rosterForImport._id, importedMember._id, req.user._id);
+          let importedMembers = [];
+          try {
+            importedMembers = await Member.find({
+              camp: campId,
+              email: { $in: importedEmails }
+            }).select('_id');
+          } catch (findErr) {
+            console.error('❌ [import-csv] Step 3 — Member.find failed:', findErr?.message);
           }
+
+          let linkedCount = 0;
+          let linkErrorCount = 0;
+          for (const importedMember of importedMembers) {
+            try {
+              await db.addMemberToRoster(rosterForImport._id, importedMember._id, req.user._id);
+              linkedCount += 1;
+            } catch (linkErr) {
+              linkErrorCount += 1;
+              console.error(`❌ [import-csv] Step 3 — addMemberToRoster failed for member ${importedMember._id}:`, linkErr?.message);
+            }
+          }
+          console.log(`✅ [import-csv] Step 3 — linked ${linkedCount} members (${linkErrorCount} errors)`);
         }
       }
     }
 
+    // ── Step 4: activity log ────────────────────────────────────────────────
     await recordActivity('CAMP', campId, req.user._id, 'DATA_ACTION', {
       field: 'rosterImport',
       action: 'import_csv',
@@ -668,6 +731,7 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       invalidCount: invalidRows.length,
       isShiftsOnlyCamp: true
     });
+    console.log(`✅ [import-csv] Done — created=${createdCount} skipped=${skippedRows.length} invalid=${invalidRows.length}`);
     return res.json({
       mode: 'confirm',
       message: 'CSV import completed',
