@@ -1682,11 +1682,8 @@ const MemberRoster: React.FC = () => {
             members={filteredMembers as any}
             canEdit={canEdit}
             canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
-            onEdit={(memberId) => handleStartEdit(memberId)}
             onDelete={(m) => handleDeleteMember(m as any)}
-            onToggleCampLead={(m, curr) => handleCampLeadToggle(m as any, curr)}
-            campLeadLoadingId={campLeadLoading}
-            onReminderSent={fetchMembers}
+            onRefresh={fetchMembers}
           />
         ) : (
         <div ref={rosterTableScrollRef} className="overflow-x-auto">
