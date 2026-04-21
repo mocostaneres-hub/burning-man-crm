@@ -124,12 +124,14 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
         confirm: true,
         mapping
       });
-      setSuccess(
-        `Import complete: ${response.createdCount || 0} created, ${response.skippedCount || 0} skipped, ${response.invalidCount || 0} invalid.`
-      );
+      const parts: string[] = [];
+      if (response.createdCount) parts.push(`${response.createdCount} added`);
+      if (response.updatedCount) parts.push(`${response.updatedCount} updated`);
+      if (response.invalidCount) parts.push(`${response.invalidCount} invalid`);
+      setSuccess(`Import complete: ${parts.length ? parts.join(', ') : 'no changes'}.`);
       if (onImportCompleted) {
         await onImportCompleted({
-          createdCount: response.createdCount || 0,
+          createdCount: (response.createdCount || 0) + (response.updatedCount || 0),
           skippedCount: response.skippedCount || 0,
           invalidCount: response.invalidCount || 0
         });
@@ -233,10 +235,10 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
                 {selectedFile.name}
               </div>
               <div className="text-sm text-gray-700">
-                Parsed: <span className="font-semibold">{preview?.summary?.totalRows || 0}</span> rows | New members:{' '}
-                <span className="font-semibold text-green-700">{preview?.summary?.toCreate || 0}</span> | Invalid:{' '}
-                <span className="font-semibold text-red-700">{preview?.summary?.invalid || 0}</span> | Skipped:{' '}
-                <span className="font-semibold text-orange-700">{preview?.summary?.skipped || 0}</span>
+                Parsed: <span className="font-semibold">{preview?.summary?.totalRows || 0}</span> rows |{' '}
+                New: <span className="font-semibold text-green-700">{preview?.summary?.toCreate || 0}</span> |{' '}
+                Update: <span className="font-semibold text-blue-700">{preview?.summary?.toUpdate || 0}</span> |{' '}
+                Invalid: <span className="font-semibold text-red-700">{preview?.summary?.invalid || 0}</span>
               </div>
             </div>
           )}

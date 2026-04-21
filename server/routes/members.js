@@ -608,27 +608,28 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       existingInDB: [...existingEmailSet],
     });
 
+    // Split valid candidates: new emails → insert, existing emails → update.
+    // We never skip — existing members get their CSV fields refreshed instead.
     const toCreate = [];
+    const toUpdate = [];
     for (const candidate of validCandidates) {
       if (existingEmailSet.has(candidate.email)) {
-        skippedRows.push({
-          reason: 'skipped_duplicate',
-          name: candidate.name,
-          email: candidate.email
-        });
-        continue;
+        toUpdate.push(candidate);
+      } else {
+        toCreate.push(candidate);
       }
-      toCreate.push(candidate);
     }
 
-    // ── TRACE F: pre-insert summary ──────────────────────────────────────────
-    console.log('[CSV-TRACE F] pre-insert', {
+    // ── TRACE F: pre-write summary ────────────────────────────────────────────
+    console.log('[CSV-TRACE F] pre-write', {
       toCreateCount: toCreate.length,
+      toUpdateCount: toUpdate.length,
       toCreateEmails: toCreate.map((c) => c.email),
-      allSkipped: toCreate.length === 0 ? skippedRows : [],
+      toUpdateEmails: toUpdate.map((c) => c.email),
     });
 
-    for (const item of toCreate.slice(0, 10)) {
+    // Preview shows first 10 across both buckets (creates first, then updates).
+    for (const item of [...toCreate, ...toUpdate].slice(0, 10)) {
       preview.push({
         name: item.name,
         email: item.email,
@@ -636,7 +637,8 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
         role: item.role || 'member',
         playaName: item.playaName || '',
         tags: item.tags || [],
-        customFieldValues: item.customFieldValues || {}
+        customFieldValues: item.customFieldValues || {},
+        _action: existingEmailSet.has(item.email) ? 'update' : 'create',
       });
     }
 
@@ -652,6 +654,7 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
           totalRows: rows.length,
           validRows: validCandidates.length,
           toCreate: toCreate.length,
+          toUpdate: toUpdate.length,
           invalid: invalidRows.length,
           skipped: skippedRows.length
         },
@@ -660,14 +663,15 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       });
     }
 
-    if (toCreate.length === 0) {
+    if (toCreate.length === 0 && toUpdate.length === 0) {
       const allFailed = invalidRows.length > 0 && validCandidates.length === 0;
       return res.json({
         mode: 'confirm',
         message: allFailed
           ? `No members could be imported — ${invalidRows.length} row(s) failed validation. Check that your CSV has "name" and "email" columns with valid values.`
-          : 'No new members to import',
+          : 'No valid members found in CSV',
         createdCount: 0,
+        updatedCount: 0,
         skippedCount: skippedRows.length,
         invalidCount: invalidRows.length,
         invalidRows: allFailed ? invalidRows.slice(0, 20) : undefined,
@@ -675,6 +679,7 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       });
     }
 
+    // ── Step 1a: insert new members ──────────────────────────────────────────
     const insertDocs = toCreate.map((item) => ({
       camp: campId,
       name: item.name,
@@ -689,93 +694,95 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       signupSource: 'shifts_only_invite'
     }));
 
-    // ── Step 1 / TRACE G: insert members ────────────────────────────────────
     console.log('[CSV-TRACE G] insert payload', {
       docCount: insertDocs.length,
-      docs: insertDocs.map((d) => ({ camp: d.camp, email: d.email, name: d.name, status: d.status, isShiftsOnly: d.isShiftsOnly })),
+      docs: insertDocs.map((d) => ({ email: d.email, name: d.name })),
     });
-    console.log(`ℹ️ [import-csv] Step 1 — inserting ${insertDocs.length} member docs`);
+    console.log(`ℹ️ [import-csv] Step 1a — inserting ${insertDocs.length} new member docs`);
+
     let createdCount = 0;
     let duplicateInsertConflicts = 0;
-    try {
-      const created = await Member.insertMany(insertDocs, { ordered: false });
-      createdCount = created.length;
-      // ── TRACE H: insert success ──────────────────────────────────────────
-      console.log('[CSV-TRACE H] insertMany succeeded', {
-        createdCount,
-        createdIds: created.map((d) => d._id),
-      });
-      console.log(`✅ [import-csv] Step 1 — insertMany succeeded: ${createdCount} created`);
-    } catch (insertError) {
-      // ordered:false → MongoDB sends as many writes as possible and collects errors.
-      // We recover from duplicate-key (E11000 / E11001) errors; anything else is fatal.
-      const writeErrors = Array.isArray(insertError?.writeErrors) ? insertError.writeErrors : [];
-      const isDuplicateOnlyError = writeErrors.length > 0 &&
-        writeErrors.every((e) => e?.code === 11000 || e?.code === 11001);
 
-      if (!isDuplicateOnlyError && writeErrors.length === 0) {
-        // No writeErrors at all → some other error (CastError, network, etc.)
-        // Log and treat as zero inserts rather than throwing a 500.
-        console.error('❌ [import-csv] Step 1 — insertMany non-bulk error:', {
-          name: insertError?.name,
-          message: insertError?.message,
-          code: insertError?.code,
+    if (insertDocs.length > 0) {
+      try {
+        const created = await Member.insertMany(insertDocs, { ordered: false });
+        createdCount = created.length;
+        console.log('[CSV-TRACE H] insertMany succeeded', { createdCount, ids: created.map((d) => d._id) });
+        console.log(`✅ [import-csv] Step 1a — inserted ${createdCount} members`);
+      } catch (insertError) {
+        const writeErrors = Array.isArray(insertError?.writeErrors) ? insertError.writeErrors : [];
+        const isDuplicateOnlyError = writeErrors.length > 0 &&
+          writeErrors.every((e) => e?.code === 11000 || e?.code === 11001);
+
+        if (!isDuplicateOnlyError && writeErrors.length === 0) {
+          console.error('❌ [import-csv] Step 1a — insertMany non-bulk error:', {
+            name: insertError?.name, message: insertError?.message, code: insertError?.code,
+          });
+        } else if (!isDuplicateOnlyError) {
+          const nonDupErrors = writeErrors.filter((e) => e?.code !== 11000 && e?.code !== 11001);
+          console.error('❌ [import-csv] Step 1a — non-duplicate write errors:', nonDupErrors.map((e) => ({ code: e?.code, msg: e?.errmsg })));
+        }
+
+        duplicateInsertConflicts = writeErrors.filter((e) => e?.code === 11000 || e?.code === 11001).length;
+        createdCount =
+          insertError?.result?.insertedCount ??
+          insertError?.result?.result?.nInserted ??
+          insertError?.result?.nInserted ??
+          (Array.isArray(insertError?.insertedDocs) ? insertError.insertedDocs.length : 0);
+
+        console.log('[CSV-TRACE I] insertMany catch', {
+          errorName: insertError?.name, errorMessage: insertError?.message,
+          writeErrorCount: writeErrors.length, createdCount, duplicateInsertConflicts,
         });
-      } else if (!isDuplicateOnlyError) {
-        // There are non-duplicate write errors — log them but don't crash.
-        const nonDupErrors = writeErrors.filter((e) => e?.code !== 11000 && e?.code !== 11001);
-        console.error('❌ [import-csv] Step 1 — insertMany non-duplicate write errors:', nonDupErrors.map((e) => ({ code: e?.code, msg: e?.errmsg })));
       }
+    }
 
-      // Extract inserted count from the bulk write result.
-      // Mongoose 7.x / MongoDB driver 5.x: error.result.insertedCount
-      // Older drivers:                      error.result.result.nInserted or error.result.nInserted
-      duplicateInsertConflicts = writeErrors.filter((e) => e?.code === 11000 || e?.code === 11001).length;
-      createdCount =
-        insertError?.result?.insertedCount ??
-        insertError?.result?.result?.nInserted ??
-        insertError?.result?.nInserted ??
-        (Array.isArray(insertError?.insertedDocs) ? insertError.insertedDocs.length : 0);
+    // ── Step 1b: update existing members ────────────────────────────────────
+    // Refreshes name, phone, playaName, tags, role, and customFieldValues from
+    // the CSV. Does NOT touch status, user reference, or signupSource.
+    console.log(`ℹ️ [import-csv] Step 1b — updating ${toUpdate.length} existing members`);
+    let updatedCount = 0;
 
-      // ── TRACE I: insert partial/error ────────────────────────────────────
-      console.log('[CSV-TRACE I] insertMany catch block', {
-        errorName: insertError?.name,
-        errorMessage: insertError?.message,
-        errorCode: insertError?.code,
-        writeErrorCount: writeErrors.length,
-        writeErrorCodes: writeErrors.map((e) => e?.code),
-        resultInsertedCount: insertError?.result?.insertedCount,
-        resultNInserted: insertError?.result?.result?.nInserted,
-        createdCount,
-        duplicateInsertConflicts,
-      });
-      console.log(`⚠️ [import-csv] Step 1 — insertMany partial: createdCount=${createdCount}, duplicates=${duplicateInsertConflicts}`);
+    if (toUpdate.length > 0) {
+      const bulkUpdateOps = toUpdate.map((item) => ({
+        updateOne: {
+          filter: { camp: campId, email: item.email },
+          update: {
+            $set: {
+              name: item.name,
+              phone: item.phone || '',
+              playaName: item.playaName || '',
+              tags: item.tags || [],
+              role: item.role === 'lead' ? 'camp-lead' : 'member',
+              customFieldValues: item.customFieldValues || {},
+              isShiftsOnly: true,
+            },
+          },
+        },
+      }));
 
-      for (const writeError of writeErrors) {
-        const duplicateEmail = normalizeCsvEmail(
-          writeError?.err?.op?.email ||
-          writeError?.op?.email ||
-          writeError?.errmsg?.match(/email.*?["']([^"']+)["']/i)?.[1] ||
-          ''
-        );
-        skippedRows.push({ reason: 'skipped_duplicate', email: duplicateEmail || undefined });
+      try {
+        const updateResult = await Member.bulkWrite(bulkUpdateOps, { ordered: false });
+        updatedCount = updateResult.modifiedCount ?? 0;
+        console.log(`✅ [import-csv] Step 1b — updated ${updatedCount} members (matched=${updateResult.matchedCount})`);
+      } catch (updateError) {
+        console.error('❌ [import-csv] Step 1b — bulkWrite error:', updateError?.message);
+        // Non-fatal: log and continue so the insert results aren't lost.
       }
     }
 
     // ── TRACE J: critical guard ──────────────────────────────────────────────
     if (insertDocs.length > 0 && createdCount === 0) {
-      console.error('[CSV-TRACE J] ⚠️ CRITICAL — docs were submitted but createdCount=0', {
-        insertDocCount: insertDocs.length,
-        insertEmails: insertDocs.map((d) => d.email),
+      console.error('[CSV-TRACE J] ⚠️ CRITICAL — docs submitted but createdCount=0', {
+        insertDocCount: insertDocs.length, insertEmails: insertDocs.map((d) => d.email),
         existingInDB: [...existingEmailSet],
-        validCandidateCount: validCandidates.length,
-        invalidRowCount: invalidRows.length,
-        skippedRowCount: skippedRows.length,
       });
     }
 
+    const totalAffected = createdCount + updatedCount;
+
     // ── Step 2: create / fetch roster ────────────────────────────────────────
-    if (createdCount > 0) {
+    if (totalAffected > 0) {
       console.log(`ℹ️ [import-csv] Step 2 — resolving roster for ${createdCount} new members`);
       let rosterForImport = activeRoster;
 
@@ -813,7 +820,9 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       // ── Step 3: link members to the roster ───────────────────────────────
       if (rosterForImport?._id) {
         console.log(`ℹ️ [import-csv] Step 3 — linking members to roster ${rosterForImport._id}`);
-        const importedEmails = toCreate.map((item) => item.email).filter(Boolean);
+        // Include both newly created AND updated members so all of them end up
+        // on the roster regardless of whether they were new or already existed.
+        const importedEmails = [...toCreate, ...toUpdate].map((item) => item.email).filter(Boolean);
         if (importedEmails.length > 0) {
           let importedMembers = [];
           try {
@@ -846,15 +855,17 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       field: 'rosterImport',
       action: 'import_csv',
       createdCount,
+      updatedCount,
       skippedCount: skippedRows.length,
       invalidCount: invalidRows.length,
       isShiftsOnlyCamp: true
     });
-    console.log(`✅ [import-csv] Done — created=${createdCount} skipped=${skippedRows.length} invalid=${invalidRows.length}`);
+    console.log(`✅ [import-csv] Done — created=${createdCount} updated=${updatedCount} invalid=${invalidRows.length}`);
     return res.json({
       mode: 'confirm',
       message: 'CSV import completed',
       createdCount,
+      updatedCount,
       skippedCount: skippedRows.length,
       invalidCount: invalidRows.length,
       duplicateInsertConflicts
