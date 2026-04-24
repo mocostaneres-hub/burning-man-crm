@@ -871,36 +871,45 @@ const TaskManagement: React.FC = () => {
                         <Edit className="w-4 h-4" />
                         Edit
                       </Button>
+                      {/*
+                        Close / Re-Open is available to anyone who can edit
+                        the task: camp management (owners, Camp Leads, sys
+                        admins), current assignees, and watchers. Backend
+                        PUT /api/tasks/:id honours the same rule, so status
+                        toggles go through without a 403. This matches the
+                        product rule "task owners or watchers can close the
+                        task" — only hard deletion stays reserved for camp
+                        management.
+                      */}
+                      {selectedTask.status === 'open' ? (
+                        <Button
+                          onClick={handleCloseTask}
+                          variant="outline"
+                          className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
+                        >
+                          <X className="w-4 h-4" />
+                          Close Task
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleReopenTask}
+                          variant="outline"
+                          className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Re-Open
+                        </Button>
+                      )}
                       {canManageAssignments && (
-                        <>
-                          {selectedTask.status === 'open' ? (
-                            <Button 
-                              onClick={handleCloseTask}
-                              variant="outline"
-                              className="flex items-center gap-2 text-orange-600 border-orange-600 hover:bg-orange-50"
-                            >
-                              <X className="w-4 h-4" />
-                              Close Task
-                            </Button>
-                          ) : (
-                            <Button 
-                              onClick={handleReopenTask}
-                              variant="outline"
-                              className="flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Re-Open
-                            </Button>
-                          )}
-                          <Button
-                            onClick={() => handleDeleteTask(selectedTask._id)}
-                            variant="outline"
-                            className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </Button>
-                        </>
+                        <Button
+                          onClick={() => handleDeleteTask(selectedTask._id)}
+                          variant="outline"
+                          className="flex items-center gap-2 text-red-600 border-red-600 hover:bg-red-50 ml-auto"
+                          title="Only camp admins and Camp Leads can delete tasks."
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </Button>
                       )}
                     </>
                   ) : (
@@ -969,20 +978,45 @@ const TaskManagement: React.FC = () => {
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
                         {rosterMembers.map((member) => {
                           const userId = member.user?._id?.toString();
-                          if (!userId) return null;
+                          // Pending (Invited) members have no linked User doc yet —
+                          // they must follow their invite and sign up before the
+                          // Task model (which stores User refs) can point at them.
+                          const isPending = !userId;
+                          const firstName = member.user?.firstName || '';
+                          const lastName = member.user?.lastName || '';
+                          const playaName = member.user?.playaName || '';
+                          const rowKey = userId || member.memberId || member._id;
                           return (
-                            <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <label
+                              key={rowKey}
+                              className={`flex items-center space-x-3 p-2 rounded ${
+                                isPending
+                                  ? 'opacity-60 cursor-not-allowed'
+                                  : 'hover:bg-gray-50 cursor-pointer'
+                              }`}
+                              title={
+                                isPending
+                                  ? 'Pending sign-up — this member will be assignable after they follow their invite link and create an account.'
+                                  : undefined
+                              }
+                            >
                               <input
                                 type="checkbox"
-                                checked={editTask.assignedTo.includes(userId)}
-                                onChange={() => toggleAssignee(userId)}
-                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                                checked={userId ? editTask.assignedTo.includes(userId) : false}
+                                onChange={() => userId && toggleAssignee(userId)}
+                                disabled={isPending}
+                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary disabled:cursor-not-allowed"
                               />
                               <div className="text-sm">
                                 <div className="font-medium text-gray-900">
-                                  {member.user?.firstName} {member.user?.lastName}
-                                  {member.user?.playaName && (
-                                    <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                  {firstName} {lastName}
+                                  {playaName && (
+                                    <span className="text-gray-500 ml-2">({playaName})</span>
+                                  )}
+                                  {isPending && (
+                                    <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 uppercase tracking-wide">
+                                      Pending sign-up
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -990,8 +1024,8 @@ const TaskManagement: React.FC = () => {
                           );
                         })}
                         {rosterMembers.length === 0 && (
-                          <div className="text-center py-4 text-gray-500">
-                            No roster members found
+                          <div className="text-center py-4 text-gray-500 text-sm">
+                            No roster members yet. Add members to this camp's roster to assign tasks.
                           </div>
                         )}
                       </div>
@@ -1012,20 +1046,42 @@ const TaskManagement: React.FC = () => {
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
                         {rosterMembers.map((member) => {
                           const userId = member.user?._id?.toString();
-                          if (!userId) return null;
+                          const isPending = !userId;
+                          const firstName = member.user?.firstName || '';
+                          const lastName = member.user?.lastName || '';
+                          const playaName = member.user?.playaName || '';
+                          const rowKey = userId || member.memberId || member._id;
                           return (
-                            <label key={userId || member._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <label
+                              key={rowKey}
+                              className={`flex items-center space-x-3 p-2 rounded ${
+                                isPending
+                                  ? 'opacity-60 cursor-not-allowed'
+                                  : 'hover:bg-gray-50 cursor-pointer'
+                              }`}
+                              title={
+                                isPending
+                                  ? 'Pending sign-up — this member will be available as a watcher after they follow their invite link and create an account.'
+                                  : undefined
+                              }
+                            >
                               <input
                                 type="checkbox"
-                                checked={editTask.watchers.includes(userId)}
-                                onChange={() => toggleWatcher(userId)}
-                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                                checked={userId ? editTask.watchers.includes(userId) : false}
+                                onChange={() => userId && toggleWatcher(userId)}
+                                disabled={isPending}
+                                className="rounded border-gray-300 text-custom-primary focus:ring-custom-primary disabled:cursor-not-allowed"
                               />
                               <div className="text-sm">
                                 <div className="font-medium text-gray-900">
-                                  {member.user?.firstName} {member.user?.lastName}
-                                  {member.user?.playaName && (
-                                    <span className="text-gray-500 ml-2">({member.user.playaName})</span>
+                                  {firstName} {lastName}
+                                  {playaName && (
+                                    <span className="text-gray-500 ml-2">({playaName})</span>
+                                  )}
+                                  {isPending && (
+                                    <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 uppercase tracking-wide">
+                                      Pending sign-up
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1033,8 +1089,8 @@ const TaskManagement: React.FC = () => {
                           );
                         })}
                         {rosterMembers.length === 0 && (
-                          <div className="text-center py-4 text-gray-500">
-                            No roster members found
+                          <div className="text-center py-4 text-gray-500 text-sm">
+                            No roster members yet. Add members to this camp's roster to assign watchers.
                           </div>
                         )}
                       </div>
@@ -1165,11 +1221,29 @@ const TaskManagement: React.FC = () => {
                       <option value="">Select a member</option>
                       {rosterMembers.map((member) => {
                         const userId = member.user?._id?.toString();
-                        if (!userId) return null;
+                        const firstName = member.user?.firstName || '';
+                        const lastName = member.user?.lastName || '';
+                        const playaName = member.user?.playaName || '';
+                        if (!userId) {
+                          // Pending members appear in the list but can't be
+                          // picked — <option disabled> is the native way to
+                          // communicate "known to the system, not yet
+                          // actionable" inside a <select>.
+                          return (
+                            <option
+                              key={member.memberId || member._id}
+                              value=""
+                              disabled
+                            >
+                              {firstName} {lastName}
+                              {playaName ? ` (${playaName})` : ''} — pending sign-up
+                            </option>
+                          );
+                        }
                         return (
                           <option key={userId} value={userId}>
-                            {member.user?.firstName} {member.user?.lastName}
-                            {member.user?.playaName ? ` (${member.user.playaName})` : ''}
+                            {firstName} {lastName}
+                            {playaName ? ` (${playaName})` : ''}
                           </option>
                         );
                       })}

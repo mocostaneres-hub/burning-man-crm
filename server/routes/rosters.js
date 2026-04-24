@@ -2283,39 +2283,80 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
       return res.json({ members: [] });
     }
 
-    // Populate member details with better error handling
+    // Populate member details with better error handling.
+    //
+    // IMPORTANT (task-assignment use case):
+    //   Historically we skipped any Member that didn't resolve to a User
+    //   document. That's correct for Full-Membership Rosters where every
+    //   member has a User, but it broke Shifts-Only Rosters: "Invited"
+    //   SOR members don't have a linked User until they follow the invite
+    //   link and sign up, so the task create/edit dropdowns looked empty
+    //   on brand-new SOR camps even when the roster had dozens of
+    //   invitees.
+    //
+    //   We now return ALL roster members. Each entry carries a
+    //   `hasUserAccount` flag so the client can decide how to render
+    //   pending ones (disabled checkbox + "Pending sign-up" hint). The
+    //   synthetic user object uses the Member document's fields so the
+    //   UI still has a name/email to display; `user._id` is null to
+    //   make it unambiguous that there's no User to assign tasks to yet.
     const membersWithDetails = [];
     for (const member of roster.members) {
       try {
-        // First find the member record
         const memberRecord = await db.findMember({ _id: member.member });
         if (!memberRecord) {
           console.warn(`⚠️ [GET /api/rosters/camp/:campId] Member record not found for ID: ${member.member}`);
           continue;
         }
-        
-        // Then find the user record
-        const user = await db.findUser({ _id: memberRecord.user });
-        if (!user) {
-          console.warn(`⚠️ [GET /api/rosters/camp/:campId] User not found for member: ${member.member}`);
-          continue;
+
+        const user = memberRecord.user
+          ? await db.findUser({ _id: memberRecord.user })
+          : null;
+
+        if (user) {
+          membersWithDetails.push({
+            ...member,
+            hasUserAccount: true,
+            memberId: memberRecord._id,
+            user: {
+              _id: user._id,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              profilePhoto: user.profilePhoto,
+              bio: user.bio,
+              playaName: user.playaName,
+              city: user.city,
+              yearsBurned: user.yearsBurned,
+              skills: user.skills
+            }
+          });
+        } else {
+          // Invited / pending sign-up: synthesise a minimum-viable user
+          // shape from the Member doc so the client has something to
+          // render. No _id — assignment requires a real User.
+          const rawName = (memberRecord.name || '').trim();
+          const nameParts = rawName.split(/\s+/).filter(Boolean);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+          membersWithDetails.push({
+            ...member,
+            hasUserAccount: false,
+            memberId: memberRecord._id,
+            user: {
+              _id: null,
+              firstName,
+              lastName,
+              email: memberRecord.email || '',
+              profilePhoto: null,
+              bio: '',
+              playaName: memberRecord.playaName || '',
+              city: '',
+              yearsBurned: 0,
+              skills: Array.isArray(memberRecord.skills) ? memberRecord.skills : []
+            }
+          });
         }
-        
-        membersWithDetails.push({
-          ...member,
-          user: {
-            _id: user._id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            profilePhoto: user.profilePhoto,
-            bio: user.bio,
-            playaName: user.playaName,
-            city: user.city,
-            yearsBurned: user.yearsBurned,
-            skills: user.skills
-          }
-        });
       } catch (memberError) {
         console.error(`❌ [GET /api/rosters/camp/:campId] Error processing member ${member.member}:`, memberError);
         // Continue with next member instead of failing entire request
