@@ -35,6 +35,16 @@ interface GoogleOAuthProps {
   onError: (error: string) => void;
   disabled?: boolean;
   mode?: 'signin' | 'signup'; // For different button text
+  /**
+   * SOR (or standard) invite token from /apply?invite_token=...
+   *
+   * Forwarded to POST /api/oauth/google so the backend can bind the
+   * just-created/just-linked User to the pre-existing Member document and
+   * flip the camp roster's status from "Invited" to "Active". Without this,
+   * sign-up via Google leaves the camp roster permanently stuck on the
+   * pre-signup state.
+   */
+  inviteToken?: string | null;
 }
 
 /**
@@ -60,8 +70,17 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
   onSuccess, 
   onError, 
   disabled = false,
-  mode = 'signin'
+  mode = 'signin',
+  inviteToken = null
 }) => {
+  // Keep the latest inviteToken in a ref so the credential callback (which
+  // is registered with Google's SDK at mount time) reads the current value.
+  // Without the ref the callback would close over the initial null/empty
+  // value because Google Identity Services caches the callback identity.
+  const inviteTokenRef = useRef<string | null>(inviteToken);
+  useEffect(() => {
+    inviteTokenRef.current = inviteToken;
+  }, [inviteToken]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
@@ -171,9 +190,13 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
       console.log('🔄 [GoogleOAuth] Sending ID token to backend for verification...');
 
       // Send ID token to backend for verification
-      // Backend will verify the token and create/update user account
+      // Backend will verify the token and create/update user account.
+      // We also forward the SOR invite token (if any) so the backend can
+      // run acceptInviteForUser and bind the new User to the camp's
+      // pre-existing Member document — see GoogleOAuthProps.inviteToken.
       const apiResponse = await api.post('/oauth/google', {
         idToken: response.credential,
+        ...(inviteTokenRef.current ? { inviteToken: inviteTokenRef.current } : {})
       });
 
       console.log('✅ [GoogleOAuth] Backend response:', apiResponse);

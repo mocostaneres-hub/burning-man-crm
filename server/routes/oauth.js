@@ -5,6 +5,8 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/databaseAdapter');
 const { sendWelcomeEmail } = require('../services/emailService');
 const { normalizeEmail } = require('../utils/emailUtils');
+const { recordActivity } = require('../services/activityLogger');
+const { acceptInviteForUser } = require('../services/inviteAcceptance');
 
 const router = express.Router();
 
@@ -117,6 +119,7 @@ async function verifyGoogleIdToken(idToken) {
 // Response: { token: string, user: User, isNewUser: boolean }
 router.post('/google', [
   body('idToken').notEmpty().withMessage('ID token is required'),
+  body('inviteToken').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -127,7 +130,12 @@ router.post('/google', [
       });
     }
 
-    const { idToken } = req.body;
+    // `inviteToken` is the SOR invite token from /apply?invite_token=...
+    // When present we bind the (possibly just-created) User to the
+    // pre-existing Member and mark the invite as applied. Without this the
+    // OAuth path leaves the camp's roster permanently stuck at "Invited"
+    // for anyone who signs up with Google.
+    const { idToken, inviteToken } = req.body;
 
     // Verify Google ID token (works for web, iOS, Android)
     const googleUser = await verifyGoogleIdToken(idToken);
@@ -239,6 +247,39 @@ router.post('/google', [
       console.log(`✅ [OAuth] Created new user with ID: ${user._id}, slug: ${user.urlSlug || 'none'}`);
     }
 
+    // Process invite token (SOR or standard) — runs for new, returning,
+    // and OAuth-link cases. The helper is idempotent: re-clicking the
+    // same invite link after sign-in will short-circuit on the
+    // already-applied check rather than double-linking.
+    let inviteContext = null;
+    if (inviteToken) {
+      try {
+        const result = await acceptInviteForUser({
+          inviteToken,
+          user,
+          normalizedEmail: normalizedGoogleEmail,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          db,
+          recordActivity
+        });
+        inviteContext = result.inviteContext;
+        if (result.error) {
+          // Soft-warn but DON'T block sign-in: the user has already
+          // authenticated and shouldn't be punished for a stale invite
+          // link. The frontend can re-prompt invite acceptance later if
+          // needed.
+          console.warn('⚠️ [OAuth] Invite acceptance reported issue (sign-in still completes):', result.error);
+        }
+        if (result.linkedShiftsOnly) {
+          console.log(`✅ [OAuth] SOR invite linked: member bound to user ${user._id}`);
+        }
+      } catch (inviteErr) {
+        // Defensive — acceptInviteForUser already swallows internal errors.
+        console.error('❌ [OAuth] Unexpected invite acceptance failure:', inviteErr?.message);
+      }
+    }
+
     // Generate our own JWT token for session management
     // This token works across web and mobile platforms
     const token = generateToken(user._id);
@@ -268,7 +309,8 @@ router.post('/google', [
       message: 'Google authentication successful',
       token,
       user: userResponse,
-      isNewUser
+      isNewUser,
+      inviteContext
     };
     
     console.log('✅ [OAuth] Response payload structure:', {
@@ -276,7 +318,8 @@ router.post('/google', [
       hasToken: !!responsePayload.token,
       hasUser: !!responsePayload.user,
       isNewUser: responsePayload.isNewUser,
-      userEmail: responsePayload.user?.email
+      userEmail: responsePayload.user?.email,
+      hasInviteContext: !!responsePayload.inviteContext
     });
 
     res.json(responsePayload);
@@ -305,7 +348,8 @@ router.post('/apple', [
   body('email').isEmail().normalizeEmail(),
   body('name').optional().trim(),
   body('appleId').notEmpty(),
-  body('profilePicture').optional().isURL()
+  body('profilePicture').optional().isURL(),
+  body('inviteToken').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -313,7 +357,8 @@ router.post('/apple', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, name, appleId, profilePicture } = req.body;
+    // See Google handler for invite-token rationale; Apple flow mirrors it.
+    const { email, name, appleId, profilePicture, inviteToken } = req.body;
     const normalizedAppleEmail = normalizeEmail(email);
 
     // OAuth must be account-type agnostic and support account linking
@@ -385,6 +430,31 @@ router.post('/apple', [
       console.log(`✅ [OAuth] Created new user with ID: ${user._id}, slug: ${user.urlSlug || 'none'}`);
     }
 
+    // Process invite token (parity with Google flow above).
+    let inviteContext = null;
+    if (inviteToken) {
+      try {
+        const result = await acceptInviteForUser({
+          inviteToken,
+          user,
+          normalizedEmail: normalizedAppleEmail,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          db,
+          recordActivity
+        });
+        inviteContext = result.inviteContext;
+        if (result.error) {
+          console.warn('⚠️ [OAuth] Apple invite acceptance reported issue (sign-in still completes):', result.error);
+        }
+        if (result.linkedShiftsOnly) {
+          console.log(`✅ [OAuth] SOR invite linked via Apple: member bound to user ${user._id}`);
+        }
+      } catch (inviteErr) {
+        console.error('❌ [OAuth] Unexpected Apple invite acceptance failure:', inviteErr?.message);
+      }
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
@@ -412,7 +482,8 @@ router.post('/apple', [
       message: 'Apple OAuth successful',
       token,
       user: userResponse,
-      isNewUser
+      isNewUser,
+      inviteContext
     });
 
   } catch (error) {

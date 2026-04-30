@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, Input } from '../../components/ui';
 import apiService from '../../services/api';
 import { useSkills } from '../../hooks/useSkills';
@@ -7,7 +7,13 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const ShiftsOnlyOnboarding: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { refreshUser, user } = useAuth();
+  // Forwarded to the backend so it can run the invite-acceptance helper as
+  // a recovery hook. This flips Member.user → User and the camp roster's
+  // status from "Invited" to "Active" for users whose original signup
+  // (e.g. Google OAuth before the inviteToken was wired) didn't link them.
+  const inviteToken = searchParams.get('invite_token') || searchParams.get('invite');
   const { skills: skillOptions, loading: skillsLoading } = useSkills();
   const [selectedSkills, setSelectedSkills] = useState<string[]>(user?.skills || []);
   const [playaName, setPlayaName] = useState(user?.playaName || '');
@@ -30,7 +36,8 @@ const ShiftsOnlyOnboarding: React.FC = () => {
       await apiService.post('/onboarding/shifts-only-complete', {
         skills: selectedSkills,
         playaName: playaName.trim(),
-        profilePhoto: profilePhoto.trim()
+        profilePhoto: profilePhoto.trim(),
+        ...(inviteToken ? { inviteToken } : {})
       });
       await refreshUser();
       navigate('/my-shifts', { replace: true });

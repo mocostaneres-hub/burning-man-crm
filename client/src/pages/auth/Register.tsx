@@ -326,11 +326,13 @@ const Register: React.FC = () => {
                 onError={handleOAuthError}
                 disabled={oauthLoading || loading}
                 mode="signup"
+                inviteToken={inviteToken}
               />
               <AppleOAuth
                 onSuccess={handleOAuthSuccess}
                 onError={handleOAuthError}
                 disabled={oauthLoading || loading}
+                inviteToken={inviteToken}
               />
             </div>
             <div className="relative my-6">

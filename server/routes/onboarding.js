@@ -315,7 +315,7 @@ router.post('/select-role', [
 // @access  Private
 router.post('/shifts-only-complete', authenticateToken, async (req, res) => {
   try {
-    const { skills = [], playaName = '', profilePhoto = '' } = req.body || {};
+    const { skills = [], playaName = '', profilePhoto = '', inviteToken = null } = req.body || {};
     if (!Array.isArray(skills) || skills.length === 0) {
       return res.status(400).json({ message: 'At least one skill is required' });
     }
@@ -329,6 +329,31 @@ router.post('/shifts-only-complete', authenticateToken, async (req, res) => {
       playaName: String(playaName || '').trim(),
       ...(profilePhoto ? { profilePhoto } : {})
     });
+
+    // RECOVERY HOOK: If the user arrives here with an invite token but their
+    // Member is not yet bound (Member.user is null), run the shared helper to
+    // link them now. This rescues users who signed up via OAuth before the
+    // invite-acceptance bug was fixed — they had a valid User but their
+    // camp's roster kept showing "Invited". Re-running the helper is
+    // idempotent: an already-applied invite returns a soft error and we
+    // fall through to the normal Member lookup below.
+    if (inviteToken) {
+      try {
+        const { acceptInviteForUser } = require('../services/inviteAcceptance');
+        await acceptInviteForUser({
+          inviteToken,
+          user: req.user,
+          normalizedEmail: (user.email || '').trim().toLowerCase(),
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          db,
+          recordActivity
+        });
+      } catch (err) {
+        // Helper already swallows internal errors; this is belt-and-braces.
+        console.warn('[onboarding/shifts-only-complete] inviteAcceptance recovery failed:', err?.message);
+      }
+    }
 
     const Member = require('../models/Member');
     const member = await Member.findOne({

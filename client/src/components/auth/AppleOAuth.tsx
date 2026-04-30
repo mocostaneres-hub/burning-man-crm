@@ -8,9 +8,21 @@ interface AppleOAuthProps {
   onSuccess: (user: any) => void;
   onError: (error: string) => void;
   disabled?: boolean;
+  /**
+   * Optional invite token (SOR or standard). Forwarded to
+   * POST /api/oauth/apple so the backend can link the just-created User
+   * to the camp's pre-existing Member document. See GoogleOAuthProps.inviteToken
+   * for full rationale.
+   */
+  inviteToken?: string | null;
 }
 
-const AppleOAuth: React.FC<AppleOAuthProps> = ({ onSuccess, onError, disabled = false }) => {
+const AppleOAuth: React.FC<AppleOAuthProps> = ({
+  onSuccess,
+  onError,
+  disabled = false,
+  inviteToken = null
+}) => {
   // Check if Apple OAuth is properly configured
   const appleClientId = process.env.REACT_APP_APPLE_CLIENT_ID;
   const isConfigured = appleClientId && appleClientId !== 'your-apple-client-id-here';
@@ -22,12 +34,15 @@ const AppleOAuth: React.FC<AppleOAuthProps> = ({ onSuccess, onError, disabled = 
       // Extract user info from Apple response
       const { email, fullName, user } = response;
       
-      // Send to backend
+      // Send to backend (forward inviteToken when present so SOR roster
+      // can bind the new User → existing Member; see GoogleOAuth handler
+      // for full rationale).
       api.post('/oauth/apple', {
         email: email || user,
         name: fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}` : '',
         appleId: user,
-        profilePicture: '' // Apple doesn't provide profile pictures
+        profilePicture: '', // Apple doesn't provide profile pictures
+        ...(inviteToken ? { inviteToken } : {})
       }).then((apiResponse: any) => {
         if (apiResponse.data.token && apiResponse.data.user) {
           // Store token and user data

@@ -12,6 +12,7 @@ const ImpersonationToken = require('../models/ImpersonationToken');
 const { recordActivity } = require('../services/activityLogger');
 const { normalizeEmail } = require('../utils/emailUtils');
 const { propagateUserEmailChange } = require('../services/emailPropagationService');
+const { acceptInviteForUser } = require('../services/inviteAcceptance');
 
 const router = express.Router();
 
@@ -81,10 +82,16 @@ router.post('/register', [
     let effectiveAccountType = accountType;
     let effectiveRole = 'unassigned';
     let inviteContext = null;
-    let inviteRecord = null;
 
     // Invitation-based signup is always a member-style personal account.
     // Backend enforces this so role/accountType cannot be escalated by client payloads.
+    //
+    // We do a *pre-flight* invite validation here (before creating the user)
+    // because the registration endpoint promises hard 400/403 responses on
+    // bad/used/wrong-email invites — the user shouldn't end up with an
+    // account they can't link. The actual linking work happens after user
+    // creation via `acceptInviteForUser`, which is the same helper the
+    // OAuth routes use; that keeps the two flows in lockstep.
     if (inviteToken) {
       const invite = await db.findInvite({ token: inviteToken });
       if (!invite) {
@@ -97,29 +104,11 @@ router.post('/register', [
       if (invite.invitedUserId || invite.status === 'applied' || invite.appliedBy || invite.appliedAt) {
         return res.status(400).json({ message: 'This invitation has already been used' });
       }
-      inviteRecord = invite;
-
-      const isExpired = invite.expiresAt && new Date(invite.expiresAt) <= new Date();
-      if (isExpired || invite.status === 'expired') {
-        await db.updateInviteById(invite._id, {
-          status: invite.status === 'expired' ? 'sent' : invite.status,
-          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
-        });
-      }
 
       const camp = await db.findCamp({ _id: invite.campId });
       if (!camp) {
         return res.status(400).json({ message: 'Camp not found for this invitation' });
       }
-
-      const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      inviteContext = {
-        token: inviteToken,
-        campId: invite.campId,
-        campSlug,
-        inviteType: invite.inviteType || 'standard',
-        isShiftsOnlyInvite: (invite.inviteType || 'standard') === 'shifts_only'
-      };
 
       effectiveAccountType = 'personal';
       effectiveRole = 'member';
@@ -155,36 +144,23 @@ router.post('/register', [
     // Registration only creates the user account - onboarding will handle camp setup
     const user = await db.createUser(userData);
 
-    // Persist invite/member onboarding tracking.
+    // Persist invite/member onboarding tracking via the shared helper. This
+    // is the same call OAuth (Google/Apple) makes after authenticating the
+    // user, so all signup channels produce identical post-conditions:
+    // Member.user gets linked, status flips to 'active', invite is marked
+    // 'applied', and the camp-side activity log gets an ACCOUNT_CREATED
+    // entry against the Member.
     if (inviteToken) {
-      const invite = inviteRecord || await db.findInvite({ token: inviteToken });
-      if (invite) {
-        const inviteUpdates = {
-          invitedUserId: user._id,
-          accountCreatedAt: invite.accountCreatedAt || new Date(),
-          status: invite.status === 'expired' ? 'sent' : invite.status
-        };
-
-        // For shifts-only invites, activate the pre-created member row and bind to this new user.
-        if ((invite.inviteType || 'standard') === 'shifts_only' && invite.memberId) {
-          await db.updateMember(invite.memberId, {
-            user: user._id,
-            status: 'active',
-            joinedAt: new Date(),
-            invitedAt: invite.createdAt || new Date(),
-            isShiftsOnly: true,
-            signupSource: 'shifts_only_invite',
-            inviteToken: invite.token,
-            email: normalizedEmail,
-            name: `${firstName || ''} ${lastName || ''}`.trim()
-          });
-          inviteUpdates.status = 'applied';
-          inviteUpdates.appliedAt = new Date();
-          inviteUpdates.appliedBy = user._id;
-        }
-
-        await db.updateInviteById(invite._id, inviteUpdates);
-      }
+      const result = await acceptInviteForUser({
+        inviteToken,
+        user,
+        normalizedEmail,
+        firstName,
+        lastName,
+        db,
+        recordActivity
+      });
+      inviteContext = result.inviteContext;
     } else {
       // Fallback: if user signed up without token but had an invite email, start reminder tracking.
       const invites = await db.findInvites({ recipient: normalizedEmail });
@@ -223,7 +199,10 @@ router.post('/register', [
         console.error('⚠️ [Auth] Failed to send welcome email:', emailError);
       });
 
-    // Audit: account signup (logged against the User).
+    // Audit: account signup (logged against the User). The
+    // member-entity-side audit (for SOR signups) is handled inside
+    // acceptInviteForUser so it always fires from a single code path,
+    // regardless of whether the signup came through password or OAuth.
     await recordActivity('MEMBER', user._id, user._id, 'ACCOUNT_CREATED', {
       field: 'account',
       newValue: effectiveAccountType,
@@ -231,31 +210,6 @@ router.post('/register', [
         ? 'User signed up via invitation link'
         : 'User signed up via email/password'
     });
-
-    // If this signup came from a shifts-only invite, ALSO log the event
-    // against the pre-existing Member document so the camp's 360 view has a
-    // continuous history: "manually added → invited → account created" all
-    // appear in chronological order. Without this, signup activity for a
-    // SOR member would only surface under the user-id entity and be missing
-    // from the camp-side member-id view.
-    if (inviteToken) {
-      try {
-        const inviteForAudit = await db.findInvite({ token: inviteToken });
-        if (inviteForAudit?.memberId && (inviteForAudit.inviteType || 'standard') === 'shifts_only') {
-          await recordActivity('MEMBER', inviteForAudit.memberId, user._id, 'ACCOUNT_CREATED', {
-            field: 'account',
-            campId: inviteForAudit.campId,
-            newValue: effectiveAccountType,
-            note: 'Member completed signup via shifts-only invite',
-            inviteId: inviteForAudit._id,
-            linkedUserId: user._id
-          });
-        }
-      } catch (auditErr) {
-        // Non-fatal: activity audit must never break registration.
-        console.error('⚠️ [Auth] Failed to log SOR signup activity against member:', auditErr?.message);
-      }
-    }
 
     res.status(201).json({
       message: 'User registered successfully',

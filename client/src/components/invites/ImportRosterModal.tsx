@@ -114,25 +114,41 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
       setError('Camp ID and file are required');
       return;
     }
+    // CRITICAL: separate "the import API call failed" from "the post-import
+    // refresh callback (e.g. fetchMembers) failed". A successful import
+    // followed by a transient roster-refresh error must NOT show
+    // "Failed to import CSV roster" — the data is already on the server.
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    let response: any;
     try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-      const response = await api.importMembersCsv({
+      response = await api.importMembersCsv({
         file: selectedFile,
         campId,
         confirm: true,
         mapping
       });
-      const parts: string[] = [];
-      if (response.createdCount) parts.push(`${response.createdCount} added`);
-      if (response.updatedCount) parts.push(`${response.updatedCount} updated`);
-      if (response.invitesSent) parts.push(`${response.invitesSent} invite${response.invitesSent === 1 ? '' : 's'} sent`);
-      if (response.invalidCount) parts.push(`${response.invalidCount} invalid`);
-      setSuccess(`Import complete: ${parts.length ? parts.join(', ') : 'no changes'}.`);
-      if (onImportCompleted) {
-        // Use linkedCount (members actually attached to the roster) as the definitive
-        // success signal. Fall back to created+updated if linkedCount is absent.
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to import CSV roster');
+      setLoading(false);
+      return;
+    }
+
+    // Import API succeeded — surface the success message immediately so the
+    // user sees the right outcome even if the parent's onImportCompleted
+    // callback throws (e.g. roster refetch glitch). Building the summary
+    // line first ensures this happens regardless.
+    const parts: string[] = [];
+    if (response.createdCount) parts.push(`${response.createdCount} added`);
+    if (response.updatedCount) parts.push(`${response.updatedCount} updated`);
+    if (response.invitesSent) parts.push(`${response.invitesSent} invite${response.invitesSent === 1 ? '' : 's'} sent`);
+    if (response.invalidCount) parts.push(`${response.invalidCount} invalid`);
+    setSuccess(`Import complete: ${parts.length ? parts.join(', ') : 'no changes'}.`);
+
+    if (onImportCompleted) {
+      try {
         const processedCount =
           response.linkedCount ?? ((response.createdCount || 0) + (response.updatedCount || 0));
         await onImportCompleted({
@@ -140,12 +156,15 @@ const ImportRosterModal: React.FC<ImportRosterModalProps> = ({ isOpen, onClose, 
           skippedCount: response.skippedCount || 0,
           invalidCount: response.invalidCount || 0
         });
+      } catch (refreshErr: any) {
+        // Demoted from a hard error to a console warning + soft notice. The
+        // import itself succeeded; the parent will reconcile the roster
+        // view on its next mount/refresh.
+        console.warn('[ImportRosterModal] onImportCompleted threw after successful import:', refreshErr);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to import CSV roster');
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   return (

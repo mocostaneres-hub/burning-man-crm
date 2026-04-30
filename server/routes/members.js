@@ -943,20 +943,24 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       }
     }
 
-    // ── Step 4: activity log ────────────────────────────────────────────────
-    await recordActivity('CAMP', campId, req.user._id, 'DATA_ACTION', {
-      field: 'rosterImport',
-      action: 'import_csv',
-      createdCount,
-      updatedCount,
-      linkedCount,
-      invitesSent,
-      skippedCount: skippedRows.length,
-      invalidCount: invalidRows.length,
-      isShiftsOnlyCamp: true
-    });
+    // ── Build success payload ────────────────────────────────────────────────
+    // CRITICAL ORDERING: respond to the client *before* the activity-log step.
+    //
+    // Why: the client UI shows "Failed to import CSV roster" whenever the
+    // request resolves as 5xx. Historically the activity-log call lived
+    // *before* `res.json`, so a single Mongo hiccup at audit time would
+    // turn a successful import (members written, roster created, invites
+    // sent) into a user-facing failure. The data was on disk; only the
+    // user's confidence wasn't.
+    //
+    // After this reorder:
+    //   • If any of the data steps (1a–3) genuinely fail before this point,
+    //     the outer catch still produces a clean 500 with `Failed to import
+    //     CSV roster`.
+    //   • If only the activity log misbehaves, we've already responded 200
+    //     with the import summary and the client shows success.
     console.log(`✅ [import-csv] Done — created=${createdCount} updated=${updatedCount} linked=${linkedCount} invitesSent=${invitesSent} invalid=${invalidRows.length}`);
-    return res.json({
+    res.json({
       mode: 'confirm',
       message: 'CSV import completed',
       createdCount,
@@ -967,7 +971,40 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
       invalidCount: invalidRows.length,
       duplicateInsertConflicts
     });
+
+    // ── Step 4: activity log (post-response, fire-and-forget) ────────────────
+    // recordActivity already swallows its own errors but we belt-and-suspender
+    // it here in case anything else throws. Cannot use `return` after this
+    // because the response has already been sent.
+    try {
+      await recordActivity('CAMP', campId, req.user._id, 'DATA_ACTION', {
+        field: 'rosterImport',
+        action: 'import_csv',
+        createdCount,
+        updatedCount,
+        linkedCount,
+        invitesSent,
+        skippedCount: skippedRows.length,
+        invalidCount: invalidRows.length,
+        isShiftsOnlyCamp: true
+      });
+    } catch (auditErr) {
+      console.warn('⚠️ [import-csv] Activity log write failed (non-fatal, response already sent):', auditErr?.message);
+    }
+    return;
   } catch (error) {
+    // Defence in depth: if the response was already sent (e.g. an error
+    // bubbled up from the post-response audit log), we MUST NOT call
+    // res.status() again — Express would crash with "Cannot set headers
+    // after they are sent".
+    if (res.headersSent) {
+      console.error('❌ [import-csv] Post-response error (response already sent):', {
+        message: error?.message,
+        code: error?.code,
+        name: error?.name
+      });
+      return;
+    }
     console.error('❌ [import-csv] Unhandled error:', {
       message: error?.message,
       code: error?.code,
