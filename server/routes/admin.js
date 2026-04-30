@@ -2478,6 +2478,43 @@ router.post('/impersonate', authenticateToken, requireAdmin, [
   }
 });
 
+// @route   POST /api/admin/backfill/sor-member-links
+// @desc    Re-run the SOR Member→User link recovery scan on demand.
+// @access  Private (system admins only — write-modifies all camps' rosters)
+//
+// Use cases:
+//   • A camp owner reports a roster row stuck on "Invited" even though the
+//     user has signed up. The startup pass already runs but a Member that
+//     was created mid-run, or one whose User signed up *after* startup,
+//     might still be orphaned. Hit this endpoint to re-scan immediately.
+//   • Pass `?dryRun=1` to preview which rows *would* be linked without
+//     actually writing — handy when the operator wants to confirm scope
+//     before applying.
+router.post('/backfill/sor-member-links', authenticateToken, requireSystemAdmin, async (req, res) => {
+  try {
+    const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
+    const limit = Math.min(
+      Math.max(Number(req.query.limit) || 5000, 1),
+      20000
+    );
+    const { backfillSorMemberLinks } = require('../startup/backfillSorMemberLinks');
+    const summary = await backfillSorMemberLinks({ dryRun, limit });
+    return res.json({
+      message: dryRun
+        ? 'Dry-run complete — no rows were modified.'
+        : 'SOR member backfill complete.',
+      dryRun,
+      ...summary
+    });
+  } catch (err) {
+    console.error('[POST /api/admin/backfill/sor-member-links] failed:', err);
+    return res.status(500).json({
+      message: 'Backfill failed',
+      detail: err?.message
+    });
+  }
+});
+
 // Log all registered admin routes on startup
 console.log('✅ [Admin Routes] Registered routes:');
 router.stack.forEach((layer) => {

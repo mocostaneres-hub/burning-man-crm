@@ -163,6 +163,17 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] Member index sync failed:', indexError.message);
   }
 
+  // Recovery pass for the OAuth-invite-token bug fixed in 278ef98.
+  // Links orphaned SOR Members (user=null) to the User row that was
+  // created during OAuth signup but never linked back. Idempotent and
+  // strictly additive — see backfillSorMemberLinks.js for guarantees.
+  try {
+    const { backfillSorMemberLinks } = require('./startup/backfillSorMemberLinks');
+    await backfillSorMemberLinks();
+  } catch (backfillError) {
+    console.error('⚠️  [Startup] SOR member link backfill failed:', backfillError.message);
+  }
+
   // Start reminder worker (hourly cadence).
   try {
     const { startOnboardingReminderWorker } = require('./startup/startOnboardingReminderWorker');
