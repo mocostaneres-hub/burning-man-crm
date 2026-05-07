@@ -1339,6 +1339,61 @@ const MemberRoster: React.FC = () => {
     }
   };
 
+  // Collect emails for every roster member whose dues are marked as PAID,
+  // dedupe (case-insensitive), and copy them to the clipboard. FMR-only:
+  // shifts-only rosters do not track dues. The button that calls this
+  // handler is gated on `isFullMembershipRoster`, but we re-check here as
+  // a defense-in-depth guard.
+  const handleCopyPaidMembersEmails = async () => {
+    if (!isFullMembershipRoster) {
+      alert('Copying paid members\u2019 emails is only available for full-membership rosters.');
+      return;
+    }
+
+    const seen = new Set<string>();
+    const emails: string[] = [];
+    members.forEach((member) => {
+      if (!member?.duesPaid) return;
+      const userObj = typeof member.user === 'object' && member.user !== null
+        ? (member.user as { email?: string })
+        : null;
+      const rawEmail = (userObj?.email || '').trim();
+      if (!rawEmail) return;
+      const dedupeKey = rawEmail.toLowerCase();
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      emails.push(rawEmail);
+    });
+
+    if (emails.length === 0) {
+      alert('No dues-paid members with email addresses found on this roster.');
+      return;
+    }
+
+    const joined = emails.join(', ');
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(joined);
+      } else {
+        // Legacy fallback for non-secure contexts (e.g. http://localhost on
+        // older browsers) where the async Clipboard API is unavailable.
+        const textarea = document.createElement('textarea');
+        textarea.value = joined;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      alert(`Copied ${emails.length} dues-paid member email${emails.length === 1 ? '' : 's'} to clipboard.`);
+    } catch (error) {
+      console.error('❌ Error copying paid member emails:', error);
+      alert('Failed to copy emails to clipboard. Please try again.');
+    }
+  };
+
   // Using shared date formatting utility
 
   const formatArrivalDepartureDate = (dateString: string | Date) => {
@@ -1579,6 +1634,22 @@ const MemberRoster: React.FC = () => {
             >
               <span className="text-lg">↓</span>
               Export Roster
+            </Button>
+          )}
+
+          {/* Copy Paid Member Emails - FMR only.
+              Shifts-only rosters do not track dues, so this action is
+              only meaningful on full-membership rosters. */}
+          {rosterId && hasActiveRoster && isFullMembershipRoster && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyPaidMembersEmails}
+              className="flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
+              title="Copy comma-separated emails of all dues-paid members to your clipboard."
+            >
+              <Mail className="w-4 h-4" />
+              Copy Paid Emails
             </Button>
           )}
 
