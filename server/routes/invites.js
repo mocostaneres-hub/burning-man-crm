@@ -8,6 +8,7 @@ const db = require('../database/databaseAdapter');
 const { canAccessCamp, isCampLeadForCamp } = require('../utils/permissionHelpers');
 const { sendInviteEmail } = require('../services/emailService');
 const { recordActivity } = require('../services/activityLogger');
+const { standardFullMembershipInviteBlocksResend } = require('../utils/fullMembershipInviteDuplicate');
 
 const router = express.Router();
 
@@ -299,11 +300,12 @@ router.post('/invites',
       const invitesSent = [];
       const sendErrors = [];
       const existingInvites = await db.findInvites({ campId });
-      const existingRecipients = new Set(
-        existingInvites
-          .map((invite) => (invite?.recipient || '').toString().trim().toLowerCase())
-          .filter(Boolean)
-      );
+      const blockedRecipients = new Set();
+      for (const inv of existingInvites) {
+        if (!standardFullMembershipInviteBlocksResend(inv)) continue;
+        const key = (inv?.recipient || '').toString().trim().toLowerCase();
+        if (key) blockedRecipients.add(key);
+      }
       
       for (const recipient of recipients) {
         try {
@@ -317,11 +319,13 @@ router.post('/invites',
             continue;
           }
 
-          // Prevent duplicate invites for the same camp/email.
-          if (existingRecipients.has(normalizedRecipient)) {
+          // Prevent duplicate full-membership invites for the same camp/email
+          // while an earlier standard invite is still active (not applied/expired).
+          if (blockedRecipients.has(normalizedRecipient)) {
             sendErrors.push({
               recipient: normalizedRecipient,
-              error: 'An invite already exists for this recipient'
+              error:
+                'A full-membership invite is already active for this email. Revoke it or wait until it expires before sending another.'
             });
             continue;
           }
@@ -419,7 +423,7 @@ router.post('/invites',
                 inviteLink,
                 status: 'sent'
               });
-              existingRecipients.add(normalizedRecipient);
+              blockedRecipients.add(normalizedRecipient);
             } catch (emailError) {
               console.error(`❌ Error sending email invitation to ${recipient}:`, emailError);
               // Don't fail the entire request, but mark this invite as failed
@@ -445,7 +449,7 @@ router.post('/invites',
               inviteLink,
               status: 'sent'
             });
-            existingRecipients.add(normalizedRecipient);
+            blockedRecipients.add(normalizedRecipient);
           }
           
         } catch (error) {
