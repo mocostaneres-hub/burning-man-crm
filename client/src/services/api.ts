@@ -916,13 +916,12 @@ class ApiService {
   }
 
   // ── Shifts-Only Roster reminders ──────────────────────────────────────────
-  // Single-member reminder. Backend enforces a 24h cooldown per member and
-  // branches on whether the member has linked a user account (Active) or
-  // not yet (Invited) to send the appropriate email variant.
+  // Invite nudge for members who have not signed up yet. Server skips signed-up
+  // members and respects SOR_ROSTER_REMINDERS_ENABLED plus a 24h cooldown.
   async remindRosterMember(
     rosterId: string,
     memberId: string
-  ): Promise<{ message: string; reminderType: 'shift_signup' | 'invite'; lastReminderAt: string }> {
+  ): Promise<{ message: string; reminderType: 'invite'; lastReminderAt: string }> {
     const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/remind`);
     return response.data;
   }
@@ -939,7 +938,7 @@ class ApiService {
       lastReminderAt?: string;
       nextAllowedAt?: string;
       reason?: string;
-      reminderType?: 'shift_signup' | 'invite';
+      reminderType?: 'invite';
     }>;
   }> {
     const response = await this.api.post(`/rosters/${rosterId}/members/bulk-remind`, { memberIds });

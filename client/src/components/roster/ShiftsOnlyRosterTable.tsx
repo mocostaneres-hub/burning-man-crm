@@ -14,9 +14,11 @@ import apiService from '../../services/api';
  *   • Compute per-row Status (Active = has linked user account; Invited = none).
  *   • Enforce a 24-hour client-side cooldown display for the Remind button,
  *     based on `member.lastReminderAt` from the backend. Server independently
- *     enforces the same cooldown — client display is strictly advisory. The
- *     button label stays "Remind" when disabled; the remaining time is only
- *     surfaced via the tooltip to keep the UI compact.
+ *     enforces the same cooldown — client display is strictly advisory.
+ *   • Remind is only offered for invited rows when `inviteRemindersEnabled` is
+ *     true; signed-up members never get manual reminders. The button label stays
+ *     "Remind" when disabled; the remaining time is only surfaced via the tooltip
+ *     to keep the UI compact.
  *   • Support bulk selection and bulk-remind via the sticky action bar.
  *   • Provide a local Edit modal for changing Playa Name and toggling the
  *     Camp Lead role. The modal is the ONLY place Camp Lead can be changed
@@ -47,6 +49,8 @@ interface Props {
   onDelete: (member: SorMemberRow) => void;
   /** Called after any mutation (reminder, edit, camp-lead change) to let the parent refresh roster data. */
   onRefresh?: () => void;
+  /** From GET /rosters/active: server allows invite nudges only when SOR_ROSTER_REMINDERS_ENABLED=true. */
+  inviteRemindersEnabled?: boolean;
 }
 
 function formatCooldownRemaining(lastReminderAt: string | Date | null | undefined): string | null {
@@ -264,7 +268,8 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   canEdit,
   canAssignCampLead,
   onDelete,
-  onRefresh
+  onRefresh,
+  inviteRemindersEnabled = false
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reminderLoadingIds, setReminderLoadingIds] = useState<Set<string>>(new Set());
@@ -281,6 +286,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
       const status = deriveStatus(m);
       const overriddenReminderAt = localReminderOverrides[m._id] || memberLastReminderAt(m);
       const cooldownText = formatCooldownRemaining(overriddenReminderAt);
+      const canRemindInvited = status === 'invited' && inviteRemindersEnabled && !cooldownText;
       return {
         member: m,
         index,
@@ -291,10 +297,10 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
         shiftCount: memberShiftCount(m),
         lastReminderAt: overriddenReminderAt,
         cooldownText,
-        canRemind: !cooldownText
+        canRemind: canRemindInvited
       };
     });
-  }, [members, localReminderOverrides]);
+  }, [members, localReminderOverrides, inviteRemindersEnabled]);
 
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.member._id));
   const anySelected = selectedIds.size > 0;
@@ -402,7 +408,12 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
               size="sm"
               className="flex items-center gap-1"
               onClick={handleBulkRemind}
-              disabled={bulkRemindLoading}
+              disabled={bulkRemindLoading || !inviteRemindersEnabled}
+              title={
+                !inviteRemindersEnabled
+                  ? 'SOR invite reminders are turned off. Set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable.'
+                  : undefined
+              }
             >
               <Bell className="w-4 h-4" />
               {bulkRemindLoading ? 'Sending…' : `Remind ${selectedIds.size} selected`}
@@ -450,7 +461,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {rows.map((row) => {
-              const { member, index, status, name, playaName, skills, shiftCount, cooldownText } = row;
+              const { member, index, status, name, playaName, skills, shiftCount, cooldownText, canRemind } = row;
               const memberId = member._id;
               const realUserId = member.member?.user?._id || (typeof member.member?.user === 'string' ? member.member.user : null);
               const contact360Link = realUserId
@@ -541,13 +552,15 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                         size="sm"
                         className="flex items-center gap-1"
                         onClick={() => handleRemindOne(memberId)}
-                        disabled={!row.canRemind || isReminderLoading}
+                        disabled={!canRemind || isReminderLoading}
                         title={
                           cooldownText
                             ? `Already reminded — next allowed in ${cooldownText}`
                             : status === 'active'
-                              ? 'Send a reminder to sign up for shifts'
-                              : 'Send a friendly reminder of the original invite'
+                              ? 'Reminders are not sent after a member has signed up'
+                              : !inviteRemindersEnabled
+                                ? 'SOR invite reminders are turned off (set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable).'
+                                : 'Send a friendly reminder of the original invite'
                         }
                       >
                         <Bell className="w-3 h-3" />
