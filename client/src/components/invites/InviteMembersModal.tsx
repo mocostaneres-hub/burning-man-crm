@@ -152,9 +152,17 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
         campId
       });
 
-      const { summary } = response;
+      const { summary, errors: sendErrors } = response;
       if (summary.failed > 0) {
-        setError(`${summary.sent} invites sent successfully, ${summary.failed} skipped/failed`);
+        const detail =
+          Array.isArray(sendErrors) && sendErrors.length > 0
+            ? sendErrors.map((e: { recipient?: string; error?: string }) => `${e.recipient || '?'}: ${e.error || 'unknown error'}`).join('; ')
+            : '';
+        setError(
+          detail
+            ? `${summary.sent} invites sent successfully, ${summary.failed} skipped/failed — ${detail}`
+            : `${summary.sent} invites sent successfully, ${summary.failed} skipped/failed`
+        );
       } else {
         setSuccess(`Successfully sent ${summary.sent} email invites.`);
       }
