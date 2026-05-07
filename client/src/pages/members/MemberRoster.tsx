@@ -315,6 +315,8 @@ const MemberRoster: React.FC = () => {
   // Roster rename state
   const [rosterName, setRosterName] = useState<string>('Member Roster');
   const [rosterId, setRosterId] = useState<string | null>(null);
+  /** SOR manual invite reminders — mirrors GET /rosters/active `sorInviteRemindersEnabled`. */
+  const [sorInviteRemindersEnabled, setSorInviteRemindersEnabled] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [newRosterName, setNewRosterName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
@@ -740,6 +742,7 @@ const MemberRoster: React.FC = () => {
         setMembers([]);
         setRosterId(null);
         setRosterName('Member Roster');
+        setSorInviteRemindersEnabled(false);
         setLoading(false);
         return;
       }
@@ -747,6 +750,9 @@ const MemberRoster: React.FC = () => {
       // Roster exists
       setHasActiveRoster(true);
       const roster = rosterResponse;
+      setSorInviteRemindersEnabled(
+        roster?.rosterType === 'shifts_only' && Boolean((roster as any).sorInviteRemindersEnabled)
+      );
       const derivedMode = deriveRosterMode(roster);
       setRosterModeState(derivedMode);
       if (derivedMode.mode === 'shifts_only' || derivedMode.mode === 'full_membership') {
@@ -848,6 +854,7 @@ const MemberRoster: React.FC = () => {
       console.error('❌ [MemberRoster] Unexpected error fetching roster:', err);
       setError('An unexpected error occurred. Please try again.');
       setHasActiveRoster(false);
+      setSorInviteRemindersEnabled(false);
       setRosterModeState({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
     } finally {
       setLoading(false);
@@ -1755,6 +1762,7 @@ const MemberRoster: React.FC = () => {
             canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
             onDelete={(m) => handleDeleteMember(m as any)}
             onRefresh={fetchMembers}
+            inviteRemindersEnabled={sorInviteRemindersEnabled}
           />
         ) : (
         <div ref={rosterTableScrollRef} className="overflow-x-auto">

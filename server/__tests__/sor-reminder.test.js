@@ -9,7 +9,7 @@
  *
  * Coverage:
  *   - 24h cooldown enforcement (REMINDER_COOLDOWN_MS math)
- *   - "Active vs Invited" routing (which email variant is built)
+ *   - Invited-only sends when SOR_ROSTER_REMINDERS_ENABLED=true (mirrors prod)
  *   - Email body builders (subject/text/html content guarantees)
  *   - Persisted fields (Member.findByIdAndUpdate called with lastReminderAt)
  *   - Skip reasons (no email) and failure paths (email send throws)
@@ -20,9 +20,19 @@
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Inlined helpers — copied verbatim from server/routes/rosters.js.
+// Inlined helpers — keep in sync with server/routes/rosters.js SOR reminder block.
 // ─────────────────────────────────────────────────────────────────────────────
+const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
+
 const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+const STORED_SOR_REMINDER_ENV = process.env.SOR_ROSTER_REMINDERS_ENABLED;
+beforeAll(() => {
+  process.env.SOR_ROSTER_REMINDERS_ENABLED = 'true';
+});
+afterAll(() => {
+  process.env.SOR_ROSTER_REMINDERS_ENABLED = STORED_SOR_REMINDER_ENV;
+});
 
 function buildInvitedReminderEmail(campName, signupUrl) {
   const subject = `Friendly reminder: ${campName} invited you to sign up for shifts`;
@@ -36,22 +46,6 @@ function buildInvitedReminderEmail(campName, signupUrl) {
       <p>Hi! This is a friendly reminder that <strong>${campName}</strong> invited you to sign up for volunteer shifts. Your invite link is still active and we'd love to have you join.</p>
       <p><a href="${signupUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Create Account and View Shifts</a></p>
       <p style="color: #666; font-size: 13px;">If you've already signed up, you can ignore this email.</p>
-    </div>
-  `;
-  return { subject, text, html };
-}
-
-function buildActiveReminderEmail(campName, shiftsUrl) {
-  const subject = `Reminder: Sign up for shifts at ${campName}`;
-  const text =
-    `Hi! ${campName} still has volunteer shifts available and we'd love your help ` +
-    `filling them.\n\nBrowse and sign up: ${shiftsUrl}`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Reminder: Sign up for shifts at ${campName}</h2>
-      <p>Hi! <strong>${campName}</strong> still has volunteer shifts available and we'd love your help filling them.</p>
-      <p><a href="${shiftsUrl}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Browse and Sign Up for Shifts</a></p>
-      <p style="color: #666; font-size: 13px;">You can sign up for multiple shifts — every hour helps.</p>
     </div>
   `;
   return { subject, text, html };
@@ -75,6 +69,20 @@ async function sendSorReminder({
 }) {
   const now = new Date();
 
+  if (!member.email) {
+    return { memberId: member._id, status: 'skipped', reason: 'Member has no email address' };
+  }
+
+  const policyReason = getSorManualReminderSkipReason(member);
+  if (policyReason) {
+    return {
+      memberId: member._id,
+      email: member.email,
+      status: 'skipped',
+      reason: policyReason
+    };
+  }
+
   if (member.lastReminderAt) {
     const elapsed = now.getTime() - new Date(member.lastReminderAt).getTime();
     if (elapsed < REMINDER_COOLDOWN_MS) {
@@ -91,46 +99,36 @@ async function sendSorReminder({
     }
   }
 
-  if (!member.email) {
-    return { memberId: member._id, status: 'skipped', reason: 'Member has no email address' };
-  }
-
   const campName = camp.name || camp.campName || 'Your camp';
-  const isActive = !!member.user;
   let emailPayload;
 
   try {
-    if (isActive) {
-      const shiftsUrl = `${clientUrl}/my-shifts?campId=${camp._id}`;
-      emailPayload = buildActiveReminderEmail(campName, shiftsUrl);
-    } else {
-      let token = member.inviteToken;
-      if (!token) {
-        token = genToken();
-        await createInvite({
-          campId: camp._id,
-          senderId: reqUser._id,
-          recipient: member.email,
-          method: 'email',
-          token,
-          status: 'sent',
-          inviteType: 'shifts_only',
-          signupSource: 'shifts_only_invite',
-          memberId: member._id
-        });
-        await Member.findByIdAndUpdate(member._id, {
-          $set: {
-            inviteToken: token,
-            invitedAt: now,
-            status: 'invited',
-            isShiftsOnly: true,
-            signupSource: 'shifts_only_invite'
-          }
-        });
-      }
-      const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
-      emailPayload = buildInvitedReminderEmail(campName, signupUrl);
+    let token = member.inviteToken;
+    if (!token) {
+      token = genToken();
+      await createInvite({
+        campId: camp._id,
+        senderId: reqUser._id,
+        recipient: member.email,
+        method: 'email',
+        token,
+        status: 'sent',
+        inviteType: 'shifts_only',
+        signupSource: 'shifts_only_invite',
+        memberId: member._id
+      });
+      await Member.findByIdAndUpdate(member._id, {
+        $set: {
+          inviteToken: token,
+          invitedAt: now,
+          status: 'invited',
+          isShiftsOnly: true,
+          signupSource: 'shifts_only_invite'
+        }
+      });
     }
+    const signupUrl = `${clientUrl}/apply?invite_token=${token}`;
+    emailPayload = buildInvitedReminderEmail(campName, signupUrl);
 
     await sendEmail({
       to: member.email,
@@ -144,12 +142,10 @@ async function sendSorReminder({
     try {
       await recordActivity('MEMBER', member._id, reqUser._id, 'REMINDER_SENT', {
         campId: camp._id,
-        reminderType: isActive ? 'shift_signup' : 'invite',
+        reminderType: 'invite',
         field: 'reminder',
         recipient: member.email,
-        note: isActive
-          ? 'Reminder to claim a shift sent to active SOR member'
-          : 'Friendly re-invite reminder sent to pending SOR member'
+        note: 'Friendly re-invite reminder sent to pending SOR member'
       });
     } catch {
       /* non-fatal */
@@ -159,7 +155,7 @@ async function sendSorReminder({
       memberId: member._id,
       email: member.email,
       status: 'sent',
-      reminderType: isActive ? 'shift_signup' : 'invite',
+      reminderType: 'invite',
       lastReminderAt: now
     };
   } catch (err) {
@@ -230,25 +226,6 @@ describe('buildInvitedReminderEmail', () => {
   test('text includes the signup URL', () => {
     const { text } = buildInvitedReminderEmail('Camp Dusty', 'https://g8road.com/apply?invite_token=T');
     expect(text).toContain('https://g8road.com/apply?invite_token=T');
-  });
-});
-
-describe('buildActiveReminderEmail', () => {
-  test('subject targets shift signup', () => {
-    const { subject } = buildActiveReminderEmail('Camp Dusty', 'https://x.com');
-    expect(subject).toMatch(/sign up for shifts/i);
-    expect(subject).toContain('Camp Dusty');
-  });
-
-  test('html links to the shifts URL', () => {
-    const { html } = buildActiveReminderEmail('Camp Dusty', 'https://g8road.com/my-shifts?campId=camp-1');
-    expect(html).toContain('href="https://g8road.com/my-shifts?campId=camp-1"');
-  });
-
-  test('does NOT use "Friendly reminder" language (that is the invited variant)', () => {
-    const { subject, html } = buildActiveReminderEmail('Camp Dusty', 'https://x.com');
-    expect(subject).not.toMatch(/friendly reminder/i);
-    expect(html).not.toMatch(/friendly reminder/i);
   });
 });
 
@@ -350,7 +327,7 @@ describe('sendSorReminder — active vs invited routing', () => {
     expect(call.text).toContain('/apply?invite_token=tok-123');
   });
 
-  test('Active member (has user) → shift signup reminder with /my-shifts link', async () => {
+  test('Active member (has user) → skipped (no post-signup reminders)', async () => {
     const member = makeMemberFixture({ user: 'user-99' });
     const sendEmail = jest.fn(async () => ({}));
     const result = await sendSorReminder({
@@ -362,12 +339,29 @@ describe('sendSorReminder — active vs invited routing', () => {
       clientUrl: 'https://g8road.com'
     });
 
-    expect(result.status).toBe('sent');
-    expect(result.reminderType).toBe('shift_signup');
-    const call = sendEmail.mock.calls[0][0];
-    expect(call.subject).toMatch(/sign up for shifts/i);
-    expect(call.subject).not.toMatch(/friendly reminder/i);
-    expect(call.html).toContain('/my-shifts?campId=camp-xyz');
+    expect(result.status).toBe('skipped');
+    expect(result.reason).toMatch(/signed up/i);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  test('invited member skipped when SOR_ROSTER_REMINDERS_ENABLED is unset', async () => {
+    delete process.env.SOR_ROSTER_REMINDERS_ENABLED;
+    try {
+      const member = makeMemberFixture({ user: null, inviteToken: 'tok-123' });
+      const sendEmail = jest.fn(async () => ({}));
+      const result = await sendSorReminder({
+        member,
+        camp: makeCampFixture(),
+        Member: makeMemberStub(),
+        reqUser: makeReqUser(),
+        sendEmail
+      });
+      expect(result.status).toBe('skipped');
+      expect(result.reason).toMatch(/disabled/i);
+      expect(sendEmail).not.toHaveBeenCalled();
+    } finally {
+      process.env.SOR_ROSTER_REMINDERS_ENABLED = 'true';
+    }
   });
 
   test('Invited member without inviteToken → regenerates token and persists it', async () => {
@@ -425,7 +419,7 @@ describe('sendSorReminder — edge cases', () => {
   });
 
   test('sendEmail throws → returns failed status and does NOT stamp lastReminderAt', async () => {
-    const member = makeMemberFixture({ user: 'user-1' });
+    const member = makeMemberFixture({ user: null, inviteToken: 'tok-fail' });
     const sendEmail = jest.fn(async () => { throw new Error('SMTP timeout'); });
     const Member = makeMemberStub();
     const result = await sendSorReminder({
@@ -444,7 +438,7 @@ describe('sendSorReminder — edge cases', () => {
   });
 
   test('successful send stamps lastReminderAt exactly once', async () => {
-    const member = makeMemberFixture({ user: 'user-1' });
+    const member = makeMemberFixture({ user: null, inviteToken: 'tok-ok' });
     const sendEmail = jest.fn(async () => ({}));
     const Member = makeMemberStub();
     await sendSorReminder({
