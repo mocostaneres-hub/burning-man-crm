@@ -1704,6 +1704,9 @@ const VolunteerShifts: React.FC = () => {
               <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                 <p className="font-medium">Choose a default invite strategy</p>
                 <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = place specific members onto a shift now.</p>
+                <p className="text-xs mt-1">
+                  <strong>Heads up:</strong> shifts set to <em>Invite to sign up (all)</em> or <em>(leads)</em> stay open to anyone who joins the roster later — they'll automatically be eligible without you re-inviting. <em>Assign directly</em> stays locked to the people you pick now.
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant={globalInviteMode === 'ALL_ROSTER' ? 'primary' : 'outline'} size="sm" onClick={() => setGlobalInviteMode('ALL_ROSTER')}>
@@ -1742,6 +1745,17 @@ const VolunteerShifts: React.FC = () => {
                         Assign directly
                       </label>
                     </div>
+                    <p className="text-[11px] text-gray-600 mb-2">
+                      {shift.assignmentMode === 'ALL_ROSTER' && (
+                        <>Future members who join your roster will automatically have access to sign up — no re-invitation required.</>
+                      )}
+                      {shift.assignmentMode === 'LEADS_ONLY' && (
+                        <>Future members promoted to Camp Lead will automatically have access. Plain members do not.</>
+                      )}
+                      {shift.assignmentMode === 'SELECTED_USERS' && (
+                        <>Only the people you pick below can sign up. Members who join the roster later will <strong>not</strong> be added.</>
+                      )}
+                    </p>
                     <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
                       {rosterMembers
                         .map((member) => {

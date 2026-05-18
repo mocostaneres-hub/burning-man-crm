@@ -331,6 +331,18 @@ router.post('/events', authenticateToken, async (req, res) => {
       shifts: shifts.map(shift => {
         const shiftStart = parsePdtDateTime(shift.date, shift.startTime);
         const shiftEnd = parsePdtDateTime(shift.date, shift.endTime, { referenceStartIso: shiftStart });
+        // Validate assignmentMode at the boundary so we never persist a
+        // mode the eligibility logic doesn't recognise. Anything unknown
+        // (or absent) falls back to ALL_ROSTER, which mirrors the
+        // historical behaviour and is the most permissive — it never
+        // accidentally locks a roster member out, only opens access.
+        const incomingMode = shift.assignmentMode;
+        const persistedMode =
+          incomingMode === 'ALL_ROSTER' ||
+          incomingMode === 'LEADS_ONLY' ||
+          incomingMode === 'SELECTED_USERS'
+            ? incomingMode
+            : 'ALL_ROSTER';
         return {
           title: shift.title,
           description: shift.description || '',
@@ -343,7 +355,10 @@ router.post('/events', authenticateToken, async (req, res) => {
             : [],
           memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
           currentSignups: 0,
-          createdBy: req.user._id
+          createdBy: req.user._id,
+          // Durable rule used by the eligibility check + the late-joiner
+          // auto-assign helper. See Event.js shiftSchema for semantics.
+          assignmentMode: persistedMode
         };
       })
     });
@@ -1380,6 +1395,18 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
         const shiftStart = parsePdtDateTime(shift.date, shift.startTime);
         const shiftEnd = parsePdtDateTime(shift.date, shift.endTime, { referenceStartIso: shiftStart });
 
+        // assignmentMode rules: take it from the request when present and
+        // valid, otherwise preserve the existing shift's mode so an edit
+        // that omits the field doesn't accidentally widen access.
+        const incomingMode = shift.assignmentMode;
+        const isValidMode =
+          incomingMode === 'ALL_ROSTER' ||
+          incomingMode === 'LEADS_ONLY' ||
+          incomingMode === 'SELECTED_USERS';
+        const persistedMode = isValidMode
+          ? incomingMode
+          : (existingShift?.assignmentMode || 'ALL_ROSTER');
+
         return {
           _id: shiftId,
           eventId: eventId,
@@ -1394,6 +1421,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
             : [],
           memberIds: existingShift ? existingShift.memberIds : [],
           currentSignups: existingShift ? (existingShift.currentSignups || 0) : 0,
+          assignmentMode: persistedMode,
           createdBy: existingShift ? existingShift.createdBy : req.user._id,
           createdAt: existingShift ? existingShift.createdAt : new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -2080,11 +2108,85 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
       userId: userId
     });
 
-    // Must be assigned to sign up.
+    // Eligibility check.
+    //
+    // Historical model: a ShiftAssignment row was the *only* eligibility
+    // proof, written at create/edit time as a snapshot of the roster.
+    // Late-joiners therefore couldn't sign up for ALL_ROSTER shifts
+    // until somebody re-edited the event.
+    //
+    // New model: ShiftAssignment is the cached audience for SELECTED_USERS
+    // and a write-through cache for ALL_ROSTER / LEADS_ONLY. The durable
+    // rule lives on the embedded shift's `assignmentMode`. So:
+    //   • If a row exists → eligible (covers all 3 modes, fast path).
+    //   • Else, evaluate the live rule against the user's roster row.
+    //     For ALL_ROSTER, anyone on the live roster is eligible.
+    //     For LEADS_ONLY, only Camp Leads.
+    //     For SELECTED_USERS, the absence of a row means ineligible —
+    //     we never widen a hand-picked audience.
+    //
+    // When the live rule grants access, lazily materialise the
+    // assignment row so subsequent reads (My Shifts, assignee lists)
+    // see them without re-running the fallback.
     const assignment = await ShiftAssignment.findOne({ shiftId: targetShift._id, userId }).lean();
+    let liveAssignmentJustCreated = false;
     if (!assignment) {
-      return res.status(403).json({ message: 'You are not assigned to this shift' });
+      const ruleMode = targetShift.assignmentMode || 'ALL_ROSTER';
+
+      // We already know the user is on the active roster (userMember
+      // resolved above) — figure out whether they're a lead so we can
+      // evaluate LEADS_ONLY properly. Roster-level lead-ness wins over
+      // member-level role flag, mirroring getCampRosterUsers().
+      let userIsLead = false;
+      try {
+        for (const entry of activeRoster.members || []) {
+          const entryMemberId = entry.member?._id || entry.member;
+          if (!entryMemberId || entryMemberId.toString() !== userMember._id.toString()) continue;
+          userIsLead = entry.isCampLead === true || ['lead', 'admin'].includes((entry.role || '').toLowerCase());
+          break;
+        }
+      } catch (e) {
+        userIsLead = false;
+      }
+
+      const liveEligible =
+        ruleMode === 'ALL_ROSTER' ||
+        (ruleMode === 'LEADS_ONLY' && userIsLead);
+
+      if (!liveEligible) {
+        return res.status(403).json({ message: 'You are not assigned to this shift' });
+      }
+
+      // Materialise the row so the rest of the system (assignee lists,
+      // notifications, audit trail) treats this user the same as any
+      // other assignee. Best-effort: a duplicate-key error here is
+      // benign (race with another writer), anything else we log and
+      // continue — the signup itself is what matters.
+      try {
+        await ShiftAssignment.updateOne(
+          { shiftId: targetShift._id, userId },
+          {
+            $setOnInsert: {
+              shiftId: targetShift._id,
+              eventId: targetEvent._id,
+              campId: targetEvent.campId,
+              userId,
+              assignedBy: userId, // self — late-joiner self-asserted via live rule
+              assignedAt: new Date(),
+              source: 'ROSTER_AUTO_ADD',
+              modeSnapshot: ruleMode
+            }
+          },
+          { upsert: true }
+        );
+        liveAssignmentJustCreated = true;
+      } catch (upsertErr) {
+        if (upsertErr?.code !== 11000) {
+          console.warn('[shift signup] live-rule lazy assignment write failed:', upsertErr?.message);
+        }
+      }
     }
+    void liveAssignmentJustCreated; // available for future telemetry hooks
 
     // Check if user is already signed up.
     const existingSignup = await ShiftSignup.findOne({ shiftId: targetShift._id, userId }).lean();

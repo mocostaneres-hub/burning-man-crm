@@ -962,7 +962,7 @@ const MemberRoster: React.FC = () => {
     
     try {
       setDeleteLoading(true);
-      await api.delete(`/camps/${campId}/roster/member/${memberToDelete._id}`);
+      const { data } = await api.delete(`/camps/${campId}/roster/member/${memberToDelete._id}`);
       
       // Update local state to remove the member
       setMembers(prev => prev.filter(m => m._id !== memberToDelete._id));
@@ -970,8 +970,7 @@ const MemberRoster: React.FC = () => {
       setDeleteDialogOpen(false);
       setMemberToDelete(null);
       
-      // Show success message
-      alert('Member removed from roster and application reset successfully!');
+      alert(data?.message || 'Member removed from roster successfully.');
     } catch (error) {
       console.error('Error deleting member:', error);
       alert('Failed to remove member from roster');
@@ -2643,8 +2642,17 @@ const MemberRoster: React.FC = () => {
                 </p>
                 <ul className="text-yellow-700 text-xs mt-1 ml-4 list-disc">
                   <li>Remove the member from the active roster</li>
-                  <li>Reset their application status to allow re-application</li>
-                  <li>Allow them to apply again to this camp immediately</li>
+                  {isFullMembershipRoster ? (
+                    <>
+                      <li>Move their application to the undecided queue</li>
+                      <li>Send them a friendly note that they can reach out when ready to commit</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>Reset their application status</li>
+                      <li>Release their shift assignments</li>
+                    </>
+                  )}
                 </ul>
               </div>
 

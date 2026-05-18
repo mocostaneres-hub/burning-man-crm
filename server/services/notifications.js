@@ -336,6 +336,56 @@ async function sendApprovalNotification(applicant, camp) {
 }
 
 /**
+ * Notify applicant they were moved to the undecided queue after roster removal.
+ */
+async function sendRosterRemovalUndecidedNotification(applicant, camp, memberName) {
+  const campName = getCampDisplayName(camp);
+  const greetingName = memberName || applicant.firstName || 'there';
+  const messageBody =
+    `Hi ${greetingName}, we've moved you to the undecided queue for now. ` +
+    `When you're ready to commit to the camp, just let us know and we'll be happy to help with the next steps.`;
+
+  const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">🏕️ ${campName}</h1>
+          <p style="color: white; margin: 10px 0 0 0;">Application Update</p>
+        </div>
+
+        <div style="padding: 20px; background: #f9f9f9;">
+          <p style="color: #333; margin-top: 0;">${messageBody}</p>
+          <p style="color: #555;">No worries — this isn't a final decision. Reach out whenever you're ready and we'll pick things up from there.</p>
+        </div>
+      </div>
+    `;
+
+  const textContent = messageBody;
+
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      console.warn('⚠️  Cannot send email - RESEND_API_KEY not configured');
+      return;
+    }
+
+    await sendEmail({
+      to: applicant.email,
+      subject: `${campName} — moved to undecided for now`,
+      html: htmlContent,
+      text: textContent,
+      fromName: getCampSenderName(camp)
+    });
+
+    console.log(`✅ Undecided-queue notification sent to ${applicant.email} via Resend`);
+  } catch (error) {
+    console.error('❌ Error sending undecided-queue notification:', error);
+    if (error.response) {
+      console.error('Resend error details:', error.response.body);
+    }
+  }
+}
+
+
+/**
  * Send rejection notification to applicant
  */
 async function sendRejectionNotification(applicant, camp) {
@@ -542,5 +592,7 @@ The G8Road Team
 module.exports = {
   sendApplicationNotification,
   sendApplicationStatusNotification,
+  sendRosterRemovalUndecidedNotification,
+  sendRejectionNotification,
   resolveApplicationNotificationRecipients
 };

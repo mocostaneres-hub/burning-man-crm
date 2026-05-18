@@ -174,6 +174,20 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] SOR member link backfill failed:', backfillError.message);
   }
 
+  // Stamp `assignmentMode` on legacy Event.shifts[] that pre-date the
+  // dynamic-eligibility refactor. Inferred from existing modeSnapshot
+  // rows; defaults to ALL_ROSTER when no inference is possible. Safe
+  // and idempotent — re-running after the backlog clears is a no-op.
+  try {
+    const { backfillShiftAssignmentMode } = require('./startup/backfillShiftAssignmentMode');
+    const stats = await backfillShiftAssignmentMode();
+    if (stats.shiftsUpdated > 0 || stats.errors > 0) {
+      console.log('🛠️  [Startup] backfillShiftAssignmentMode →', stats);
+    }
+  } catch (modeBackfillError) {
+    console.error('⚠️  [Startup] Shift assignmentMode backfill failed:', modeBackfillError.message);
+  }
+
   // Start reminder worker (hourly cadence).
   try {
     const { startOnboardingReminderWorker } = require('./startup/startOnboardingReminderWorker');

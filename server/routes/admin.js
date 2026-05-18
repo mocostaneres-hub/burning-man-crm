@@ -2515,6 +2515,42 @@ router.post('/backfill/sor-member-links', authenticateToken, requireSystemAdmin,
   }
 });
 
+// @route   POST /api/admin/backfill/shift-assignment-mode
+// @desc    Stamp `assignmentMode` on legacy Event.shifts[] documents.
+// @access  Private (system admins only — touches every camp's events)
+//
+// Use cases:
+//   • After deploying the dynamic-eligibility refactor, run this to
+//     normalise existing shifts so My Shifts and the live-rule
+//     fallback have a definitive answer for "what mode is this shift?".
+//     The startup pass already runs; this endpoint is for ad-hoc
+//     re-runs (e.g. an event imported via a one-off migration).
+//   • Pass `?dryRun=1` to log decisions without writing.
+router.post('/backfill/shift-assignment-mode', authenticateToken, requireSystemAdmin, async (req, res) => {
+  try {
+    const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
+    const limit = Math.min(
+      Math.max(Number(req.query.limit) || 5000, 1),
+      20000
+    );
+    const { backfillShiftAssignmentMode } = require('../startup/backfillShiftAssignmentMode');
+    const summary = await backfillShiftAssignmentMode({ dryRun, limit });
+    return res.json({
+      message: dryRun
+        ? 'Dry-run complete — no shifts were modified.'
+        : 'Shift assignmentMode backfill complete.',
+      dryRun,
+      ...summary
+    });
+  } catch (err) {
+    console.error('[POST /api/admin/backfill/shift-assignment-mode] failed:', err);
+    return res.status(500).json({
+      message: 'Backfill failed',
+      detail: err?.message
+    });
+  }
+});
+
 // Log all registered admin routes on startup
 console.log('✅ [Admin Routes] Registered routes:');
 router.stack.forEach((layer) => {

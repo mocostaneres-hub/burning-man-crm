@@ -858,6 +858,36 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
             }
           }
           console.log(`✅ [import-csv] Step 3 — linked ${linkedCount} members (${linkErrorCount} errors)`);
+
+          // Late-joiner shift auto-assign for re-imported members that
+          // already have a User account (e.g. somebody who previously
+          // signed up via invite, then got re-imported via CSV). Pure
+          // SOR imports of brand-new members skip this block (no
+          // member.user yet) and will get auto-assigned when they
+          // accept their invite — see services/inviteAcceptance.js.
+          try {
+            const linkedMembers = await Member.find({
+              _id: { $in: importedMembers.map((m) => m._id) },
+              user: { $ne: null }
+            }).select('_id user').lean();
+            if (linkedMembers.length > 0) {
+              const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
+              for (const m of linkedMembers) {
+                try {
+                  await autoAssignRosterUserToOpenShifts({
+                    campId,
+                    userId: m.user,
+                    assignedBy: req.user._id,
+                    isLead: false
+                  });
+                } catch (perMemberErr) {
+                  console.warn(`[import-csv] auto-assign failed for ${m._id}:`, perMemberErr?.message);
+                }
+              }
+            }
+          } catch (autoAssignErr) {
+            console.warn('[import-csv] late-joiner auto-assign batch failed:', autoAssignErr?.message);
+          }
         }
       }
 

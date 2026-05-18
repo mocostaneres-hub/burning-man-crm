@@ -206,6 +206,26 @@ async function acceptInviteForUser({
       inviteUpdates.appliedAt = new Date();
       inviteUpdates.appliedBy = user._id;
       linkedShiftsOnly = true;
+
+      // Late-joiner auto-assign: now that the new User is part of the
+      // active roster, give them eligibility for any open ALL_ROSTER
+      // (and LEADS_ONLY, if they're a lead — invitees default to plain
+      // member, so we pass false here) shifts. SELECTED_USERS shifts
+      // are intentionally skipped by the helper so an explicit audience
+      // is never quietly widened. Wrapped in its own try/catch because
+      // a notification-service hiccup must not roll back the link we
+      // just made.
+      try {
+        const { autoAssignRosterUserToOpenShifts } = require('./shiftService');
+        await autoAssignRosterUserToOpenShifts({
+          campId: invite.campId,
+          userId: user._id,
+          assignedBy: user._id,
+          isLead: false
+        });
+      } catch (assignErr) {
+        console.warn('[acceptInviteForUser] late-joiner shift assign failed:', assignErr?.message);
+      }
     } catch (err) {
       console.warn('[acceptInviteForUser] SOR member link failed:', err?.message);
       // Fall through and at least record invitedUserId — the cleanup script

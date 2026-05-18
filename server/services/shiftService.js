@@ -145,28 +145,70 @@ async function getShiftAssignmentState({ shiftId, campId }) {
   };
 }
 
-async function autoAssignRosterUserToOpenShifts({ campId, userId, assignedBy }) {
-  const [events, existingAssignments, signups] = await Promise.all([
-    db.findEvents({ campId }),
-    ShiftAssignment.find({ campId, userId }).select('shiftId').lean(),
-    ShiftSignup.find({ campId }).select('shiftId').lean()
-  ]);
-
-  const alreadyAssigned = new Set(existingAssignments.map((item) => normalizeId(item.shiftId)).filter(Boolean));
-  const signupCountByShift = new Map();
-  for (const signup of signups) {
-    const shiftId = normalizeId(signup.shiftId);
-    signupCountByShift.set(shiftId, (signupCountByShift.get(shiftId) || 0) + 1);
-  }
+/**
+ * Pure helper: given the events for a camp, the user's already-existing
+ * assignment shiftIds, signup counts, optional mode-inference map, and
+ * the user's lead-ness, decide which new ShiftAssignment rows should
+ * be created.
+ *
+ * Extracted so the eligibility rules are unit-testable without spinning
+ * up MongoDB. See `autoAssignRosterUserToOpenShifts` below for the
+ * production caller.
+ *
+ * Returns plain objects ready for ShiftAssignment.insertMany. Order
+ * matches event/shift iteration order, which makes the function
+ * deterministic for tests.
+ */
+function decideAssignmentsForJoiner({
+  events,
+  alreadyAssignedShiftIds,
+  signupCountByShift,
+  inferredModeByShift = new Map(),
+  campId,
+  userId,
+  assignedBy,
+  isLead
+}) {
+  const alreadyAssigned = alreadyAssignedShiftIds instanceof Set
+    ? alreadyAssignedShiftIds
+    : new Set(alreadyAssignedShiftIds || []);
+  const signups = signupCountByShift instanceof Map
+    ? signupCountByShift
+    : new Map(Object.entries(signupCountByShift || {}));
 
   const newAssignments = [];
   for (const event of events || []) {
     for (const shift of event.shifts || []) {
       const shiftId = normalizeId(shift._id);
-      if (!shiftId || alreadyAssigned.has(shiftId)) continue;
+      if (!shiftId) continue;
 
-      const signupCount = signupCountByShift.get(shiftId) || 0;
+      // Skip shifts the user is already assigned to — re-running this
+      // helper must be idempotent.
+      if (alreadyAssigned.has(shiftId)) continue;
+
+      // Capacity gate. Full shifts are not auto-extended; a late-joiner
+      // can still see/sign-up via the live-rule fallback if a spot
+      // opens up later, but we don't pre-create a row that can't be
+      // honoured.
+      const signupCount = signups.get(shiftId) || 0;
       if (signupCount >= (shift.maxSignUps || 0)) continue;
+
+      // Mode resolution: explicit on the shift wins, then inferred
+      // from existing modeSnapshot rows (legacy data), then default
+      // ALL_ROSTER.
+      const mode =
+        shift.assignmentMode ||
+        inferredModeByShift.get(shiftId) ||
+        'ALL_ROSTER';
+
+      // Hand-picked audiences are never widened. If a camp lead
+      // explicitly chose SELECTED_USERS, late-joiners stay out.
+      if (mode === 'SELECTED_USERS') continue;
+
+      // LEADS_ONLY only includes Camp Leads. A new plain member gets
+      // nothing here; if they're later promoted to lead, the role-
+      // grant code path can re-trigger this helper.
+      if (mode === 'LEADS_ONLY' && !isLead) continue;
 
       newAssignments.push({
         shiftId,
@@ -175,10 +217,107 @@ async function autoAssignRosterUserToOpenShifts({ campId, userId, assignedBy }) 
         userId: normalizeId(userId),
         assignedBy: normalizeId(assignedBy),
         source: 'ROSTER_AUTO_ADD',
-        modeSnapshot: 'ALL_ROSTER'
+        modeSnapshot: mode
       });
     }
   }
+  return newAssignments;
+}
+
+/**
+ * Late-joiner hook. Run this whenever a member is added to the active
+ * roster (CSV import, manual add, FMR application approval, SOR invite
+ * acceptance) so that ALL_ROSTER and (where applicable) LEADS_ONLY
+ * shifts pick up the new user automatically.
+ *
+ * Mode awareness — IMPORTANT for backward compatibility with shifts
+ * that explicitly chose specific assignees:
+ *   • ALL_ROSTER     — always assign.
+ *   • LEADS_ONLY     — assign only when isLead=true.
+ *   • SELECTED_USERS — never auto-add. Expanding a hand-picked audience
+ *                      after the fact would silently violate the camp
+ *                      lead's intent.
+ *
+ * Legacy shifts pre-dating the assignmentMode field are inferred from
+ * the modeSnapshot stamped on existing ShiftAssignment rows for that
+ * shift; the startup backfill will normalise them eventually, but this
+ * runtime fallback keeps things sane between deploy and backfill.
+ *
+ * @param {Object} params
+ * @param {string} params.campId
+ * @param {string} params.userId   — the joining roster member's User _id
+ * @param {string} params.assignedBy — actor recorded on the audit row
+ * @param {boolean} [params.isLead=false] — pass true when the joining
+ *   member is a Camp Lead so LEADS_ONLY shifts pick them up too.
+ */
+async function autoAssignRosterUserToOpenShifts({ campId, userId, assignedBy, isLead = false }) {
+  const [events, existingAssignments, signups] = await Promise.all([
+    db.findEvents({ campId }),
+    ShiftAssignment.find({ campId, userId }).select('shiftId').lean(),
+    ShiftSignup.find({ campId }).select('shiftId').lean()
+  ]);
+
+  const alreadyAssignedShiftIds = new Set(existingAssignments.map((item) => normalizeId(item.shiftId)).filter(Boolean));
+  const signupCountByShift = new Map();
+  for (const signup of signups) {
+    const shiftId = normalizeId(signup.shiftId);
+    signupCountByShift.set(shiftId, (signupCountByShift.get(shiftId) || 0) + 1);
+  }
+
+  // Build the inferred-mode map for legacy shifts (no assignmentMode
+  // field yet). Mirrors the backfill's logic: dominant modeSnapshot
+  // among the shift's existing assignments wins, with ALL_ROSTER
+  // fallback when no rows exist.
+  const shiftsMissingMode = [];
+  for (const event of events || []) {
+    for (const shift of event.shifts || []) {
+      if (!shift.assignmentMode) {
+        const sid = normalizeId(shift._id);
+        if (sid) shiftsMissingMode.push(sid);
+      }
+    }
+  }
+  const inferredModeByShift = new Map();
+  if (shiftsMissingMode.length > 0) {
+    try {
+      const sampleRows = await ShiftAssignment.find({
+        shiftId: { $in: shiftsMissingMode }
+      })
+        .select('shiftId modeSnapshot')
+        .lean();
+      const tally = new Map();
+      for (const row of sampleRows) {
+        const sid = normalizeId(row.shiftId);
+        if (!tally.has(sid)) tally.set(sid, {});
+        const counts = tally.get(sid);
+        const k = row.modeSnapshot || 'ALL_ROSTER';
+        counts[k] = (counts[k] || 0) + 1;
+      }
+      for (const [sid, counts] of tally.entries()) {
+        const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+        inferredModeByShift.set(sid, dominant);
+      }
+    } catch (err) {
+      // Inference is best-effort. Falling through with an empty map
+      // means legacy shifts default to ALL_ROSTER — the safe direction
+      // (opens access; SELECTED_USERS still can't be widened because
+      // that requires either the field or explicit snapshot rows,
+      // which would have already populated `alreadyAssignedShiftIds`
+      // for users who were originally picked).
+      console.warn('[autoAssignRosterUserToOpenShifts] mode inference failed:', err?.message);
+    }
+  }
+
+  const newAssignments = decideAssignmentsForJoiner({
+    events,
+    alreadyAssignedShiftIds,
+    signupCountByShift,
+    inferredModeByShift,
+    campId,
+    userId,
+    assignedBy,
+    isLead
+  });
 
   if (!newAssignments.length) return { created: 0 };
 
@@ -221,6 +360,35 @@ async function buildMyShiftsPayload(userId) {
   const camps = await db.findCamps({ _id: { $in: campIds } });
   const campMap = new Map((camps || []).map((camp) => [normalizeId(camp._id), camp]));
 
+  // Determine, per camp, whether the user is a Camp Lead. This is the
+  // input to the LEADS_ONLY live rule below. We tolerate a missing
+  // active roster (some camps may not have one yet).
+  const userIdStr = userId.toString();
+  const isLeadByCamp = new Map();
+  await Promise.all(
+    campIds.map(async (campId) => {
+      try {
+        const roster = await db.findActiveRoster({ camp: campId });
+        if (!roster?.members?.length) {
+          isLeadByCamp.set(campId, false);
+          return;
+        }
+        let lead = false;
+        for (const entry of roster.members) {
+          const memberDoc = entry.member;
+          const userRef = memberDoc?.user;
+          if (!userRef) continue;
+          if (normalizeId(userRef) !== userIdStr) continue;
+          lead = entry.isCampLead === true || ['lead', 'admin'].includes((entry.role || '').toLowerCase());
+          break;
+        }
+        isLeadByCamp.set(campId, lead);
+      } catch (e) {
+        isLeadByCamp.set(campId, false);
+      }
+    })
+  );
+
   const eventsByCamp = await Promise.all(campIds.map((campId) => db.findEvents({ campId })));
   const events = eventsByCamp.flat();
   const allShiftIds = [];
@@ -254,7 +422,6 @@ async function buildMyShiftsPayload(userId) {
       .filter(Boolean)
   );
 
-  const userIdStr = userId.toString();
   const coworkerIds = new Set();
   const availableShifts = [];
   const signedUpShifts = [];
@@ -266,9 +433,41 @@ async function buildMyShiftsPayload(userId) {
     signupByShift.get(shiftId).push(normalizeId(signup.userId));
   }
 
-  // Show shifts in My Shifts if the user is assigned OR already signed up.
-  // This prevents signed-up shifts from disappearing if assignments are edited.
-  const relevantShiftIds = new Set([...assignedShiftIds, ...signedShiftIds]);
+  // Live-rule expansion. Layered on top of the assignment-row source
+  // of truth so SELECTED_USERS shifts are never silently widened:
+  //
+  //   • A shift is "live-eligible" iff its assignmentMode is
+  //     ALL_ROSTER, OR LEADS_ONLY and the user is a Camp Lead.
+  //   • Legacy shifts without assignmentMode are treated as
+  //     ALL_ROSTER (matches the historical default of
+  //     resolveAssignmentCandidates and the createShiftAssignments
+  //     fallback). This is the only safe inference here because My
+  //     Shifts is read-only — it can't read modeSnapshot from a row
+  //     that doesn't exist for this user yet.
+  //
+  // Note we do NOT auto-write ShiftAssignment rows from a list endpoint
+  // — keeping reads side-effect-free. Materialisation happens lazily at
+  // signup time, where it's needed for capacity tracking and audit.
+  const liveEligibleShiftIds = new Set();
+  for (const [shiftId, indexed] of shiftIndex.entries()) {
+    const mode = indexed.shift.assignmentMode || 'ALL_ROSTER';
+    if (mode === 'ALL_ROSTER') {
+      liveEligibleShiftIds.add(shiftId);
+    } else if (mode === 'LEADS_ONLY' && isLeadByCamp.get(indexed.campId)) {
+      liveEligibleShiftIds.add(shiftId);
+    }
+    // SELECTED_USERS: rely strictly on assignedShiftIds.
+  }
+
+  // Show shifts in My Shifts if the user is assigned, signed up, OR
+  // live-eligible. Live-eligibility ensures late-joiners see shifts
+  // that pre-date their roster membership without waiting for an
+  // explicit re-assignment write.
+  const relevantShiftIds = new Set([
+    ...assignedShiftIds,
+    ...signedShiftIds,
+    ...liveEligibleShiftIds
+  ]);
   for (const shiftId of relevantShiftIds) {
     const indexed = shiftIndex.get(shiftId);
     if (!indexed) continue;
@@ -345,5 +544,6 @@ module.exports = {
   createShiftAssignments,
   getShiftAssignmentState,
   autoAssignRosterUserToOpenShifts,
+  decideAssignmentsForJoiner,
   buildMyShiftsPayload
 };

@@ -1179,6 +1179,26 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
       console.log(`ℹ️ [manual-add] Invite skipped (${skipReason}) for member ${memberRecord._id}`);
     }
 
+    // Late-joiner shift auto-assign (parity with FMR application approval +
+    // SOR invite acceptance). Only fires when the Member is already linked
+    // to a User — i.e. an FMR / cross-camp manual add. SOR-style invitees
+    // get their auto-assign at the moment they accept the invite (handled
+    // inside services/inviteAcceptance.js), because at THIS point they
+    // have no User document yet.
+    if (memberRecord.user) {
+      try {
+        const memberUserId = memberRecord.user?._id || memberRecord.user;
+        await autoAssignRosterUserToOpenShifts({
+          campId: camp._id,
+          userId: memberUserId,
+          assignedBy: req.user._id,
+          isLead: false
+        });
+      } catch (assignErr) {
+        console.warn(`[manual-add] auto-assign shifts failed for member ${memberRecord._id}:`, assignErr?.message);
+      }
+    }
+
     step = 'record_activity';
     await recordActivity('MEMBER', memberRecord._id, req.user._id, 'RESOURCE_ASSIGNED', {
       field: 'roster',

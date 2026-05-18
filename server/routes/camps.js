@@ -6,6 +6,9 @@ const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
+const { applyRosterRemovalStatusUpdates, resolveMemberUserId } = require('../services/rosterMemberRemoval');
+const { createNotification } = require('../services/notificationService');
+const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 const { SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 
@@ -1582,7 +1585,7 @@ router.post('/:campId/roster/create', authenticateToken, async (req, res) => {
 });
 
 // @route   DELETE /api/camps/:campId/roster/member/:memberId
-// @desc    Remove member from roster and reset their application for re-application
+// @desc    Remove member from roster; full-membership camps move applicant to undecided queue
 // @access  Private (Camp admins/leads only)
 router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req, res) => {
   try {
@@ -1603,7 +1606,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     if (!member) {
       return res.status(404).json({ message: 'Member not found' });
     }
-    const memberUserId = member.user?._id?.toString?.() || member.user?.toString?.() || member.user;
+    const memberUserId = resolveMemberUserId(member);
 
     // Find the active roster for this camp
     const activeRoster = await db.findActiveRoster({ camp: campId });
@@ -1646,41 +1649,45 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
       }
     }
 
-    // Step 2: Mark all related member docs as rejected so they don't appear as active roster members.
-    for (const relatedMember of (relatedMemberDocs || [member])) {
-      await db.updateMember(relatedMember._id, {
-        status: 'rejected',
-        reviewedAt: new Date(),
-        reviewedBy: req.user._id,
-        reviewNotes: 'Removed from roster - moved to rejected queue'
-      });
-    }
-
-    // Step 3: Find and reset the corresponding application record
-    const application = await db.findMemberApplication({ 
-      applicant: member.user, 
-      camp: campId,
-      // Get the current year's application
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), 0, 1), // Start of current year
-        $lt: new Date(new Date().getFullYear() + 1, 0, 1) // Start of next year
-      }
+    const removalResult = await applyRosterRemovalStatusUpdates({
+      db,
+      camp,
+      member,
+      relatedMemberDocs: relatedMemberDocs || [member],
+      activeRoster,
+      reviewedBy: req.user._id
     });
 
-    if (application) {
-      // Keep application visible in Rejected queue after roster removal.
-      await db.updateMemberApplication(application._id, {
-        status: 'rejected',
-        reviewedAt: new Date(),
-        reviewedBy: req.user._id,
-        reviewNotes: 'Application moved to rejected after roster removal',
-        // Remove the member linkage to allow fresh application
-        memberId: null
-      });
+    if (memberUserId && removalResult.queue === 'undecided') {
+      try {
+        const applicant = await db.findUser({ _id: memberUserId });
+        const applicantName = applicant?.firstName || 'there';
+        await createNotification({
+          recipient: memberUserId,
+          actor: req.user._id,
+          campId: camp._id,
+          type: NOTIFICATION_TYPES.APPLICATION_STATUS_UPDATED,
+          title: `${camp.name || camp.campName || 'Camp'} update`,
+          message:
+            `Hi ${applicantName}, we've moved you to the undecided queue for now. ` +
+            `When you're ready to commit to the camp, just let us know and we'll be happy to help with the next steps.`,
+          link: '/applications/my',
+          metadata: {
+            queue: 'undecided',
+            reason: 'roster_removal'
+          }
+        });
+      } catch (notificationError) {
+        console.error('⚠️ Failed to create in-app undecided-queue notification:', notificationError);
+      }
     }
 
-    res.json({ 
-      message: 'Member removed from roster and application reset successfully',
+    res.json({
+      message: removalResult.queue === 'undecided'
+        ? 'Member removed from roster and moved to the undecided queue'
+        : 'Member removed from roster and application reset successfully',
+      queue: removalResult.queue,
+      applicationStatus: removalResult.applicationStatus,
       canReapply: true,
       resetYear: new Date().getFullYear()
     });
