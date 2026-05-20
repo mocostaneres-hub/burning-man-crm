@@ -1,11 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { COOKIE_PREFERENCES_EVENT } from '../../contexts/CookieConsentContext';
 
 interface FooterProps {
   className?: string;
 }
 
 const Footer: React.FC<FooterProps> = ({ className = '' }) => {
+  const handleManageCookies = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(COOKIE_PREFERENCES_EVENT));
+    }
+  };
+
   return (
     <footer className={`bg-gray-900 text-white py-8 ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -64,6 +71,15 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
                 <a href="mailto:info@g8road.com" className="text-gray-300 hover:text-white transition-colors">
                   Contact Us
                 </a>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={handleManageCookies}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
+                  Cookie Preferences
+                </button>
               </li>
             </ul>
           </div>

@@ -142,9 +142,10 @@ const PrivacyPolicy: React.FC = () => {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Cookies and Tracking</h2>
             <p className="text-gray-700 leading-relaxed">
-              We use cookies and similar technologies to enhance your experience, analyze usage patterns, 
-              and provide personalized content. You can control cookie settings through your browser 
-              preferences.
+              We use essential cookies to keep the platform secure and to maintain sign-in sessions. Optional
+              categories (such as analytics and functional third-party services) are only enabled after consent
+              where required by law. You can review or change these preferences at any time through the
+              &quot;Cookie Preferences&quot; link in the footer.
             </p>
           </section>
 

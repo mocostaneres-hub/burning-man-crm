@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
+import { CookieConsentProvider, useCookieConsent } from './contexts/CookieConsentContext';
 import Navbar from './components/layout/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
@@ -135,223 +136,233 @@ const CampRouteRedirect: React.FC<{ route: string }> = ({ route }) => {
   return <Navigate to={`${newPath}${location.search || ''}`} replace />;
 };
 
+const AppShell: React.FC = () => {
+  const { canUseAnalytics } = useCookieConsent();
+
+  return (
+    <Router>
+      <div className="min-h-screen bg-custom-bg">
+        <ConditionalNavbar />
+        <ConditionalMain>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/apply" element={<ApplyInviteRedirect />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/impersonate" element={<Impersonate />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/onboarding/select-role" element={
+              <ProtectedRoute>
+                <SelectRole />
+              </ProtectedRoute>
+            } />
+            <Route path="/onboarding/shifts-only" element={
+              <ProtectedRoute requirePersonalAccount>
+                <ShiftsOnlyOnboarding />
+              </ProtectedRoute>
+            } />
+            {/* Legacy dashboard route - redirects based on account type */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <DashboardRedirect />
+              </ProtectedRoute>
+            } />
+            
+            {/* New identifier-based dashboard route for camp accounts */}
+            <Route path="/camp/:campIdentifier/dashboard" element={
+              <ProtectedRoute requireCampAccount>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Legacy route redirects for backward compatibility */}
+            <Route path="/camp/profile" element={
+              <ProtectedRoute requireCampAccount>
+                <CampProfileRedirect />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/rosters" element={
+              <ProtectedRoute requireCampAccount>
+                <CampRouteRedirect route="/roster" />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/applications" element={
+              <ProtectedRoute requireCampAccount>
+                <CampRouteRedirect route="/applications" />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/tasks" element={
+              <ProtectedRoute>
+                <CampRouteRedirect route="/tasks" />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/shifts" element={
+              <ProtectedRoute requireCampAccount>
+                <CampRouteRedirect route="/events" />
+              </ProtectedRoute>
+            } />
+            
+            {/* New identifier-based routes */}
+            <Route path="/camp/:campIdentifier/profile" element={
+              <ProtectedRoute requireCampAccount>
+                <CampProfile />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/roster" element={
+              <ProtectedRoute requireCampAccount>
+                <MemberRoster />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/applications" element={
+              <ProtectedRoute requireCampAccount>
+                <ApplicationManagementTable />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/tasks" element={
+              <ProtectedRoute>
+                <TaskManagement />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/events" element={
+              <ProtectedRoute requireCampAccount>
+                <VolunteerShifts />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/events/:eventId" element={
+              <ProtectedRoute requireCampAccount>
+                <VolunteerShifts />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/shifts/:shiftId" element={
+              <ProtectedRoute requireCampAccount>
+                <VolunteerShifts />
+              </ProtectedRoute>
+            } />
+            
+            {/* Other camp routes */}
+            <Route path="/camp/create" element={
+              <ProtectedRoute requirePersonalAccount>
+                <CampCreate />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/edit" element={
+              <ProtectedRoute requireCampAccount>
+                <CampEdit />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/call-slots" element={
+              <ProtectedRoute requireCampAccount>
+                <CallSlotManagement />
+              </ProtectedRoute>
+            } />
+            <Route path="/tasks/:taskIdCode" element={
+              <ProtectedRoute>
+                <TaskDetailsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campId/contacts/member/:memberId" element={
+              <ProtectedRoute requireCampAccount>
+                <Contact360View />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campId/contacts/:userId" element={
+              <ProtectedRoute requireCampAccount>
+                <Contact360View />
+              </ProtectedRoute>
+            } />
+            <Route path="/camps" element={<CampDiscovery />} />
+            <Route path="/camps/public/:slug" element={<PublicCampProfile />} />
+            <Route path="/camps/:slug" element={<PublicCampProfile />} />
+            <Route path="/member/profile" element={
+              <ProtectedRoute requirePersonalAccount>
+                <MemberProfile />
+              </ProtectedRoute>
+            } />
+            <Route path="/member/edit" element={
+              <ProtectedRoute requirePersonalAccount>
+                <MemberProfileEdit />
+              </ProtectedRoute>
+            } />
+            <Route path="/members/public/:identifier" element={<PublicMemberProfile />} />
+            <Route path="/members/:identifier" element={<PublicMemberProfile />} />
+            <Route path="/user/profile" element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute requireAdmin>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/help" element={<Help />} />
+            <Route path="/camp/help" element={
+              <ProtectedRoute requireCampAccount>
+                <Help />
+              </ProtectedRoute>
+            } />
+            <Route path="/member/help" element={
+              <ProtectedRoute>
+                <Help />
+              </ProtectedRoute>
+            } />
+            <Route path="/help/admin" element={
+              <ProtectedRoute requireAdmin>
+                <FAQAdmin />
+              </ProtectedRoute>
+            } />
+            <Route path="/help/mockups" element={
+              <ProtectedRoute>
+                <HelpPageMockups />
+              </ProtectedRoute>
+            } />
+            <Route path="/principles" element={<Principles />} />
+            <Route path="/support/inbox" element={
+              <ProtectedRoute requireCampAccount>
+                <SupportInbox />
+              </ProtectedRoute>
+            } />
+            <Route path="/applications/my" element={
+              <ProtectedRoute requirePersonalAccount>
+                <MyApplications />
+              </ProtectedRoute>
+            } />
+            <Route path="/rosters/manage" element={
+              <ProtectedRoute requireCampAccount>
+                <RosterManagement />
+              </ProtectedRoute>
+            } />
+            <Route path="/tasks" element={
+              <ProtectedRoute requirePersonalAccount>
+                <MyTasks />
+              </ProtectedRoute>
+            } />
+            <Route path="/my-shifts" element={
+              <ProtectedRoute requirePersonalAccount>
+                <MyShiftsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ConditionalMain>
+      </div>
+      {canUseAnalytics && <Analytics />}
+    </Router>
+  );
+};
+
 function App() {
   return (
     <ErrorBoundary>
-        <AuthProvider>
-          <SocketProvider>
-            <Router>
-            <div className="min-h-screen bg-custom-bg">
-              <ConditionalNavbar />
-              <ConditionalMain>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/apply" element={<ApplyInviteRedirect />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/auth/impersonate" element={<Impersonate />} />
-                  <Route path="/privacy" element={<PrivacyPolicy />} />
-                  <Route path="/terms" element={<TermsOfService />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/onboarding/select-role" element={
-                    <ProtectedRoute>
-                      <SelectRole />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/onboarding/shifts-only" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <ShiftsOnlyOnboarding />
-                    </ProtectedRoute>
-                  } />
-                  {/* Legacy dashboard route - redirects based on account type */}
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                      <DashboardRedirect />
-                    </ProtectedRoute>
-                  } />
-                  
-                  {/* New identifier-based dashboard route for camp accounts */}
-                  <Route path="/camp/:campIdentifier/dashboard" element={
-                    <ProtectedRoute requireCampAccount>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  } />
-                  
-                  {/* Legacy route redirects for backward compatibility */}
-                  <Route path="/camp/profile" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampProfileRedirect />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/rosters" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampRouteRedirect route="/roster" />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/applications" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampRouteRedirect route="/applications" />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/tasks" element={
-                    <ProtectedRoute>
-                      <CampRouteRedirect route="/tasks" />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/shifts" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampRouteRedirect route="/events" />
-                    </ProtectedRoute>
-                  } />
-                  
-                  {/* New identifier-based routes */}
-                  <Route path="/camp/:campIdentifier/profile" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampProfile />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/roster" element={
-                    <ProtectedRoute requireCampAccount>
-                      <MemberRoster />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/applications" element={
-                    <ProtectedRoute requireCampAccount>
-                      <ApplicationManagementTable />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/tasks" element={
-                    <ProtectedRoute>
-                      <TaskManagement />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/events" element={
-                    <ProtectedRoute requireCampAccount>
-                      <VolunteerShifts />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/events/:eventId" element={
-                    <ProtectedRoute requireCampAccount>
-                      <VolunteerShifts />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campIdentifier/shifts/:shiftId" element={
-                    <ProtectedRoute requireCampAccount>
-                      <VolunteerShifts />
-                    </ProtectedRoute>
-                  } />
-                  
-                  {/* Other camp routes */}
-                  <Route path="/camp/create" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <CampCreate />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/edit" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CampEdit />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/call-slots" element={
-                    <ProtectedRoute requireCampAccount>
-                      <CallSlotManagement />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/tasks/:taskIdCode" element={
-                    <ProtectedRoute>
-                      <TaskDetailsPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campId/contacts/member/:memberId" element={
-                    <ProtectedRoute requireCampAccount>
-                      <Contact360View />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camp/:campId/contacts/:userId" element={
-                    <ProtectedRoute requireCampAccount>
-                      <Contact360View />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/camps" element={<CampDiscovery />} />
-                  <Route path="/camps/public/:slug" element={<PublicCampProfile />} />
-                  <Route path="/camps/:slug" element={<PublicCampProfile />} />
-                  <Route path="/member/profile" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <MemberProfile />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/member/edit" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <MemberProfileEdit />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/members/public/:identifier" element={<PublicMemberProfile />} />
-                  <Route path="/members/:identifier" element={<PublicMemberProfile />} />
-                  <Route path="/user/profile" element={
-                    <ProtectedRoute>
-                      <UserProfile />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/admin" element={
-                    <ProtectedRoute requireAdmin>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/help" element={<Help />} />
-                  <Route path="/camp/help" element={
-                    <ProtectedRoute requireCampAccount>
-                      <Help />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/member/help" element={
-                    <ProtectedRoute>
-                      <Help />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/help/admin" element={
-                    <ProtectedRoute requireAdmin>
-                      <FAQAdmin />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/help/mockups" element={
-                    <ProtectedRoute>
-                      <HelpPageMockups />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/principles" element={<Principles />} />
-                  <Route path="/support/inbox" element={
-                    <ProtectedRoute requireCampAccount>
-                      <SupportInbox />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/applications/my" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <MyApplications />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/rosters/manage" element={
-                    <ProtectedRoute requireCampAccount>
-                      <RosterManagement />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/tasks" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <MyTasks />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/my-shifts" element={
-                    <ProtectedRoute requirePersonalAccount>
-                      <MyShiftsPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </ConditionalMain>
-            </div>
-            <Analytics />
-          </Router>
+      <AuthProvider>
+        <SocketProvider>
+          <CookieConsentProvider>
+            <AppShell />
+          </CookieConsentProvider>
         </SocketProvider>
       </AuthProvider>
     </ErrorBoundary>

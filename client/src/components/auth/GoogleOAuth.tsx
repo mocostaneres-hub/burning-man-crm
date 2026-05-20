@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui';
 import api from '../../services/api';
+import { useCookieConsent } from '../../contexts/CookieConsentContext';
 
 // Google Identity Services type definitions
 declare global {
@@ -86,9 +87,15 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const isInitialized = useRef(false);
+  const { canUseFunctional, openPreferences } = useCookieConsent();
 
   // Load Google OAuth configuration from backend
   useEffect(() => {
+    if (!canUseFunctional) {
+      setIsConfigured(false);
+      return;
+    }
+
     const loadConfig = async () => {
       try {
         const config = await api.get('/oauth/config');
@@ -109,11 +116,11 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
     };
 
     loadConfig();
-  }, []);
+  }, [canUseFunctional]);
 
   // Load Google Identity Services script
   useEffect(() => {
-    if (!isConfigured || !googleClientId) return;
+    if (!canUseFunctional || !isConfigured || !googleClientId) return;
 
     // Check if script is already loaded
     if (window.google?.accounts?.id) {
@@ -144,7 +151,7 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
         existingScript.remove();
       }
     };
-  }, [isConfigured, googleClientId]);
+  }, [canUseFunctional, isConfigured, googleClientId, onError]);
 
   // Initialize Google Sign-In
   const initializeGoogleSignIn = () => {
@@ -255,6 +262,23 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
       onError('Failed to trigger Google Sign-In');
     }
   };
+
+  if (!canUseFunctional) {
+    return (
+      <div className="w-full text-center">
+        <Button
+          type="button"
+          variant="outline"
+          size="md"
+          className="w-full"
+          onClick={openPreferences}
+          disabled={disabled || isLoading}
+        >
+          Enable functional cookies to use Google Sign-In
+        </Button>
+      </div>
+    );
+  }
 
   // Don't render if not configured
   if (!isConfigured) {
