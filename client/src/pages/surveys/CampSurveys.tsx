@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Badge, Button, Card, Modal } from '../../components/ui';
@@ -35,6 +35,7 @@ const stripHtmlToText = (value: string): string =>
 const CampSurveys: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { campIdentifier } = useParams<{ campIdentifier?: string }>();
 
   const [campId, setCampId] = useState<string>('');
@@ -50,6 +51,7 @@ const CampSurveys: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [descriptionPreviewMode, setDescriptionPreviewMode] = useState(false);
   const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
+  const [descriptionEditorInitialHtml, setDescriptionEditorInitialHtml] = useState('');
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -155,10 +157,23 @@ const CampSurveys: React.FC = () => {
     };
   }, [campIdentifier, loadCampContext, loadSurveys, navigate, user?.campLeadCampSlug]);
 
+  useEffect(() => {
+    const editSurveyId = searchParams.get('editSurveyId');
+    if (!editSurveyId || editorOpen || surveys.length === 0) return;
+    const targetSurvey = surveys.find((survey) => survey._id === editSurveyId);
+    if (!targetSurvey) return;
+
+    openEditModal(targetSurvey);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('editSurveyId');
+    setSearchParams(nextParams, { replace: true });
+  }, [editorOpen, searchParams, setSearchParams, surveys]);
+
   const resetEditor = () => {
     setEditingSurveyId(null);
     setTitle('');
     setDescription('');
+    setDescriptionEditorInitialHtml('');
     setQuestions([defaultQuestion()]);
     setImportWarnings([]);
     setDescriptionPreviewMode(false);
@@ -181,6 +196,7 @@ const CampSurveys: React.FC = () => {
       setEditingSurveyId(survey._id);
       setTitle(detail.survey.title || '');
       setDescription(nextDescription);
+      setDescriptionEditorInitialHtml(nextDescription);
       setQuestions((detail.questions || []).map((question: any, index: number) => ({ ...question, order: index })));
       setEditorOpen(true);
       setDescriptionPreviewMode(false);
@@ -194,6 +210,11 @@ const CampSurveys: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!editorOpen || !descriptionEditorRef.current) return;
+    descriptionEditorRef.current.innerHTML = descriptionEditorInitialHtml || '';
+  }, [editorOpen, editingSurveyId, descriptionEditorInitialHtml]);
+
   const setQuestion = (index: number, patch: Partial<SurveyQuestion>) => {
     setQuestions((prev) =>
       prev.map((question, qIndex) => (qIndex === index ? { ...question, ...patch, order: qIndex } : question))
@@ -204,13 +225,15 @@ const CampSurveys: React.FC = () => {
     setQuestions((prev) => [...prev, { ...defaultQuestion(), order: prev.length }]);
   };
 
-  const moveQuestion = (index: number, delta: -1 | 1) => {
+  const reorderQuestions = (fromIndex: number, toIndex: number) => {
     setQuestions((prev) => {
-      const targetIndex = index + delta;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length) {
+        return prev;
+      }
       const next = [...prev];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next.map((question, qIndex) => ({ ...question, order: qIndex }));
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next.map((question, index) => ({ ...question, order: index }));
     });
   };
 
@@ -256,15 +279,40 @@ const CampSurveys: React.FC = () => {
     );
   };
 
-  const moveOptionField = (questionIndex: number, optionIndex: number, delta: -1 | 1) => {
+  const reorderOptionFields = (questionIndex: number, fromIndex: number, toIndex: number) => {
     setQuestions((prev) =>
       prev.map((question, qIndex) => {
         if (qIndex !== questionIndex) return question;
         const nextOptions = [...(question.options || [])];
-        const targetIndex = optionIndex + delta;
-        if (targetIndex < 0 || targetIndex >= nextOptions.length) return question;
-        [nextOptions[optionIndex], nextOptions[targetIndex]] = [nextOptions[targetIndex], nextOptions[optionIndex]];
+        if (
+          fromIndex === toIndex ||
+          fromIndex < 0 ||
+          toIndex < 0 ||
+          fromIndex >= nextOptions.length ||
+          toIndex >= nextOptions.length
+        ) {
+          return question;
+        }
+        const [moved] = nextOptions.splice(fromIndex, 1);
+        nextOptions.splice(toIndex, 0, moved);
         return { ...question, options: nextOptions };
+      })
+    );
+  };
+
+  const handleQuestionTypeChange = (questionIndex: number, nextType: SurveyQuestion['blockType']) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => {
+        if (qIndex !== questionIndex) return question;
+        if (optionBlockTypes.has(nextType)) {
+          const currentOptions = Array.isArray(question.options) ? question.options : [];
+          return {
+            ...question,
+            blockType: nextType,
+            options: currentOptions.length > 0 ? currentOptions : [{ label: '', value: '' }]
+          };
+        }
+        return { ...question, blockType: nextType };
       })
     );
   };
@@ -677,21 +725,27 @@ const CampSurveys: React.FC = () => {
             </div>
             {questions.map((question, index) => (
               <div key={`question-${index}`} className="border border-gray-200 rounded p-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <p className="text-xs font-semibold text-gray-600">Question #{index + 1}</p>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => moveQuestion(index, -1)} disabled={index === 0}>
-                      Move Up
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => moveQuestion(index, 1)}
-                      disabled={index === questions.length - 1}
-                    >
-                      Move Down
-                    </Button>
-                  </div>
+                <div
+                  className="flex justify-between items-center cursor-grab active:cursor-grabbing"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData('application/x-question-index', String(index));
+                    event.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const fromIndexRaw = event.dataTransfer.getData('application/x-question-index');
+                    const fromIndex = Number(fromIndexRaw);
+                    if (Number.isFinite(fromIndex)) {
+                      reorderQuestions(fromIndex, index);
+                    }
+                  }}
+                >
+                  <p className="text-xs font-semibold text-gray-600">
+                    Question #{index + 1} <span className="text-gray-400 ml-1">(drag to reorder)</span>
+                  </p>
+                  <span className="text-gray-400 text-sm">::</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="md:col-span-2">
@@ -707,7 +761,7 @@ const CampSurveys: React.FC = () => {
                     <label className="block text-xs text-gray-600 mb-1">Type</label>
                     <select
                       value={question.blockType}
-                      onChange={(e) => setQuestion(index, { blockType: e.target.value as any })}
+                      onChange={(e) => handleQuestionTypeChange(index, e.target.value as any)}
                       className="w-full border border-gray-300 rounded px-2 py-1"
                     >
                       <option value="short_answer">Short Answer</option>
@@ -728,29 +782,41 @@ const CampSurveys: React.FC = () => {
                     <label className="block text-xs text-gray-600 mb-2">Options</label>
                     <div className="space-y-2">
                       {(question.options || []).map((option, optionIndex) => (
-                        <div key={`option-${index}-${optionIndex}`} className="flex items-center gap-2">
+                        <div
+                          key={`option-${index}-${optionIndex}`}
+                          className="flex items-center gap-2 cursor-grab active:cursor-grabbing"
+                          draggable
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(
+                              'application/x-option-index',
+                              JSON.stringify({ questionIndex: index, optionIndex })
+                            );
+                            event.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            const payload = event.dataTransfer.getData('application/x-option-index');
+                            if (!payload) return;
+                            try {
+                              const parsed = JSON.parse(payload);
+                              if (parsed.questionIndex !== index) return;
+                              const fromIndex = Number(parsed.optionIndex);
+                              if (Number.isFinite(fromIndex)) {
+                                reorderOptionFields(index, fromIndex, optionIndex);
+                              }
+                            } catch (_error) {
+                              // Ignore malformed drag payload
+                            }
+                          }}
+                        >
+                          <span className="text-gray-400 text-sm">::</span>
                           <input
                             value={option.label}
                             onChange={(e) => setOptionField(index, optionIndex, e.target.value)}
                             className="flex-1 border border-gray-300 rounded px-2 py-1"
                             placeholder={`Option ${optionIndex + 1}`}
                           />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => moveOptionField(index, optionIndex, -1)}
-                            disabled={optionIndex === 0}
-                          >
-                            ↑
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => moveOptionField(index, optionIndex, 1)}
-                            disabled={optionIndex === (question.options || []).length - 1}
-                          >
-                            ↓
-                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -787,6 +853,11 @@ const CampSurveys: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
+            {editingSurveyId && (
+              <Button variant="outline" onClick={() => openSurveyViewMode(editingSurveyId)}>
+                Preview as Recipient
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setEditorOpen(false)}>
               Cancel
             </Button>

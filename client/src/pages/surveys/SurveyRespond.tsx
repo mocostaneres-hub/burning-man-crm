@@ -63,18 +63,41 @@ const SurveyRespond: React.FC = () => {
       setQuestions(detail.questions || []);
       setViewer(detail.viewer || {});
 
-      if (detail.viewer?.canRespond) {
-        const eligible = await api.getSurveyEligibleMembers(surveyId);
-        setEligibleMembers(eligible.eligibleMembers || []);
-        const selfId = eligible.submitterMemberId;
-        setSelectedMemberIds(selfId ? [selfId] : []);
+      if (detail.viewer?.canRespond || isViewMode) {
+        try {
+          const eligible = await api.getSurveyEligibleMembers(surveyId);
+          setEligibleMembers(eligible.eligibleMembers || []);
+          const selfId = eligible.submitterMemberId;
+          setSelectedMemberIds(selfId ? [selfId] : []);
+        } catch (_eligibleError) {
+          if (isViewMode && detail.survey?.campId) {
+            const membersResponse = await api.getCampMembers(detail.survey.campId);
+            const previewMembers = (membersResponse.members || [])
+              .map((member: any) => {
+                const userDoc = member.user;
+                if (!userDoc || !userDoc._id) return null;
+                const fullName = `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || userDoc.email || 'Member';
+                return {
+                  memberId: member._id || userDoc._id,
+                  name: fullName,
+                  email: userDoc.email,
+                  alreadyCovered: false,
+                  eligible: true,
+                  coveredByResponseId: null
+                };
+              })
+              .filter(Boolean) as EligibleMember[];
+            setEligibleMembers(previewMembers);
+            setSelectedMemberIds([]);
+          }
+        }
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load survey');
     } finally {
       setLoading(false);
     }
-  }, [surveyId]);
+  }, [surveyId, isViewMode]);
 
   useEffect(() => {
     loadSurvey();
@@ -134,7 +157,7 @@ const SurveyRespond: React.FC = () => {
   };
 
   const removeMember = (memberId: string) => {
-    if (memberId === viewer?.submitterMemberId) return;
+    if (!isViewMode && memberId === viewer?.submitterMemberId) return;
     setSelectedMemberIds((prev) => prev.filter((id) => id !== memberId));
   };
 
@@ -335,59 +358,6 @@ const SurveyRespond: React.FC = () => {
     }
   };
 
-  const renderQuestionPreview = (question: SurveyQuestion) => {
-    const prompt = question.prompt || 'Untitled question';
-    if (question.blockType === 'section_header') {
-      return <h3 className="text-base font-semibold text-custom-text border-t border-gray-200 pt-3">{prompt}</h3>;
-    }
-    if (question.blockType === 'description') {
-      return <p className="text-sm text-custom-text-secondary">{prompt}</p>;
-    }
-    if (question.blockType === 'image_block' || question.blockType === 'video_block') {
-      return (
-        <div className="text-xs text-gray-500">
-          Media block: {question.mediaUrl || 'No media URL'}
-        </div>
-      );
-    }
-    if (question.blockType === 'linear_scale') {
-      const min = Number(question.linearScale?.min || 1);
-      const max = Number(question.linearScale?.max || 5);
-      return (
-        <div>
-          <p className="text-sm font-medium text-custom-text">
-            {prompt} {question.required ? <span className="text-red-500">*</span> : null}
-          </p>
-          <p className="text-xs text-gray-600 mt-1">Scale: {min} to {max}</p>
-        </div>
-      );
-    }
-
-    if (['multiple_choice', 'checkboxes', 'dropdown'].includes(question.blockType)) {
-      return (
-        <div>
-          <p className="text-sm font-medium text-custom-text">
-            {prompt} {question.required ? <span className="text-red-500">*</span> : null}
-          </p>
-          <ul className="mt-1 text-sm text-gray-700 list-disc list-inside">
-            {(question.options || []).map((option) => (
-              <li key={option.value}>{option.label}</li>
-            ))}
-          </ul>
-        </div>
-      );
-    }
-
-    return (
-      <div>
-        <p className="text-sm font-medium text-custom-text">
-          {prompt} {question.required ? <span className="text-red-500">*</span> : null}
-        </p>
-        <p className="text-xs text-gray-600 mt-1">Answer type: {question.blockType.replace('_', ' ')}</p>
-      </div>
-    );
-  };
-
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto py-8 px-4">
@@ -408,8 +378,7 @@ const SurveyRespond: React.FC = () => {
 
   const isCovered = viewer?.isCovered;
   const canRespond = viewer?.canRespond;
-  const showInteractiveForm = canRespond && !isViewMode;
-  const showReadOnlyView = isViewMode || !canRespond || isCovered;
+  const showInteractiveForm = canRespond || isViewMode;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -435,15 +404,24 @@ const SurveyRespond: React.FC = () => {
       {isViewMode && (
         <Card className="p-4 mb-4 border border-blue-200 bg-blue-50">
           <p className="text-sm text-blue-900">
-            Viewing this survey in read-only mode.
+            Preview mode: this behaves like recipient view, but submit is disabled.
           </p>
-          {canRespond && (
-            <div className="mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
+            {viewer?.canEditSurveyDefinition && survey.status === 'draft' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/camp/${survey.campId}/surveys?editSurveyId=${survey._id}`)}
+              >
+                Edit Draft
+              </Button>
+            )}
+            {canRespond && (
               <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${surveyId}`)}>
                 Switch to response mode
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </Card>
       )}
 
@@ -478,7 +456,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {showInteractiveForm && (
+      {showInteractiveForm && !isCovered && (
         <>
           <Card className="p-5 mb-4">
             <h2 className="text-base font-semibold text-custom-text mb-2">Who are you responding for?</h2>
@@ -548,26 +526,18 @@ const SurveyRespond: React.FC = () => {
             <Button variant="outline" onClick={() => navigate('/tasks')}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={submitSurvey} disabled={submitting}>
-              {submitting ? 'Submitting...' : 'Submit Survey'}
-            </Button>
+            {!isViewMode && (
+              <Button variant="primary" onClick={submitSurvey} disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Submit Survey'}
+              </Button>
+            )}
           </div>
-        </>
-      )}
-
-      {showReadOnlyView && (
-        <Card className="p-5 space-y-4 mt-4">
-          <h2 className="text-base font-semibold text-custom-text">Survey Questions</h2>
-          {questions.length === 0 ? (
-            <p className="text-sm text-gray-500">No questions found for this survey.</p>
-          ) : (
-            questions.map((question, index) => (
-              <div key={question._id || `${question.blockType}-${index}`} className="space-y-1">
-                {renderQuestionPreview(question)}
-              </div>
-            ))
+          {isViewMode && (
+            <p className="text-xs text-gray-500 mt-2">
+              Submit is disabled in preview mode.
+            </p>
           )}
-        </Card>
+        </>
       )}
     </div>
   );
