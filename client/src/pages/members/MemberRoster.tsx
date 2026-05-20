@@ -22,6 +22,8 @@ interface RosterMember extends Member {
   member?: Member; // Nested member structure from API
   isCampLead?: boolean; // Camp Lead role
   rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
+  responseGroupExtraCount?: number;
+  responseGroupOtherNames?: string[];
 }
 
 // Rosters are strictly one of these modes. The server-side Mongoose schema
@@ -317,6 +319,9 @@ const MemberRoster: React.FC = () => {
   const [rosterId, setRosterId] = useState<string | null>(null);
   /** SOR manual invite reminders — mirrors GET /rosters/active `sorInviteRemindersEnabled`. */
   const [sorInviteRemindersEnabled, setSorInviteRemindersEnabled] = useState(false);
+  const [responseGroupsByPrimary, setResponseGroupsByPrimary] = useState<
+    Record<string, { extraCount: number; otherNames: string[] }>
+  >({});
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [newRosterName, setNewRosterName] = useState('');
   const [renameLoading, setRenameLoading] = useState(false);
@@ -740,6 +745,7 @@ const MemberRoster: React.FC = () => {
           // no-op for storage failures
         }
         setMembers([]);
+        setResponseGroupsByPrimary({});
         setRosterId(null);
         setRosterName('Member Roster');
         setSorInviteRemindersEnabled(false);
@@ -846,6 +852,21 @@ const MemberRoster: React.FC = () => {
       console.log('✅ [MemberRoster] Enhanced members:', enhancedMembers);
       
       setMembers(enhancedMembers);
+
+      try {
+        const rosterGroups = await api.getSurveyRosterGroups(campId);
+        const groupMap = rosterGroups?.groupsByPrimary || {};
+        const normalizedGroupMap = Object.entries(groupMap).reduce((acc, [memberId, group]) => {
+          acc[memberId] = {
+            extraCount: Number((group as any)?.extraCount || 0),
+            otherNames: Array.isArray((group as any)?.otherNames) ? (group as any).otherNames : []
+          };
+          return acc;
+        }, {} as Record<string, { extraCount: number; otherNames: string[] }>);
+        setResponseGroupsByPrimary(normalizedGroupMap);
+      } catch (_error) {
+        setResponseGroupsByPrimary({});
+      }
       
       // Clear any local edits when data is refreshed
       setLocalEdits({});
@@ -856,6 +877,7 @@ const MemberRoster: React.FC = () => {
       setHasActiveRoster(false);
       setSorInviteRemindersEnabled(false);
       setRosterModeState({ mode: 'none', hasShiftsOnlyRoster: false, hasFullMembershipRoster: false, memberCount: 0 });
+      setResponseGroupsByPrimary({});
     } finally {
       setLoading(false);
     }
@@ -1613,23 +1635,6 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && hasActiveRoster && hasShiftsOnlyRoster && (
-            <div className="flex flex-col">
-              <Button
-                variant="outline"
-                disabled
-                className="flex items-center gap-2 text-gray-400 border-gray-300 cursor-not-allowed"
-                title="Archive the current shifts-only roster before creating a full-membership roster."
-              >
-                <Mail className="w-4 h-4" />
-                Invite Members (Full Membership)
-              </Button>
-              <p className="text-[11px] text-gray-500 mt-1">
-                Archive the active SOR first to return to roster-less mode, then create an FMR.
-              </p>
-            </div>
-          )}
-
           {/* Export Roster button - Only available when an active roster exists */}
           {rosterId && hasActiveRoster && (
             <Button
@@ -1756,7 +1761,15 @@ const MemberRoster: React.FC = () => {
           <ShiftsOnlyRosterTable
             rosterId={rosterId}
             campId={campId}
-            members={filteredMembers as any}
+            members={filteredMembers.map((member) => {
+              const memberId = member?._id?.toString?.() || String(member?._id || '');
+              const group = responseGroupsByPrimary[memberId];
+              return {
+                ...(member as any),
+                responseGroupExtraCount: group?.extraCount || 0,
+                responseGroupOtherNames: group?.otherNames || []
+              };
+            }) as any}
             canEdit={canEdit}
             canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
             onDelete={(m) => handleDeleteMember(m as any)}
@@ -1824,6 +1837,11 @@ const MemberRoster: React.FC = () => {
                 const userName = derivedName || csvName || 'Unknown';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
+                const memberGroup = responseGroupsByPrimary[member._id.toString()];
+                const extraResponses = memberGroup?.extraCount || 0;
+                const groupTooltip = memberGroup?.otherNames?.length
+                  ? `Also submitted for: ${memberGroup.otherNames.join(', ')}`
+                  : 'Submitted as a grouped response';
                 
                 return (
                   <tr key={member._id} className={`${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
@@ -1867,6 +1885,15 @@ const MemberRoster: React.FC = () => {
                               )}
                             </div>
                             {member.isCampLead && <CampLeadBadge size="sm" />}
+                            {extraResponses > 0 && (
+                              <span
+                                className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 text-xs px-2 py-0.5"
+                                title={groupTooltip}
+                                aria-label={groupTooltip}
+                              >
+                                +{extraResponses}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

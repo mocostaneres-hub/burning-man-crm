@@ -38,6 +38,8 @@ export interface SorMemberRow {
   user: any;
   isCampLead?: boolean;
   rosterStatus?: string;
+  responseGroupExtraCount?: number;
+  responseGroupOtherNames?: string[];
 }
 
 interface Props {
@@ -295,6 +297,8 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
         playaName: memberPlayaName(m),
         skills: memberSkills(m),
         shiftCount: memberShiftCount(m),
+        responseGroupExtraCount: Number(m.responseGroupExtraCount || 0),
+        responseGroupOtherNames: Array.isArray(m.responseGroupOtherNames) ? m.responseGroupOtherNames : [],
         lastReminderAt: overriddenReminderAt,
         cooldownText,
         canRemind: canRemindInvited
@@ -461,7 +465,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {rows.map((row) => {
-              const { member, index, status, name, playaName, skills, shiftCount, cooldownText, canRemind } = row;
+              const { member, index, status, name, playaName, skills, shiftCount, cooldownText, canRemind, responseGroupExtraCount, responseGroupOtherNames } = row;
               const memberId = member._id;
               const realUserId = member.member?.user?._id || (typeof member.member?.user === 'string' ? member.member.user : null);
               const contact360Link = realUserId
@@ -493,6 +497,18 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                     {member.isCampLead && (
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 uppercase tracking-wide">
                         Lead
+                      </span>
+                    )}
+                    {responseGroupExtraCount > 0 && (
+                      <span
+                        className="ml-2 inline-flex items-center rounded-full bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 font-semibold"
+                        title={
+                          responseGroupOtherNames.length > 0
+                            ? `Also submitted for: ${responseGroupOtherNames.join(', ')}`
+                            : 'Submitted as a grouped response'
+                        }
+                      >
+                        +{responseGroupExtraCount}
                       </span>
                     )}
                   </td>

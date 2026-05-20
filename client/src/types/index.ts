@@ -422,6 +422,96 @@ export interface Task {
   };
 }
 
+export type SurveyBlockType =
+  | 'form_title'
+  | 'description'
+  | 'section_header'
+  | 'image_block'
+  | 'video_block'
+  | 'short_answer'
+  | 'paragraph'
+  | 'multiple_choice'
+  | 'checkboxes'
+  | 'dropdown'
+  | 'linear_scale'
+  | 'multiple_choice_grid'
+  | 'checkbox_grid'
+  | 'date'
+  | 'time'
+  | 'unsupported';
+
+export interface SurveyOption {
+  label: string;
+  value: string;
+  isOther?: boolean;
+}
+
+export interface SurveyQuestion {
+  _id?: string;
+  surveyId?: string;
+  order: number;
+  blockType: SurveyBlockType;
+  prompt: string;
+  helpText?: string;
+  required?: boolean;
+  options?: SurveyOption[];
+  rows?: string[];
+  columns?: string[];
+  mediaUrl?: string | null;
+  supportLevel?: 'supported' | 'partial' | 'unsupported';
+  warnings?: string[];
+  linearScale?: {
+    min: number;
+    max: number;
+    minLabel?: string;
+    maxLabel?: string;
+  };
+  validation?: {
+    kind?: 'text' | 'number' | 'email' | 'url' | 'none';
+    min?: number | null;
+    max?: number | null;
+    pattern?: string | null;
+  };
+  isSuggestion?: boolean;
+}
+
+export interface SurveyCompletionStats {
+  totalRosterMembers: number;
+  assignedUsers: number;
+  completedMembers: number;
+  pendingMembers: number;
+  completionRate: number;
+}
+
+export interface Survey {
+  _id: string;
+  campId: string;
+  title: string;
+  description?: string;
+  status: 'draft' | 'sent' | 'closed';
+  isLocked: boolean;
+  lockReason?: string | null;
+  sentAt?: string | null;
+  closedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completionStats?: SurveyCompletionStats;
+}
+
+export interface PendingSurveyItem {
+  surveyId: string;
+  title: string;
+  description?: string;
+  status: 'draft' | 'sent' | 'closed';
+  campId: string;
+  campName: string;
+  sentAt?: string | null;
+  assignedAt?: string | null;
+  completedByCoverage?: boolean;
+  coveredByResponseId?: string;
+  coveredBySubmitterName?: string;
+}
+
 export interface ApiResponse<T = any> {
   message: string;
   data?: T;

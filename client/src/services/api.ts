@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation, NotificationListResponse, MyShiftsResponse } from '../types';
+import { User, Camp, Member, Admin, RegisterData, ApiResponse, PaginatedResponse, CallSlot, Task, StructuredLocation, NotificationListResponse, MyShiftsResponse, Survey, SurveyQuestion, PendingSurveyItem } from '../types';
 
 const SENSITIVE_LOG_KEYS = new Set([
   'password',
@@ -789,6 +789,124 @@ class ApiService {
   ): Promise<{ message: string; invitedCount: number; availableShiftCount: number; recipientPreview?: { existingUsers: number; rosterOnly: number; total: number } }> {
     const url = campId ? `/shifts/events/invite-entire-roster?campId=${campId}` : '/shifts/events/invite-entire-roster';
     const response: AxiosResponse<{ message: string; invitedCount: number; availableShiftCount: number; recipientPreview?: { existingUsers: number; rosterOnly: number; total: number } }> = await this.api.post(url, options || {});
+    return response.data;
+  }
+
+  // Surveys
+  async getCampSurveys(campId: string): Promise<{ surveys: Survey[] }> {
+    const response: AxiosResponse<{ surveys: Survey[] }> = await this.api.get(`/surveys/camp/${campId}`);
+    return response.data;
+  }
+
+  async getSurveyDetails(surveyId: string): Promise<{
+    survey: Survey;
+    questions: SurveyQuestion[];
+    viewer: any;
+    completionStats?: any;
+  }> {
+    const response = await this.api.get(`/surveys/${surveyId}`);
+    return response.data;
+  }
+
+  async createSurveyDraft(payload: {
+    campId: string;
+    title: string;
+    description?: string;
+    questions?: SurveyQuestion[];
+  }): Promise<{ survey: Survey; questions: SurveyQuestion[] }> {
+    const response = await this.api.post('/surveys', payload);
+    return response.data;
+  }
+
+  async updateSurveyDraft(
+    surveyId: string,
+    payload: { title?: string; description?: string; questions?: SurveyQuestion[] }
+  ): Promise<{ survey: Survey; questions: SurveyQuestion[] }> {
+    const response = await this.api.put(`/surveys/${surveyId}`, payload);
+    return response.data;
+  }
+
+  async sendSurvey(
+    surveyId: string,
+    payload?: {
+      assignmentMode?: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+      selectedUserIds?: string[];
+      manualAddIds?: string[];
+      manualRemoveIds?: string[];
+    }
+  ): Promise<{ message: string; surveyId: string; assignedCount: number; assignmentMode: string }> {
+    const response = await this.api.post(`/surveys/${surveyId}/send`, payload || {});
+    return response.data;
+  }
+
+  async closeSurvey(surveyId: string): Promise<{ message: string; survey: Survey }> {
+    const response = await this.api.post(`/surveys/${surveyId}/close`);
+    return response.data;
+  }
+
+  async importSurveyFromPublicForm(payload: {
+    campId: string;
+    url: string;
+    saveDraft?: boolean;
+  }): Promise<{
+    message: string;
+    survey?: Survey & { questions?: SurveyQuestion[]; importWarnings?: string[] };
+    suggestion?: any;
+    canContinueManually?: boolean;
+  }> {
+    const response = await this.api.post('/surveys/import-suggestion', payload);
+    return response.data;
+  }
+
+  async getMyPendingSurveys(): Promise<{
+    pendingSurveys: PendingSurveyItem[];
+    completedSurveys: PendingSurveyItem[];
+  }> {
+    const response = await this.api.get('/surveys/my-pending');
+    return response.data;
+  }
+
+  async getSurveyEligibleMembers(
+    surveyId: string,
+    query?: string
+  ): Promise<{ submitterMemberId: string; eligibleMembers: Array<{ memberId: string; name: string; email?: string; alreadyCovered: boolean; eligible: boolean; coveredByResponseId?: string | null }> }> {
+    const response = await this.api.get(`/surveys/${surveyId}/eligible-members`, {
+      params: query ? { q: query } : undefined
+    });
+    return response.data;
+  }
+
+  async submitSurveyResponse(
+    surveyId: string,
+    payload: { coveredMemberIds: string[]; answers: Array<{ questionId: string; blockType: string; value: any; valueType?: string }> }
+  ): Promise<{ message: string; responseId: string; coveredMemberIds: string[] }> {
+    const response = await this.api.post(`/surveys/${surveyId}/responses`, payload);
+    return response.data;
+  }
+
+  async editSurveyResponse(
+    surveyId: string,
+    responseId: string,
+    payload: { answers?: Array<{ questionId: string; blockType: string; value: any; valueType?: string }>; coveredMemberIds?: string[]; editReason?: string }
+  ): Promise<{ message: string; response: any }> {
+    const response = await this.api.put(`/surveys/${surveyId}/responses/${responseId}`, payload);
+    return response.data;
+  }
+
+  async getSurveyResponses(surveyId: string): Promise<{ responses: Array<any> }> {
+    const response = await this.api.get(`/surveys/${surveyId}/responses`);
+    return response.data;
+  }
+
+  async getSurveyRosterGroups(campId: string, surveyId?: string): Promise<{
+    surveyId: string | null;
+    surveyTitle?: string;
+    groupsByPrimary: Record<string, { responseId: string; surveyId: string; extraCount: number; otherMemberIds: string[]; otherNames: string[] }>;
+    memberToPrimary: Record<string, string>;
+  }> {
+    const response = await this.api.get(`/surveys/camp/${campId}/roster-groups`, {
+      params: surveyId ? { surveyId } : undefined
+    });
     return response.data;
   }
 

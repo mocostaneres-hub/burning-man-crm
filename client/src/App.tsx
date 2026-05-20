@@ -43,6 +43,8 @@ import CallSlotManagement from './pages/camps/CallSlotManagement';
 import TaskManagement from './pages/camps/TaskManagement';
 import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
+import CampSurveys from './pages/surveys/CampSurveys';
+import SurveyRespond from './pages/surveys/SurveyRespond';
 import SelectRole from './pages/onboarding/SelectRole';
 import ShiftsOnlyOnboarding from './pages/onboarding/ShiftsOnlyOnboarding';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -205,6 +207,11 @@ const AppShell: React.FC = () => {
                 <CampRouteRedirect route="/events" />
               </ProtectedRoute>
             } />
+            <Route path="/camp/surveys" element={
+              <ProtectedRoute requireCampAccount>
+                <CampRouteRedirect route="/surveys" />
+              </ProtectedRoute>
+            } />
             
             {/* New identifier-based routes */}
             <Route path="/camp/:campIdentifier/profile" element={
@@ -235,6 +242,11 @@ const AppShell: React.FC = () => {
             <Route path="/camp/:campIdentifier/events/:eventId" element={
               <ProtectedRoute requireCampAccount>
                 <VolunteerShifts />
+              </ProtectedRoute>
+            } />
+            <Route path="/camp/:campIdentifier/surveys" element={
+              <ProtectedRoute requireCampAccount>
+                <CampSurveys />
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/shifts/:shiftId" element={
@@ -339,6 +351,11 @@ const AppShell: React.FC = () => {
             <Route path="/tasks" element={
               <ProtectedRoute requirePersonalAccount>
                 <MyTasks />
+              </ProtectedRoute>
+            } />
+            <Route path="/surveys/:surveyId" element={
+              <ProtectedRoute>
+                <SurveyRespond />
               </ProtectedRoute>
             } />
             <Route path="/my-shifts" element={

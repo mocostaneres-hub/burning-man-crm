@@ -33,16 +33,24 @@ const Dashboard: React.FC = () => {
   const { campIdentifier } = useParams<{ campIdentifier?: string }>();
   const [stats, setStats] = useState<DashboardStats>({});
   const [loading, setLoading] = useState(true);
-  const isCampContext = user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId);
-  const currentCampId = user?.campId?.toString() || user?._id?.toString() || '';
+  const isCampContext =
+    user?.accountType === 'camp' ||
+    (user?.accountType === 'admin' && !!user?.campId) ||
+    (user?.isCampLead === true && !!user?.campLeadCampId);
+  const currentCampId = user?.campId?.toString() || user?.campLeadCampId || user?._id?.toString() || '';
   const campBasePath = currentCampId ? `/camp/${currentCampId}` : '';
 
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
-    if (campIdentifier && user && (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId))) {
-      const userCampId = user.campId?.toString() || user._id?.toString();
+    if (
+      campIdentifier &&
+      user &&
+      (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId) || user.isCampLead)
+    ) {
+      const userCampId = user.campId?.toString() || user.campLeadCampId || user._id?.toString();
       const identifierMatches = campIdentifier === userCampId || 
                                 campIdentifier === user.urlSlug ||
+                                campIdentifier === user.campLeadCampSlug ||
                                 (user.campName && campIdentifier === user.campName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
       
       if (!identifierMatches) {
@@ -58,8 +66,11 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         if (isCampContext) {
-          const campData = await apiService.getMyCamp();
-          const campId = campData._id;
+          let campId = user?.campLeadCampId || '';
+          if (!campId) {
+            const campData = await apiService.getMyCamp();
+            campId = campData._id;
+          }
 
           const [applicationsRes, tasksRes, membersRes] = await Promise.all([
             apiService.get(`/applications/camp/${campId}`),
@@ -138,7 +149,7 @@ const Dashboard: React.FC = () => {
         color: 'bg-blue-500'
       },
       {
-        title: 'My Tasks',
+        title: isCampContext ? 'Tasks' : 'To-dos',
         description: `${stats.openTasks || 0} open tasks`,
         icon: <Assignment size={24} />,
         onClick: () => navigate(isCampContext ? (campBasePath ? `${campBasePath}/tasks` : '/camp/tasks') : '/tasks'),
@@ -162,6 +173,13 @@ const Dashboard: React.FC = () => {
           icon: <People size={24} />,
           onClick: () => navigate(campBasePath ? `${campBasePath}/roster` : '/camp/rosters'),
           color: 'bg-orange-500'
+        },
+        {
+          title: 'Surveys',
+          description: 'Create and track roster surveys',
+          icon: <Assignment size={24} />,
+          onClick: () => navigate(campBasePath ? `${campBasePath}/surveys` : '/camp/surveys'),
+          color: 'bg-cyan-500'
         },
         {
           title: 'Shifts',
@@ -238,6 +256,12 @@ const Dashboard: React.FC = () => {
           icon: <People size={24} />,
           onClick: () => navigate(campBasePath ? `${campBasePath}/roster` : '/camp/rosters'),
           description: 'View and manage members'
+        },
+        {
+          title: 'Manage Surveys',
+          icon: <Assignment size={24} />,
+          onClick: () => navigate(campBasePath ? `${campBasePath}/surveys` : '/camp/surveys'),
+          description: 'Build and send surveys'
         },
         {
           title: 'Manage Shifts',

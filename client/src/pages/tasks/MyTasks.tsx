@@ -45,6 +45,15 @@ interface Task {
   };
 }
 
+interface PendingSurveyItem {
+  surveyId: string;
+  title: string;
+  description?: string;
+  campName: string;
+  sentAt?: string | null;
+  coveredBySubmitterName?: string;
+}
+
 const MyTasks: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -56,6 +65,8 @@ const MyTasks: React.FC = () => {
   const [eventData, setEventData] = useState<any>(null);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [signUpLoading, setSignUpLoading] = useState<string | null>(null);
+  const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
+  const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -78,15 +89,18 @@ const MyTasks: React.FC = () => {
   const fetchMyTasks = async () => {
     try {
       setLoading(true);
-      // Fetch tasks assigned to the current user with cache-busting to ensure fresh camp data
-      const response = await apiService.get('/tasks/my-tasks', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
+      const [tasksResponse, surveysResponse] = await Promise.all([
+        apiService.get('/tasks/my-tasks', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }),
+        apiService.getMyPendingSurveys().catch(() => ({ pendingSurveys: [], completedSurveys: [] }))
+      ]);
+
       // Normalize payload in case API returns raw Mongoose docs
-      const normalized = (response || []).map((item: any) => {
+      const normalized = (tasksResponse || []).map((item: any) => {
         // If payload looks like a Mongoose doc wrapper, unwrap
         const task = item?._doc ? { ...item._doc, camp: item.camp } : item;
 
@@ -101,9 +115,11 @@ const MyTasks: React.FC = () => {
       });
 
       setTasks(normalized);
+      setPendingSurveys(surveysResponse.pendingSurveys || []);
+      setCompletedSurveys(surveysResponse.completedSurveys || []);
     } catch (error) {
       console.error('Error fetching my tasks:', error);
-      setError('Failed to load your tasks');
+      setError('Failed to load your to-dos');
     } finally {
       setLoading(false);
     }
@@ -367,11 +383,11 @@ const MyTasks: React.FC = () => {
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-h1 font-lato font-bold text-custom-text">
-          My Tasks
+          To-dos
         </h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">
-            Tasks assigned to you by your camp
+            Tasks and surveys assigned to you by your camp
           </span>
           <button
             onClick={fetchMyTasks}
@@ -400,12 +416,55 @@ const MyTasks: React.FC = () => {
         </div>
       )}
 
+      <Card className="mb-6">
+        <div className="p-5">
+          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Surveys</h2>
+          {pendingSurveys.length === 0 ? (
+            <p className="text-sm text-gray-600">No pending surveys right now.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingSurveys.map((survey) => (
+                <button
+                  key={survey.surveyId}
+                  onClick={() => navigate(`/surveys/${survey.surveyId}`)}
+                  className="w-full text-left border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <p className="font-work font-medium text-custom-text">{survey.title}</p>
+                      <p className="text-xs text-gray-500">{survey.campName}</p>
+                    </div>
+                    <Badge variant="warning">Pending</Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {completedSurveys.length > 0 && (
+            <div className="mt-4 border-t border-gray-200 pt-3">
+              <h3 className="text-sm font-semibold text-custom-text mb-2">Completed by Group Coverage</h3>
+              <div className="space-y-2">
+                {completedSurveys.slice(0, 6).map((survey) => (
+                  <div key={`${survey.surveyId}-completed`} className="text-xs text-gray-600 flex items-center justify-between">
+                    <span>
+                      {survey.title} ({survey.campName})
+                    </span>
+                    <span>Covered by {survey.coveredBySubmitterName || 'another responder'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {tasks.length === 0 ? (
         <Card className="text-center">
           <div className="py-12">
             <Assignment size={64} className="text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-lato font-bold text-gray-600 mb-2">
-              No tasks assigned to you yet
+              No task to-dos assigned yet
             </h3>
             <p className="text-sm text-gray-500">
               Your camp leaders will assign tasks to you here when they're available
@@ -413,13 +472,16 @@ const MyTasks: React.FC = () => {
           </div>
         </Card>
       ) : (
-        <Table
-          columns={columns}
-          data={tasks}
-          loading={loading}
-          emptyText="No tasks found"
-          onRowClick={(task) => handleViewTask(task)}
-        />
+        <>
+          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Task To-dos</h2>
+          <Table
+            columns={columns}
+            data={tasks}
+            loading={loading}
+            emptyText="No tasks found"
+            onRowClick={(task) => handleViewTask(task)}
+          />
+        </>
       )}
 
       {/* Task Details Modal */}

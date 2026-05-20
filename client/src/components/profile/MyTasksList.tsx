@@ -59,7 +59,7 @@ const MyTasksList: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h2 className="text-xl font-lato-bold text-custom-text flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-custom-primary" />
-          My Tasks
+          To-dos
         </h2>
 
         <select

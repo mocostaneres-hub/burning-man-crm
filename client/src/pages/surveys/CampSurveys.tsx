@@ -1,0 +1,686 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+import { Badge, Button, Card, Modal } from '../../components/ui';
+import { Survey, SurveyQuestion } from '../../types';
+import { Plus, Send, Clock, ClipboardList } from 'lucide-react';
+
+type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+
+const defaultQuestion = (): SurveyQuestion => ({
+  order: 0,
+  blockType: 'short_answer',
+  prompt: '',
+  required: false,
+  options: [],
+  supportLevel: 'supported'
+});
+
+const CampSurveys: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { campIdentifier } = useParams<{ campIdentifier?: string }>();
+
+  const [campId, setCampId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultQuestion()]);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+
+  const [assignmentModeBySurvey, setAssignmentModeBySurvey] = useState<Record<string, AssignmentMode>>({});
+  const [selectedUsersBySurvey, setSelectedUsersBySurvey] = useState<Record<string, string[]>>({});
+  const [rosterUsers, setRosterUsers] = useState<Array<{ userId: string; name: string; isLead: boolean }>>([]);
+  const [sendingSurveyId, setSendingSurveyId] = useState<string | null>(null);
+  const [closingSurveyId, setClosingSurveyId] = useState<string | null>(null);
+
+  const [responsesModalOpen, setResponsesModalOpen] = useState(false);
+  const [activeResponsesSurvey, setActiveResponsesSurvey] = useState<Survey | null>(null);
+  const [responses, setResponses] = useState<any[]>([]);
+  const [editingResponseId, setEditingResponseId] = useState<string | null>(null);
+  const [editingAnswersJson, setEditingAnswersJson] = useState<string>('');
+  const [savingResponse, setSavingResponse] = useState(false);
+
+  const canImportFromPublicLink = useMemo(
+    () => user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId),
+    [user?.accountType, user?.campId]
+  );
+
+  const canManageCamp = useMemo(
+    () => user?.accountType === 'camp' || user?.isCampLead === true || (user?.accountType === 'admin' && !!user?.campId),
+    [user?.accountType, user?.isCampLead, user?.campId]
+  );
+
+  const loadCampContext = useCallback(async () => {
+    if (!user) return '';
+    if (user.accountType === 'camp' || (user.accountType === 'admin' && user.campId)) {
+      const myCamp = await api.getMyCamp();
+      return myCamp?._id?.toString?.() || '';
+    }
+    if (user.isCampLead && user.campLeadCampId) {
+      return user.campLeadCampId;
+    }
+    return '';
+  }, [user]);
+
+  const loadSurveys = useCallback(
+    async (resolvedCampId?: string) => {
+      try {
+        const cid = resolvedCampId || campId;
+        if (!cid) return;
+        setLoading(true);
+        const [surveyRes, memberRes] = await Promise.all([
+          api.getCampSurveys(cid),
+          api.getCampMembers(cid)
+        ]);
+        setSurveys(surveyRes.surveys || []);
+        const users = (memberRes.members || [])
+          .map((member: any) => {
+            const userDoc = member.user;
+            if (!userDoc || !userDoc._id) return null;
+            const name = `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || userDoc.email || 'Member';
+            return {
+              userId: userDoc._id,
+              name,
+              isLead:
+                member.isCampLead === true ||
+                ['camp-lead', 'project-lead', 'lead', 'admin'].includes(String(member.role || '').toLowerCase())
+            };
+          })
+          .filter(Boolean);
+        setRosterUsers(users as Array<{ userId: string; name: string; isLead: boolean }>);
+      } catch (err: any) {
+        setError(err?.response?.data?.message || 'Failed to load surveys');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [campId]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const resolvedCampId = await loadCampContext();
+        if (!mounted) return;
+        if (!resolvedCampId) {
+          setError('Unable to resolve camp context');
+          setLoading(false);
+          return;
+        }
+        if (campIdentifier && campIdentifier !== resolvedCampId && campIdentifier !== user?.campLeadCampSlug) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+        setCampId(resolvedCampId);
+        await loadSurveys(resolvedCampId);
+      } catch (err: any) {
+        if (mounted) {
+          setError(err?.response?.data?.message || 'Failed to initialize surveys');
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [campIdentifier, loadCampContext, loadSurveys, navigate, user?.campLeadCampSlug]);
+
+  const resetEditor = () => {
+    setEditingSurveyId(null);
+    setTitle('');
+    setDescription('');
+    setQuestions([defaultQuestion()]);
+    setImportWarnings([]);
+  };
+
+  const openCreateModal = () => {
+    resetEditor();
+    setEditorOpen(true);
+  };
+
+  const openEditModal = async (survey: Survey) => {
+    try {
+      const detail = await api.getSurveyDetails(survey._id);
+      setEditingSurveyId(survey._id);
+      setTitle(detail.survey.title || '');
+      setDescription(detail.survey.description || '');
+      setQuestions((detail.questions || []).map((question: any, index: number) => ({ ...question, order: index })));
+      setEditorOpen(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load survey details');
+    }
+  };
+
+  const setQuestion = (index: number, patch: Partial<SurveyQuestion>) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => (qIndex === index ? { ...question, ...patch, order: qIndex } : question))
+    );
+  };
+
+  const addQuestion = () => {
+    setQuestions((prev) => [...prev, { ...defaultQuestion(), order: prev.length }]);
+  };
+
+  const removeQuestion = (index: number) => {
+    setQuestions((prev) => prev.filter((_, i) => i !== index).map((question, i) => ({ ...question, order: i })));
+  };
+
+  const saveDraft = async () => {
+    if (!campId || !title.trim()) {
+      setError('Survey title is required');
+      return;
+    }
+    const sanitizedQuestions = questions
+      .map((question, index) => ({
+        ...question,
+        order: index,
+        prompt: String(question.prompt || '').trim(),
+        options: Array.isArray(question.options)
+          ? question.options.filter((option) => option.label && option.value)
+          : []
+      }))
+      .filter((question) => question.blockType === 'section_header' || question.blockType === 'description' || question.prompt);
+
+    if (sanitizedQuestions.length === 0) {
+      setError('Add at least one question or section before saving');
+      return;
+    }
+
+    try {
+      setSavingDraft(true);
+      setError(null);
+      if (editingSurveyId) {
+        await api.updateSurveyDraft(editingSurveyId, {
+          title: title.trim(),
+          description: description.trim(),
+          questions: sanitizedQuestions
+        });
+      } else {
+        await api.createSurveyDraft({
+          campId,
+          title: title.trim(),
+          description: description.trim(),
+          questions: sanitizedQuestions
+        });
+      }
+      setEditorOpen(false);
+      resetEditor();
+      await loadSurveys();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to save survey draft');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const runImportSuggestion = async () => {
+    if (!campId || !importUrl.trim()) return;
+    try {
+      setImportLoading(true);
+      setError(null);
+      const response = await api.importSurveyFromPublicForm({
+        campId,
+        url: importUrl.trim(),
+        saveDraft: true
+      });
+      if (response.survey) {
+        setImportWarnings(response.survey.importWarnings || response.suggestion?.warnings || []);
+        setImportModalOpen(false);
+        setImportUrl('');
+        await loadSurveys();
+      } else {
+        setError(response?.message || 'Could not parse this form. You can continue manually.');
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          'Public form could not be imported. You can continue by creating your survey manually.'
+      );
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleSendSurvey = async (survey: Survey) => {
+    try {
+      setSendingSurveyId(survey._id);
+      setError(null);
+      const assignmentMode = assignmentModeBySurvey[survey._id] || 'ALL_ROSTER';
+      const selectedUserIds = selectedUsersBySurvey[survey._id] || [];
+      await api.sendSurvey(survey._id, {
+        assignmentMode,
+        selectedUserIds
+      });
+      await loadSurveys();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to send survey');
+    } finally {
+      setSendingSurveyId(null);
+    }
+  };
+
+  const handleCloseSurvey = async (survey: Survey) => {
+    try {
+      setClosingSurveyId(survey._id);
+      setError(null);
+      await api.closeSurvey(survey._id);
+      await loadSurveys();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to close survey');
+    } finally {
+      setClosingSurveyId(null);
+    }
+  };
+
+  const openResponsesModal = async (survey: Survey) => {
+    try {
+      setActiveResponsesSurvey(survey);
+      setResponsesModalOpen(true);
+      setEditingResponseId(null);
+      setEditingAnswersJson('');
+      const response = await api.getSurveyResponses(survey._id);
+      setResponses(response.responses || []);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to load survey responses');
+    }
+  };
+
+  const startEditResponse = (response: any) => {
+    setEditingResponseId(response._id);
+    setEditingAnswersJson(JSON.stringify(response.answers || [], null, 2));
+  };
+
+  const saveEditedResponse = async () => {
+    if (!activeResponsesSurvey || !editingResponseId) return;
+    try {
+      setSavingResponse(true);
+      const parsedAnswers = JSON.parse(editingAnswersJson);
+      await api.editSurveyResponse(activeResponsesSurvey._id, editingResponseId, {
+        answers: parsedAnswers,
+        editReason: 'Updated from camp survey manager'
+      });
+      const response = await api.getSurveyResponses(activeResponsesSurvey._id);
+      setResponses(response.responses || []);
+      setEditingResponseId(null);
+      setEditingAnswersJson('');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update response');
+    } finally {
+      setSavingResponse(false);
+    }
+  };
+
+  if (!canManageCamp) {
+    return (
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        <Card className="p-6">
+          <p className="text-red-600">Camp management access is required to use surveys.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto py-8 px-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-h1 font-lato-bold text-custom-text">Surveys</h1>
+          <p className="text-sm text-custom-text-secondary">Create draft surveys, import suggestions, and send to roster members.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {canImportFromPublicLink && (
+            <Button variant="outline" onClick={() => setImportModalOpen(true)} className="flex items-center gap-2">
+              <ClipboardList size={16} />
+              Create from public form link
+            </Button>
+          )}
+          <Button variant="primary" onClick={openCreateModal} className="flex items-center gap-2">
+            <Plus size={16} />
+            New Survey
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 text-red-700 px-4 py-2 text-sm">
+          {error}
+        </div>
+      )}
+
+      {importWarnings.length > 0 && (
+        <div className="mb-4 rounded border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+          <p className="font-medium mb-1">Imported survey warnings</p>
+          <ul className="list-disc list-inside space-y-1">
+            {importWarnings.map((warning, index) => (
+              <li key={`${warning}-${index}`}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {loading ? (
+        <Card className="p-8 text-center text-sm text-gray-500">Loading surveys...</Card>
+      ) : surveys.length === 0 ? (
+        <Card className="p-8 text-center">
+          <ClipboardList className="mx-auto mb-3 text-gray-400" />
+          <p className="text-custom-text-secondary">No surveys yet. Create your first draft to get started.</p>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {surveys.map((survey) => {
+            const assignmentMode = assignmentModeBySurvey[survey._id] || 'ALL_ROSTER';
+            const selectedUsers = selectedUsersBySurvey[survey._id] || [];
+            return (
+              <Card key={survey._id} className="p-4">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h2 className="text-lg font-semibold text-custom-text truncate">{survey.title}</h2>
+                      <Badge variant={survey.status === 'draft' ? 'warning' : survey.status === 'sent' ? 'info' : 'neutral'}>
+                        {survey.status}
+                      </Badge>
+                      {survey.isLocked && <Clock size={14} className="text-gray-500" />}
+                    </div>
+                    <p className="text-sm text-custom-text-secondary mb-2">{survey.description || 'No description'}</p>
+                    {survey.completionStats && (
+                      <p className="text-xs text-gray-600">
+                        Completion: {survey.completionStats.completedMembers}/{survey.completionStats.totalRosterMembers} ({survey.completionStats.completionRate}%)
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 lg:w-[360px]">
+                    {survey.status === 'draft' && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                          <label className="col-span-1 sm:col-span-1">
+                            <span className="block text-gray-600 mb-1">Targeting</span>
+                            <select
+                              value={assignmentMode}
+                              onChange={(e) =>
+                                setAssignmentModeBySurvey((prev) => ({
+                                  ...prev,
+                                  [survey._id]: e.target.value as AssignmentMode
+                                }))
+                              }
+                              className="w-full border border-gray-300 rounded px-2 py-1"
+                            >
+                              <option value="ALL_ROSTER">All roster</option>
+                              <option value="LEADS_ONLY">Leads only</option>
+                              <option value="SELECTED_USERS">Selected users</option>
+                            </select>
+                          </label>
+                          {assignmentMode === 'SELECTED_USERS' && (
+                            <div className="col-span-1 sm:col-span-2 border border-gray-200 rounded p-2 max-h-28 overflow-y-auto">
+                              {rosterUsers.map((rosterUser) => (
+                                <label key={rosterUser.userId} className="flex items-center gap-2 text-xs py-0.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUsers.includes(rosterUser.userId)}
+                                    onChange={() =>
+                                      setSelectedUsersBySurvey((prev) => {
+                                        const current = prev[survey._id] || [];
+                                        const exists = current.includes(rosterUser.userId);
+                                        return {
+                                          ...prev,
+                                          [survey._id]: exists
+                                            ? current.filter((id) => id !== rosterUser.userId)
+                                            : [...current, rosterUser.userId]
+                                        };
+                                      })
+                                    }
+                                  />
+                                  <span>{rosterUser.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
+                            Edit Draft
+                          </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="flex items-center gap-1"
+                            onClick={() => handleSendSurvey(survey)}
+                            disabled={sendingSurveyId === survey._id}
+                          >
+                            <Send size={14} />
+                            {sendingSurveyId === survey._id ? 'Sending...' : 'Send Survey'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+
+                    {survey.status !== 'draft' && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openResponsesModal(survey)}>
+                          Review Responses
+                        </Button>
+                        {survey.status === 'sent' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCloseSurvey(survey)}
+                            disabled={closingSurveyId === survey._id}
+                          >
+                            {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <Modal isOpen={editorOpen} onClose={() => setEditorOpen(false)} title={editingSurveyId ? 'Edit Survey Draft' : 'Create Survey Draft'} size="xl">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Survey title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2"
+              placeholder="Volunteer Preferences Survey"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 min-h-[80px]"
+              placeholder="Tell members what this survey is for..."
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-custom-text">Questions</h3>
+              <Button variant="outline" size="sm" onClick={addQuestion}>
+                Add Question
+              </Button>
+            </div>
+            {questions.map((question, index) => (
+              <div key={`question-${index}`} className="border border-gray-200 rounded p-3 space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-600 mb-1">Prompt</label>
+                    <input
+                      value={question.prompt}
+                      onChange={(e) => setQuestion(index, { prompt: e.target.value })}
+                      className="w-full border border-gray-300 rounded px-2 py-1"
+                      placeholder="Question prompt"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Type</label>
+                    <select
+                      value={question.blockType}
+                      onChange={(e) => setQuestion(index, { blockType: e.target.value as any })}
+                      className="w-full border border-gray-300 rounded px-2 py-1"
+                    >
+                      <option value="short_answer">Short Answer</option>
+                      <option value="paragraph">Paragraph</option>
+                      <option value="multiple_choice">Multiple Choice</option>
+                      <option value="checkboxes">Checkboxes</option>
+                      <option value="dropdown">Dropdown</option>
+                      <option value="linear_scale">Linear Scale</option>
+                      <option value="date">Date</option>
+                      <option value="time">Time</option>
+                      <option value="section_header">Section Header</option>
+                    </select>
+                  </div>
+                </div>
+
+                {['multiple_choice', 'checkboxes', 'dropdown'].includes(question.blockType) && (
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Options (comma separated)</label>
+                    <input
+                      value={(question.options || []).map((option) => option.label).join(', ')}
+                      onChange={(e) =>
+                        setQuestion(index, {
+                          options: e.target.value
+                            .split(',')
+                            .map((value) => value.trim())
+                            .filter(Boolean)
+                            .map((value) => ({ label: value, value }))
+                        })
+                      }
+                      className="w-full border border-gray-300 rounded px-2 py-1"
+                      placeholder="Option A, Option B, Option C"
+                    />
+                  </div>
+                )}
+
+                <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={question.required === true}
+                    onChange={(e) => setQuestion(index, { required: e.target.checked })}
+                  />
+                  Required question
+                </label>
+
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => removeQuestion(index)} disabled={questions.length === 1}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditorOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={saveDraft} disabled={savingDraft}>
+              {savingDraft ? 'Saving...' : editingSurveyId ? 'Save Draft' : 'Create Draft'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} title="Create from public form link" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-custom-text-secondary">
+            Paste a publicly accessible form URL. G8Road will suggest a similar draft survey. Private/protected forms are rejected.
+          </p>
+          <input
+            value={importUrl}
+            onChange={(e) => setImportUrl(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2"
+            placeholder="https://example.com/public-form"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setImportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={runImportSuggestion} disabled={importLoading || !importUrl.trim()}>
+              {importLoading ? 'Analyzing...' : 'Generate Draft Suggestion'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={responsesModalOpen}
+        onClose={() => {
+          setResponsesModalOpen(false);
+          setEditingResponseId(null);
+          setEditingAnswersJson('');
+          setResponses([]);
+          setActiveResponsesSurvey(null);
+        }}
+        title={activeResponsesSurvey ? `Responses · ${activeResponsesSurvey.title}` : 'Responses'}
+        size="xl"
+      >
+        <div className="space-y-3">
+          {responses.length === 0 ? (
+            <p className="text-sm text-gray-500">No responses submitted yet.</p>
+          ) : (
+            responses.map((response) => (
+              <div key={response._id} className="border border-gray-200 rounded p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-medium text-sm">{response.submitterName || 'Responder'}</p>
+                    <p className="text-xs text-gray-500">
+                      Covered: {(response.coveredMembers || []).map((member: any) => member.name).join(', ') || 'None'}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => startEditResponse(response)}>
+                    Edit Response
+                  </Button>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {(response.answers || []).length} answer field(s)
+                </div>
+              </div>
+            ))
+          )}
+
+          {editingResponseId && (
+            <div className="border border-blue-200 bg-blue-50 rounded p-3 space-y-2">
+              <p className="text-sm font-medium text-blue-900">Editing response answers (JSON)</p>
+              <textarea
+                value={editingAnswersJson}
+                onChange={(e) => setEditingAnswersJson(e.target.value)}
+                className="w-full min-h-[180px] border border-blue-200 rounded px-2 py-2 text-xs font-mono"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingResponseId(null)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" onClick={saveEditedResponse} disabled={savingResponse}>
+                  {savingResponse ? 'Saving...' : 'Save Response'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+export default CampSurveys;
