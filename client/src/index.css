@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Lato:wght@700&family=Work+Sans:wght@400;500;600&display=swap');
+/* Google-hosted webfont import removed for consent compliance.
+   We keep the font utility classes and rely on local/system fallbacks. */
 
 @layer base {
   body {
