@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { Badge, Button, Card } from '../../components/ui';
 import { Survey, SurveyQuestion } from '../../types';
@@ -27,9 +27,17 @@ const answerableBlockTypes = new Set([
   'time'
 ]);
 
+const sanitizeRichTextHtml = (value: string): string =>
+  String(value || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+
 const SurveyRespond: React.FC = () => {
   const navigate = useNavigate();
   const { surveyId } = useParams<{ surveyId: string }>();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +51,7 @@ const SurveyRespond: React.FC = () => {
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, SurveyAnswerValue>>({});
+  const isViewMode = searchParams.get('mode') === 'view' || searchParams.get('view') === '1';
 
   const loadSurvey = useCallback(async () => {
     if (!surveyId) return;
@@ -326,6 +335,59 @@ const SurveyRespond: React.FC = () => {
     }
   };
 
+  const renderQuestionPreview = (question: SurveyQuestion) => {
+    const prompt = question.prompt || 'Untitled question';
+    if (question.blockType === 'section_header') {
+      return <h3 className="text-base font-semibold text-custom-text border-t border-gray-200 pt-3">{prompt}</h3>;
+    }
+    if (question.blockType === 'description') {
+      return <p className="text-sm text-custom-text-secondary">{prompt}</p>;
+    }
+    if (question.blockType === 'image_block' || question.blockType === 'video_block') {
+      return (
+        <div className="text-xs text-gray-500">
+          Media block: {question.mediaUrl || 'No media URL'}
+        </div>
+      );
+    }
+    if (question.blockType === 'linear_scale') {
+      const min = Number(question.linearScale?.min || 1);
+      const max = Number(question.linearScale?.max || 5);
+      return (
+        <div>
+          <p className="text-sm font-medium text-custom-text">
+            {prompt} {question.required ? <span className="text-red-500">*</span> : null}
+          </p>
+          <p className="text-xs text-gray-600 mt-1">Scale: {min} to {max}</p>
+        </div>
+      );
+    }
+
+    if (['multiple_choice', 'checkboxes', 'dropdown'].includes(question.blockType)) {
+      return (
+        <div>
+          <p className="text-sm font-medium text-custom-text">
+            {prompt} {question.required ? <span className="text-red-500">*</span> : null}
+          </p>
+          <ul className="mt-1 text-sm text-gray-700 list-disc list-inside">
+            {(question.options || []).map((option) => (
+              <li key={option.value}>{option.label}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <p className="text-sm font-medium text-custom-text">
+          {prompt} {question.required ? <span className="text-red-500">*</span> : null}
+        </p>
+        <p className="text-xs text-gray-600 mt-1">Answer type: {question.blockType.replace('_', ' ')}</p>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto py-8 px-4">
@@ -346,6 +408,8 @@ const SurveyRespond: React.FC = () => {
 
   const isCovered = viewer?.isCovered;
   const canRespond = viewer?.canRespond;
+  const showInteractiveForm = canRespond && !isViewMode;
+  const showReadOnlyView = isViewMode || !canRespond || isCovered;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -353,13 +417,35 @@ const SurveyRespond: React.FC = () => {
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
             <h1 className="text-h2 font-lato-bold text-custom-text">{survey.title}</h1>
-            <p className="text-sm text-custom-text-secondary mt-1">{survey.description || 'No description'}</p>
+            {survey.description ? (
+              <div
+                className="text-sm text-custom-text-secondary mt-1"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(survey.description) }}
+              />
+            ) : (
+              <p className="text-sm text-custom-text-secondary mt-1">No description</p>
+            )}
           </div>
           <Badge variant={survey.status === 'sent' ? 'info' : survey.status === 'closed' ? 'neutral' : 'warning'}>
             {survey.status}
           </Badge>
         </div>
       </Card>
+
+      {isViewMode && (
+        <Card className="p-4 mb-4 border border-blue-200 bg-blue-50">
+          <p className="text-sm text-blue-900">
+            Viewing this survey in read-only mode.
+          </p>
+          {canRespond && (
+            <div className="mt-2">
+              <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${surveyId}`)}>
+                Switch to response mode
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 text-red-700 px-4 py-2 text-sm">
@@ -384,7 +470,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {!canRespond && !isCovered && (
+      {!canRespond && !isCovered && !isViewMode && (
         <Card className="p-5 mb-4">
           <p className="text-sm text-gray-700">
             You do not currently have permission to submit this survey.
@@ -392,7 +478,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {canRespond && (
+      {showInteractiveForm && (
         <>
           <Card className="p-5 mb-4">
             <h2 className="text-base font-semibold text-custom-text mb-2">Who are you responding for?</h2>
@@ -467,6 +553,21 @@ const SurveyRespond: React.FC = () => {
             </Button>
           </div>
         </>
+      )}
+
+      {showReadOnlyView && (
+        <Card className="p-5 space-y-4 mt-4">
+          <h2 className="text-base font-semibold text-custom-text">Survey Questions</h2>
+          {questions.length === 0 ? (
+            <p className="text-sm text-gray-500">No questions found for this survey.</p>
+          ) : (
+            questions.map((question, index) => (
+              <div key={question._id || `${question.blockType}-${index}`} className="space-y-1">
+                {renderQuestionPreview(question)}
+              </div>
+            ))
+          )}
+        </Card>
       )}
     </div>
   );

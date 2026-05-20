@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Badge, Button, Card, Modal } from '../../components/ui';
 import { Survey, SurveyQuestion } from '../../types';
-import { Plus, Send, Clock, ClipboardList } from 'lucide-react';
+import { Plus, Send, Clock, ClipboardList, Eye } from 'lucide-react';
 
 type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
 
@@ -16,6 +16,21 @@ const defaultQuestion = (): SurveyQuestion => ({
   options: [],
   supportLevel: 'supported'
 });
+
+const optionBlockTypes = new Set(['multiple_choice', 'checkboxes', 'dropdown']);
+
+const sanitizeRichTextHtml = (value: string): string =>
+  String(value || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '');
+
+const stripHtmlToText = (value: string): string =>
+  sanitizeRichTextHtml(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const CampSurveys: React.FC = () => {
   const { user } = useAuth();
@@ -33,6 +48,8 @@ const CampSurveys: React.FC = () => {
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultQuestion()]);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [descriptionPreviewMode, setDescriptionPreviewMode] = useState(false);
+  const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -144,21 +161,34 @@ const CampSurveys: React.FC = () => {
     setDescription('');
     setQuestions([defaultQuestion()]);
     setImportWarnings([]);
+    setDescriptionPreviewMode(false);
   };
 
   const openCreateModal = () => {
     resetEditor();
     setEditorOpen(true);
+    setTimeout(() => {
+      if (descriptionEditorRef.current) {
+        descriptionEditorRef.current.innerHTML = '';
+      }
+    }, 0);
   };
 
   const openEditModal = async (survey: Survey) => {
     try {
       const detail = await api.getSurveyDetails(survey._id);
+      const nextDescription = detail.survey.description || '';
       setEditingSurveyId(survey._id);
       setTitle(detail.survey.title || '');
-      setDescription(detail.survey.description || '');
+      setDescription(nextDescription);
       setQuestions((detail.questions || []).map((question: any, index: number) => ({ ...question, order: index })));
       setEditorOpen(true);
+      setDescriptionPreviewMode(false);
+      setTimeout(() => {
+        if (descriptionEditorRef.current) {
+          descriptionEditorRef.current.innerHTML = nextDescription;
+        }
+      }, 0);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load survey details');
     }
@@ -174,8 +204,89 @@ const CampSurveys: React.FC = () => {
     setQuestions((prev) => [...prev, { ...defaultQuestion(), order: prev.length }]);
   };
 
+  const moveQuestion = (index: number, delta: -1 | 1) => {
+    setQuestions((prev) => {
+      const targetIndex = index + delta;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next.map((question, qIndex) => ({ ...question, order: qIndex }));
+    });
+  };
+
   const removeQuestion = (index: number) => {
     setQuestions((prev) => prev.filter((_, i) => i !== index).map((question, i) => ({ ...question, order: i })));
+  };
+
+  const addOptionField = (questionIndex: number) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) =>
+        qIndex === questionIndex
+          ? {
+              ...question,
+              options: [...(question.options || []), { label: '', value: '' }]
+            }
+          : question
+      )
+    );
+  };
+
+  const setOptionField = (questionIndex: number, optionIndex: number, nextLabel: string) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => {
+        if (qIndex !== questionIndex) return question;
+        const nextOptions = [...(question.options || [])];
+        nextOptions[optionIndex] = {
+          ...(nextOptions[optionIndex] || { isOther: false }),
+          label: nextLabel,
+          value: nextLabel
+        };
+        return { ...question, options: nextOptions };
+      })
+    );
+  };
+
+  const removeOptionField = (questionIndex: number, optionIndex: number) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => {
+        if (qIndex !== questionIndex) return question;
+        const nextOptions = [...(question.options || [])].filter((_, index) => index !== optionIndex);
+        return { ...question, options: nextOptions };
+      })
+    );
+  };
+
+  const moveOptionField = (questionIndex: number, optionIndex: number, delta: -1 | 1) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => {
+        if (qIndex !== questionIndex) return question;
+        const nextOptions = [...(question.options || [])];
+        const targetIndex = optionIndex + delta;
+        if (targetIndex < 0 || targetIndex >= nextOptions.length) return question;
+        [nextOptions[optionIndex], nextOptions[targetIndex]] = [nextOptions[targetIndex], nextOptions[optionIndex]];
+        return { ...question, options: nextOptions };
+      })
+    );
+  };
+
+  const applyDescriptionFormat = (command: string) => {
+    document.execCommand(command, false);
+    if (descriptionEditorRef.current) {
+      setDescription(descriptionEditorRef.current.innerHTML);
+    }
+  };
+
+  const insertDescriptionLink = () => {
+    const href = window.prompt('Enter URL', 'https://');
+    if (!href) return;
+    document.execCommand('createLink', false, href);
+    if (descriptionEditorRef.current) {
+      setDescription(descriptionEditorRef.current.innerHTML);
+    }
+  };
+
+  const openSurveyViewMode = (surveyId: string) => {
+    navigate(`/surveys/${surveyId}?mode=view`);
   };
 
   const saveDraft = async () => {
@@ -189,7 +300,16 @@ const CampSurveys: React.FC = () => {
         order: index,
         prompt: String(question.prompt || '').trim(),
         options: Array.isArray(question.options)
-          ? question.options.filter((option) => option.label && option.value)
+          ? question.options
+              .map((option) => {
+                const nextLabel = String(option.label || option.value || '').trim();
+                return {
+                  ...option,
+                  label: nextLabel,
+                  value: nextLabel
+                };
+              })
+              .filter((option) => option.label && option.value)
           : []
       }))
       .filter((question) => question.blockType === 'section_header' || question.blockType === 'description' || question.prompt);
@@ -394,7 +514,7 @@ const CampSurveys: React.FC = () => {
                       </Badge>
                       {survey.isLocked && <Clock size={14} className="text-gray-500" />}
                     </div>
-                    <p className="text-sm text-custom-text-secondary mb-2">{survey.description || 'No description'}</p>
+                    <p className="text-sm text-custom-text-secondary mb-2">{stripHtmlToText(survey.description || '') || 'No description'}</p>
                     {survey.completionStats && (
                       <p className="text-xs text-gray-600">
                         Completion: {survey.completionStats.completedMembers}/{survey.completionStats.totalRosterMembers} ({survey.completionStats.completionRate}%)
@@ -450,6 +570,10 @@ const CampSurveys: React.FC = () => {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
+                            <Eye size={14} />
+                            Open View
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
                             Edit Draft
                           </Button>
@@ -469,6 +593,10 @@ const CampSurveys: React.FC = () => {
 
                     {survey.status !== 'draft' && (
                       <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
+                          <Eye size={14} />
+                          Open View
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => openResponsesModal(survey)}>
                           Review Responses
                         </Button>
@@ -505,12 +633,39 @@ const CampSurveys: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2 min-h-[80px]"
-              placeholder="Tell members what this survey is for..."
-            />
+            <div className="rounded border border-gray-200">
+              <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('bold')}>Bold</Button>
+                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('italic')}>Italic</Button>
+                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('insertUnorderedList')}>Bullets</Button>
+                <Button variant="outline" size="sm" onClick={insertDescriptionLink}>Link</Button>
+                <Button
+                  variant={descriptionPreviewMode ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setDescriptionPreviewMode((prev) => !prev)}
+                >
+                  {descriptionPreviewMode ? 'Editing' : 'Preview'}
+                </Button>
+              </div>
+              {!descriptionPreviewMode ? (
+                <div
+                  ref={descriptionEditorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => setDescription(descriptionEditorRef.current?.innerHTML || '')}
+                  className="min-h-[120px] p-3 outline-none text-sm"
+                />
+              ) : (
+                <div
+                  className="min-h-[120px] p-3 text-sm prose max-w-none"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(description || '<p class="text-gray-500">No description yet.</p>') }}
+                />
+              )}
+            </div>
+            <div className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <p className="font-semibold mb-1">Formatting guide</p>
+              <p>Use bold, italic, bullets, and links to explain survey context. Toggle preview to check exactly what roster members will read.</p>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -522,6 +677,22 @@ const CampSurveys: React.FC = () => {
             </div>
             {questions.map((question, index) => (
               <div key={`question-${index}`} className="border border-gray-200 rounded p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs font-semibold text-gray-600">Question #{index + 1}</p>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => moveQuestion(index, -1)} disabled={index === 0}>
+                      Move Up
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => moveQuestion(index, 1)}
+                      disabled={index === questions.length - 1}
+                    >
+                      Move Down
+                    </Button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="md:col-span-2">
                     <label className="block text-xs text-gray-600 mb-1">Prompt</label>
@@ -552,23 +723,48 @@ const CampSurveys: React.FC = () => {
                   </div>
                 </div>
 
-                {['multiple_choice', 'checkboxes', 'dropdown'].includes(question.blockType) && (
+                {optionBlockTypes.has(question.blockType) && (
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Options (comma separated)</label>
-                    <input
-                      value={(question.options || []).map((option) => option.label).join(', ')}
-                      onChange={(e) =>
-                        setQuestion(index, {
-                          options: e.target.value
-                            .split(',')
-                            .map((value) => value.trim())
-                            .filter(Boolean)
-                            .map((value) => ({ label: value, value }))
-                        })
-                      }
-                      className="w-full border border-gray-300 rounded px-2 py-1"
-                      placeholder="Option A, Option B, Option C"
-                    />
+                    <label className="block text-xs text-gray-600 mb-2">Options</label>
+                    <div className="space-y-2">
+                      {(question.options || []).map((option, optionIndex) => (
+                        <div key={`option-${index}-${optionIndex}`} className="flex items-center gap-2">
+                          <input
+                            value={option.label}
+                            onChange={(e) => setOptionField(index, optionIndex, e.target.value)}
+                            className="flex-1 border border-gray-300 rounded px-2 py-1"
+                            placeholder={`Option ${optionIndex + 1}`}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => moveOptionField(index, optionIndex, -1)}
+                            disabled={optionIndex === 0}
+                          >
+                            ↑
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => moveOptionField(index, optionIndex, 1)}
+                            disabled={optionIndex === (question.options || []).length - 1}
+                          >
+                            ↓
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeOptionField(index, optionIndex)}
+                            disabled={(question.options || []).length <= 1}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" size="sm" onClick={() => addOptionField(index)}>
+                        Add Option
+                      </Button>
+                    </div>
                   </div>
                 )}
 
