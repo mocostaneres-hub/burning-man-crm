@@ -194,6 +194,7 @@ const Navbar: React.FC = () => {
         });
       }
       campLeadItems.push(
+        { label: 'To-dos', path: '/tasks', icon: <Task size={18} /> },
         { label: 'Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
         { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
         { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> },

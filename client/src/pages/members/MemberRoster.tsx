@@ -230,6 +230,96 @@ const toStructuredLocationOrNull = (location?: Partial<StructuredLocation> | nul
   };
 };
 
+const US_STATE_ABBREVIATIONS: Record<string, string> = {
+  alabama: 'AL',
+  alaska: 'AK',
+  arizona: 'AZ',
+  arkansas: 'AR',
+  california: 'CA',
+  colorado: 'CO',
+  connecticut: 'CT',
+  delaware: 'DE',
+  florida: 'FL',
+  georgia: 'GA',
+  hawaii: 'HI',
+  idaho: 'ID',
+  illinois: 'IL',
+  indiana: 'IN',
+  iowa: 'IA',
+  kansas: 'KS',
+  kentucky: 'KY',
+  louisiana: 'LA',
+  maine: 'ME',
+  maryland: 'MD',
+  massachusetts: 'MA',
+  michigan: 'MI',
+  minnesota: 'MN',
+  mississippi: 'MS',
+  missouri: 'MO',
+  montana: 'MT',
+  nebraska: 'NE',
+  nevada: 'NV',
+  'new hampshire': 'NH',
+  'new jersey': 'NJ',
+  'new mexico': 'NM',
+  'new york': 'NY',
+  'north carolina': 'NC',
+  'north dakota': 'ND',
+  ohio: 'OH',
+  oklahoma: 'OK',
+  oregon: 'OR',
+  pennsylvania: 'PA',
+  'rhode island': 'RI',
+  'south carolina': 'SC',
+  'south dakota': 'SD',
+  tennessee: 'TN',
+  texas: 'TX',
+  utah: 'UT',
+  vermont: 'VT',
+  virginia: 'VA',
+  washington: 'WA',
+  'west virginia': 'WV',
+  wisconsin: 'WI',
+  wyoming: 'WY',
+  'district of columbia': 'DC'
+};
+
+const formatRosterLocation = ({
+  city,
+  state,
+  country,
+  countryCode
+}: {
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+}): string => {
+  const normalizedCity = String(city || '').trim();
+  if (!normalizedCity) return 'Not specified';
+
+  const normalizedState = String(state || '').trim();
+  const normalizedCountry = String(country || '').trim();
+  const normalizedCountryCode = String(countryCode || '').trim().toUpperCase();
+  const inferredUsFromLegacyState = !normalizedCountry && !!normalizedState;
+  const isUS =
+    inferredUsFromLegacyState ||
+    normalizedCountryCode === 'US' ||
+    normalizedCountryCode === 'USA' ||
+    ['united states', 'united states of america', 'usa', 'us'].includes(normalizedCountry.toLowerCase());
+
+  if (isUS) {
+    const stateKey = normalizedState.toLowerCase();
+    const twoLetterState =
+      US_STATE_ABBREVIATIONS[stateKey] ||
+      (normalizedState.length === 2 ? normalizedState.toUpperCase() : '');
+
+    return twoLetterState ? `${normalizedCity}, ${twoLetterState}` : normalizedCity;
+  }
+
+  return normalizedCountry ? `${normalizedCity}, ${normalizedCountry}` : normalizedCity;
+};
+
 const MemberRoster: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -2020,9 +2110,9 @@ const MemberRoster: React.FC = () => {
                           const city = overrideLocation?.city || (member as any).overrides?.city || userLocation?.city || user?.city;
                           const state = overrideLocation?.state || (member as any).overrides?.state || userLocation?.state;
                           const country = overrideLocation?.country || userLocation?.country;
+                          const countryCode = overrideLocation?.countryCode || userLocation?.countryCode;
 
-                          if (!city) return 'Not specified';
-                          return [city, state, country].filter(Boolean).join(', ');
+                          return formatRosterLocation({ city, state, country, countryCode });
                         })()
                       )}
                     </td>
