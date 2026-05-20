@@ -1,6 +1,7 @@
 const {
   normalizePublicFormUrl,
-  parsePublicFormToSuggestion
+  parsePublicFormToSuggestion,
+  evaluateRobotsAccess
 } = require('../services/surveyImportService');
 
 describe('survey import service', () => {
@@ -74,5 +75,32 @@ describe('survey import service', () => {
     expect(unsupported.length).toBeGreaterThan(0);
     expect(suggestion.unsupportedCount).toBeGreaterThan(0);
     expect(suggestion.warnings.length).toBeGreaterThan(0);
+  });
+
+  test('robots parsing honors Allow over broader Disallow', () => {
+    const robotsTxt = `
+      User-agent: *
+      Allow: /forms
+      Disallow: /
+    `;
+
+    const allowed = evaluateRobotsAccess(
+      robotsTxt,
+      '/forms/d/e/1FAIpQLSample/viewform',
+      'G8RoadSurveyImportBot/1.0'
+    );
+    expect(allowed.allowed).toBe(true);
+  });
+
+  test('robots parsing blocks explicitly disallowed path', () => {
+    const robotsTxt = `
+      User-agent: *
+      Disallow: /private
+      Allow: /private/public
+    `;
+
+    const blocked = evaluateRobotsAccess(robotsTxt, '/private/secret', 'G8RoadSurveyImportBot/1.0');
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.matchedRule).toBe('/private');
   });
 });

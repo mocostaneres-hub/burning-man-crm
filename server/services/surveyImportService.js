@@ -192,35 +192,136 @@ async function checkRobotsAllow(normalizedUrl) {
 
     if (!response.ok) return { allowed: true, reason: null };
     const text = await response.text();
-    const lines = String(text || '').split(/\r?\n/);
-    let inGlobalSection = false;
-    const disallows = [];
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith('#')) continue;
-      const [directiveRaw, valueRaw = ''] = line.split(':', 2);
-      const directive = directiveRaw.trim().toLowerCase();
-      const value = valueRaw.trim();
-      if (directive === 'user-agent') {
-        inGlobalSection = value === '*';
-      } else if (directive === 'disallow' && inGlobalSection) {
-        disallows.push(value);
-      }
-    }
-
-    const path = parsed.pathname || '/';
-    const blocked = disallows.some((disallow) => {
-      if (!disallow) return false;
-      if (disallow === '/') return true;
-      return path.startsWith(disallow);
-    });
-    if (blocked) {
-      return { allowed: false, reason: 'robots.txt disallows scraping this path' };
+    const evaluation = evaluateRobotsAccess(
+      String(text || ''),
+      parsed.pathname || '/',
+      'G8RoadSurveyImportBot/1.0'
+    );
+    if (!evaluation.allowed) {
+      return {
+        allowed: false,
+        reason: evaluation.matchedRule
+          ? `robots.txt disallows scraping this path (${evaluation.matchedRule})`
+          : 'robots.txt disallows scraping this path'
+      };
     }
     return { allowed: true, reason: null };
   } catch (_error) {
     return { allowed: true, reason: null };
   }
+}
+
+function parseRobotsGroups(robotsText) {
+  const lines = String(robotsText || '').split(/\r?\n/);
+  const groups = [];
+  let currentAgents = [];
+  let currentRules = [];
+  let hasRulesInCurrentGroup = false;
+
+  const flushCurrentGroup = () => {
+    if (currentAgents.length === 0) return;
+    groups.push({
+      agents: [...currentAgents],
+      rules: [...currentRules]
+    });
+    currentAgents = [];
+    currentRules = [];
+    hasRulesInCurrentGroup = false;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const [directiveRaw, valueRaw = ''] = line.split(':', 2);
+    const directive = directiveRaw.trim().toLowerCase();
+    const value = valueRaw.trim();
+
+    if (directive === 'user-agent') {
+      if (hasRulesInCurrentGroup) {
+        flushCurrentGroup();
+      }
+      currentAgents.push(value.toLowerCase());
+      continue;
+    }
+
+    if (directive === 'allow' || directive === 'disallow') {
+      if (currentAgents.length === 0) currentAgents = ['*'];
+      hasRulesInCurrentGroup = true;
+      currentRules.push({
+        type: directive,
+        pattern: value
+      });
+    }
+  }
+
+  flushCurrentGroup();
+  return groups;
+}
+
+function robotAgentMatches(ruleAgent, userAgent) {
+  const rule = String(ruleAgent || '').toLowerCase();
+  const ua = String(userAgent || '').toLowerCase();
+  if (!rule) return false;
+  if (rule === '*') return true;
+  return ua.includes(rule);
+}
+
+function escapeRegexLiteral(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function robotRuleMatchesPath(pattern, path) {
+  if (pattern === '') return true;
+  const rawPattern = String(pattern || '');
+  const hasEndAnchor = rawPattern.endsWith('$');
+  const withoutAnchor = hasEndAnchor ? rawPattern.slice(0, -1) : rawPattern;
+  const regexPattern = withoutAnchor
+    .split('*')
+    .map((part) => escapeRegexLiteral(part))
+    .join('.*');
+  const fullPattern = `^${regexPattern}${hasEndAnchor ? '$' : ''}`;
+  const regex = new RegExp(fullPattern);
+  return regex.test(path);
+}
+
+function evaluateRobotsAccess(robotsText, path, userAgent = '*') {
+  const groups = parseRobotsGroups(robotsText);
+  const matchedGroups = groups.filter((group) =>
+    group.agents.some((agent) => robotAgentMatches(agent, userAgent))
+  );
+
+  if (matchedGroups.length === 0) {
+    return { allowed: true, matchedRule: null };
+  }
+
+  const groupSpecificity = (group) =>
+    Math.max(
+      ...group.agents
+        .filter((agent) => robotAgentMatches(agent, userAgent))
+        .map((agent) => (agent === '*' ? 0 : agent.length))
+    );
+
+  const maxSpecificity = Math.max(...matchedGroups.map(groupSpecificity));
+  const applicableGroups = matchedGroups.filter((group) => groupSpecificity(group) === maxSpecificity);
+  const rules = applicableGroups.flatMap((group) => group.rules);
+
+  let winner = null;
+  for (const rule of rules) {
+    const pattern = String(rule.pattern || '');
+    // Empty Disallow means "allow everything" and should not create a block.
+    if (rule.type === 'disallow' && pattern === '') continue;
+    if (!robotRuleMatchesPath(pattern, path)) continue;
+    const score = pattern.length;
+    if (!winner || score > winner.score || (score === winner.score && rule.type === 'allow')) {
+      winner = { ...rule, score };
+    }
+  }
+
+  if (!winner) return { allowed: true, matchedRule: null };
+  return {
+    allowed: winner.type !== 'disallow',
+    matchedRule: winner.pattern || null
+  };
 }
 
 function findLabelMaps(html) {
@@ -635,5 +736,6 @@ module.exports = {
   PARSER_VERSION,
   normalizePublicFormUrl,
   parsePublicFormToSuggestion,
-  analyzePublicFormUrl
+  analyzePublicFormUrl,
+  evaluateRobotsAccess
 };
