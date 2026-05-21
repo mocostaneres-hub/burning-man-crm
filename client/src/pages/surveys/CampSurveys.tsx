@@ -562,7 +562,11 @@ const CampSurveys: React.FC = () => {
                       </Badge>
                       {survey.isLocked && <Clock size={14} className="text-gray-500" />}
                     </div>
-                    <p className="text-sm text-custom-text-secondary mb-2">{stripHtmlToText(survey.description || '') || 'No description'}</p>
+                    {survey.status !== 'draft' && (
+                      <p className="text-sm text-custom-text-secondary mb-2">
+                        {stripHtmlToText(survey.description || '') || 'No description'}
+                      </p>
+                    )}
                     {survey.completionStats && (
                       <p className="text-xs text-gray-600">
                         Completion: {survey.completionStats.completedMembers}/{survey.completionStats.totalRosterMembers} ({survey.completionStats.completionRate}%)
