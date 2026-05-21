@@ -49,12 +49,15 @@ declare module 'lucide-react' {
   export const Car: ComponentType<LucideProps>;
   export const Share: ComponentType<LucideProps>;
   export const ArrowLeft: ComponentType<LucideProps>;
+  export const ArrowRight: ComponentType<LucideProps>;
   export const Search: ComponentType<LucideProps>;
   export const Home: ComponentType<LucideProps>;
   export const TrendingUp: ComponentType<LucideProps>;
   export const Video: ComponentType<LucideProps>;
   export const MessageSquare: ComponentType<LucideProps>;
   export const CheckSquare: ComponentType<LucideProps>;
+  export const ClipboardCheck: ComponentType<LucideProps>;
+  export const FileText: ComponentType<LucideProps>;
   export const Play: ComponentType<LucideProps>;
   export const Square: ComponentType<LucideProps>;
   export const Mic: ComponentType<LucideProps>;
@@ -67,4 +70,3 @@ declare module 'lucide-react' {
   export const Ban: ComponentType<LucideProps>;
   export const Filter: ComponentType<LucideProps>;
 }
-

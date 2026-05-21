@@ -9,6 +9,7 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
+import { User } from '../../types';
 
 const schema = yup.object({
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -18,6 +19,24 @@ const schema = yup.object({
 type FormData = {
   email: string;
   password: string;
+};
+
+const getCampDashboardPath = (account?: Pick<User, '_id' | 'accountType' | 'campId' | 'campLeadCampId'> | null): string => {
+  const campIdentifier =
+    account?.campId?.toString() ||
+    account?.campLeadCampId ||
+    (account?.accountType === 'camp' ? account?._id?.toString() : '') ||
+    '';
+
+  return campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard';
+};
+
+const getDefaultLandingPath = (account?: Pick<User, '_id' | 'accountType' | 'campId' | 'campLeadCampId'> | null): string => {
+  if (account?.accountType === 'camp' || account?.campId || account?.campLeadCampId) {
+    return getCampDashboardPath(account);
+  }
+
+  return '/dashboard';
 };
 
 const Login: React.FC = () => {
@@ -68,7 +87,7 @@ const Login: React.FC = () => {
       // Redirect based on account type
       if (user.accountType === 'camp') {
         console.log('✅ [Login] Redirecting to camp dashboard...');
-        navigate(safeRedirect, { replace: true });
+        navigate(safeRedirect === '/dashboard' ? getCampDashboardPath(user) : safeRedirect, { replace: true });
       } else {
         console.log('✅ [Login] Redirecting to member dashboard...');
         navigate(safeRedirect, { replace: true });
@@ -94,7 +113,8 @@ const Login: React.FC = () => {
         navigate('/camp/edit', { replace: true });
       } else {
         // Otherwise, redirect based on the from path or default to /dashboard
-        const from = location.state?.from?.pathname || safeRedirect;
+        const defaultLandingPath = getDefaultLandingPath(result.user);
+        const from = location.state?.from?.pathname || (safeRedirect === '/dashboard' ? defaultLandingPath : safeRedirect);
         navigate(from, { replace: true });
       }
     } catch (err: any) {
@@ -152,7 +172,8 @@ const Login: React.FC = () => {
       }
       
       // Existing user - redirect to dashboard like email/password login
-      const from = location.state?.from?.pathname || safeRedirect;
+      const defaultLandingPath = getDefaultLandingPath(user);
+      const from = location.state?.from?.pathname || (safeRedirect === '/dashboard' ? defaultLandingPath : safeRedirect);
       console.log('✅ [Login] Existing user, redirecting to:', from);
       window.location.href = from;
     }, 100); // 100ms delay to ensure localStorage write completes

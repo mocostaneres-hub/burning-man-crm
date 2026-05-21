@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { Card, Button } from '../components/ui';
@@ -14,6 +14,10 @@ import {
   UserCheck,
   Eye,
   User,
+  Calendar,
+  ArrowRight,
+  ClipboardCheck,
+  FileText,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -25,6 +29,15 @@ interface DashboardStats {
   totalMembers?: number;
   totalCamps?: number;
   activeCamps?: number;
+}
+
+interface DashboardTile {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  path: string;
+  color: string;
+  count?: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -128,7 +141,7 @@ const Dashboard: React.FC = () => {
     }
   }, [user, isCampContext]);
 
-  const getDashboardTiles = () => {
+  const getDashboardTiles = (): DashboardTile[] => {
     // Debug logging
     console.log('Dashboard - User data:', user);
     console.log('Dashboard - Account type:', user?.accountType);
@@ -139,53 +152,65 @@ const Dashboard: React.FC = () => {
         title: 'My Profile',
         description: user?.accountType === 'camp' ? 'Manage camp information' : 'Manage your profile',
         icon: <User size={24} />,
-        onClick: () => {
-          if (user?.accountType === 'camp') {
-            navigate(campBasePath ? `${campBasePath}/profile` : '/camp/profile');
-          } else {
-            navigate('/profile/edit');
-          }
-        },
+        path: user?.accountType === 'camp'
+          ? (campBasePath ? `${campBasePath}/profile` : '/camp/profile')
+          : '/user/profile',
         color: 'bg-blue-500'
       },
       {
         title: isCampContext ? 'Tasks' : 'To-dos',
         description: `${stats.openTasks || 0} open tasks`,
         icon: <Assignment size={24} />,
-        onClick: () => navigate(isCampContext ? (campBasePath ? `${campBasePath}/tasks` : '/camp/tasks') : '/tasks'),
+        path: isCampContext ? (campBasePath ? `${campBasePath}/tasks` : '/camp/tasks') : '/tasks',
         color: 'bg-green-500'
       }
     ];
 
     if (isCampContext) {
       return [
-        ...commonTiles,
         {
-          title: 'Applications',
-          description: `${stats.pendingApplications || 0} open applications`,
-          icon: <Assignment size={24} />,
-          onClick: () => navigate(campBasePath ? `${campBasePath}/applications` : '/camp/applications'),
-          color: 'bg-purple-500'
+          title: 'Camp Profile',
+          description: 'Public profile, photos, settings',
+          icon: <User size={22} />,
+          path: campBasePath ? `${campBasePath}/profile` : '/camp/profile',
+          color: 'bg-blue-500'
         },
         {
-          title: 'Members',
-          description: `${stats.totalMembers || 0} roster members`,
-          icon: <People size={24} />,
-          onClick: () => navigate(campBasePath ? `${campBasePath}/roster` : '/camp/rosters'),
-          color: 'bg-orange-500'
+          title: 'Applications',
+          description: `${stats.pendingApplications || 0} open`,
+          icon: <FileText size={22} />,
+          path: campBasePath ? `${campBasePath}/applications` : '/camp/applications',
+          color: 'bg-purple-500',
+          count: stats.pendingApplications || 0
+        },
+        {
+          title: 'Roster',
+          description: `${stats.totalMembers || 0} members`,
+          icon: <People size={22} />,
+          path: campBasePath ? `${campBasePath}/roster` : '/camp/rosters',
+          color: 'bg-orange-500',
+          count: stats.totalMembers || 0
+        },
+        {
+          title: 'Tasks',
+          description: `${stats.openTasks || 0} open`,
+          icon: <ClipboardCheck size={22} />,
+          path: campBasePath ? `${campBasePath}/tasks` : '/camp/tasks',
+          color: 'bg-green-500',
+          count: stats.openTasks || 0
         },
         {
           title: 'Surveys',
-          description: 'Create and track roster surveys',
-          icon: <Assignment size={24} />,
-          onClick: () => navigate(campBasePath ? `${campBasePath}/surveys` : '/camp/surveys'),
+          description: 'Build and send surveys',
+          icon: <Assignment size={22} />,
+          path: campBasePath ? `${campBasePath}/surveys` : '/camp/surveys',
           color: 'bg-cyan-500'
         },
         {
-          title: 'Shifts',
-          description: 'Manage events & shifts',
-          icon: <TrendingUpIcon size={24} />,
-          onClick: () => navigate(campBasePath ? `${campBasePath}/events` : '/camp/shifts'),
+          title: 'Events',
+          description: 'Events and volunteer shifts',
+          icon: <Calendar size={22} />,
+          path: campBasePath ? `${campBasePath}/events` : '/camp/shifts',
           color: 'bg-teal-500'
         }
       ];
@@ -198,14 +223,14 @@ const Dashboard: React.FC = () => {
           title: 'Discover Camps',
           description: 'Find camps to join',
           icon: <SearchIcon size={24} />,
-          onClick: () => navigate('/camps'),
+          path: '/camps',
           color: 'bg-indigo-500'
         },
         {
           title: 'My Applications',
           description: `${stats.pendingApplications || 0} pending`,
           icon: <Assignment size={24} />,
-          onClick: () => navigate('/applications'),
+          path: '/applications/my',
           color: 'bg-purple-500'
         }
       ];
@@ -218,14 +243,14 @@ const Dashboard: React.FC = () => {
           title: 'Admin',
           description: 'System administration',
           icon: <UserCheck size={24} />,
-          onClick: () => navigate('/admin'),
+          path: '/admin',
           color: 'bg-red-500'
         },
         {
           title: 'All Camps',
           description: `${stats.totalCamps || 0} camps`,
           icon: <Group size={24} />,
-          onClick: () => navigate('/admin'),
+          path: '/admin',
           color: 'bg-yellow-500'
         }
       ];
@@ -283,7 +308,7 @@ const Dashboard: React.FC = () => {
         {
           title: 'View Applications',
           icon: <Eye size={24} />,
-          onClick: () => navigate('/applications'),
+          onClick: () => navigate('/applications/my'),
           description: 'Check application status'
         }
       ];
@@ -303,6 +328,8 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const dashboardTiles = getDashboardTiles();
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
@@ -317,6 +344,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Overview */}
+      {!isCampContext && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card className="p-6 text-center">
           <Assignment size={40} className="text-orange-500 mx-auto mb-3" />
@@ -348,29 +376,48 @@ const Dashboard: React.FC = () => {
           </p>
         </Card>
       </div>
+      )}
 
       {/* Main Dashboard Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {getDashboardTiles().map((tile, index) => (
-          <Card 
-            key={index} 
-            className="p-6 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={tile.onClick}
+      {isCampContext && (
+        <div className="grid grid-cols-1 gap-3 mb-6 sm:max-w-lg sm:grid-cols-3">
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-lato-bold text-custom-text">{stats.pendingApplications || 0}</p>
+            <p className="text-sm text-custom-text-secondary">Open applications</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-lato-bold text-custom-text">{stats.openTasks || 0}</p>
+            <p className="text-sm text-custom-text-secondary">Open tasks</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xl font-lato-bold text-custom-text">{stats.totalMembers || 0}</p>
+            <p className="text-sm text-custom-text-secondary">Members</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {dashboardTiles.map((tile) => (
+          <Link
+            key={tile.path}
+            to={tile.path}
+            className="group rounded-lg border border-gray-200 bg-white p-5 transition hover:border-custom-primary hover:shadow-md focus:outline-none focus:ring-2 focus:ring-custom-primary focus:ring-offset-2"
           >
-            <div className="flex items-center space-x-4">
-              <div className={`p-3 rounded-lg ${tile.color} text-white`}>
+            <div className="flex items-center gap-4">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${tile.color} text-white`}>
                 {tile.icon}
               </div>
-              <div>
-                <h3 className="text-h3 font-lato-bold text-custom-text mb-1">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-lato-bold text-custom-text mb-1">
                   {tile.title}
                 </h3>
-                <p className="text-body text-custom-text-secondary">
+                <p className="text-sm text-custom-text-secondary">
                   {tile.description}
                 </p>
               </div>
+              <ArrowRight size={18} className="text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-custom-primary" />
             </div>
-          </Card>
+          </Link>
         ))}
       </div>
 

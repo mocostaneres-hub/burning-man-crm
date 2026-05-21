@@ -47,10 +47,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ isFirstLogin?: boolean; needsOnboarding?: boolean }> => {
+  const login = async (email: string, password: string): Promise<{ isFirstLogin?: boolean; needsOnboarding?: boolean; user?: User }> => {
     try {
       const response = await apiService.login(email, password);
       const { token: newToken, user: userData, isFirstLogin } = response;
+      let resolvedUser = userData;
 
       setToken(newToken);
       setUser(userData);
@@ -61,8 +62,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         const refreshed = await apiService.getCurrentUser();
         if (refreshed?.user) {
-          setUser(refreshed.user);
-          localStorage.setItem('user', JSON.stringify(refreshed.user));
+          resolvedUser = refreshed.user;
+          setUser(resolvedUser);
+          localStorage.setItem('user', JSON.stringify(resolvedUser));
         }
       } catch (refreshError) {
         console.warn('⚠️ [AuthContext] Failed to refresh user after login:', refreshError);
@@ -70,7 +72,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       return { 
         isFirstLogin,
-        needsOnboarding: needsOnboarding(userData)
+        needsOnboarding: needsOnboarding(userData),
+        user: resolvedUser
       };
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Login failed');

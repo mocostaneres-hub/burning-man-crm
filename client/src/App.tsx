@@ -78,6 +78,16 @@ const ConditionalMain: React.FC<ConditionalMainProps> = ({ children }) => {
   return <main className="pt-16">{children}</main>;
 };
 
+const getCampDashboardPath = (user: ReturnType<typeof useAuth>['user']): string => {
+  const campIdentifier =
+    user?.campId?.toString() ||
+    user?.campLeadCampId ||
+    (user?.accountType === 'camp' ? user?._id?.toString() : '') ||
+    '';
+
+  return campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard';
+};
+
 // Dashboard redirect component for personal accounts and camp accounts
 const DashboardRedirect: React.FC = () => {
   const { user } = useAuth();
@@ -93,10 +103,10 @@ const DashboardRedirect: React.FC = () => {
   
   // Camp accounts redirect to identifier-based dashboard URL
   if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
-    const campId = user?.campId?.toString() || '';
-    if (campId) {
+    const dashboardPath = getCampDashboardPath(user);
+    if (dashboardPath !== '/dashboard') {
       console.log('🔍 [DashboardRedirect] Redirecting camp account to identifier-based dashboard');
-      return <Navigate to={`/camp/${campId}/dashboard`} replace />;
+      return <Navigate to={dashboardPath} replace />;
     }
   }
   
