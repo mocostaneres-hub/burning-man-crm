@@ -243,9 +243,12 @@ async function isCampLeadForCamp(req, targetCampId) {
     // outside of roster isCampLead flag synchronization.
     const roleBasedCampLead = members.some((memberRecord) => {
       const sameCamp = memberRecord.camp?.toString() === targetCampId.toString();
-      const hasLeadRole = memberRecord.role === 'camp-lead';
-      const isActiveLikeStatus = ['active', 'approved'].includes((memberRecord.status || '').toLowerCase());
-      return sameCamp && hasLeadRole && isActiveLikeStatus;
+      const normalizedRole = String(memberRecord.role || '').toLowerCase();
+      const hasLeadRole = normalizedRole === 'camp-lead' || normalizedRole === 'camp_lead';
+      // Keep delegated camp-lead access resilient to legacy status sync drift.
+      const normalizedStatus = String(memberRecord.status || '').toLowerCase();
+      const isRemovedStatus = ['inactive', 'rejected', 'withdrawn', 'suspended'].includes(normalizedStatus);
+      return sameCamp && hasLeadRole && !isRemovedStatus;
     });
 
     if (roleBasedCampLead) {
