@@ -71,8 +71,6 @@ const Home: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
 
-  const dashboardPath = user?.accountType === 'camp' ? '/dashboard' : '/user/profile';
-  const dashboardLabel = user?.accountType === 'camp' ? 'Go to Dashboard' : 'My Profile';
   const campProfilePath = !isAuthenticated
     ? '/register'
     : user?.accountType === 'personal'
@@ -92,52 +90,31 @@ const Home: React.FC = () => {
                 Roster-first camp operations
               </Badge>
               <h1 className="text-h1 md:text-[2.75rem] md:leading-tight font-lato-bold text-custom-text mb-4">
-                Know what is ready before playa week gets loud.
+                Manage your camp operations and roster — without the spreadsheets, copy-paste, and manual chaos.
               </h1>
               <p className="text-body text-custom-text-secondary mb-6 max-w-2xl">
-                G8Road gives camps an operational dashboard for roster health,
-                applications, shifts, dues, tickets, vehicle passes, and member
-                readiness, while members get a clear personal workspace after login.
+                G8Road is a CRM built by camp leads, for camp leads — helping you manage
+                applications, rosters, communications, tasks, volunteer shifts and surveys
+                in one place.
               </p>
-              <div className="flex flex-wrap gap-3">
-                {!isAuthenticated ? (
-                  <>
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      onClick={() => navigate('/register')}
-                    >
-                      Get Started
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => navigate('/camps')}
-                    >
-                      Discover Camps
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      onClick={() => navigate(dashboardPath)}
-                    >
-                      {dashboardLabel}
-                    </Button>
-                    {user?.accountType !== 'camp' && (
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() => navigate('/camps')}
-                      >
-                        Find Your Camp
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
+              {!isAuthenticated && (
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => navigate('/register')}
+                  >
+                    Get Started
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => navigate('/camps')}
+                  >
+                    Discover Camps
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <MetricCard
@@ -155,15 +132,15 @@ const Home: React.FC = () => {
                 iconBgClass="bg-green-100"
               />
               <MetricCard
-                title="Open tasks"
+                title="Early arrivals"
                 value="11"
-                icon={<ClipboardList className="w-6 h-6 text-orange-600" />}
+                icon={<Calendar className="w-6 h-6 text-orange-600" />}
                 colorClass="text-orange-600"
                 iconBgClass="bg-orange-100"
               />
               <MetricCard
-                title="Shift gaps"
-                value="5"
+                title="Volunteer shifts"
+                value="27"
                 icon={<TrendingUp className="w-6 h-6 text-blue-600" />}
                 colorClass="text-blue-600"
                 iconBgClass="bg-blue-100"
@@ -251,38 +228,38 @@ const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h2 className="text-h2 font-lato-bold text-custom-text mb-2">
-              Operational coverage
+              Camp Operations
             </h2>
             <p className="text-body text-custom-text-secondary max-w-3xl">
-              The homepage should preview the same workstreams users see inside the app,
-              with Roster as the visual and functional anchor.
+              G8Road is a camp lead&rsquo;s one-stop shop for managing camp operations, cutting
+              operational work by 80%.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             <FeatureCard
               title="Roster"
-              description="Members, leads, skills, arrival, departure, tickets, vehicle passes, and dues."
+              description="Track members, camp leads, skills, arrivals, departures, tickets, vehicle passes, dues, and logistics gaps in one place."
               icon={<Users className="w-6 h-6" />}
               iconBgClass="bg-green-100"
               iconColorClass="text-green-600"
             />
             <FeatureCard
               title="Applications"
-              description="Review queues, call states, decisions, and next steps for prospective members."
+              description="Review applicants, decisions, follow-ups, and next steps before adding people to the roster."
               icon={<ClipboardList className="w-6 h-6" />}
               iconBgClass="bg-orange-100"
               iconColorClass="text-orange-600"
             />
             <FeatureCard
               title="Shifts"
-              description="Events, volunteer signups, coverage gaps, reminders, and personal schedules."
+              description="Plan events, volunteer signups, coverage gaps, reminders, and personal schedules across the camp."
               icon={<Calendar className="w-6 h-6" />}
               iconBgClass="bg-blue-100"
               iconColorClass="text-blue-600"
             />
             <FeatureCard
-              title="Tasks"
-              description="Assignment, completion, and member-specific follow-through for camp work."
+              title="Surveys"
+              description="Ask roster members about travel, transportation, arrival, and shelter plans so leads can design their camp map, build, strike and other operations."
               icon={<CheckCircle className="w-6 h-6" />}
               iconBgClass="bg-purple-100"
               iconColorClass="text-purple-600"
