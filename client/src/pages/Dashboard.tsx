@@ -40,6 +40,23 @@ interface DashboardTile {
   count?: number;
 }
 
+const countVisibleRosterMembers = (rosterMembers: any[] = []): number => {
+  return rosterMembers
+    .filter((memberEntry: any) => memberEntry?.member)
+    .map((memberEntry: any) => {
+      const memberData = memberEntry.member || {};
+      return {
+        _id: memberData?._id?.toString?.() || memberEntry.member?.toString?.() || null,
+        status: memberData.status || memberEntry.status || 'active',
+      };
+    })
+    .filter((member: any) => member._id)
+    .filter((member: any) => {
+      const normalizedStatus = String(member?.status || '').toLowerCase();
+      return !['deleted', 'rejected', 'withdrawn'].includes(normalizedStatus);
+    }).length;
+};
+
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -85,15 +102,18 @@ const Dashboard: React.FC = () => {
             campId = campData._id;
           }
 
-          const [applicationsRes, tasksRes, membersRes] = await Promise.all([
+          const [applicationsRes, tasksRes, rosterRes] = await Promise.all([
             apiService.get(`/applications/camp/${campId}`),
             apiService.get('/tasks'),
-            apiService.getCampMembers(campId.toString())
+            apiService.get(`/rosters/active?campId=${campId}`).catch((err) => {
+              console.log('ℹ️ [Dashboard] No active roster found:', err.response?.status);
+              return null;
+            })
           ]);
 
           const applications = applicationsRes?.applications || [];
           const tasks = Array.isArray(tasksRes) ? tasksRes : [];
-          const members = membersRes?.members || [];
+          const totalMembers = countVisibleRosterMembers(rosterRes?.members || []);
 
           const openApplicationStatuses = new Set(['new', 'pending', 'call-scheduled', 'pending-orientation', 'under-review', 'undecided']);
 
@@ -107,7 +127,7 @@ const Dashboard: React.FC = () => {
             totalTasks: tasks.length,
             openTasks: tasks.filter((task: { status?: string }) => String(task.status || '').toLowerCase() === 'open').length,
             completedTasks: tasks.filter((task: { status?: string }) => String(task.status || '').toLowerCase() === 'closed').length,
-            totalMembers: members.length
+            totalMembers
           });
         } else if (user?.accountType === 'admin' || user?.isSystemAdmin) {
           const response = await apiService.get('/admin/stats');
