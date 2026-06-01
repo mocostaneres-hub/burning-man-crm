@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireCampLead, optionalAuth } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
+const { findCampByIdentifier } = require('../utils/campIdentifier');
 const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { applyRosterRemovalStatusUpdates, resolveMemberUserId } = require('../services/rosterMemberRemoval');
@@ -537,11 +538,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid camp identifier' });
     }
 
-    // Find camp by slug first, then by ID (fallback)
-    let camp = await db.findCamp({ slug: slug.trim() });
-    if (!camp) {
-      camp = await db.findCamp({ _id: slug.trim() });
-    }
+    const camp = await findCampByIdentifier(db, slug);
 
     if (!camp) {
       console.log('❌ [GET /api/camps/public/:slug] Camp not found for slug:', slug);

@@ -6,6 +6,7 @@ const Invite = require('../models/Invite');
 const { authenticateToken, requireCampLead } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { canAccessCamp, isCampLeadForCamp } = require('../utils/permissionHelpers');
+const { getCampPublicIdentifier } = require('../utils/campIdentifier');
 const { sendInviteEmail } = require('../services/emailService');
 const { recordActivity } = require('../services/activityLogger');
 const { standardFullMembershipInviteBlocksResend } = require('../utils/fullMembershipInviteDuplicate');
@@ -64,7 +65,7 @@ router.get('/invites/validate/:token', async (req, res) => {
       return res.status(404).json({ valid: false, message: 'Camp not found for this invitation' });
     }
 
-    const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const campSlug = getCampPublicIdentifier(camp);
 
     return res.json({
       valid: true,
@@ -352,8 +353,9 @@ router.post('/invites',
           // CRITICAL: This link is sent via email to external recipients.
           // It MUST use the correct environment-based URL, never localhost in production.
           // 
-          // The link points to the camp profile page with an invite token parameter.
-          // Format: https://www.g8road.com/camps/:campSlug?invite=<token>
+          // The link points to the invite redirect page, which validates the token
+          // and then sends the user to the correct camp application flow.
+          // Format: https://www.g8road.com/apply?invite_token=<token>
           // 
           // Environment-aware URL ensures:
           // - Local development: http://localhost:3000
@@ -380,7 +382,6 @@ router.post('/invites',
             console.error('❌ Update CLIENT_URL to your production domain: https://www.g8road.com');
           }
           
-          const campSlug = camp.slug || camp.urlSlug || camp.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           const inviteLink = `${clientUrl}/apply?invite_token=${token}`;
           
           // Get template and replace placeholders
