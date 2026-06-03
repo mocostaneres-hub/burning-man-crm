@@ -9,195 +9,101 @@ interface FAQItem {
   _id?: string;
   question: string;
   answer: string;
+  category?: string;
+  order?: number;
 }
 
 type RequesterType = 'camp' | 'member' | 'other';
 
-const campFAQData: FAQItem[] = [
-  {
-    question: "What is this platform?",
-    answer: "This is a comprehensive platform designed specifically for G8Road camps to manage their rosters, recruit members, organize volunteer shifts, handle EAP assignments, and build their community. It's built by burners, for burners."
-  },
-  {
-    question: "How is this different from other camp management tools?",
-    answer: "Our platform is specifically designed for G8Road camps with features like EAP assignments, orientation calls, mapping tools, and shopping lists. We understand the unique needs of burner communities and have built features that address real camp management challenges."
-  },
-  {
-    question: "Can I use this for both personal and camp accounts?",
-    answer: "Yes! You can create either a personal account (to join camps as a member) or a camp account (to manage your camp). Each email address can only be used for one account type to maintain clear separation between personal and camp management."
-  },
-  {
-    question: "What are the different account types and roles?",
-    answer: "We have two account types: Personal (for individual burners) and Camp (for camp management). Within camps, there are three roles: Camp Lead (full administrative access), Project Lead (manages specific projects and team members), and Camp Member (basic access with ability to request role changes)."
-  },
-  {
-    question: "How do I sign up with Google or Apple?",
-    answer: "OAuth sign-in is available for personal accounts only. When you select 'Personal Account' during registration, you'll see Google and Apple sign-in buttons. This allows for quick registration using your existing accounts while maintaining security."
-  },
-  {
-    question: "What features are available for camp management?",
-    answer: "Camp accounts have access to member roster management, role assignments, volunteer shift scheduling, EAP (Emergency Action Plan) assignments, orientation call scheduling, camp mapping tools, collaborative shopping lists, video meetings, and comprehensive analytics."
-  },
-  {
-    question: "How do volunteer shifts work?",
-    answer: "Camp leads can create volunteer shifts for various camp activities (setup, teardown, kitchen duty, etc.). Members can sign up for shifts, and the system tracks participation. This helps ensure fair distribution of camp responsibilities."
-  },
-  {
-    question: "What are EAP assignments?",
-    answer: "EAP (Emergency Action Plan) assignments help camps prepare for emergencies by assigning specific roles and responsibilities to members. This includes first aid responders, evacuation coordinators, communication leads, and other critical roles."
-  },
-  {
-    question: "Can I schedule orientation calls for new members?",
-    answer: "Yes! Camp leads can schedule orientation calls to onboard new members. The system integrates with video calling platforms to help new members understand camp culture, rules, and expectations before the event."
-  },
-  {
-    question: "How does the mapping feature work?",
-    answer: "The mapping feature allows camps to create and share their camp layout, including tent locations, common areas, kitchen setup, and other important landmarks. This helps members navigate the camp and plan their setup."
-  },
-  {
-    question: "Are shopping lists collaborative?",
-    answer: "Yes! Camp members can contribute to shared shopping lists for camp supplies, food, equipment, and other necessities. The system tracks who's bringing what to avoid duplication and ensure nothing is forgotten."
-  },
-  {
-    question: "Is my data secure?",
-    answer: "Absolutely. We use industry-standard security practices including encrypted data transmission, secure authentication, and regular security audits. Your camp's sensitive information is protected and only accessible to authorized members."
-  },
-  {
-    question: "Can I export my camp data?",
-    answer: "Yes, camp leads can export member rosters, shift schedules, and other camp data in various formats (CSV, PDF) for backup purposes or to use with other tools."
-  },
-  {
-    question: "What if I need help or have questions?",
-    answer: "We have a comprehensive help system, and our support team is made up of experienced burners who understand camp management challenges. You can reach out through the platform or email us directly."
-  },
-  {
-    question: "Is there a mobile app?",
-    answer: "The platform is fully responsive and works great on mobile devices. We're also planning dedicated mobile apps for iOS and Android to provide an even better mobile experience for camp management on the go."
-  }
-];
-
-const memberFAQData: FAQItem[] = [
-  {
-    question: "What is this platform?",
-    answer: "This is a community platform designed to help you find and connect with G8Road camps, discover events and experiences, and build lasting relationships within the burner community."
-  },
-  {
-    question: "How do I find camps to join?",
-    answer: "Browse our camp directory to discover amazing camps that match your interests, values, and G8Road goals. Each camp profile shows their mission, activities, requirements, and what they're looking for in members."
-  },
-  {
-    question: "How do I apply to join a camp?",
-    answer: "Once you find a camp you're interested in, you can apply directly through the platform. Share your skills, interests, and what you can contribute to make your application stand out to camp leaders."
-  },
-  {
-    question: "What information should I include in my application?",
-    answer: "Be honest about your G8Road experience, skills you can contribute, availability during the event, and what you're hoping to get out of joining the camp. Include any relevant experience with art, cooking, construction, or other valuable skills."
-  },
-  {
-    question: "How long does it take to hear back from camps?",
-    answer: "Response times vary by camp, but most camps try to respond within a few days to a week. If you don't hear back, you can send a follow-up message or apply to other camps that interest you."
-  },
-  {
-    question: "Can I apply to multiple camps?",
-    answer: "Yes! You can apply to multiple camps to increase your chances of finding the right fit. Just be transparent with camps if you're accepted by multiple and need to make a decision."
-  },
-  {
-    question: "How do I discover events and experiences?",
-    answer: "Use our events calendar to find workshops, art installations, performances, and community events happening throughout G8Road week. You can filter by type, time, location, and interests."
-  },
-  {
-    question: "Can I message camps directly?",
-    answer: "Yes! Our messaging system allows you to communicate directly with camp leaders to ask questions, learn more about their community, and discuss your potential fit with the camp."
-  },
-  {
-    question: "What if I'm new to G8Road?",
-    answer: "Many camps welcome newcomers! Look for camps that specifically mention being newbie-friendly or that offer orientation programs. Don't be afraid to mention your new status in applications - enthusiasm and willingness to learn are valuable qualities."
-  },
-  {
-    question: "How do I know if a camp is right for me?",
-    answer: "Read their camp profile thoroughly, check out their social media, and ask questions about their values, activities, and expectations. Consider what you want to contribute and experience during your G8Road week."
-  },
-  {
-    question: "Can I create my own events or workshops?",
-    answer: "Yes! Once you're part of a camp, you can collaborate with your campmates to create and promote events, workshops, or art projects that you'd like to share with the community."
-  },
-  {
-    question: "How do I stay updated on camp activities?",
-    answer: "Use our messaging system and calendar features to stay connected with your camp. Camps often share updates about meetings, preparation activities, and event planning through the platform."
-  },
-  {
-    question: "What if I need to change my plans?",
-    answer: "Life happens! If your situation changes, communicate openly with your camp as soon as possible. Most camps understand that plans can change and will work with you to find solutions."
-  },
-  {
-    question: "Is my personal information secure?",
-    answer: "Absolutely. We use industry-standard security practices to protect your information. Your personal details are only shared with camps you choose to apply to, and you control what information is visible."
-  },
-  {
-    question: "How do I get help if I have questions?",
-    answer: "Use our help center and messaging system to get support. Our team is made up of experienced burners who understand the community and can help guide you through the process."
-  }
-];
-
-// General FAQs for non-authenticated users (combination of both)
+// Curated FAQs for non-authenticated homepage visitors. These are used when
+// the admin-managed homepage FAQ data is missing or sparse.
 const generalFAQData: FAQItem[] = [
   {
-    question: "What is this platform?",
-    answer: "This is a comprehensive platform designed to help you find and connect with G8Road camps, discover events and experiences, and build lasting relationships within the burner community. Whether you're looking to join a camp or manage one, we've got you covered."
+    question: "What is G8Road?",
+    answer: "G8Road is a camp operations platform for Burner camps and the people who join them. Camp leads can manage applications, rosters, communications, tasks, volunteer shifts, surveys, and camp logistics in one place.",
+    category: "General",
+    order: 1
   },
   {
-    question: "How do I find camps to join?",
-    answer: "Browse our camp directory to discover amazing camps that match your interests, values, and G8Road goals. Each camp profile shows their mission, activities, requirements, and what they're looking for in members."
+    question: "What is a Camp account?",
+    answer: "A Camp account is for the person or team managing a camp. It gives you camp-level tools to create a public camp profile, accept or review applications, maintain your roster, assign tasks, coordinate shifts, and keep member information organized.",
+    category: "Account Management",
+    order: 2
   },
   {
-    question: "How do I apply to join a camp?",
-    answer: "Once you find a camp you're interested in, you can apply directly through the platform. Share your skills, interests, and what you can contribute to make your application stand out to camp leaders."
+    question: "How do I get started as a camp lead?",
+    answer: "Create an account, choose the camp role during onboarding, and complete your camp profile. From there you can publish your profile, invite members, review applications, and start building the roster and planning tools your camp needs.",
+    category: "Camp Management",
+    order: 3
   },
   {
-    question: "What information should I include in my application?",
-    answer: "Be honest about your G8Road experience, skills you can contribute, availability during the event, and what you're hoping to get out of joining the camp. Include relevant experience with art, cooking, construction, or other valuable skills."
+    question: "What can I manage from a Camp account?",
+    answer: "Camp accounts can manage member rosters, applications, dues status, arrivals and departures, tickets, vehicle passes, tasks, surveys, events, volunteer shifts, and camp communications. The goal is to replace scattered spreadsheets with one roster-first workflow.",
+    category: "Camp Management",
+    order: 4
   },
   {
-    question: "How do I create a camp profile?",
-    answer: "To create a camp profile, go to your dashboard and click 'Create Camp'. Fill out all the required information including camp name, contact email, and Playa location."
+    question: "Can members apply to join my camp through G8Road?",
+    answer: "Yes. If your camp profile is public and accepting applications, visitors can review your camp information and apply. You can review applicants, track decisions, follow up, and move approved people into your roster.",
+    category: "Applications",
+    order: 5
   },
   {
-    question: "How do I add members to my camp?",
-    answer: "You can add members by going to the 'Manage Members' section in your dashboard. Click 'Add Member' and fill out their information."
+    question: "Can I add existing members without making them apply?",
+    answer: "Yes. Camp leads can add or invite known members directly to the roster. Applications are useful for recruiting and screening new people, but they are not required for every roster member.",
+    category: "Members",
+    order: 6
   },
   {
-    question: "Can I edit my camp profile after creating it?",
-    answer: "Yes! You can edit your camp profile at any time by going to 'Your Camp' in the navigation menu."
+    question: "Can I give another person access to help manage the camp?",
+    answer: "Yes. Camp owners can assign delegated Camp Lead access to trusted roster members so they can help manage camp operations. Access is scoped to that camp, so they get the tools they need without becoming a system admin.",
+    category: "Camp Management",
+    order: 7
   },
   {
-    question: "How long does it take to hear back from camps?",
-    answer: "Response times vary by camp, but most camps try to respond within a few days to a week. If you don't hear back, you can send a follow-up message or apply to other camps that interest you."
+    question: "Can individual burners use G8Road too?",
+    answer: "Yes. Personal accounts are for members who want to browse camps, complete a profile, apply to camps, track application status, view tasks, sign up for shifts, and stay connected with the camp they join.",
+    category: "General",
+    order: 8
   },
   {
-    question: "Can I apply to multiple camps?",
-    answer: "Yes! You can apply to multiple camps to increase your chances of finding the right fit. Just be transparent with camps if you're accepted by multiple and need to make a decision."
+    question: "Is camp and member information private?",
+    answer: "Sensitive camp operations data is only available to authorized users. Public camp profiles can be shown to visitors, while roster details, applications, tasks, shifts, and internal notes stay inside the appropriate camp account permissions.",
+    category: "Technical Support",
+    order: 9
   },
   {
-    question: "What if I'm new to G8Road?",
-    answer: "Many camps welcome newcomers! Look for camps that specifically mention being newbie-friendly or that offer orientation programs. Don't be afraid to mention your new status in applications - enthusiasm and willingness to learn are valuable qualities."
-  },
-  {
-    question: "How do I discover events and experiences?",
-    answer: "Use our events calendar to find workshops, art installations, performances, and community events happening throughout G8Road week. You can filter by type, time, location, and interests."
-  },
-  {
-    question: "How do I contact support?",
-    answer: "You can contact our support team using the contact form on the Help page. We typically respond within 24 hours."
-  },
-  {
-    question: "What if I forget my password?",
-    answer: "Click 'Forgot your password?' on the login page and enter your email address. We'll send you a link to reset your password."
-  },
-  {
-    question: "Is my information secure?",
-    answer: "Absolutely. We use industry-standard security practices to protect your information. Your personal details are only shared with camps you choose to apply to, and you control what information is visible."
+    question: "What if I need help choosing the right account type?",
+    answer: "Choose a Camp account if you are creating or managing a camp. Choose a Personal account if you are joining camps as an individual member. If you are unsure, contact support and the G8Road team can help you pick the right path.",
+    category: "Account Management",
+    order: 10
   }
 ];
+
+const MIN_HOMEPAGE_FAQS = 6;
+
+const sortFAQs = (faqs: FAQItem[]) =>
+  [...faqs].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+const mergeHomepageFAQs = (apiFaqs: FAQItem[]) => {
+  const sortedApiFaqs = sortFAQs(apiFaqs);
+
+  if (sortedApiFaqs.length >= MIN_HOMEPAGE_FAQS) {
+    return sortedApiFaqs;
+  }
+
+  const seenQuestions = new Set<string>();
+  const merged: FAQItem[] = [];
+
+  [...sortedApiFaqs, ...generalFAQData].forEach((faq) => {
+    const questionKey = faq.question.trim().toLowerCase();
+    if (!questionKey || seenQuestions.has(questionKey)) return;
+    seenQuestions.add(questionKey);
+    merged.push(faq);
+  });
+
+  return merged;
+};
 
 const FAQ: React.FC = () => {
   const { user } = useAuth();
@@ -227,10 +133,10 @@ const FAQ: React.FC = () => {
           params: { audience: 'homepage' }
         });
         const apiFaqs = response.faqs || [];
-        setFaqData(apiFaqs);
+        setFaqData(mergeHomepageFAQs(apiFaqs));
       } catch (error) {
         console.error('Error loading FAQs:', error);
-        setFaqData([]);
+        setFaqData(generalFAQData);
       } finally {
         setLoading(false);
       }
