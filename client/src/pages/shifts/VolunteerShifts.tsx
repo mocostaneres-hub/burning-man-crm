@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal, Input, TimePicker } from '../../components/ui';
 import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Event } from '../../types';
@@ -26,6 +26,43 @@ const deriveRosterMeta = (roster: any) => {
     hasShiftsOnlyRoster: analyzed.some((entry) => entry.isShiftsOnly),
     hasFullMembershipRoster: analyzed.some((entry) => entry.isFullMembership)
   };
+};
+
+type RosterMemberLite = {
+  _id: string;
+  memberId: string;
+  userId?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isLead: boolean;
+  skills?: string[];
+};
+
+type ReportMember = {
+  id: string;
+  personName: string;
+  email?: string;
+  link?: string;
+};
+
+type PersonReportRow = {
+  personName: string;
+  member: ReportMember;
+  date: string;
+  eventName: string;
+  shiftTitle: string;
+  shiftTime: string;
+  description: string;
+};
+
+type ShiftReportRow = {
+  eventName: string;
+  shift: any;
+  date: string;
+  shiftTime: string;
+  description: string;
+  signedUpMembers: ReportMember[];
 };
 
 const VolunteerShifts: React.FC = () => {
@@ -80,7 +117,7 @@ const VolunteerShifts: React.FC = () => {
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
   const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTime' | 'description'>('date');
+  const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTitle' | 'shiftTime' | 'description'>('date');
   const [personSortDir, setPersonSortDir] = useState<'asc' | 'desc'>('asc');
   const [eventShiftSortKey, setEventShiftSortKey] = useState<'title' | 'date' | 'filled' | 'capacity' | 'remaining'>('date');
   const [eventShiftSortDir, setEventShiftSortDir] = useState<'asc' | 'desc'>('asc');
@@ -120,14 +157,8 @@ const VolunteerShifts: React.FC = () => {
       requiredSkills: string[];
     }>
   });
-  const [rosterMembers, setRosterMembers] = useState<Array<{
-    _id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    isLead: boolean;
-    skills?: string[];
-  }>>([]);
+  const [rosterMembers, setRosterMembers] = useState<RosterMemberLite[]>([]);
+  const [currentCampId, setCurrentCampId] = useState<string | null>(null);
   const [rosterMeta, setRosterMeta] = useState({
     hasActiveRoster: false,
     memberCount: 0,
@@ -171,6 +202,90 @@ const VolunteerShifts: React.FC = () => {
     const filledPercent = max > 0 ? Math.round((current / max) * 100) : 0;
     return { current, max, remaining, filledPercent };
   };
+
+  const rosterMemberById = useMemo(() => {
+    const lookup = new Map<string, RosterMemberLite>();
+    rosterMembers.forEach((member) => {
+      [member._id, member.memberId, member.userId].forEach((id) => {
+        if (id) lookup.set(id.toString(), member);
+      });
+    });
+    return lookup;
+  }, [rosterMembers]);
+
+  const getMemberDisplayName = useCallback((member: Pick<RosterMemberLite, 'firstName' | 'lastName'> | undefined) => {
+    if (!member) return 'Unknown Member';
+    return `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member';
+  }, []);
+
+  const getMember360Link = useCallback((member: RosterMemberLite | undefined) => {
+    if (!member || !currentCampId) return undefined;
+    return member.userId
+      ? `/camp/${currentCampId}/contacts/${member.userId}`
+      : `/camp/${currentCampId}/contacts/member/${member.memberId}`;
+  }, [currentCampId]);
+
+  const resolveReportMember = useCallback((memberId: any): ReportMember => {
+    const id = memberId?.toString?.() || String(memberId || '');
+    const member = rosterMemberById.get(id);
+    return {
+      id,
+      personName: getMemberDisplayName(member),
+      email: member?.email || undefined,
+      link: getMember360Link(member)
+    };
+  }, [getMember360Link, getMemberDisplayName, rosterMemberById]);
+
+  const renderReportMember = (member: ReportMember, compact = false) => {
+    const content = (
+      <>
+        <span className="font-medium">{member.personName}</span>
+        {!compact && member.email && (
+          <span className="text-xs text-gray-500">{member.email}</span>
+        )}
+      </>
+    );
+    const className = compact
+      ? 'inline-flex items-center rounded-full bg-orange-50 text-orange-700 border border-orange-100 text-xs px-2 py-1 font-medium hover:bg-orange-100'
+      : 'inline-flex flex-col text-orange-600 hover:text-orange-700';
+
+    return member.link ? (
+      <Link to={member.link} className={className}>
+        {content}
+      </Link>
+    ) : (
+      <span className={compact ? 'inline-flex items-center rounded-full bg-gray-100 text-gray-700 text-xs px-2 py-1 font-medium' : 'inline-flex flex-col text-gray-700'}>
+        {content}
+      </span>
+    );
+  };
+
+  const shiftReportRows = useMemo<ShiftReportRow[]>(() => {
+    return events.flatMap((event) => (
+      event.shifts.map((shift) => ({
+        eventName: event.eventName,
+        shift,
+        date: formatShiftDate(shift.date),
+        shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
+        description: shift.description || shift.title,
+        signedUpMembers: (shift.memberIds || []).map(resolveReportMember)
+      }))
+    ));
+  }, [events, resolveReportMember]);
+
+  const personReportRows = useMemo<PersonReportRow[]>(() => {
+    return shiftReportRows.flatMap((row) => (
+      row.signedUpMembers.map((member) => ({
+        personName: member.personName,
+        member,
+        date: row.date,
+        eventName: row.eventName,
+        shiftTitle: row.shift.title,
+        shiftTime: row.shiftTime,
+        description: row.description
+      }))
+    ));
+  }, [shiftReportRows]);
 
   const getSortIndicator = (activeKey: string, key: string, direction: 'asc' | 'desc') => {
     if (activeKey !== key) return '';
@@ -240,6 +355,7 @@ const VolunteerShifts: React.FC = () => {
       }
 
       if (!campId) {
+        setCurrentCampId(null);
         setRosterMembers([]);
         setRosterMeta({
           hasActiveRoster: false,
@@ -249,6 +365,7 @@ const VolunteerShifts: React.FC = () => {
         });
         return;
       }
+      setCurrentCampId(campId.toString());
 
       try {
         const roster = await api.get(`/rosters/active?campId=${campId}`);
@@ -265,8 +382,12 @@ const VolunteerShifts: React.FC = () => {
       const response = await api.getCampMembers(campId.toString());
       const normalized = (response.members || []).map((member: any) => {
         const resolvedUser = typeof member.user === 'object' ? member.user : member;
+        const memberId = member?._id?.toString?.() || String(member?._id || '');
+        const userId = resolvedUser?._id?.toString?.() || (typeof member.user === 'string' ? member.user : undefined);
         return {
-          _id: resolvedUser._id || member._id,
+          _id: userId || memberId,
+          memberId,
+          userId,
           firstName: resolvedUser.firstName || '',
           lastName: resolvedUser.lastName || '',
           email: resolvedUser.email || '',
@@ -277,6 +398,7 @@ const VolunteerShifts: React.FC = () => {
       setRosterMembers(normalized);
     } catch (error) {
       console.error('Error loading roster members:', error);
+      setCurrentCampId(null);
       setRosterMembers([]);
       setRosterMeta({
         hasActiveRoster: false,
@@ -731,57 +853,38 @@ const VolunteerShifts: React.FC = () => {
 
     const generatedAt = new Date().toLocaleString();
     const title = reportType === 'per-person' ? 'Volunteer Shift Report - Per Person' : 'Volunteer Shift Report - Per Day';
+    const selectedDateLabel = selectedDate ? formatShiftDate(new Date(selectedDate)) : '';
+    const escapeHtml = (value: any) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const renderPrintMember = (member: ReportMember) => {
+      const label = member.email ? `${member.personName} (${member.email})` : member.personName;
+      if (!member.link) return escapeHtml(label);
+      const href = `${window.location.origin}${member.link}`;
+      return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+    };
 
-    const personRows: Array<{ personName: string; date: string; eventName: string; shiftTime: string; description: string }> = [];
-    events.forEach(event => {
-      event.shifts.forEach(shift => {
-        if (shift.memberIds && shift.memberIds.length > 0) {
-          shift.memberIds.forEach(memberId => {
-            const member = rosterMembers.find(m => m._id === memberId);
-            const memberName = member
-              ? `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member'
-              : 'Unknown Member';
-            personRows.push({
-              personName: memberName,
-              date: formatShiftDate(shift.date),
-              eventName: event.eventName,
-              shiftTime: `${formatShiftTime(shift.startTime)} - ${formatShiftTime(shift.endTime)}`,
-              description: shift.description || shift.title
-            });
-          });
-        }
-      });
-    });
+    const sortedPersonRows = [...personReportRows].sort((a, b) => (
+      a.personName.localeCompare(b.personName)
+      || a.date.localeCompare(b.date)
+      || a.shiftTime.localeCompare(b.shiftTime)
+    ));
 
-    const dayRowsByDate: Record<string, Array<{ eventName: string; shiftTime: string; description: string; signedUpMembers: string[] }>> = {};
-    events.forEach(event => {
-      event.shifts.forEach(shift => {
-        const dateKey = formatShiftDate(shift.date);
-        if (selectedDate) {
-          const selectedKey = formatShiftDate(new Date(selectedDate));
-          if (dateKey !== selectedKey) return;
-        }
-        if (!dayRowsByDate[dateKey]) dayRowsByDate[dateKey] = [];
-        const signedUpMembers = (shift.memberIds || []).map((memberId: any) => {
-          const member = rosterMembers.find(m => m._id === memberId);
-          if (!member) return 'Unknown Member';
-          const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member';
-          return member.email ? `${name} (${member.email})` : name;
-        });
-        dayRowsByDate[dateKey].push({
-          eventName: event.eventName,
-          shiftTime: `${formatShiftTime(shift.startTime)} - ${formatShiftTime(shift.endTime)}`,
-          description: shift.description || shift.title,
-          signedUpMembers
-        });
-      });
+    const dayRowsByDate: Record<string, ShiftReportRow[]> = {};
+    shiftReportRows.forEach((row) => {
+      if (selectedDateLabel && row.date !== selectedDateLabel) return;
+      if (!dayRowsByDate[row.date]) dayRowsByDate[row.date] = [];
+      dayRowsByDate[row.date].push(row);
     });
 
     const personTable = `
       <table>
-        <thead><tr><th>Person Name</th><th>Date</th><th>Event Name</th><th>Shift Time</th><th>Description</th></tr></thead>
+        <thead><tr><th>Person</th><th>Date</th><th>Event</th><th>Shift</th><th>Time</th><th>Description</th></tr></thead>
         <tbody>
-          ${personRows.length === 0 ? '<tr><td colspan="5">No sign-ups yet</td></tr>' : personRows.map(r => `<tr><td>${r.personName}</td><td>${r.date}</td><td>${r.eventName}</td><td>${r.shiftTime}</td><td>${r.description}</td></tr>`).join('')}
+          ${sortedPersonRows.length === 0 ? '<tr><td colspan="6">No sign-ups yet</td></tr>' : sortedPersonRows.map(r => `<tr><td>${renderPrintMember(r.member)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.eventName)}</td><td>${escapeHtml(r.shiftTitle)}</td><td>${escapeHtml(r.shiftTime)}</td><td>${escapeHtml(r.description)}</td></tr>`).join('')}
         </tbody>
       </table>
     `;
@@ -789,9 +892,12 @@ const VolunteerShifts: React.FC = () => {
     const daySections = Object.keys(dayRowsByDate).sort().map(date => `
       <h3>${date}</h3>
       <table>
-        <thead><tr><th>Event Name</th><th>Shift Time</th><th>Description</th><th>Signed Up Members</th></tr></thead>
+        <thead><tr><th>Event</th><th>Shift</th><th>Time</th><th>Filled</th><th>Capacity</th><th>Remaining</th><th>Signed Up Members</th></tr></thead>
         <tbody>
-          ${dayRowsByDate[date].map(row => `<tr><td>${row.eventName}</td><td>${row.shiftTime}</td><td>${row.description}</td><td>${row.signedUpMembers.join('<br/>') || 'No sign-ups'}</td></tr>`).join('')}
+          ${dayRowsByDate[date].map(row => {
+            const stats = getShiftStats(row.shift);
+            return `<tr><td>${escapeHtml(row.eventName)}</td><td>${escapeHtml(row.shift.title)}</td><td>${escapeHtml(row.shiftTime)}</td><td>${stats.filledPercent}%</td><td>${stats.current}/${stats.max}</td><td>${stats.remaining}</td><td>${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMember).join('<br/>') : 'No sign-ups'}</td></tr>`;
+          }).join('')}
         </tbody>
       </table>
     `).join('');
@@ -807,6 +913,7 @@ const VolunteerShifts: React.FC = () => {
             table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
             th { background: #f3f4f6; }
+            a { color: #c2410c; text-decoration: none; font-weight: 600; }
             h3 { margin: 18px 0 8px 0; }
             @media print { body { padding: 8px; } }
           </style>
@@ -1259,11 +1366,13 @@ const VolunteerShifts: React.FC = () => {
                                   >
                                     Remaining {getSortIndicator(eventShiftSortKey, 'remaining', eventShiftSortDir)}
                                   </th>
+                                  <th className="border border-gray-300 px-4 py-2 text-left">Signed Up Members</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {sortedShifts.map(shift => {
                                   const stats = getShiftStats(shift);
+                                  const signedUpMembers = (shift.memberIds || []).map(resolveReportMember);
                                   return (
                                     <tr key={shift._id} className="hover:bg-gray-50">
                                       <td className="border border-gray-300 px-4 py-2">{shift.title}</td>
@@ -1274,6 +1383,19 @@ const VolunteerShifts: React.FC = () => {
                                       <td className="border border-gray-300 px-4 py-2">{stats.filledPercent}%</td>
                                       <td className="border border-gray-300 px-4 py-2">{stats.current}/{stats.max}</td>
                                       <td className="border border-gray-300 px-4 py-2">{stats.remaining}</td>
+                                      <td className="border border-gray-300 px-4 py-2">
+                                        {signedUpMembers.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {signedUpMembers.map((member) => (
+                                              <React.Fragment key={`${shift._id}-${member.id}`}>
+                                                {renderReportMember(member, true)}
+                                              </React.Fragment>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-sm text-gray-500">No sign-ups</span>
+                                        )}
+                                      </td>
                                     </tr>
                                   );
                                 })}
@@ -1317,6 +1439,12 @@ const VolunteerShifts: React.FC = () => {
                           </th>
                           <th
                             className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
+                            onClick={() => togglePersonSort('shiftTitle')}
+                          >
+                            Shift {getSortIndicator(personSortKey, 'shiftTitle', personSortDir)}
+                          </th>
+                          <th
+                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
                             onClick={() => togglePersonSort('shiftTime')}
                           >
                             Shift Time {getSortIndicator(personSortKey, 'shiftTime', personSortDir)}
@@ -1331,47 +1459,17 @@ const VolunteerShifts: React.FC = () => {
                       </thead>
                       <tbody>
                         {(() => {
-                          const signUps: Array<{
-                            personName: string;
-                            date: string;
-                            eventName: string;
-                            shiftTime: string;
-                            description: string;
-                          }> = [];
-
-                          events.forEach(event => {
-                            event.shifts.forEach(shift => {
-                              if (shift.memberIds && shift.memberIds.length > 0) {
-                                shift.memberIds.forEach(memberId => {
-                                  // Find member name from roster
-                                  const member = rosterMembers.find(m => m._id === memberId);
-                                  const memberName = member ? 
-                                    `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member' : 
-                                    'Unknown Member';
-
-                                  signUps.push({
-                                    personName: memberName,
-                                    date: formatShiftDate(shift.date),
-                                    eventName: event.eventName,
-                                    shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
-                                    description: shift.description || shift.title
-                                  });
-                                });
-                              }
-                            });
-                          });
-
-                          if (signUps.length === 0) {
+                          if (personReportRows.length === 0) {
                             return (
                               <tr>
-                                <td colSpan={5} className="border border-gray-300 px-4 py-8 text-center text-gray-500">
+                                <td colSpan={6} className="border border-gray-300 px-4 py-8 text-center text-gray-500">
                                   No sign-ups yet
                                 </td>
                               </tr>
                             );
                           }
 
-                          const sorted = [...signUps].sort((a, b) => {
+                          const sorted = [...personReportRows].sort((a, b) => {
                             const direction = personSortDir === 'asc' ? 1 : -1;
                             if (personSortKey === 'date') {
                               return a.date.localeCompare(b.date) * direction;
@@ -1381,9 +1479,10 @@ const VolunteerShifts: React.FC = () => {
 
                           return sorted.map((signUp, index) => (
                             <tr key={index} className="hover:bg-gray-50">
-                              <td className="border border-gray-300 px-4 py-2">{signUp.personName}</td>
+                              <td className="border border-gray-300 px-4 py-2">{renderReportMember(signUp.member)}</td>
                               <td className="border border-gray-300 px-4 py-2">{signUp.date}</td>
                               <td className="border border-gray-300 px-4 py-2">{signUp.eventName}</td>
+                              <td className="border border-gray-300 px-4 py-2">{signUp.shiftTitle}</td>
                               <td className="border border-gray-300 px-4 py-2">{signUp.shiftTime}</td>
                               <td className="border border-gray-300 px-4 py-2">{signUp.description}</td>
                             </tr>
@@ -1405,38 +1504,17 @@ const VolunteerShifts: React.FC = () => {
                   <div className="space-y-4">
                     {(() => {
                       // Group shifts by date
-                      const shiftsByDate: { [key: string]: Array<{
-                        event: any;
-                        shift: any;
-                        signedUpMembers: string[];
-                      }> } = {};
+                      const shiftsByDate: { [key: string]: ShiftReportRow[] } = {};
+                      const selectedKey = selectedDate ? formatShiftDate(new Date(selectedDate)) : '';
 
-                      events.forEach(event => {
-                        event.shifts.forEach(shift => {
-                          const dateKey = formatShiftDate(shift.date);
-                          if (selectedDate) {
-                            const selectedKey = formatShiftDate(new Date(selectedDate));
-                            if (dateKey !== selectedKey) {
-                              return;
-                            }
-                          }
-                          if (!shiftsByDate[dateKey]) {
-                            shiftsByDate[dateKey] = [];
-                          }
-
-                          const signedUpMembers = shift.memberIds?.map((memberId: any) => {
-                            const member = rosterMembers.find(m => m._id === memberId);
-                            if (!member) return 'Unknown Member';
-                            const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown Member';
-                            return member.email ? `${name} (${member.email})` : name;
-                          }) || [];
-
-                          shiftsByDate[dateKey].push({
-                            event,
-                            shift,
-                            signedUpMembers
-                          });
-                        });
+                      shiftReportRows.forEach((row) => {
+                        if (selectedKey && row.date !== selectedKey) {
+                          return;
+                        }
+                        if (!shiftsByDate[row.date]) {
+                          shiftsByDate[row.date] = [];
+                        }
+                        shiftsByDate[row.date].push(row);
                       });
 
                       const sortedDates = Object.keys(shiftsByDate).sort((a, b) => {
@@ -1465,26 +1543,42 @@ const VolunteerShifts: React.FC = () => {
                                 <thead>
                                   <tr className="border-b border-gray-200">
                                     <th className="text-left py-2">Event Name</th>
+                                    <th className="text-left py-2">Shift</th>
                                     <th className="text-left py-2">Shift Time</th>
-                                    <th className="text-left py-2">Description</th>
+                                    <th className="text-left py-2">Filled</th>
+                                    <th className="text-left py-2">Capacity</th>
+                                    <th className="text-left py-2">Remaining</th>
                                     <th className="text-left py-2">Signed Up Members</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {shiftsByDate[date].map((item, index) => (
-                                    <tr key={index} className="border-b border-gray-100 last:border-b-0">
-                                      <td className="py-2">{item.event.eventName}</td>
-                                      <td className="py-2">
-                                        {formatShiftTime(item.shift.startTime)} – {formatShiftTime(item.shift.endTime)}
+                                    <tr key={`${item.shift._id}-${index}`} className="border-b border-gray-100 last:border-b-0">
+                                      <td className="py-2 pr-3">{item.eventName}</td>
+                                      <td className="py-2 pr-3">
+                                        <div className="font-medium text-gray-900">{item.shift.title}</div>
+                                        {item.description && item.description !== item.shift.title && (
+                                          <div className="text-xs text-gray-500">{item.description}</div>
+                                        )}
                                       </td>
-                                      <td className="py-2">{item.shift.description || item.shift.title}</td>
+                                      <td className="py-2 pr-3">{item.shiftTime}</td>
+                                      {(() => {
+                                        const stats = getShiftStats(item.shift);
+                                        return (
+                                          <>
+                                            <td className="py-2 pr-3">{stats.filledPercent}%</td>
+                                            <td className="py-2 pr-3">{stats.current}/{stats.max}</td>
+                                            <td className="py-2 pr-3">{stats.remaining}</td>
+                                          </>
+                                        );
+                                      })()}
                                       <td className="py-2">
                                         {item.signedUpMembers.length > 0 ? (
-                                          <div className="flex flex-wrap gap-1">
-                                            {item.signedUpMembers.map((memberName, idx) => (
-                                              <span key={idx} className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                                {memberName}
-                                              </span>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {item.signedUpMembers.map((member) => (
+                                              <React.Fragment key={`${item.shift._id}-${member.id}`}>
+                                                {renderReportMember(member, true)}
+                                              </React.Fragment>
                                             ))}
                                           </div>
                                         ) : (
