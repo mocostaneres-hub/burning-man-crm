@@ -229,6 +229,44 @@ const VolunteerShifts: React.FC = () => {
     };
   }, [getMember360Link, getMemberDisplayName, rosterMemberById]);
 
+  const normalizeRosterMember = useCallback((member: any): RosterMemberLite | null => {
+    if (!member) return null;
+
+    const memberDoc = member.member && typeof member.member === 'object'
+      ? member.member
+      : member;
+    const nestedUser = memberDoc?.user && typeof memberDoc.user === 'object'
+      ? memberDoc.user
+      : null;
+    const memberId = memberDoc?._id?.toString?.()
+      || member?._id?.toString?.()
+      || String(memberDoc?._id || member?._id || '');
+    const userId = nestedUser?._id?.toString?.()
+      || (typeof memberDoc?.user === 'string' ? memberDoc.user : undefined)
+      || (typeof member.user === 'string' ? member.user : undefined);
+    const fallbackName = memberDoc?.name || '';
+    const [fallbackFirstName, ...fallbackLastNameParts] = fallbackName.split(' ').filter(Boolean);
+
+    if (!memberId && !userId) return null;
+
+    return {
+      _id: userId || memberId,
+      memberId,
+      userId,
+      firstName: nestedUser?.firstName || memberDoc?.firstName || fallbackFirstName || '',
+      lastName: nestedUser?.lastName || memberDoc?.lastName || fallbackLastNameParts.join(' ') || '',
+      email: nestedUser?.email || memberDoc?.email || '',
+      isLead: member?.isCampLead === true
+        || memberDoc?.isCampLead === true
+        || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((memberDoc?.role || member?.role || '').toLowerCase()),
+      skills: Array.isArray(nestedUser?.skills)
+        ? nestedUser.skills
+        : Array.isArray(memberDoc?.skills)
+          ? memberDoc.skills
+          : []
+    };
+  }, []);
+
   const renderReportMember = (member: ReportMember, compact = false) => {
     const content = (
       <>
@@ -420,9 +458,13 @@ const VolunteerShifts: React.FC = () => {
       }
       setCurrentCampId(campId.toString());
 
+      let rosterMembersFromActiveRoster: RosterMemberLite[] = [];
       try {
         const roster = await api.get(`/rosters/active?campId=${campId}`);
         setRosterMeta(deriveRosterMeta(roster));
+        rosterMembersFromActiveRoster = (roster?.members || [])
+          .map(normalizeRosterMember)
+          .filter(Boolean) as RosterMemberLite[];
       } catch (_rosterError) {
         setRosterMeta({
           hasActiveRoster: false,
@@ -433,22 +475,16 @@ const VolunteerShifts: React.FC = () => {
       }
 
       const response = await api.getCampMembers(campId.toString());
-      const normalized = (response.members || []).map((member: any) => {
-        const resolvedUser = typeof member.user === 'object' ? member.user : member;
-        const memberId = member?._id?.toString?.() || String(member?._id || '');
-        const userId = resolvedUser?._id?.toString?.() || (typeof member.user === 'string' ? member.user : undefined);
-        return {
-          _id: userId || memberId,
-          memberId,
-          userId,
-          firstName: resolvedUser.firstName || '',
-          lastName: resolvedUser.lastName || '',
-          email: resolvedUser.email || '',
-          isLead: member?.isCampLead === true || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((member?.role || '').toLowerCase()),
-          skills: Array.isArray(resolvedUser.skills) ? resolvedUser.skills : []
-        };
+      const activeCampMembers = (response.members || [])
+        .map(normalizeRosterMember)
+        .filter(Boolean) as RosterMemberLite[];
+      const mergedMembers = new Map<string, RosterMemberLite>();
+      [...activeCampMembers, ...rosterMembersFromActiveRoster].forEach((member) => {
+        [member.memberId, member.userId, member._id].forEach((id) => {
+          if (id && !mergedMembers.has(id)) mergedMembers.set(id, member);
+        });
       });
-      setRosterMembers(normalized);
+      setRosterMembers(Array.from(new Set(mergedMembers.values())));
     } catch (error) {
       console.error('Error loading roster members:', error);
       setCurrentCampId(null);
@@ -460,7 +496,7 @@ const VolunteerShifts: React.FC = () => {
         hasFullMembershipRoster: false
       });
     }
-  }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
+  }, [normalizeRosterMember, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
 
   const loadEvents = useCallback(async () => {
     try {
