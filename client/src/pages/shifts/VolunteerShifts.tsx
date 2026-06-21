@@ -960,14 +960,30 @@ const VolunteerShifts: React.FC = () => {
 
     const namesSections = personReportGroups.length === 0
       ? '<p class="empty">No one has signed up yet.</p>'
-      : personReportGroups.map((group) => `
-        <section class="person-block">
-          <h2>${renderPrintMember(group.member)}</h2>
-          <ul>
-            ${group.shifts.map((row) => `<li><strong>${escapeHtml(row.shiftTitle)}</strong> · ${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</li>`).join('')}
-          </ul>
-        </section>
-      `).join('');
+      : `
+        <table class="names-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="count-col">Shifts</th>
+              <th>Days and Times</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${personReportGroups.map((group) => `
+              <tr>
+                <td class="name-cell">${renderPrintMember(group.member)}</td>
+                <td class="count-col">${group.shifts.length}</td>
+                <td>
+                  <div class="shift-lines">
+                    ${group.shifts.map((row) => `<span>${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)}</span>`).join('')}
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
 
     const shiftSections = sortedShiftReportRows.map((row) => {
       const stats = getShiftStats(row.shift);
@@ -1027,11 +1043,17 @@ const VolunteerShifts: React.FC = () => {
             h1 { margin: 0 0 8px 0; font-size: 26px; }
             h2 { margin: 0; font-size: 18px; }
             h3 { margin: 0; font-size: 15px; }
-            ul { margin: 10px 0 0 18px; padding: 0; }
-            li { margin: 4px 0; }
             a { color: #c2410c; text-decoration: none; font-weight: 700; }
             .meta { color: #6b7280; margin-bottom: 22px; font-size: 12px; }
             .person-block, .shift-block, .day-block { break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+            .names-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .names-table th { background: #fff7ed; color: #9a3412; text-align: left; border: 1px solid #fed7aa; padding: 7px 8px; }
+            .names-table td { border: 1px solid #e5e7eb; padding: 7px 8px; vertical-align: top; }
+            .names-table tr { break-inside: avoid; }
+            .name-cell { width: 28%; font-size: 13px; }
+            .count-col { width: 56px; text-align: center; white-space: nowrap; }
+            .shift-lines { display: flex; flex-wrap: wrap; gap: 4px 12px; line-height: 1.35; }
+            .shift-lines span { white-space: nowrap; }
             .day-shift { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; break-inside: avoid; }
             .shift-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
             .shift-head span { color: #6b7280; font-size: 12px; white-space: nowrap; }
@@ -1443,30 +1465,49 @@ const VolunteerShifts: React.FC = () => {
                       <p>No one has signed up yet.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      {personReportGroups.map((group) => (
-                        <div key={group.member.id || group.member.personName} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                          <div className="mb-3 flex items-start justify-between gap-3">
-                            <div>
-                              {renderReportMember(group.member)}
-                              <div className="mt-2 text-xs font-medium text-gray-500">
-                                {group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}
-                              </div>
+                    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                      <div className="hidden grid-cols-[minmax(9rem,1.1fr)_4rem_minmax(12rem,2fr)] border-b border-orange-100 bg-orange-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-orange-800 md:grid">
+                        <div>Name</div>
+                        <div className="text-center">Shifts</div>
+                        <div>Days and times</div>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {personReportGroups.map((group) => (
+                          <div
+                            key={group.member.id || group.member.personName}
+                            className="grid grid-cols-1 gap-2 px-4 py-3 md:grid-cols-[minmax(9rem,1.1fr)_4rem_minmax(12rem,2fr)] md:items-start"
+                          >
+                            <div className="min-w-0">
+                              {group.member.link ? (
+                                <Link
+                                  to={group.member.link}
+                                  className="font-semibold text-orange-700 hover:text-orange-800 hover:underline"
+                                >
+                                  {group.member.personName}
+                                </Link>
+                              ) : (
+                                <span className="font-semibold text-gray-900">{group.member.personName}</span>
+                              )}
+                              {group.member.email && (
+                                <div className="truncate text-xs text-gray-500">{group.member.email}</div>
+                              )}
                             </div>
-                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                            <div className="hidden text-center text-sm font-semibold text-gray-700 md:block">
                               {group.shifts.length}
-                            </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {group.shifts.map((shift) => (
+                                <span
+                                  key={`${group.member.id}-${shift.dateValue}-${shift.shiftTitle}-${shift.shiftTime}`}
+                                  className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700"
+                                >
+                                  {shift.date} · {shift.shiftTime}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            {group.shifts.map((shift) => (
-                              <div key={`${group.member.id}-${shift.dateValue}-${shift.shiftTitle}-${shift.shiftTime}`} className="rounded-md bg-gray-50 px-3 py-2">
-                                <div className="font-medium text-gray-900">{shift.shiftTitle}</div>
-                                <div className="text-xs text-gray-600">{shift.date} · {shift.shiftTime} · {shift.eventName}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )
                 )}
