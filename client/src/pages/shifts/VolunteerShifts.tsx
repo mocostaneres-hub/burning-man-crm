@@ -50,6 +50,7 @@ type PersonReportRow = {
   personName: string;
   member: ReportMember;
   date: string;
+  dateValue: string;
   eventName: string;
   shiftTitle: string;
   shiftTime: string;
@@ -60,10 +61,24 @@ type ShiftReportRow = {
   eventName: string;
   shift: any;
   date: string;
+  dateValue: string;
   shiftTime: string;
   description: string;
   signedUpMembers: ReportMember[];
 };
+
+type PersonReportGroup = {
+  member: ReportMember;
+  shifts: PersonReportRow[];
+};
+
+type DayReportGroup = {
+  date: string;
+  dateValue: string;
+  shifts: ShiftReportRow[];
+};
+
+type ReportView = 'names' | 'shifts' | 'day';
 
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
@@ -115,12 +130,8 @@ const VolunteerShifts: React.FC = () => {
   }>({ assignedUsers: [], unassignedUsers: [] });
   const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
-  const [reportType, setReportType] = useState<'per-person' | 'per-day'>('per-person');
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [personSortKey, setPersonSortKey] = useState<'personName' | 'date' | 'eventName' | 'shiftTitle' | 'shiftTime' | 'description'>('date');
-  const [personSortDir, setPersonSortDir] = useState<'asc' | 'desc'>('asc');
-  const [eventShiftSortKey, setEventShiftSortKey] = useState<'title' | 'date' | 'filled' | 'capacity' | 'remaining'>('date');
-  const [eventShiftSortDir, setEventShiftSortDir] = useState<'asc' | 'desc'>('asc');
+  const [reportType, setReportType] = useState<ReportView>('names');
+  const [selectedDate, setSelectedDate] = useState('');
   const [bulkInviteLoading, setBulkInviteLoading] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [bulkShiftSelection, setBulkShiftSelection] = useState<number[]>([]);
@@ -177,24 +188,6 @@ const VolunteerShifts: React.FC = () => {
   
   const canAccessShifts = isCampContext && isAdminOrLead;
 
-  const togglePersonSort = (key: typeof personSortKey) => {
-    if (key === personSortKey) {
-      setPersonSortDir(personSortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setPersonSortKey(key);
-      setPersonSortDir('asc');
-    }
-  };
-
-  const toggleEventShiftSort = (key: typeof eventShiftSortKey) => {
-    if (key === eventShiftSortKey) {
-      setEventShiftSortDir(eventShiftSortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setEventShiftSortKey(key);
-      setEventShiftSortDir('asc');
-    }
-  };
-
   const getShiftStats = (shift: any) => {
     const current = shift.memberIds?.length || 0;
     const max = shift.maxSignUps || 0;
@@ -246,8 +239,8 @@ const VolunteerShifts: React.FC = () => {
       </>
     );
     const className = compact
-      ? 'inline-flex items-center rounded-full bg-orange-50 text-orange-700 border border-orange-100 text-xs px-2 py-1 font-medium hover:bg-orange-100'
-      : 'inline-flex flex-col text-orange-600 hover:text-orange-700';
+      ? 'inline-flex items-center rounded-full bg-orange-50 text-orange-700 border border-orange-100 text-xs px-2.5 py-1 font-semibold hover:bg-orange-100'
+      : 'inline-flex min-w-[12rem] flex-col rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-orange-700 hover:bg-orange-100';
 
     return member.link ? (
       <Link to={member.link} className={className}>
@@ -266,6 +259,7 @@ const VolunteerShifts: React.FC = () => {
         eventName: event.eventName,
         shift,
         date: formatShiftDate(shift.date),
+        dateValue: utcToPdtDateInput(shift.date),
         shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
         description: shift.description || shift.title,
         signedUpMembers: (shift.memberIds || []).map(resolveReportMember)
@@ -279,6 +273,7 @@ const VolunteerShifts: React.FC = () => {
         personName: member.personName,
         member,
         date: row.date,
+        dateValue: row.dateValue,
         eventName: row.eventName,
         shiftTitle: row.shift.title,
         shiftTime: row.shiftTime,
@@ -287,9 +282,67 @@ const VolunteerShifts: React.FC = () => {
     ));
   }, [shiftReportRows]);
 
-  const getSortIndicator = (activeKey: string, key: string, direction: 'asc' | 'desc') => {
-    if (activeKey !== key) return '';
-    return direction === 'asc' ? '▲' : '▼';
+  const sortedShiftReportRows = useMemo(() => {
+    return [...shiftReportRows].sort((a, b) => (
+      new Date(a.shift.startTime).getTime() - new Date(b.shift.startTime).getTime()
+      || a.eventName.localeCompare(b.eventName)
+      || a.shift.title.localeCompare(b.shift.title)
+    ));
+  }, [shiftReportRows]);
+
+  const personReportGroups = useMemo<PersonReportGroup[]>(() => {
+    const groups = new Map<string, PersonReportGroup>();
+    personReportRows.forEach((row) => {
+      const key = row.member.id || row.personName;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.shifts.push(row);
+      } else {
+        groups.set(key, { member: row.member, shifts: [row] });
+      }
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        shifts: [...group.shifts].sort((a, b) => (
+          a.dateValue.localeCompare(b.dateValue)
+          || a.shiftTime.localeCompare(b.shiftTime)
+          || a.shiftTitle.localeCompare(b.shiftTitle)
+        ))
+      }))
+      .sort((a, b) => a.member.personName.localeCompare(b.member.personName));
+  }, [personReportRows]);
+
+  const shiftDateOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    sortedShiftReportRows.forEach((row) => {
+      if (row.dateValue) options.set(row.dateValue, row.date);
+    });
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [sortedShiftReportRows]);
+
+  const dayReportGroups = useMemo<DayReportGroup[]>(() => {
+    const groups = new Map<string, DayReportGroup>();
+    sortedShiftReportRows.forEach((row) => {
+      if (selectedDate && row.dateValue !== selectedDate) return;
+      const key = row.dateValue || row.date;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.shifts.push(row);
+      } else {
+        groups.set(key, { date: row.date, dateValue: row.dateValue, shifts: [row] });
+      }
+    });
+    return Array.from(groups.values()).sort((a, b) => a.dateValue.localeCompare(b.dateValue));
+  }, [selectedDate, sortedShiftReportRows]);
+
+  const reportLabels: Record<ReportView, { title: string; print: string }> = {
+    names: { title: 'Names List', print: 'Print Names List' },
+    shifts: { title: 'Shift Rosters', print: 'Print Per Shift' },
+    day: { title: 'Day Sheet', print: 'Print Per Day' }
   };
 
   const allRosterIds = useMemo(() => rosterMembers.map((member) => member._id), [rosterMembers]);
@@ -852,8 +905,7 @@ const VolunteerShifts: React.FC = () => {
     if (!printWindow) return;
 
     const generatedAt = new Date().toLocaleString();
-    const title = reportType === 'per-person' ? 'Volunteer Shift Report - Per Person' : 'Volunteer Shift Report - Per Day';
-    const selectedDateLabel = selectedDate ? formatShiftDate(new Date(selectedDate)) : '';
+    const title = `Volunteer Shift Report - ${reportLabels[reportType].title}`;
     const escapeHtml = (value: any) => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -866,62 +918,99 @@ const VolunteerShifts: React.FC = () => {
       const href = `${window.location.origin}${member.link}`;
       return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
     };
+    const renderPrintMemberChip = (member: ReportMember) => (
+      `<span class="name-chip">${renderPrintMember(member)}</span>`
+    );
 
-    const sortedPersonRows = [...personReportRows].sort((a, b) => (
-      a.personName.localeCompare(b.personName)
-      || a.date.localeCompare(b.date)
-      || a.shiftTime.localeCompare(b.shiftTime)
-    ));
+    const namesSections = personReportGroups.length === 0
+      ? '<p class="empty">No one has signed up yet.</p>'
+      : personReportGroups.map((group) => `
+        <section class="person-block">
+          <h2>${renderPrintMember(group.member)}</h2>
+          <ul>
+            ${group.shifts.map((row) => `<li><strong>${escapeHtml(row.shiftTitle)}</strong> · ${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</li>`).join('')}
+          </ul>
+        </section>
+      `).join('');
 
-    const dayRowsByDate: Record<string, ShiftReportRow[]> = {};
-    shiftReportRows.forEach((row) => {
-      if (selectedDateLabel && row.date !== selectedDateLabel) return;
-      if (!dayRowsByDate[row.date]) dayRowsByDate[row.date] = [];
-      dayRowsByDate[row.date].push(row);
-    });
+    const shiftSections = sortedShiftReportRows.map((row) => {
+      const stats = getShiftStats(row.shift);
+      return `
+        <section class="shift-block">
+          <div class="shift-head">
+            <h2>${escapeHtml(row.shift.title)}</h2>
+            <span>${stats.current}/${stats.max} signed · ${stats.remaining} open</span>
+          </div>
+          <p class="shift-meta">${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</p>
+          <div class="name-grid">
+            ${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMemberChip).join('') : '<span class="empty-chip">No sign-ups yet</span>'}
+          </div>
+        </section>
+      `;
+    }).join('');
 
-    const personTable = `
-      <table>
-        <thead><tr><th>Person</th><th>Date</th><th>Event</th><th>Shift</th><th>Time</th><th>Description</th></tr></thead>
-        <tbody>
-          ${sortedPersonRows.length === 0 ? '<tr><td colspan="6">No sign-ups yet</td></tr>' : sortedPersonRows.map(r => `<tr><td>${renderPrintMember(r.member)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.eventName)}</td><td>${escapeHtml(r.shiftTitle)}</td><td>${escapeHtml(r.shiftTime)}</td><td>${escapeHtml(r.description)}</td></tr>`).join('')}
-        </tbody>
-      </table>
-    `;
-
-    const daySections = Object.keys(dayRowsByDate).sort().map(date => `
-      <h3>${date}</h3>
-      <table>
-        <thead><tr><th>Event</th><th>Shift</th><th>Time</th><th>Filled</th><th>Capacity</th><th>Remaining</th><th>Signed Up Members</th></tr></thead>
-        <tbody>
-          ${dayRowsByDate[date].map(row => {
+    const daySections = dayReportGroups.length === 0
+      ? '<p class="empty">No shifts scheduled for selected day.</p>'
+      : dayReportGroups.map((group) => `
+        <section class="day-block">
+          <h2>${escapeHtml(group.date)}</h2>
+          ${group.shifts.map((row) => {
             const stats = getShiftStats(row.shift);
-            return `<tr><td>${escapeHtml(row.eventName)}</td><td>${escapeHtml(row.shift.title)}</td><td>${escapeHtml(row.shiftTime)}</td><td>${stats.filledPercent}%</td><td>${stats.current}/${stats.max}</td><td>${stats.remaining}</td><td>${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMember).join('<br/>') : 'No sign-ups'}</td></tr>`;
+            return `
+              <div class="day-shift">
+                <div class="shift-head">
+                  <h3>${escapeHtml(row.shift.title)}</h3>
+                  <span>${stats.current}/${stats.max} signed · ${stats.remaining} open</span>
+                </div>
+                <p class="shift-meta">${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</p>
+                <div class="name-grid">
+                  ${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMemberChip).join('') : '<span class="empty-chip">No sign-ups yet</span>'}
+                </div>
+              </div>
+            `;
           }).join('')}
-        </tbody>
-      </table>
-    `).join('');
+        </section>
+      `).join('');
+
+    const reportBody = reportType === 'names'
+      ? namesSections
+      : reportType === 'shifts'
+        ? shiftSections || '<p class="empty">No shifts scheduled yet.</p>'
+        : daySections;
+
+    const scopedMeta = reportType === 'day' && selectedDate
+      ? ` · ${shiftDateOptions.find((option) => option.value === selectedDate)?.label || selectedDate}`
+      : '';
 
     printWindow.document.write(`
       <html>
         <head>
-          <title>${title}</title>
+          <title>${escapeHtml(title)}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
-            h1 { margin: 0 0 8px 0; }
-            .meta { color: #555; margin-bottom: 18px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
-            th { background: #f3f4f6; }
-            a { color: #c2410c; text-decoration: none; font-weight: 600; }
-            h3 { margin: 18px 0 8px 0; }
-            @media print { body { padding: 8px; } }
+            body { font-family: Arial, sans-serif; padding: 28px; color: #111827; }
+            h1 { margin: 0 0 8px 0; font-size: 26px; }
+            h2 { margin: 0; font-size: 18px; }
+            h3 { margin: 0; font-size: 15px; }
+            ul { margin: 10px 0 0 18px; padding: 0; }
+            li { margin: 4px 0; }
+            a { color: #c2410c; text-decoration: none; font-weight: 700; }
+            .meta { color: #6b7280; margin-bottom: 22px; font-size: 12px; }
+            .person-block, .shift-block, .day-block { break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+            .day-shift { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; break-inside: avoid; }
+            .shift-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+            .shift-head span { color: #6b7280; font-size: 12px; white-space: nowrap; }
+            .shift-meta { color: #4b5563; margin: 6px 0 10px; font-size: 13px; }
+            .name-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+            .name-chip { display: inline-block; border: 1px solid #fed7aa; background: #fff7ed; color: #c2410c; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
+            .empty, .empty-chip { color: #6b7280; }
+            .empty-chip { display: inline-block; border: 1px dashed #d1d5db; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
+            @media print { body { padding: 10px; } }
           </style>
         </head>
         <body>
-          <h1>${title}</h1>
-          <div class="meta">Generated: ${generatedAt}</div>
-          ${reportType === 'per-person' ? personTable : daySections || '<p>No shifts scheduled for selected day.</p>'}
+          <h1>${escapeHtml(title)}</h1>
+          <div class="meta">Generated: ${escapeHtml(generatedAt)}${escapeHtml(scopedMeta)}</div>
+          ${reportBody}
         </body>
       </html>
     `);
@@ -1240,47 +1329,67 @@ const VolunteerShifts: React.FC = () => {
                 Volunteer Shift Reports
               </h2>
               <p className="text-gray-600">
-                View participation and assignment data for all volunteer shifts.
+                Human-first shift rosters for printing, day-of coordination, and quick staffing checks.
               </p>
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1 mt-2 inline-block">
                 🕐 All dates and times are in <strong>{PDT_LABEL}</strong>
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6 no-print">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={reportType === 'per-person' ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => setReportType('per-person')}
-                >
-                  Per-Person
-                </Button>
-                <Button
-                  variant={reportType === 'per-day' ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => setReportType('per-day')}
-                >
-                  Per-Day
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                {reportType === 'per-day' && (
-                  <Input
-                    type="date"
+            <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => setReportType('names')}
+                className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'names' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
+              >
+                <span className="block text-sm font-semibold">Names List</span>
+                <span className="block text-xs text-gray-500">{personReportGroups.length} people signed up</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportType('shifts')}
+                className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'shifts' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
+              >
+                <span className="block text-sm font-semibold">Per Shift</span>
+                <span className="block text-xs text-gray-500">{sortedShiftReportRows.length} shift rosters</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportType('day')}
+                className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'day' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
+              >
+                <span className="block text-sm font-semibold">Per Day</span>
+                <span className="block text-xs text-gray-500">{shiftDateOptions.length} scheduled day{shiftDateOptions.length === 1 ? '' : 's'}</span>
+              </button>
+            </div>
+
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between no-print">
+              {reportType === 'day' ? (
+                <label className="flex flex-col gap-1 text-sm text-gray-700 md:flex-row md:items-center">
+                  <span className="font-medium">Day</span>
+                  <select
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-40"
-                  />
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrintReportView}
-                >
-                  Printable View
-                </Button>
-              </div>
+                    className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm md:w-56"
+                  >
+                    <option value="">All days</option>
+                    {shiftDateOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="text-sm text-gray-500">
+                  Names link to Contact 360 when a roster record is available.
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrintReportView}
+              >
+                {reportLabels[reportType].print}
+              </Button>
             </div>
 
             {events.length === 0 ? (
@@ -1290,312 +1399,131 @@ const VolunteerShifts: React.FC = () => {
                 <p className="text-gray-600">Create some volunteer events first to see reporting data.</p>
               </div>
             ) : (
-              <div className="space-y-8">
-                {/* Per-Event View */}
-                <div>
-                  <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Per-Event View
-                  </h3>
-                  <div className="text-sm text-gray-500 mb-3">
-                    Click a column header to sort.
-                  </div>
-                  <div className="space-y-6">
-                    {events.map(event => {
-                      const sortedShifts = [...event.shifts].sort((a, b) => {
-                        const statsA = getShiftStats(a);
-                        const statsB = getShiftStats(b);
-                        const direction = eventShiftSortDir === 'asc' ? 1 : -1;
-                        if (eventShiftSortKey === 'title') {
-                          return a.title.localeCompare(b.title) * direction;
-                        }
-                        if (eventShiftSortKey === 'capacity') {
-                          return (statsA.max - statsB.max) * direction;
-                        }
-                        if (eventShiftSortKey === 'remaining') {
-                          return (statsA.remaining - statsB.remaining) * direction;
-                        }
-                        if (eventShiftSortKey === 'filled') {
-                          return (statsA.filledPercent - statsB.filledPercent) * direction;
-                        }
-                        const aTime = new Date(a.startTime).getTime();
-                        const bTime = new Date(b.startTime).getTime();
-                        return (aTime - bTime) * direction;
-                      });
+              <div className="space-y-5">
+                {reportType === 'names' && (
+                  personReportGroups.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-300 px-6 py-10 text-center text-gray-500">
+                      <Users size={32} className="mx-auto mb-2 opacity-50" />
+                      <p>No one has signed up yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      {personReportGroups.map((group) => (
+                        <div key={group.member.id || group.member.personName} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                              {renderReportMember(group.member)}
+                              <div className="mt-2 text-xs font-medium text-gray-500">
+                                {group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}
+                              </div>
+                            </div>
+                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                              {group.shifts.length}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {group.shifts.map((shift) => (
+                              <div key={`${group.member.id}-${shift.dateValue}-${shift.shiftTitle}-${shift.shiftTime}`} className="rounded-md bg-gray-50 px-3 py-2">
+                                <div className="font-medium text-gray-900">{shift.shiftTitle}</div>
+                                <div className="text-xs text-gray-600">{shift.date} · {shift.shiftTime} · {shift.eventName}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
 
+                {reportType === 'shifts' && (
+                  <div className="space-y-4">
+                    {sortedShiftReportRows.map((row) => {
+                      const stats = getShiftStats(row.shift);
                       return (
-                        <div key={event._id} className="print-page-break">
-                          <div className="mb-3">
-                            <h4 className="text-base font-medium text-gray-900">{event.eventName}</h4>
-                            {event.description && (
-                              <p className="text-sm text-gray-600">{event.description}</p>
-                            )}
+                        <div key={row.shift._id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">{row.shift.title}</h3>
+                              <p className="text-sm text-gray-600">{row.date} · {row.shiftTime} · {row.eventName}</p>
+                              {row.description && row.description !== row.shift.title && (
+                                <p className="mt-1 text-sm text-gray-500">{row.description}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                              <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">{stats.current} signed</span>
+                              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">{stats.max} capacity</span>
+                              <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">{stats.remaining} open</span>
+                            </div>
                           </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse border border-gray-300">
-                              <thead>
-                                <tr className="bg-gray-50">
-                                  <th
-                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                                    onClick={() => toggleEventShiftSort('title')}
-                                  >
-                                    Shift {getSortIndicator(eventShiftSortKey, 'title', eventShiftSortDir)}
-                                  </th>
-                                  <th
-                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                                    onClick={() => toggleEventShiftSort('date')}
-                                  >
-                                    Date {getSortIndicator(eventShiftSortKey, 'date', eventShiftSortDir)}
-                                  </th>
-                                  <th className="border border-gray-300 px-4 py-2 text-left">Time</th>
-                                  <th
-                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                                    onClick={() => toggleEventShiftSort('filled')}
-                                  >
-                                    % Filled {getSortIndicator(eventShiftSortKey, 'filled', eventShiftSortDir)}
-                                  </th>
-                                  <th
-                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                                    onClick={() => toggleEventShiftSort('capacity')}
-                                  >
-                                    Capacity {getSortIndicator(eventShiftSortKey, 'capacity', eventShiftSortDir)}
-                                  </th>
-                                  <th
-                                    className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                                    onClick={() => toggleEventShiftSort('remaining')}
-                                  >
-                                    Remaining {getSortIndicator(eventShiftSortKey, 'remaining', eventShiftSortDir)}
-                                  </th>
-                                  <th className="border border-gray-300 px-4 py-2 text-left">Signed Up Members</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {sortedShifts.map(shift => {
-                                  const stats = getShiftStats(shift);
-                                  const signedUpMembers = (shift.memberIds || []).map(resolveReportMember);
-                                  return (
-                                    <tr key={shift._id} className="hover:bg-gray-50">
-                                      <td className="border border-gray-300 px-4 py-2">{shift.title}</td>
-                                      <td className="border border-gray-300 px-4 py-2">{formatShiftDate(shift.date)}</td>
-                                      <td className="border border-gray-300 px-4 py-2">
-                                        {formatShiftTime(shift.startTime)} – {formatShiftTime(shift.endTime)}
-                                      </td>
-                                      <td className="border border-gray-300 px-4 py-2">{stats.filledPercent}%</td>
-                                      <td className="border border-gray-300 px-4 py-2">{stats.current}/{stats.max}</td>
-                                      <td className="border border-gray-300 px-4 py-2">{stats.remaining}</td>
-                                      <td className="border border-gray-300 px-4 py-2">
-                                        {signedUpMembers.length > 0 ? (
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {signedUpMembers.map((member) => (
-                                              <React.Fragment key={`${shift._id}-${member.id}`}>
-                                                {renderReportMember(member, true)}
-                                              </React.Fragment>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <span className="text-sm text-gray-500">No sign-ups</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
+                          {row.signedUpMembers.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {row.signedUpMembers.map((member) => (
+                                <React.Fragment key={`${row.shift._id}-${member.id}`}>
+                                  {renderReportMember(member)}
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-500">
+                              No one has signed up for this shift yet.
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                </div>
-
-                {/* Per-Person View */}
-                {reportType === 'per-person' && (
-                  <div>
-                  <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Per-Person View
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-300">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('personName')}
-                          >
-                            Person Name {getSortIndicator(personSortKey, 'personName', personSortDir)}
-                          </th>
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('date')}
-                          >
-                            Date {getSortIndicator(personSortKey, 'date', personSortDir)}
-                          </th>
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('eventName')}
-                          >
-                            Event Name {getSortIndicator(personSortKey, 'eventName', personSortDir)}
-                          </th>
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('shiftTitle')}
-                          >
-                            Shift {getSortIndicator(personSortKey, 'shiftTitle', personSortDir)}
-                          </th>
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('shiftTime')}
-                          >
-                            Shift Time {getSortIndicator(personSortKey, 'shiftTime', personSortDir)}
-                          </th>
-                          <th
-                            className="border border-gray-300 px-4 py-2 text-left cursor-pointer"
-                            onClick={() => togglePersonSort('description')}
-                          >
-                            Description {getSortIndicator(personSortKey, 'description', personSortDir)}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          if (personReportRows.length === 0) {
-                            return (
-                              <tr>
-                                <td colSpan={6} className="border border-gray-300 px-4 py-8 text-center text-gray-500">
-                                  No sign-ups yet
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          const sorted = [...personReportRows].sort((a, b) => {
-                            const direction = personSortDir === 'asc' ? 1 : -1;
-                            if (personSortKey === 'date') {
-                              return a.date.localeCompare(b.date) * direction;
-                            }
-                            return (a[personSortKey] || '').toString().localeCompare((b[personSortKey] || '').toString()) * direction;
-                          });
-
-                          return sorted.map((signUp, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
-                              <td className="border border-gray-300 px-4 py-2">{renderReportMember(signUp.member)}</td>
-                              <td className="border border-gray-300 px-4 py-2">{signUp.date}</td>
-                              <td className="border border-gray-300 px-4 py-2">{signUp.eventName}</td>
-                              <td className="border border-gray-300 px-4 py-2">{signUp.shiftTitle}</td>
-                              <td className="border border-gray-300 px-4 py-2">{signUp.shiftTime}</td>
-                              <td className="border border-gray-300 px-4 py-2">{signUp.description}</td>
-                            </tr>
-                          ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
                 )}
 
-                {/* Per-Day View */}
-                {reportType === 'per-day' && (
-                <div>
-                  <h3 className="text-lg font-lato-bold text-custom-text mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5" />
-                    Per-Day View
-                  </h3>
-                  <div className="space-y-4">
-                    {(() => {
-                      // Group shifts by date
-                      const shiftsByDate: { [key: string]: ShiftReportRow[] } = {};
-                      const selectedKey = selectedDate ? formatShiftDate(new Date(selectedDate)) : '';
-
-                      shiftReportRows.forEach((row) => {
-                        if (selectedKey && row.date !== selectedKey) {
-                          return;
-                        }
-                        if (!shiftsByDate[row.date]) {
-                          shiftsByDate[row.date] = [];
-                        }
-                        shiftsByDate[row.date].push(row);
-                      });
-
-                      const sortedDates = Object.keys(shiftsByDate).sort((a, b) => {
-                        const shiftA = shiftsByDate[a]?.[0]?.shift?.date;
-                        const shiftB = shiftsByDate[b]?.[0]?.shift?.date;
-                        return new Date(shiftA).getTime() - new Date(shiftB).getTime();
-                      });
-
-                      if (sortedDates.length === 0) {
-                        return (
-                          <div className="text-center py-12 text-gray-500">
-                            <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                            <p>No shifts scheduled yet</p>
+                {reportType === 'day' && (
+                  dayReportGroups.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-300 px-6 py-10 text-center text-gray-500">
+                      <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+                      <p>No shifts scheduled for the selected day.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {dayReportGroups.map((group) => (
+                        <div key={group.dateValue || group.date} className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+                            <h3 className="text-lg font-semibold text-gray-900">{group.date}</h3>
+                            <p className="text-sm text-gray-500">{group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}</p>
                           </div>
-                        );
-                      }
-
-                      return sortedDates.map(date => (
-                        <div key={date} className="border border-gray-200 rounded-lg">
-                          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                            <h4 className="font-medium text-gray-900">{date}</h4>
-                          </div>
-                          <div className="p-4">
-                            <div className="overflow-x-auto">
-                              <table className="w-full">
-                                <thead>
-                                  <tr className="border-b border-gray-200">
-                                    <th className="text-left py-2">Event Name</th>
-                                    <th className="text-left py-2">Shift</th>
-                                    <th className="text-left py-2">Shift Time</th>
-                                    <th className="text-left py-2">Filled</th>
-                                    <th className="text-left py-2">Capacity</th>
-                                    <th className="text-left py-2">Remaining</th>
-                                    <th className="text-left py-2">Signed Up Members</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {shiftsByDate[date].map((item, index) => (
-                                    <tr key={`${item.shift._id}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                                      <td className="py-2 pr-3">{item.eventName}</td>
-                                      <td className="py-2 pr-3">
-                                        <div className="font-medium text-gray-900">{item.shift.title}</div>
-                                        {item.description && item.description !== item.shift.title && (
-                                          <div className="text-xs text-gray-500">{item.description}</div>
-                                        )}
-                                      </td>
-                                      <td className="py-2 pr-3">{item.shiftTime}</td>
-                                      {(() => {
-                                        const stats = getShiftStats(item.shift);
-                                        return (
-                                          <>
-                                            <td className="py-2 pr-3">{stats.filledPercent}%</td>
-                                            <td className="py-2 pr-3">{stats.current}/{stats.max}</td>
-                                            <td className="py-2 pr-3">{stats.remaining}</td>
-                                          </>
-                                        );
-                                      })()}
-                                      <td className="py-2">
-                                        {item.signedUpMembers.length > 0 ? (
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {item.signedUpMembers.map((member) => (
-                                              <React.Fragment key={`${item.shift._id}-${member.id}`}>
-                                                {renderReportMember(member, true)}
-                                              </React.Fragment>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <span className="text-gray-500 text-sm">No sign-ups</span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                          <div className="divide-y divide-gray-100">
+                            {group.shifts.map((row) => {
+                              const stats = getShiftStats(row.shift);
+                              return (
+                                <div key={row.shift._id} className="p-4">
+                                  <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900">{row.shift.title}</h4>
+                                      <p className="text-sm text-gray-600">{row.shiftTime} · {row.eventName}</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                                      <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">{stats.current}/{stats.max} signed</span>
+                                      <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">{stats.remaining} open</span>
+                                    </div>
+                                  </div>
+                                  {row.signedUpMembers.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {row.signedUpMembers.map((member) => (
+                                        <React.Fragment key={`${row.shift._id}-${member.id}`}>
+                                          {renderReportMember(member)}
+                                        </React.Fragment>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-md border border-dashed border-gray-300 px-4 py-4 text-sm text-gray-500">
+                                      No sign-ups yet.
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             )}
