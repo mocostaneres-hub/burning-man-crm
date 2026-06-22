@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { Member, StructuredLocation } from '../../types';
 import { formatDate } from '../../utils/dateFormatters';
 import MetricsPanel from '../../components/roster/MetricsPanel';
+import ShiftsOnlyMetricsPanel from '../../components/roster/ShiftsOnlyMetricsPanel';
 import RosterFilters, { FilterType } from '../../components/roster/RosterFilters';
 import { ImportRosterModal, InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
@@ -480,7 +481,8 @@ const MemberRoster: React.FC = () => {
     || rosterModeState.mode === 'full_membership'
   )) || isLikelyFullMembershipByCampSetting;
   const canManageFullMembershipInvites = campAcceptingApplications || authUser?.isCampLead === true;
-  const canViewMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
+  const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
+  const canViewShiftsOnlyMetrics = canAccessRoster && hasShiftsOnlyRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
 
   useEffect(() => {
@@ -1809,8 +1811,14 @@ const MemberRoster: React.FC = () => {
       )}
 
       {/* Metrics Panel - Legacy pre-SOR full-membership camps */}
-      {canViewMetrics && (
+      {canViewFullMembershipMetrics && (
         <MetricsPanel
+          members={filteredMembers}
+        />
+      )}
+
+      {canViewShiftsOnlyMetrics && (
+        <ShiftsOnlyMetricsPanel
           members={filteredMembers}
         />
       )}
