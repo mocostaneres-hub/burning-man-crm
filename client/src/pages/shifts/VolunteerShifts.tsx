@@ -1152,25 +1152,6 @@ const VolunteerShifts: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {!rosterMeta.hasFullMembershipRoster && (
-            <div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const rosterPath = campIdentifier ? `/camp/${campIdentifier}/roster` : '/roster';
-                  navigate(`${rosterPath}?action=${rosterMeta.hasShiftsOnlyRoster ? 'add_sor' : 'start_sor'}`);
-                }}
-                className="flex items-center gap-2 min-h-[44px]"
-              >
-                {rosterMeta.hasShiftsOnlyRoster ? 'Add More People to SOR' : 'Start Shifts-Only Roster'}
-              </Button>
-              <p className="text-[11px] text-gray-600 mt-1">
-                {rosterMeta.hasShiftsOnlyRoster
-                  ? 'Open roster tools to add/import more shifts-only members.'
-                  : 'Set up shifts-only roster before sending shift invites.'}
-              </p>
-            </div>
-          )}
           {hasRoster && (
             <div>
               <Button

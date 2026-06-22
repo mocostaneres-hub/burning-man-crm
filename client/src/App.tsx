@@ -94,6 +94,16 @@ const DashboardRedirect: React.FC = () => {
   
   console.log('🔍 [DashboardRedirect] User account type:', user?.accountType);
   console.log('🔍 [DashboardRedirect] User data:', user);
+
+  // Camp Leads are personal/member accounts, but their landing page should be
+  // the camp admin dashboard they are delegated to manage.
+  if (user?.isCampLead === true && user?.campLeadCampId) {
+    const dashboardPath = getCampDashboardPath(user);
+    if (dashboardPath !== '/dashboard') {
+      console.log('🔍 [DashboardRedirect] Redirecting Camp Lead to camp dashboard');
+      return <Navigate to={dashboardPath} replace />;
+    }
+  }
   
   // Personal accounts go to profile
   if (user?.accountType === 'personal') {

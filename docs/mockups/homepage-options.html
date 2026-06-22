@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>G8Road Homepage Mockups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #FAFAFA;
+      --primary: #2ECC71;
+      --primary-hover: #27AE60;
+      --secondary: #F39C12;
+      --accent: #3498DB;
+      --text: #2D3436;
+      --muted: #636E72;
+      --border: #E5E7EB;
+      --soft: 0 2px 8px rgba(0, 0, 0, 0.08);
+      --medium: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Work Sans", sans-serif;
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      font-family: "Lato", sans-serif;
+      line-height: 1.4;
+    }
+
+    h1 {
+      font-size: 2rem;
+    }
+
+    h2 {
+      font-size: 1.625rem;
+    }
+
+    h3 {
+      font-size: 1.125rem;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }
+
+    .intro {
+      margin-bottom: 32px;
+    }
+
+    .intro p {
+      max-width: 760px;
+      margin-top: 8px;
+    }
+
+    .mockup {
+      margin-bottom: 44px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: white;
+      box-shadow: var(--soft);
+    }
+
+    .mockup-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      background: #F9FAFB;
+    }
+
+    .mockup-label span {
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .site {
+      min-height: 760px;
+      background: var(--bg);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      padding: 0 32px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      color: var(--primary);
+      font-family: "Lato", sans-serif;
+      font-size: 1.625rem;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 8px 16px;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      font-family: "Work Sans", sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--soft);
+    }
+
+    .btn-outline {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: white;
+    }
+
+    .section {
+      padding: 40px 32px;
+    }
+
+    .hero {
+      display: grid;
+      align-items: center;
+      gap: 32px;
+      min-height: 420px;
+    }
+
+    .hero-two {
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    }
+
+    .hero-center {
+      max-width: 880px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-bottom: 12px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #EAFBF1;
+      color: #166534;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .hero-copy {
+      margin: 12px 0 24px;
+      font-size: 1rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .center-actions {
+      justify-content: center;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #F3F4F6;
+      border-radius: 12px;
+      box-shadow: var(--soft);
+    }
+
+    .panel {
+      padding: 24px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px;
+    }
+
+    .metric p:first-child {
+      color: #4B5563;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 1.75rem;
+      line-height: 1.2;
+    }
+
+    .icon {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .green {
+      color: #16A34A;
+    }
+
+    .green-bg {
+      background: #DCFCE7;
+      color: #16A34A;
+    }
+
+    .orange {
+      color: #EA580C;
+    }
+
+    .orange-bg {
+      background: #FFEDD5;
+      color: #EA580C;
+    }
+
+    .blue {
+      color: #2563EB;
+    }
+
+    .blue-bg {
+      background: #DBEAFE;
+      color: #2563EB;
+    }
+
+    .purple {
+      color: #9333EA;
+    }
+
+    .purple-bg {
+      background: #F3E8FF;
+      color: #9333EA;
+    }
+
+    .feature-card {
+      padding: 22px;
+    }
+
+    .feature-card h3 {
+      margin: 10px 0 6px;
+    }
+
+    .table {
+      overflow: hidden;
+    }
+
+    .table-row,
+    .table-head {
+      display: grid;
+      grid-template-columns: 1.1fr 0.8fr 0.8fr 0.9fr;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 18px;
+    }
+
+    .table-head {
+      background: #F9FAFB;
+      color: #6B7280;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .table-row {
+      border-top: 1px solid #E5E7EB;
+      font-size: 0.875rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-success {
+      background: #DCFCE7;
+      color: #166534;
+    }
+
+    .badge-warning {
+      background: #FFEDD5;
+      color: #9A3412;
+    }
+
+    .badge-info {
+      background: #DBEAFE;
+      color: #1E40AF;
+    }
+
+    .screen-card {
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      background: white;
+      box-shadow: var(--soft);
+    }
+
+    .screen-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mini-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      background: #F9FAFB;
+      font-size: 0.875rem;
+    }
+
+    .path-card {
+      display: grid;
+      gap: 14px;
+      padding: 28px;
+      border: 2px solid #E5E7EB;
+      border-radius: 12px;
+      background: white;
+      box-shadow: var(--soft);
+    }
+
+    .path-card.primary {
+      border-color: #BBF7D0;
+      background: #FBFEFC;
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: white;
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
+
+    .workflow-band {
+      border-top: 1px solid var(--border);
+      background: white;
+    }
+
+    .muted-band {
+      background: #F3F4F6;
+    }
+
+    @media (max-width: 900px) {
+      .hero-two,
+      .grid-2,
+      .grid-3,
+      .grid-4 {
+        grid-template-columns: 1fr;
+      }
+
+      .nav {
+        align-items: flex-start;
+        height: auto;
+        flex-direction: column;
+        padding: 18px;
+      }
+
+      .nav-links {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <h1>G8Road Public Homepage Mockups</h1>
+      <p>Three homepage directions using the current Roster page as the visual source of truth: Work Sans body text, Lato headings, white cards, soft shadows, green primary actions, orange urgency, blue informational states, and compact operational layouts.</p>
+    </section>
+
+    <section class="mockup">
+      <div class="mockup-label">
+        <div>
+          <h2>Option A: Minimalist / Content-Focused</h2>
+          <span>Best for a calm, clear first impression with direct camp/member paths.</span>
+        </div>
+      </div>
+      <div class="site">
+        <nav class="nav">
+          <div class="brand">G8Road</div>
+          <div class="nav-links">
+            <div class="nav-link">Discover Camps</div>
+            <div class="nav-link">Principles</div>
+            <div class="nav-link">Help</div>
+            <a class="btn btn-outline">Log In</a>
+            <a class="btn btn-primary">Sign Up</a>
+          </div>
+        </nav>
+        <section class="section hero hero-center">
+          <div>
+            <span class="eyebrow">Theme camp CRM for Burning Man communities</span>
+            <h1>Run your camp. Find your people. Keep the details moving.</h1>
+            <p class="hero-copy">G8Road helps camps manage rosters, applications, shifts, tasks, dues, and member readiness while giving members one place to stay current.</p>
+            <div class="actions center-actions">
+              <a class="btn btn-primary">Create or manage a camp</a>
+              <a class="btn btn-outline">Discover camps</a>
+            </div>
+          </div>
+        </section>
+        <section class="section">
+          <div class="grid-2">
+            <div class="feature-card card">
+              <div class="icon green-bg">C</div>
+              <h3>For Camp Accounts</h3>
+              <p>Roster health, applications, logistics, tasks, and shifts organized in one operational workspace.</p>
+            </div>
+            <div class="feature-card card">
+              <div class="icon blue-bg">M</div>
+              <h3>For Members</h3>
+              <p>Profile status, camp applications, assigned tasks, volunteer shifts, and camp messages in one personal dashboard.</p>
+            </div>
+          </div>
+        </section>
+        <section class="section muted-band">
+          <h2 style="margin-bottom: 18px;">Camp activity preview</h2>
+          <div class="table card">
+            <div class="table-head">
+              <div>Camp</div><div>Status</div><div>Focus</div><div>Action</div>
+            </div>
+            <div class="table-row">
+              <div>Sound + build crew</div><div><span class="badge badge-success">Accepting</span></div><div>Volunteer shifts</div><div class="green">View profile</div>
+            </div>
+            <div class="table-row">
+              <div>Art support camp</div><div><span class="badge badge-warning">Reviewing</span></div><div>Kitchen + EAP</div><div class="green">Apply</div>
+            </div>
+            <div class="table-row">
+              <div>Mutant vehicle crew</div><div><span class="badge badge-info">Invite only</span></div><div>Build week</div><div class="green">Learn more</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="mockup">
+      <div class="mockup-label">
+        <div>
+          <h2>Option B: Data-Heavy / Analytical</h2>
+          <span>Best for emphasizing that G8Road is a serious camp operations system.</span>
+        </div>
+      </div>
+      <div class="site">
+        <nav class="nav">
+          <div class="brand">G8Road</div>
+          <div class="nav-links">
+            <div class="nav-link">Camps</div>
+            <div class="nav-link">Members</div>
+            <div class="nav-link">Help</div>
+            <a class="btn btn-outline">Log In</a>
+            <a class="btn btn-primary">Get Started</a>
+          </div>
+        </nav>
+        <section class="section hero hero-two">
+          <div>
+            <span class="eyebrow">Roster-first camp operations</span>
+            <h1>Know what is ready before playa week gets loud.</h1>
+            <p class="hero-copy">Track member readiness, applications, logistics, tickets, vehicle passes, dues, tasks, and shifts with the same clarity as your roster.</p>
+            <div class="actions">
+              <a class="btn btn-primary">Open camp tools</a>
+              <a class="btn btn-outline">Browse public camps</a>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="metric card"><div><p>Roster members</p><strong class="purple">42</strong></div><div class="icon purple-bg">👥</div></div>
+            <div class="metric card"><div><p>Dues paid</p><strong class="green">76%</strong></div><div class="icon green-bg">✓</div></div>
+            <div class="metric card"><div><p>Open tasks</p><strong class="orange">11</strong></div><div class="icon orange-bg">!</div></div>
+            <div class="metric card"><div><p>Shift gaps</p><strong class="blue">5</strong></div><div class="icon blue-bg">↗</div></div>
+          </div>
+        </section>
+        <section class="section workflow-band">
+          <h2 style="margin-bottom: 18px;">Operational coverage</h2>
+          <div class="grid-4">
+            <div class="feature-card card"><div class="icon green-bg">R</div><h3>Roster</h3><p>Members, leads, skills, arrival, departure, tickets, VP, and dues.</p></div>
+            <div class="feature-card card"><div class="icon orange-bg">A</div><h3>Applications</h3><p>Review queues, call states, decisions, and next steps.</p></div>
+            <div class="feature-card card"><div class="icon blue-bg">S</div><h3>Shifts</h3><p>Events, volunteer signups, coverage gaps, and reminders.</p></div>
+            <div class="feature-card card"><div class="icon purple-bg">T</div><h3>Tasks</h3><p>Assignment, completion, and member-specific follow-through.</p></div>
+          </div>
+        </section>
+        <section class="section muted-band">
+          <div class="grid-3">
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Camp readiness</h3><span class="badge badge-success">Healthy</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>Ticket confirmations</span><strong>31 / 42</strong></div>
+                <div class="mini-item"><span>Vehicle passes</span><strong>18 / 24</strong></div>
+                <div class="mini-item"><span>EAP requests</span><strong>9</strong></div>
+              </div>
+            </div>
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Member flow</h3><span class="badge badge-info">Active</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>New applications</span><strong>6</strong></div>
+                <div class="mini-item"><span>Calls scheduled</span><strong>4</strong></div>
+                <div class="mini-item"><span>Pending invites</span><strong>8</strong></div>
+              </div>
+            </div>
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Member dashboard</h3><span class="badge badge-warning">2 actions</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>Complete profile</span><strong>80%</strong></div>
+                <div class="mini-item"><span>Upcoming shift</span><strong>Thu</strong></div>
+                <div class="mini-item"><span>Unread messages</span><strong>3</strong></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="mockup">
+      <div class="mockup-label">
+        <div>
+          <h2>Option C: Task / Workflow-Oriented</h2>
+          <span>Best recommended direction: visitors self-select their path immediately.</span>
+        </div>
+      </div>
+      <div class="site">
+        <nav class="nav">
+          <div class="brand">G8Road</div>
+          <div class="nav-links">
+            <div class="nav-link">Discover Camps</div>
+            <div class="nav-link">Principles</div>
+            <div class="nav-link">Support</div>
+            <a class="btn btn-outline">Log In</a>
+            <a class="btn btn-primary">Start</a>
+          </div>
+        </nav>
+        <section class="section hero hero-center">
+          <div>
+            <span class="eyebrow">Choose your G8Road path</span>
+            <h1>What do you need to do today?</h1>
+            <p class="hero-copy">Start from the workflow that matches you. Camp teams land in management tools; members land in personal actions and updates.</p>
+          </div>
+        </section>
+        <section class="section" style="padding-top: 0;">
+          <div class="grid-2">
+            <div class="path-card primary">
+              <div class="screen-card-header">
+                <div class="icon green-bg">C</div>
+                <span class="badge badge-success">Camp account</span>
+              </div>
+              <h2>Manage a camp</h2>
+              <p>Build your roster, review applications, assign work, manage shifts, and track logistics from a camp-level dashboard.</p>
+              <div class="actions">
+                <a class="btn btn-primary">Go to camp tools</a>
+                <a class="btn btn-outline">Create camp profile</a>
+              </div>
+            </div>
+            <div class="path-card">
+              <div class="screen-card-header">
+                <div class="icon blue-bg">M</div>
+                <span class="badge badge-info">Member account</span>
+              </div>
+              <h2>Join and participate</h2>
+              <p>Find camps, keep your profile ready, follow application status, view tasks, sign up for shifts, and read updates.</p>
+              <div class="actions">
+                <a class="btn btn-primary">Find camps</a>
+                <a class="btn btn-outline">Complete my profile</a>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="section muted-band">
+          <h2 style="margin-bottom: 18px;">How it flows after login</h2>
+          <div class="grid-3">
+            <div class="screen-card">
+              <div class="step"><div class="step-number">1</div><div><h3>Authenticate</h3><p>Email, Google, or Apple login keeps the redirect path when a user starts from a camp page.</p></div></div>
+            </div>
+            <div class="screen-card">
+              <div class="step"><div class="step-number">2</div><div><h3>Detect account type</h3><p>Camp accounts route to camp dashboard. Members route to personal dashboard. Camp Leads use delegated camp context.</p></div></div>
+            </div>
+            <div class="screen-card">
+              <div class="step"><div class="step-number">3</div><div><h3>Show next action</h3><p>Camp users see roster and logistics health. Members see profile, tasks, shifts, and messages first.</p></div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="mockup">
+      <div class="mockup-label">
+        <div>
+          <h2>Refined Direction: Option B + Path Cards</h2>
+          <span>Recommended hybrid: analytical confidence up front, followed by clear camp/member self-selection.</span>
+        </div>
+      </div>
+      <div class="site">
+        <nav class="nav">
+          <div class="brand">G8Road</div>
+          <div class="nav-links">
+            <div class="nav-link">Discover Camps</div>
+            <div class="nav-link">Principles</div>
+            <div class="nav-link">Help</div>
+            <a class="btn btn-outline">Log In</a>
+            <a class="btn btn-primary">Get Started</a>
+          </div>
+        </nav>
+
+        <section class="section hero hero-two">
+          <div>
+            <span class="eyebrow">Roster-first camp operations</span>
+            <h1>Know what is ready before playa week gets loud.</h1>
+            <p class="hero-copy">G8Road gives camps an operational dashboard for roster health, applications, shifts, dues, tickets, vehicle passes, and member readiness, while members get a clear personal workspace after login.</p>
+            <div class="actions">
+              <a class="btn btn-primary">Get started</a>
+              <a class="btn btn-outline">Discover camps</a>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="metric card"><div><p>Roster members</p><strong class="purple">42</strong></div><div class="icon purple-bg">👥</div></div>
+            <div class="metric card"><div><p>Dues paid</p><strong class="green">76%</strong></div><div class="icon green-bg">✓</div></div>
+            <div class="metric card"><div><p>Open tasks</p><strong class="orange">11</strong></div><div class="icon orange-bg">!</div></div>
+            <div class="metric card"><div><p>Shift gaps</p><strong class="blue">5</strong></div><div class="icon blue-bg">↗</div></div>
+          </div>
+        </section>
+
+        <section class="section" style="padding-top: 8px;">
+          <div class="grid-2">
+            <div class="path-card primary">
+              <div class="screen-card-header">
+                <div class="icon green-bg">C</div>
+                <span class="badge badge-success">Camp account</span>
+              </div>
+              <h2>Manage a camp</h2>
+              <p>Build your roster, review applications, assign work, manage shifts, and track logistics from a camp-level dashboard.</p>
+              <div class="actions">
+                <a class="btn btn-primary">Go to camp tools</a>
+                <a class="btn btn-outline">Create camp profile</a>
+              </div>
+            </div>
+            <div class="path-card">
+              <div class="screen-card-header">
+                <div class="icon blue-bg">M</div>
+                <span class="badge badge-info">Member account</span>
+              </div>
+              <h2>Join and participate</h2>
+              <p>Find camps, keep your profile ready, follow application status, view tasks, sign up for shifts, and read updates.</p>
+              <div class="actions">
+                <a class="btn btn-primary">Find camps</a>
+                <a class="btn btn-outline">Complete my profile</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section workflow-band">
+          <h2 style="margin-bottom: 18px;">Operational coverage</h2>
+          <div class="grid-4">
+            <div class="feature-card card"><div class="icon green-bg">R</div><h3>Roster</h3><p>Members, leads, skills, arrival, departure, tickets, VP, and dues.</p></div>
+            <div class="feature-card card"><div class="icon orange-bg">A</div><h3>Applications</h3><p>Review queues, call states, decisions, and next steps.</p></div>
+            <div class="feature-card card"><div class="icon blue-bg">S</div><h3>Shifts</h3><p>Events, volunteer signups, coverage gaps, and reminders.</p></div>
+            <div class="feature-card card"><div class="icon purple-bg">T</div><h3>Tasks</h3><p>Assignment, completion, and member-specific follow-through.</p></div>
+          </div>
+        </section>
+
+        <section class="section muted-band">
+          <div class="grid-3">
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Camp dashboard</h3><span class="badge badge-success">After login</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>Roster overview</span><strong>Primary</strong></div>
+                <div class="mini-item"><span>Logistics gaps</span><strong>Visible</strong></div>
+                <div class="mini-item"><span>Applications</span><strong>Queued</strong></div>
+              </div>
+            </div>
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Member dashboard</h3><span class="badge badge-info">Personalized</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>Profile status</span><strong>First</strong></div>
+                <div class="mini-item"><span>Tasks and shifts</span><strong>Next</strong></div>
+                <div class="mini-item"><span>Messages</span><strong>Current</strong></div>
+              </div>
+            </div>
+            <div class="screen-card">
+              <div class="screen-card-header"><h3>Redirect logic</h3><span class="badge badge-warning">Dynamic</span></div>
+              <div class="mini-list">
+                <div class="mini-item"><span>Camp account</span><strong>/camp/:id/dashboard</strong></div>
+                <div class="mini-item"><span>Camp Lead</span><strong>Camp context</strong></div>
+                <div class="mini-item"><span>Member</span><strong>/dashboard</strong></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

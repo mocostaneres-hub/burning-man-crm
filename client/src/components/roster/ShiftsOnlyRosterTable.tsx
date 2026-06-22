@@ -460,7 +460,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shifts</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -561,12 +561,12 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-4 text-sm">
-                    <div className="flex gap-2 flex-wrap">
+                  <td className="px-4 py-4 text-sm whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-2 flex-nowrap">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1"
+                        className="inline-flex items-center gap-1 shrink-0"
                         onClick={() => handleRemindOne(memberId)}
                         disabled={!canRemind || isReminderLoading}
                         title={
@@ -587,20 +587,22 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex items-center gap-1"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0"
                             onClick={() => setEditingMember(member)}
+                            title="Edit member"
+                            aria-label={`Edit ${name}`}
                           >
-                            <Edit className="w-3 h-3" />
-                            Edit
+                            <Edit className="w-4 h-4" aria-hidden="true" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600 border-red-600 hover:bg-red-50"
                             onClick={() => onDelete(member)}
+                            title="Delete member"
+                            aria-label={`Delete ${name}`}
                           >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                           </Button>
                         </>
                       )}
