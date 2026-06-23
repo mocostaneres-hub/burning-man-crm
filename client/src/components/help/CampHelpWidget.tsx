@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HelpCircle, Loader2, MessageCircle, Send, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { Button, Input } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
@@ -8,6 +9,7 @@ type RequesterType = 'camp' | 'member' | 'other';
 
 const CampHelpWidget: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({
     requesterType: 'camp' as RequesterType,
@@ -20,9 +22,17 @@ const CampHelpWidget: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const hasCampHelpAccess = Boolean(
+  const isHelpPage = location.pathname === '/help'
+    || location.pathname.startsWith('/help/')
+    || location.pathname === '/camp/help'
+    || location.pathname === '/member/help';
+  const isSystemAdminPage = location.pathname === '/admin'
+    || location.pathname.startsWith('/admin/');
+
+  const hasHelpAccess = Boolean(
     isAuthenticated && user && (
       user.accountType === 'camp'
+      || user.accountType === 'personal'
       || (user.accountType === 'admin' && user.campId)
       || (user.isCampLead === true && user.campLeadCampId)
     )
@@ -38,7 +48,7 @@ const CampHelpWidget: React.FC = () => {
     }));
   }, [user]);
 
-  if (!hasCampHelpAccess) {
+  if (!hasHelpAccess || isHelpPage || isSystemAdminPage) {
     return null;
   }
 
