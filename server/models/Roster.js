@@ -150,6 +150,28 @@ const rosterSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null
+    },
+    mealPlanStatus: {
+      type: String,
+      enum: Object.values(DUES_STATUS),
+      default: DUES_STATUS.UNPAID
+    },
+    mealPlanInstructedAt: {
+      type: Date,
+      default: null
+    },
+    mealPlanPaidAt: {
+      type: Date,
+      default: null
+    },
+    mealPlanReceiptSentAt: {
+      type: Date,
+      default: null
+    },
+    mealPlanPaidByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
     }
   }],
   createdBy: {
@@ -175,6 +197,7 @@ rosterSchema.pre('validate', function(next) {
   if (Array.isArray(this.members)) {
     this.members.forEach((memberEntry) => {
       memberEntry.duesStatus = normalizeDuesStatus(memberEntry.duesStatus);
+      memberEntry.mealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus);
       if (memberEntry.paid === undefined || memberEntry.paid === null) {
         memberEntry.paid = memberEntry.duesStatus === DUES_STATUS.PAID;
       }

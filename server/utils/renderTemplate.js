@@ -2,9 +2,11 @@ const ALLOWED_TEMPLATE_VARIABLES = new Set([
   'member_name',
   'camp_name',
   'dues_amount',
+  'meal_plan_amount',
   'due_date',
   'payment_link',
-  'payment_date'
+  'payment_date',
+  'today_date'
 ]);
 
 function renderTemplate(template, variables = {}) {

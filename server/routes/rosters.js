@@ -11,6 +11,7 @@ const ShiftSignup = require('../models/ShiftSignup');
 const Event = require('../models/Event');
 const { renderTemplate } = require('../utils/renderTemplate');
 const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
+const { getCampMealPlanTemplate, SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES } = require('../utils/mealPlanTemplates');
 const { sendDuesEmail } = require('../services/emailService');
 const {
   DUES_STATUS,
@@ -50,6 +51,38 @@ async function buildDuesEmailPreview({ camp, memberUser, type, paymentDate, over
     memberUser,
     camp,
     campDues: camp?.requirements?.dues,
+    paymentDate
+  });
+
+  const rawSubject = overrideSubject || template.subject;
+  const rawBody = overrideBody || template.body;
+
+  return {
+    type,
+    variables,
+    subject: renderTemplate(rawSubject, variables),
+    body: renderTemplate(rawBody, variables)
+  };
+}
+
+function resolveMealPlanVariables({ memberUser, camp, paymentDate }) {
+  const todayDate = new Date().toLocaleDateString('en-US');
+  return {
+    member_name: `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim() || 'Member',
+    camp_name: camp?.name || camp?.campName || 'Your Camp',
+    meal_plan_amount: 'TBD',
+    due_date: 'TBD',
+    payment_link: camp?.website || process.env.CLIENT_URL || 'https://www.g8road.com',
+    payment_date: paymentDate ? new Date(paymentDate).toLocaleDateString('en-US') : todayDate,
+    today_date: todayDate
+  };
+}
+
+async function buildMealPlanEmailPreview({ camp, memberUser, type, paymentDate, overrideSubject, overrideBody }) {
+  const template = getCampMealPlanTemplate(camp, type);
+  const variables = resolveMealPlanVariables({
+    memberUser,
+    camp,
     paymentDate
   });
 
@@ -142,6 +175,88 @@ router.put('/:rosterId/dues/templates', authenticateToken, async (req, res) => {
     res.json({ message: 'Dues templates updated successfully' });
   } catch (error) {
     console.error('Update dues templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/rosters/:rosterId/meal-plan/templates
+// @desc    Get camp-level meal plan template defaults for roster's camp
+// @access  Private (Camp admins/leads)
+router.get('/:rosterId/meal-plan/templates', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    res.json({
+      templates: {
+        instructions: {
+          subject: camp.mealPlanInstructionsSubject || '',
+          body: camp.mealPlanInstructionsBody || '',
+          effectiveSubject: camp.mealPlanInstructionsSubject || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.instructions.subject,
+          effectiveBody: camp.mealPlanInstructionsBody || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.instructions.body
+        },
+        receipt: {
+          subject: camp.mealPlanReceiptSubject || '',
+          body: camp.mealPlanReceiptBody || '',
+          effectiveSubject: camp.mealPlanReceiptSubject || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.receipt.subject,
+          effectiveBody: camp.mealPlanReceiptBody || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.receipt.body
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get meal plan templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/rosters/:rosterId/meal-plan/templates
+// @desc    Update camp-level meal plan template defaults for roster's camp
+// @access  Private (Camp admins/leads)
+router.put('/:rosterId/meal-plan/templates', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+    const { instructions, receipt } = req.body || {};
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const normalizeField = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const updateData = {
+      mealPlanInstructionsSubject: normalizeField(instructions?.subject),
+      mealPlanInstructionsBody: normalizeField(instructions?.body),
+      mealPlanReceiptSubject: normalizeField(receipt?.subject),
+      mealPlanReceiptBody: normalizeField(receipt?.body)
+    };
+
+    await db.updateCamp({ _id: camp._id }, updateData);
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+      field: 'mealPlanTemplates',
+      rosterId: roster._id
+    });
+
+    res.json({ message: 'Meal plan templates updated successfully' });
+  } catch (error) {
+    console.error('Update meal plan templates error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -630,6 +745,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           // Get dues status from roster member entry first (most accurate), 
           // then member record, then application, then default to Unpaid
           const duesStatus = normalizeDuesStatus(memberEntry.duesStatus || member.duesStatus || application?.duesStatus || DUES_STATUS.UNPAID);
+          const mealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID);
           
           populatedMembers.push({
             ...memberEntry,
@@ -652,7 +768,8 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 departureDate: user.departureDate,
                 interestedInEAP: user.interestedInEAP,
                 interestedInStrike: user.interestedInStrike,
-                duesStatus: duesStatus
+                duesStatus: duesStatus,
+                mealPlanStatus: mealPlanStatus
               }
             }
           });
@@ -748,6 +865,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
       'Bio',
       'Social Media',
       'Dues Status',
+      'Meal Plan Status',
       'Added to Roster'
     ];
 
@@ -776,6 +894,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         `"${(user.bio || '').replace(/"/g, '""')}"`,
         `"${formatSocialMedia(user.socialMedia).replace(/"/g, '""')}"`,
         normalizeDuesStatus(user.duesStatus || DUES_STATUS.UNPAID),
+        normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID),
         new Date(memberEntry.addedAt).toLocaleDateString()
       ];
     });
@@ -1609,7 +1728,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 departureDate: user.departureDate,
                 interestedInEAP: user.interestedInEAP,
                 interestedInStrike: user.interestedInStrike,
-                duesStatus: normalizeDuesStatus(memberEntry.duesStatus || DUES_STATUS.UNPAID)
+                duesStatus: normalizeDuesStatus(memberEntry.duesStatus || DUES_STATUS.UNPAID),
+                mealPlanStatus: normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID)
               }
             }
           });
@@ -1903,6 +2023,283 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     });
   } catch (error) {
     console.error('Error updating dues status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/rosters/:rosterId/members/:memberId/meal-plan/preview
+// @desc    Build editable meal plan email preview before sending
+// @access  Private (Camp admins/leads)
+router.post('/:rosterId/members/:memberId/meal-plan/preview', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { actionType, targetStatus, subject, body } = req.body;
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+
+    let previewType = actionType;
+    if (!previewType && targetStatus) {
+      const previousStatus = normalizeDuesStatus(roster.members[memberIndex].mealPlanStatus || DUES_STATUS.UNPAID);
+      previewType = getEmailTrigger(previousStatus, targetStatus);
+    }
+
+    if (!previewType || !['instructions', 'receipt'].includes(previewType)) {
+      return res.status(400).json({ message: 'Preview type must be instructions or receipt' });
+    }
+
+    const paymentDate = previewType === 'receipt' ? new Date() : null;
+    const preview = await buildMealPlanEmailPreview({
+      camp,
+      memberUser,
+      type: previewType,
+      paymentDate,
+      overrideSubject: subject,
+      overrideBody: body
+    });
+
+    res.json({
+      preview,
+      recipient: memberUser.email
+    });
+  } catch (error) {
+    console.error('Preview meal plan email error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/rosters/:rosterId/members/:memberId/meal-plan/send-email
+// @desc    Send meal plan instruction/receipt without changing status
+// @access  Private (Camp admins/leads)
+router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { actionType, subject, body, saveAsCampDefault } = req.body;
+
+    if (!actionType || !['instructions', 'receipt'].includes(actionType)) {
+      return res.status(400).json({ message: 'actionType must be instructions or receipt' });
+    }
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+
+    const preview = await buildMealPlanEmailPreview({
+      camp,
+      memberUser,
+      type: actionType,
+      paymentDate: actionType === 'receipt' ? (roster.members[memberIndex].mealPlanPaidAt || new Date()) : null,
+      overrideSubject: subject,
+      overrideBody: body
+    });
+
+    await sendDuesEmail({
+      to: memberUser.email,
+      subject: preview.subject,
+      body: preview.body,
+      camp
+    });
+
+    if (saveAsCampDefault === true) {
+      const updateData = actionType === 'instructions'
+        ? {
+            mealPlanInstructionsSubject: subject || null,
+            mealPlanInstructionsBody: body || null
+          }
+        : {
+            mealPlanReceiptSubject: subject || null,
+            mealPlanReceiptBody: body || null
+          };
+      await db.updateCamp({ _id: camp._id }, updateData);
+    }
+
+    if (actionType === 'receipt') {
+      roster.members[memberIndex].mealPlanReceiptSentAt = new Date();
+      roster.markModified('members');
+      await roster.save();
+    }
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+      field: 'mealPlanEmail',
+      action: actionType,
+      memberId,
+      memberEmail: memberUser.email,
+      rosterId: roster._id
+    });
+
+    res.json({ message: 'Email sent successfully' });
+  } catch (error) {
+    console.error('Send meal plan email error:', error);
+    res.status(500).json({ message: 'Failed to send email' });
+  }
+});
+
+// @route   PUT /api/rosters/:rosterId/members/:memberId/meal-plan
+// @desc    Update structured meal plan status for a roster member
+// @access  Private (Camp admins/leads)
+router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (req, res) => {
+  try {
+    const { rosterId, memberId } = req.params;
+    const { mealPlanStatus, emailPreview, saveAsCampDefault } = req.body;
+
+    const nextStatus = normalizeDuesStatus(mealPlanStatus);
+    if (!Object.values(DUES_STATUS).includes(nextStatus)) {
+      return res.status(400).json({ message: 'Invalid meal plan status' });
+    }
+
+    const roster = await db.findRoster({ _id: rosterId }) || await db.findRoster({ _id: parseInt(rosterId) });
+    if (!roster) return res.status(404).json({ message: 'Roster not found' });
+
+    const camp = await db.findCamp({ _id: roster.camp });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const memberIndex = getMemberEntryIndex(roster, memberId);
+    if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
+
+    const previousStatus = normalizeDuesStatus(roster.members[memberIndex].mealPlanStatus || DUES_STATUS.UNPAID);
+    if (previousStatus === nextStatus) {
+      return res.status(200).json({ message: 'No meal plan status change', mealPlanStatus: previousStatus, memberId });
+    }
+
+    if (!isAllowedTransition(previousStatus, nextStatus)) {
+      return res.status(400).json({ message: `Invalid transition from ${previousStatus} to ${nextStatus}` });
+    }
+
+    const emailTriggerType = getEmailTrigger(previousStatus, nextStatus);
+    const member = await db.findMember({ _id: memberId });
+    const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+
+    if (emailTriggerType) {
+      if (!memberUser?.email) {
+        return res.status(400).json({ message: 'Cannot send meal plan email: member has no email' });
+      }
+      if (!emailPreview?.subject || !emailPreview?.body) {
+        return res.status(400).json({ message: 'Email preview subject and body are required before sending' });
+      }
+    }
+
+    let renderedEmail = null;
+    if (emailTriggerType) {
+      renderedEmail = await buildMealPlanEmailPreview({
+        camp,
+        memberUser,
+        type: emailTriggerType,
+        paymentDate: nextStatus === DUES_STATUS.PAID ? new Date() : null,
+        overrideSubject: emailPreview.subject,
+        overrideBody: emailPreview.body
+      });
+
+      try {
+        await sendDuesEmail({
+          to: memberUser.email,
+          subject: renderedEmail.subject,
+          body: renderedEmail.body,
+          camp
+        });
+      } catch (emailError) {
+        await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
+          field: 'mealPlanEmail',
+          action: 'failed',
+          memberId,
+          memberEmail: memberUser.email,
+          trigger: emailTriggerType,
+          error: emailError.message
+        });
+        return res.status(502).json({ message: 'Failed to send meal plan email; status not updated' });
+      }
+
+      if (saveAsCampDefault === true) {
+        const updateData = emailTriggerType === 'instructions'
+          ? {
+              mealPlanInstructionsSubject: emailPreview.subject,
+              mealPlanInstructionsBody: emailPreview.body
+            }
+          : {
+              mealPlanReceiptSubject: emailPreview.subject,
+              mealPlanReceiptBody: emailPreview.body
+            };
+        await db.updateCamp({ _id: camp._id }, updateData);
+      }
+    }
+
+    const now = new Date();
+    roster.members[memberIndex].mealPlanStatus = nextStatus;
+
+    if (nextStatus === DUES_STATUS.INSTRUCTED) {
+      roster.members[memberIndex].mealPlanInstructedAt = now;
+    }
+    if (nextStatus === DUES_STATUS.PAID) {
+      roster.members[memberIndex].mealPlanPaidAt = now;
+      roster.members[memberIndex].mealPlanPaidByUserId = req.user._id;
+      roster.members[memberIndex].mealPlanReceiptSentAt = now;
+    }
+    if (previousStatus === DUES_STATUS.PAID && nextStatus === DUES_STATUS.UNPAID) {
+      roster.members[memberIndex].mealPlanPaidAt = null;
+      roster.members[memberIndex].mealPlanPaidByUserId = null;
+      // Keep mealPlanReceiptSentAt for historical audit.
+    }
+
+    roster.markModified('members');
+    roster.updatedAt = now;
+    await roster.save();
+
+    if (member && memberUser) {
+      await recordActivity('MEMBER', member.user, req.user._id, 'SETTING_TOGGLED', {
+        field: 'mealPlanStatus',
+        oldValue: previousStatus,
+        newValue: nextStatus,
+        rosterId: roster._id,
+        campId: camp._id,
+        emailTriggerType: emailTriggerType || null
+      });
+
+      await recordActivity('CAMP', camp._id, req.user._id, 'SETTING_TOGGLED', {
+        field: 'mealPlanStatus',
+        oldValue: previousStatus,
+        newValue: nextStatus,
+        rosterId: roster._id,
+        memberId,
+        memberName: `${memberUser.firstName} ${memberUser.lastName}`,
+        memberEmail: memberUser.email,
+        emailTriggerType: emailTriggerType || null
+      });
+    }
+
+    res.json({
+      message: 'Meal plan status updated successfully',
+      mealPlanStatus: nextStatus,
+      memberId
+    });
+  } catch (error) {
+    console.error('Error updating meal plan status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

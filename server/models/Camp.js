@@ -387,6 +387,22 @@ const campSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  mealPlanInstructionsSubject: {
+    type: String,
+    default: null
+  },
+  mealPlanInstructionsBody: {
+    type: String,
+    default: null
+  },
+  mealPlanReceiptSubject: {
+    type: String,
+    default: null
+  },
+  mealPlanReceiptBody: {
+    type: String,
+    default: null
+  },
 
   // Onboarding reminder tracking (UTC)
   accountCreatedAt: {

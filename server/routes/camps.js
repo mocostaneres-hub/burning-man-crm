@@ -12,6 +12,7 @@ const { createNotification } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 const { SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
+const { SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES } = require('../utils/mealPlanTemplates');
 
 // (moved below after router initialization)
 
@@ -854,6 +855,80 @@ router.put('/:id/dues/templates', authenticateToken, async (req, res) => {
     res.json({ message: 'Dues templates updated successfully' });
   } catch (error) {
     console.error('Update camp dues templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/camps/:id/meal-plan/templates
+// @desc    Get camp-level meal plan template defaults
+// @access  Private (Camp admins/leads)
+router.get('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    res.json({
+      templates: {
+        instructions: {
+          subject: camp.mealPlanInstructionsSubject || '',
+          body: camp.mealPlanInstructionsBody || '',
+          effectiveSubject: camp.mealPlanInstructionsSubject || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.instructions.subject,
+          effectiveBody: camp.mealPlanInstructionsBody || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.instructions.body
+        },
+        receipt: {
+          subject: camp.mealPlanReceiptSubject || '',
+          body: camp.mealPlanReceiptBody || '',
+          effectiveSubject: camp.mealPlanReceiptSubject || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.receipt.subject,
+          effectiveBody: camp.mealPlanReceiptBody || SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES.receipt.body
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get camp meal plan templates error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/camps/:id/meal-plan/templates
+// @desc    Update camp-level meal plan template defaults
+// @access  Private (Camp admins/leads)
+router.put('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { instructions, receipt } = req.body || {};
+
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+
+    const hasPermission = await canManageCamp(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+
+    const normalizeField = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const updateData = {
+      mealPlanInstructionsSubject: normalizeField(instructions?.subject),
+      mealPlanInstructionsBody: normalizeField(instructions?.body),
+      mealPlanReceiptSubject: normalizeField(receipt?.subject),
+      mealPlanReceiptBody: normalizeField(receipt?.body)
+    };
+
+    await db.updateCamp({ _id: camp._id }, updateData);
+
+    await recordActivity('CAMP', camp._id, req.user._id, 'PROFILE_UPDATE', {
+      field: 'mealPlanTemplates'
+    });
+
+    res.json({ message: 'Meal plan templates updated successfully' });
+  } catch (error) {
+    console.error('Update camp meal plan templates error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

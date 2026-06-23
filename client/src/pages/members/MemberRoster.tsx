@@ -126,6 +126,20 @@ const deriveRosterMode = (roster: any): {
 };
 
 type DuesStatus = 'UNPAID' | 'INSTRUCTED' | 'PAID';
+type PaymentKind = 'dues' | 'mealPlan';
+
+const PAYMENT_LABELS: Record<PaymentKind, { singular: string; actionTitle: string; errorNoun: string }> = {
+  dues: {
+    singular: 'Dues',
+    actionTitle: 'Dues Actions',
+    errorNoun: 'dues'
+  },
+  mealPlan: {
+    singular: 'Meal Plan',
+    actionTitle: 'Meal Plan Actions',
+    errorNoun: 'meal plan'
+  }
+};
 
 const normalizeDuesStatus = (status?: string | null): DuesStatus => {
   if (!status) return 'UNPAID';
@@ -378,9 +392,11 @@ const MemberRoster: React.FC = () => {
   const [duesActionModal, setDuesActionModal] = useState<{
     isOpen: boolean;
     member: any;
-  }>({ isOpen: false, member: null });
+    paymentKind: PaymentKind;
+  }>({ isOpen: false, member: null, paymentKind: 'dues' });
   const [emailPreviewModal, setEmailPreviewModal] = useState<{
     isOpen: boolean;
+    paymentKind: PaymentKind;
     member: any;
     actionType: 'instructions' | 'receipt' | null;
     nextStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID';
@@ -390,6 +406,7 @@ const MemberRoster: React.FC = () => {
     sending: boolean;
   }>({
     isOpen: false,
+    paymentKind: 'dues',
     member: null,
     actionType: null,
     subject: '',
@@ -398,6 +415,7 @@ const MemberRoster: React.FC = () => {
     sending: false
   });
   const [duesLoading, setDuesLoading] = useState<string | null>(null);
+  const [mealPlanLoading, setMealPlanLoading] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<RosterMember | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -502,9 +520,12 @@ const MemberRoster: React.FC = () => {
   useEffect(() => {
     if (duesActionModal.isOpen) {
       console.log('[DuesActionsModal] opened with payload:', {
+        paymentKind: duesActionModal.paymentKind,
         memberId: duesActionModal.member?._id,
         duesStatus: duesActionModal.member?.duesStatus,
+        mealPlanStatus: duesActionModal.member?.mealPlanStatus,
         normalizedDuesStatus: normalizeDuesStatus(duesActionModal.member?.duesStatus),
+        normalizedMealPlanStatus: normalizeDuesStatus(duesActionModal.member?.mealPlanStatus),
         hasMember: Boolean(duesActionModal.member)
       });
     }
@@ -883,6 +904,7 @@ const MemberRoster: React.FC = () => {
           const normalizedDuesStatus = normalizeDuesStatus(
             memberEntry.duesStatus || (memberEntry.paid ? 'PAID' : 'UNPAID')
           );
+          const normalizedMealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus);
           const duesPaid = normalizedDuesStatus === 'PAID';
           
           // Extract member ID safely
@@ -924,6 +946,10 @@ const MemberRoster: React.FC = () => {
             duesInstructedAt: memberEntry.duesInstructedAt || null,
             duesPaidAt: memberEntry.duesPaidAt || null,
             duesReceiptSentAt: memberEntry.duesReceiptSentAt || null,
+            mealPlanStatus: normalizedMealPlanStatus,
+            mealPlanInstructedAt: memberEntry.mealPlanInstructedAt || null,
+            mealPlanPaidAt: memberEntry.mealPlanPaidAt || null,
+            mealPlanReceiptSentAt: memberEntry.mealPlanReceiptSentAt || null,
             isCampLead: memberEntry.isCampLead || false, // Camp Lead role
             addedAt: memberEntry.addedAt,
             addedBy: memberEntry.addedBy,
@@ -1258,25 +1284,54 @@ const MemberRoster: React.FC = () => {
 
     setDuesActionModal({
       isOpen: true,
+      member,
+      paymentKind: 'dues'
+    });
+  };
+
+  const handleMealPlanClick = (member: any) => {
+    if (!canEdit) return;
+
+    console.log('[DuesActionsModal] meal plan icon click:', {
+      memberId: member?._id,
+      mealPlanStatus: member?.mealPlanStatus,
+      normalizedMealPlanStatus: normalizeDuesStatus(member?.mealPlanStatus),
       member
+    });
+
+    setDuesActionModal({
+      isOpen: true,
+      member,
+      paymentKind: 'mealPlan'
     });
   };
 
   const closeDuesActionModal = () => {
-    setDuesActionModal({ isOpen: false, member: null });
+    setDuesActionModal({ isOpen: false, member: null, paymentKind: 'dues' });
   };
 
-  const openEmailPreview = async (member: any, actionType: 'instructions' | 'receipt', nextStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID') => {
+  const openEmailPreview = async (
+    member: any,
+    actionType: 'instructions' | 'receipt',
+    nextStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID',
+    paymentKind: PaymentKind = duesActionModal.paymentKind
+  ) => {
     if (!rosterId) return;
 
     try {
-      const response = await api.previewDuesEmail(rosterId, member._id.toString(), {
-        actionType,
-        targetStatus: nextStatus
-      });
+      const response = paymentKind === 'dues'
+        ? await api.previewDuesEmail(rosterId, member._id.toString(), {
+            actionType,
+            targetStatus: nextStatus
+          })
+        : await api.previewMealPlanEmail(rosterId, member._id.toString(), {
+            actionType,
+            targetStatus: nextStatus
+          });
 
       setEmailPreviewModal({
         isOpen: true,
+        paymentKind,
         member,
         actionType,
         nextStatus,
@@ -1291,18 +1346,27 @@ const MemberRoster: React.FC = () => {
     }
   };
 
-  const handleDuesStatusChange = async (member: any, nextStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID') => {
+  const handleDuesStatusChange = async (
+    member: any,
+    nextStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID',
+    paymentKind: PaymentKind = duesActionModal.paymentKind
+  ) => {
     if (!rosterId) return;
-    setDuesLoading(member._id.toString());
+    const setLoading = paymentKind === 'dues' ? setDuesLoading : setMealPlanLoading;
+    setLoading(member._id.toString());
     try {
-      await api.updateMemberDuesStatus(rosterId, member._id.toString(), { duesStatus: nextStatus });
+      if (paymentKind === 'dues') {
+        await api.updateMemberDuesStatus(rosterId, member._id.toString(), { duesStatus: nextStatus });
+      } else {
+        await api.updateMemberMealPlanStatus(rosterId, member._id.toString(), { mealPlanStatus: nextStatus });
+      }
       await fetchMembers();
       closeDuesActionModal();
     } catch (error: any) {
-      console.error('Failed to update dues status:', error);
-      alert(error?.response?.data?.message || 'Failed to update dues status.');
+      console.error(`Failed to update ${PAYMENT_LABELS[paymentKind].errorNoun} status:`, error);
+      alert(error?.response?.data?.message || `Failed to update ${PAYMENT_LABELS[paymentKind].errorNoun} status.`);
     } finally {
-      setDuesLoading(null);
+      setLoading(null);
     }
   };
 
@@ -1312,30 +1376,50 @@ const MemberRoster: React.FC = () => {
     setEmailPreviewModal(prev => ({ ...prev, sending: true }));
     try {
       if (emailPreviewModal.nextStatus) {
-        await api.updateMemberDuesStatus(rosterId, emailPreviewModal.member._id.toString(), {
-          duesStatus: emailPreviewModal.nextStatus,
-          emailPreview: {
-            subject: emailPreviewModal.subject,
-            body: emailPreviewModal.body
-          },
-          saveAsCampDefault: emailPreviewModal.saveAsCampDefault
-        });
+        if (emailPreviewModal.paymentKind === 'dues') {
+          await api.updateMemberDuesStatus(rosterId, emailPreviewModal.member._id.toString(), {
+            duesStatus: emailPreviewModal.nextStatus,
+            emailPreview: {
+              subject: emailPreviewModal.subject,
+              body: emailPreviewModal.body
+            },
+            saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+          });
+        } else {
+          await api.updateMemberMealPlanStatus(rosterId, emailPreviewModal.member._id.toString(), {
+            mealPlanStatus: emailPreviewModal.nextStatus,
+            emailPreview: {
+              subject: emailPreviewModal.subject,
+              body: emailPreviewModal.body
+            },
+            saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+          });
+        }
       } else {
-        await api.sendDuesEmail(rosterId, emailPreviewModal.member._id.toString(), {
-          actionType: emailPreviewModal.actionType,
-          subject: emailPreviewModal.subject,
-          body: emailPreviewModal.body,
-          saveAsCampDefault: emailPreviewModal.saveAsCampDefault
-        });
+        if (emailPreviewModal.paymentKind === 'dues') {
+          await api.sendDuesEmail(rosterId, emailPreviewModal.member._id.toString(), {
+            actionType: emailPreviewModal.actionType,
+            subject: emailPreviewModal.subject,
+            body: emailPreviewModal.body,
+            saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+          });
+        } else {
+          await api.sendMealPlanEmail(rosterId, emailPreviewModal.member._id.toString(), {
+            actionType: emailPreviewModal.actionType,
+            subject: emailPreviewModal.subject,
+            body: emailPreviewModal.body,
+            saveAsCampDefault: emailPreviewModal.saveAsCampDefault
+          });
+        }
       }
 
       await fetchMembers();
       setEmailPreviewModal(prev => ({ ...prev, isOpen: false, sending: false }));
       closeDuesActionModal();
     } catch (error: any) {
-      console.error('Failed to send dues email:', error);
+      console.error(`Failed to send ${PAYMENT_LABELS[emailPreviewModal.paymentKind].errorNoun} email:`, error);
       setEmailPreviewModal(prev => ({ ...prev, sending: false }));
-      alert(error?.response?.data?.message || 'Failed to send dues email.');
+      alert(error?.response?.data?.message || `Failed to send ${PAYMENT_LABELS[emailPreviewModal.paymentKind].errorNoun} email.`);
     }
   };
 
@@ -1892,6 +1976,9 @@ const MemberRoster: React.FC = () => {
                   Dues
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Meal Plan
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ticket/VP
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2038,6 +2125,38 @@ const MemberRoster: React.FC = () => {
                         title={tooltipDetails}
                       >
                         {duesLoading === member._id.toString() ? (
+                          <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                        ) : (
+                          '$'
+                        )}
+                      </button>
+                        );
+                      })()}
+                    </td>
+                    {/* Meal Plan */}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {(() => {
+                        const mealPlanStatus = normalizeDuesStatus(member.mealPlanStatus);
+                        const mealPlanColorClass = mealPlanStatus === 'PAID'
+                          ? 'text-green-600 font-bold'
+                          : mealPlanStatus === 'INSTRUCTED'
+                            ? 'text-orange-500 font-bold'
+                            : 'text-gray-400';
+                        const tooltipDetails = mealPlanStatus === 'PAID'
+                          ? `Paid on: ${member.mealPlanPaidAt ? formatDate(member.mealPlanPaidAt as string) : 'N/A'}\nReceipt sent: ${member.mealPlanReceiptSentAt ? formatDate(member.mealPlanReceiptSentAt as string) : 'N/A'}`
+                          : mealPlanStatus === 'INSTRUCTED'
+                            ? 'Meal plan payment instructions sent'
+                            : 'Meal plan unpaid';
+                        return (
+                      <button
+                        onClick={() => handleMealPlanClick(member)}
+                        disabled={!canEdit || mealPlanLoading === member._id.toString()}
+                        className={`text-xl ${canEdit ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
+                          mealPlanColorClass
+                        }`}
+                        title={tooltipDetails}
+                      >
+                        {mealPlanLoading === member._id.toString() ? (
                           <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                         ) : (
                           '$'
@@ -3062,15 +3181,19 @@ const MemberRoster: React.FC = () => {
       <Modal
         isOpen={duesActionModal.isOpen}
         onClose={closeDuesActionModal}
-        title="Dues Actions"
+        title={PAYMENT_LABELS[duesActionModal.paymentKind].actionTitle}
         size="sm"
       >
         <div className="space-y-3">
           {!duesActionModal.member && (
-            <p className="text-sm text-gray-500">Loading member dues actions...</p>
+            <p className="text-sm text-gray-500">Loading member {PAYMENT_LABELS[duesActionModal.paymentKind].errorNoun} actions...</p>
           )}
           {duesActionModal.member && (() => {
-            const duesStatus = normalizeDuesStatus(duesActionModal.member.duesStatus);
+            const duesStatus = normalizeDuesStatus(
+              duesActionModal.paymentKind === 'dues'
+                ? duesActionModal.member.duesStatus
+                : duesActionModal.member.mealPlanStatus
+            );
             const canMarkUnpaid = canEdit;
             return (
               <>
@@ -3116,7 +3239,7 @@ const MemberRoster: React.FC = () => {
       <Modal
         isOpen={emailPreviewModal.isOpen}
         onClose={() => !emailPreviewModal.sending && setEmailPreviewModal(prev => ({ ...prev, isOpen: false }))}
-        title="Email Preview"
+        title={`${PAYMENT_LABELS[emailPreviewModal.paymentKind].singular} Email Preview`}
         size="lg"
       >
         <div className="space-y-4">
@@ -3247,7 +3370,7 @@ const MemberRoster: React.FC = () => {
                 </p>
                 <ul className="mt-1 ml-5 list-disc text-sm text-gray-600 space-y-1">
                   <li>accept and manage member applications, manage roster</li>
-                  <li>send dues payments instructions, reminders and receipts</li>
+                  <li>send dues and meal plan payment instructions, reminders and receipts</li>
                   <li>volunteer shifts sign up and management</li>
                   <li>tasks</li>
                 </ul>

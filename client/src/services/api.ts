@@ -999,6 +999,49 @@ class ApiService {
     return response.data;
   }
 
+  async previewMealPlanEmail(
+    rosterId: string,
+    memberId: string,
+    payload: { actionType?: 'instructions' | 'receipt'; targetStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID'; subject?: string; body?: string }
+  ): Promise<any> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/meal-plan/preview`, payload);
+    return response.data;
+  }
+
+  async sendMealPlanEmail(
+    rosterId: string,
+    memberId: string,
+    payload: { actionType: 'instructions' | 'receipt'; subject?: string; body?: string; saveAsCampDefault?: boolean }
+  ): Promise<any> {
+    const response = await this.api.post(`/rosters/${rosterId}/members/${memberId}/meal-plan/send-email`, payload);
+    return response.data;
+  }
+
+  async updateMemberMealPlanStatus(
+    rosterId: string,
+    memberId: string,
+    payload: { mealPlanStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID'; emailPreview?: { subject: string; body: string }; saveAsCampDefault?: boolean }
+  ): Promise<any> {
+    const response = await this.api.put(`/rosters/${rosterId}/members/${memberId}/meal-plan`, payload);
+    return response.data;
+  }
+
+  async getMealPlanTemplates(rosterId: string): Promise<any> {
+    const response = await this.api.get(`/rosters/${rosterId}/meal-plan/templates`);
+    return response.data;
+  }
+
+  async updateMealPlanTemplates(
+    rosterId: string,
+    payload: {
+      instructions: { subject?: string; body?: string };
+      receipt: { subject?: string; body?: string };
+    }
+  ): Promise<any> {
+    const response = await this.api.put(`/rosters/${rosterId}/meal-plan/templates`, payload);
+    return response.data;
+  }
+
   async getCampDuesTemplates(campId: string): Promise<any> {
     const response = await this.api.get(`/camps/${campId}/dues/templates`);
     return response.data;
@@ -1012,6 +1055,22 @@ class ApiService {
     }
   ): Promise<any> {
     const response = await this.api.put(`/camps/${campId}/dues/templates`, payload);
+    return response.data;
+  }
+
+  async getCampMealPlanTemplates(campId: string): Promise<any> {
+    const response = await this.api.get(`/camps/${campId}/meal-plan/templates`);
+    return response.data;
+  }
+
+  async updateCampMealPlanTemplates(
+    campId: string,
+    payload: {
+      instructions: { subject?: string; body?: string };
+      receipt: { subject?: string; body?: string };
+    }
+  ): Promise<any> {
+    const response = await this.api.put(`/camps/${campId}/meal-plan/templates`, payload);
     return response.data;
   }
 

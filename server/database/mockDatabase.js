@@ -1267,7 +1267,12 @@ class MockDatabase {
       duesInstructedAt: duesStatus === 'INSTRUCTED' ? new Date() : null,
       duesPaidAt: duesStatus === 'PAID' ? new Date() : null,
       duesReceiptSentAt: null,
-      duesPaidByUserId: null
+      duesPaidByUserId: null,
+      mealPlanStatus: 'UNPAID',
+      mealPlanInstructedAt: null,
+      mealPlanPaidAt: null,
+      mealPlanReceiptSentAt: null,
+      mealPlanPaidByUserId: null
     };
     
     // Clean up any null/undefined members and add the new member
@@ -2078,4 +2083,3 @@ class MockDatabase {
 const mockDB = new MockDatabase();
 
 module.exports = mockDB;
-

@@ -408,7 +408,12 @@ class DatabaseAdapter {
               paid,
               duesStatus,
               duesInstructedAt: duesStatus === 'INSTRUCTED' ? new Date() : null,
-              duesPaidAt: duesStatus === 'PAID' ? new Date() : null
+              duesPaidAt: duesStatus === 'PAID' ? new Date() : null,
+              mealPlanStatus: 'UNPAID',
+              mealPlanInstructedAt: null,
+              mealPlanPaidAt: null,
+              mealPlanReceiptSentAt: null,
+              mealPlanPaidByUserId: null
             } 
           } 
         },
