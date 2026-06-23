@@ -69,4 +69,5 @@ declare module 'lucide-react' {
   export const Building: ComponentType<LucideProps>;
   export const Ban: ComponentType<LucideProps>;
   export const Filter: ComponentType<LucideProps>;
+  export const Utensils: ComponentType<LucideProps>;
 }

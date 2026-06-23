@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '../ui';
 import { Filter, X } from 'lucide-react';
 
-export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
+export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'meal-plan-paid' | 'meal-plan-unpaid' | 'meal-plan-instructed' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
 
 interface RosterFiltersProps {
   activeFilters: FilterType[];
@@ -73,6 +73,9 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       'dues-paid': 'Dues: Paid',
       'dues-unpaid': 'Dues: Unpaid',
       'dues-instructed': 'Dues: Instructed',
+      'meal-plan-paid': 'Meal Plan: Paid',
+      'meal-plan-unpaid': 'Meal Plan: Unpaid',
+      'meal-plan-instructed': 'Meal Plan: Instructed',
       'without-tickets': 'Tickets: No',
       'with-tickets': 'Tickets: Yes',
       'without-vp': 'Vehicle Pass: No',
@@ -159,6 +162,32 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
             filterType="dues-instructed"
             isActive={activeFilters.includes('dues-instructed')}
             onClick={() => toggleFilter('dues-instructed')}
+            variant="primary"
+          />
+        </div>
+
+        {/* Meal Plan Status Filters */}
+        <div className="flex gap-1 mr-2">
+          <span className="text-sm font-medium text-gray-600 self-center">Meal Plan:</span>
+          <FilterButton
+            label="Paid"
+            filterType="meal-plan-paid"
+            isActive={activeFilters.includes('meal-plan-paid')}
+            onClick={() => toggleFilter('meal-plan-paid')}
+            variant="success"
+          />
+          <FilterButton
+            label="Unpaid"
+            filterType="meal-plan-unpaid"
+            isActive={activeFilters.includes('meal-plan-unpaid')}
+            onClick={() => toggleFilter('meal-plan-unpaid')}
+            variant="warning"
+          />
+          <FilterButton
+            label="Instructed"
+            filterType="meal-plan-instructed"
+            isActive={activeFilters.includes('meal-plan-instructed')}
+            onClick={() => toggleFilter('meal-plan-instructed')}
             variant="primary"
           />
         </div>

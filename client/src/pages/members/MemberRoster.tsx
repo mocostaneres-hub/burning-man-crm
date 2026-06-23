@@ -1647,6 +1647,7 @@ const MemberRoster: React.FC = () => {
     return members.filter(member => {
       const user = typeof member.user === 'object' ? member.user : null;
       const duesStatus = normalizeDuesStatus(member.duesStatus);
+      const mealPlanStatus = normalizeDuesStatus(member.mealPlanStatus);
       
       // Check each active filter
       for (const filter of activeFilters) {
@@ -1659,6 +1660,15 @@ const MemberRoster: React.FC = () => {
             break;
           case 'dues-instructed':
             if (duesStatus !== 'INSTRUCTED') return false;
+            break;
+          case 'meal-plan-paid':
+            if (mealPlanStatus !== 'PAID') return false;
+            break;
+          case 'meal-plan-unpaid':
+            if (mealPlanStatus !== 'UNPAID') return false;
+            break;
+          case 'meal-plan-instructed':
+            if (mealPlanStatus !== 'INSTRUCTED') return false;
             break;
           case 'without-tickets':
             if (user?.hasTicket) return false;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from '../ui';
-import { Ticket, Car, Calendar, Clock, Users, User, CheckCircle } from 'lucide-react';
+import { Ticket, Car, Calendar, Clock, Users, User, CheckCircle, Utensils } from 'lucide-react';
 import { Member } from '../../types';
 
 interface MetricsPanelProps {
@@ -38,6 +38,19 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, count, icon, colorClass,
     </div>
   </Card>
 );
+
+type PaymentStatus = 'UNPAID' | 'INSTRUCTED' | 'PAID';
+
+const normalizePaymentStatus = (status?: string | null): PaymentStatus => {
+  if (!status) return 'UNPAID';
+
+  const normalized = status.toString().trim().toUpperCase();
+  if (normalized === 'UNPAID' || normalized === 'INSTRUCTED' || normalized === 'PAID') {
+    return normalized;
+  }
+
+  return 'UNPAID';
+};
 
 const MetricsPanel: React.FC<MetricsPanelProps> = ({
   members
@@ -87,7 +100,11 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   }).length;
 
   const duesPaidCount = members.filter(member => {
-    return member.duesPaid === true;
+    return normalizePaymentStatus(member.duesStatus) === 'PAID' || member.duesPaid === true;
+  }).length;
+
+  const mealPlanPaidCount = members.filter(member => {
+    return normalizePaymentStatus(member.mealPlanStatus) === 'PAID';
   }).length;
 
   // Calculate percentages (rounded to nearest whole number)
@@ -99,7 +116,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   return (
     <div className="mb-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <MetricCard
           title="Total Members"
           count={members.length}
@@ -112,6 +129,13 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
           icon={<CheckCircle className="w-6 h-6 text-green-600" />}
           colorClass="text-green-600"
           percentage={calculatePercentage(duesPaidCount)}
+        />
+        <MetricCard
+          title="Meal Plan Paid"
+          count={mealPlanPaidCount}
+          icon={<Utensils className="w-6 h-6 text-emerald-600" />}
+          colorClass="text-emerald-600"
+          percentage={calculatePercentage(mealPlanPaidCount)}
         />
         <MetricCard
           title="First-Year Burners"
