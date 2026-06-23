@@ -48,6 +48,7 @@ import SurveyRespond from './pages/surveys/SurveyRespond';
 import SelectRole from './pages/onboarding/SelectRole';
 import ShiftsOnlyOnboarding from './pages/onboarding/ShiftsOnlyOnboarding';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import CampHelpWidget from './components/help/CampHelpWidget';
 import { useLocation } from 'react-router-dom';
 
 // Conditional Navbar component that hides on onboarding pages
@@ -386,6 +387,7 @@ const AppShell: React.FC = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ConditionalMain>
+        <CampHelpWidget />
       </div>
       {canUseAnalytics && <Analytics />}
     </Router>
