@@ -17,6 +17,8 @@ import { useSkills } from '../../hooks/useSkills';
 import CampLeadBadge from '../../components/badges/CampLeadBadge';
 import CampLeadConfirmModal from '../../components/modals/CampLeadConfirmModal';
 import { canAssignCampLeadRole } from '../../utils/permissions';
+import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../../components/food/FoodPreferenceControls';
+import { normalizeFoodPreferences } from '../../constants/foodPreferences';
 
 // Extended type for roster members that includes nested member data
 interface RosterMember extends Member {
@@ -616,6 +618,7 @@ const MemberRoster: React.FC = () => {
       if (allEdits.playaName !== undefined) overridesData.playaName = allEdits.playaName;
       if (allEdits.yearsBurned !== undefined) overridesData.yearsBurned = allEdits.yearsBurned;
       if (allEdits.skills !== undefined) overridesData.skills = allEdits.skills;
+      if (allEdits.foodPreferences !== undefined) overridesData.foodPreferences = normalizeFoodPreferences(allEdits.foodPreferences);
       if (allEdits.hasTicket !== undefined) overridesData.hasTicket = allEdits.hasTicket;
       if (allEdits.hasVehiclePass !== undefined) overridesData.hasVehiclePass = allEdits.hasVehiclePass;
       if (allEdits.interestedInEAP !== undefined) overridesData.interestedInEAP = allEdits.interestedInEAP;
@@ -769,6 +772,23 @@ const MemberRoster: React.FC = () => {
           </select>
         </div>
       </div>
+    );
+  };
+
+  const EditableFoodPreferences = ({ user, memberId }: { user: any; memberId: string }) => {
+    const currentEdits = localEdits[memberId] || {};
+    const member = members.find(m => m._id.toString() === memberId);
+    const overrides = member?.overrides || {};
+    const selectedPreferences = currentEdits?.foodPreferences !== undefined
+      ? currentEdits.foodPreferences
+      : (overrides?.foodPreferences !== undefined ? overrides.foodPreferences : user?.foodPreferences);
+
+    return (
+      <FoodPreferenceMultiSelect
+        value={selectedPreferences}
+        onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
+        buttonClassName="min-w-[10rem] py-1"
+      />
     );
   };
 
@@ -930,6 +950,7 @@ const MemberRoster: React.FC = () => {
             city: memberData.city || '',
             yearsBurned: memberData.yearsBurned || 0,
             skills: memberData.skills || [],
+            foodPreferences: normalizeFoodPreferences(memberData.foodPreferences),
             hasTicket: memberData.hasTicket,
             hasVehiclePass: memberData.hasVehiclePass,
             interestedInEAP: memberData.interestedInEAP,
@@ -1989,6 +2010,9 @@ const MemberRoster: React.FC = () => {
                   Meal Plan
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Food Prefs
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ticket/VP
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2032,6 +2056,11 @@ const MemberRoster: React.FC = () => {
                 const userName = derivedName || csvName || 'Unknown';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
+                const effectiveFoodPreferences = normalizeFoodPreferences(
+                  (member as any).overrides?.foodPreferences !== undefined
+                    ? (member as any).overrides.foodPreferences
+                    : user?.foodPreferences
+                );
                 const memberGroup = responseGroupsByPrimary[member._id.toString()];
                 const extraResponses = memberGroup?.extraCount || 0;
                 const groupTooltip = memberGroup?.otherNames?.length
@@ -2080,6 +2109,7 @@ const MemberRoster: React.FC = () => {
                               )}
                             </div>
                             {member.isCampLead && <CampLeadBadge size="sm" />}
+                            <FoodPreferenceTags preferences={effectiveFoodPreferences} emptyLabel="No food prefs" />
                             {extraResponses > 0 && (
                               <span
                                 className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 text-xs px-2 py-0.5"
@@ -2174,6 +2204,14 @@ const MemberRoster: React.FC = () => {
                       </button>
                         );
                       })()}
+                    </td>
+                    {/* Food Preferences */}
+                    <td className="px-6 py-4 text-sm text-gray-900 min-w-[12rem]">
+                      {isEditing ? (
+                        <EditableFoodPreferences user={user} memberId={member._id.toString()} />
+                      ) : (
+                        <FoodPreferenceTags preferences={effectiveFoodPreferences} />
+                      )}
                     </td>
                     {/* Ticket/VP */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

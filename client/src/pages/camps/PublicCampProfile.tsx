@@ -168,7 +168,7 @@ const PublicCampProfile: React.FC = () => {
     if (!pendingInvite) return;
     
     // Check if profile is complete - must match backend validation in applications.js
-    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills (at least one)
+    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills, foodPreferences
     const isProfileIncomplete = 
       !user.firstName || 
       !user.lastName || 
@@ -177,6 +177,8 @@ const PublicCampProfile: React.FC = () => {
       !user.phoneNumber || 
       !user.skills || 
       user.skills.length === 0 || 
+      !user.foodPreferences ||
+      user.foodPreferences.length === 0 ||
       user.yearsBurned === undefined ||
       !user.burningPlans;
     
@@ -245,7 +247,7 @@ const PublicCampProfile: React.FC = () => {
     }
     
     // Check if profile is complete - must match backend validation in applications.js
-    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills (at least one)
+    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills, foodPreferences
     const isProfileIncomplete = 
       !user.firstName || 
       !user.lastName || 
@@ -254,6 +256,8 @@ const PublicCampProfile: React.FC = () => {
       !user.phoneNumber || 
       !user.skills || 
       user.skills.length === 0 || 
+      !user.foodPreferences ||
+      user.foodPreferences.length === 0 ||
       user.yearsBurned === undefined ||
       !user.burningPlans;
       

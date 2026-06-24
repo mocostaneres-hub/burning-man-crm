@@ -29,6 +29,7 @@ export interface User {
     linkedin?: string;
   };
   skills?: string[];
+  foodPreferences?: string[];
   interests?: string[];
   burningManExperience?: 'first-timer' | '1-2-years' | '3-5-years' | '5+ years' | 'veteran';
   hasTicket?: boolean;
@@ -263,6 +264,7 @@ export interface Member {
     playaName?: string;
     yearsBurned?: number;
     skills?: string[];
+    foodPreferences?: string[];
     hasTicket?: boolean;
     hasVehiclePass?: boolean;
     interestedInEAP?: boolean;

@@ -54,6 +54,10 @@ const rosterSchema = new mongoose.Schema({
       skills: [{
         type: String
       }],
+      foodPreferences: [{
+        type: String,
+        enum: ['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free', 'Nut-Free', 'No Restrictions']
+      }],
       hasTicket: {
         type: Boolean
       },

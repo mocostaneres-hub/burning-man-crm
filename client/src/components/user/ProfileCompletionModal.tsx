@@ -5,6 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import CityAutocomplete from '../location/CityAutocomplete';
 import { StructuredLocation } from '../../types';
+import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../food/FoodPreferenceControls';
+import { normalizeFoodPreferences } from '../../constants/foodPreferences';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -30,6 +32,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     bio: user?.bio || '',
     phoneNumber: user?.phoneNumber || '',
     skills: user?.skills || [] as string[],
+    foodPreferences: normalizeFoodPreferences(user?.foodPreferences),
     burningPlans: 'confirmed' as 'confirmed' | 'undecided', // New field
     hasTicket: user?.hasTicket || false,
     hasVehiclePass: user?.hasVehiclePass || false,
@@ -57,6 +60,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
         bio: user.bio ?? prev.bio,
         phoneNumber: user.phoneNumber ?? prev.phoneNumber,
         skills: Array.isArray(user.skills) ? user.skills : prev.skills,
+        foodPreferences: Array.isArray(user.foodPreferences) ? normalizeFoodPreferences(user.foodPreferences) : prev.foodPreferences,
         hasTicket: user.hasTicket ?? prev.hasTicket,
         hasVehiclePass: user.hasVehiclePass ?? prev.hasVehiclePass,
         arrivalDate: user.arrivalDate ? new Date(user.arrivalDate).toISOString().split('T')[0] : prev.arrivalDate,
@@ -132,6 +136,11 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     }
     if (formData.skills.length === 0) {
       setError('Please select at least one skill');
+      setLoading(false);
+      return;
+    }
+    if (normalizeFoodPreferences(formData.foodPreferences).length === 0) {
+      setError('Food preferences are required');
       setLoading(false);
       return;
     }
@@ -321,6 +330,18 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
                 </p>
               )}
             </div>
+
+            <div>
+              <FoodPreferenceMultiSelect
+                label="Food Preferences"
+                value={formData.foodPreferences}
+                onChange={(foodPreferences) => setFormData(prev => ({ ...prev, foodPreferences }))}
+                required
+              />
+              <div className="mt-2">
+                <FoodPreferenceTags preferences={formData.foodPreferences} emptyLabel="Required" />
+              </div>
+            </div>
           </div>
 
           {/* OPTIONAL INFORMATION SECTION */}
@@ -456,4 +477,3 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
 };
 
 export default ProfileCompletionModal;
-

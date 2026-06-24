@@ -116,6 +116,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  foodPreferences: [{
+    type: String,
+    enum: ['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free', 'Nut-Free', 'No Restrictions']
+  }],
   interests: [{
     type: String,
     trim: true

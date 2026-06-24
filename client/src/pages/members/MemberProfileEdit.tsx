@@ -7,6 +7,8 @@ import PhotoUpload from '../../components/profile/PhotoUpload';
 import { useSkills } from '../../hooks/useSkills';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { StructuredLocation, User } from '../../types';
+import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../../components/food/FoodPreferenceControls';
+import { normalizeFoodPreferences } from '../../constants/foodPreferences';
 
 interface MemberProfileData {
   firstName: string;
@@ -17,6 +19,7 @@ interface MemberProfileData {
   isFirstBurn: boolean;
   previousCamps: string;
   skills: string[];
+  foodPreferences: string[];
   interests: string[];
   bio: string;
   profilePhoto?: string;
@@ -49,6 +52,7 @@ const mapApiUserToMemberProfileData = (userData: User): MemberProfileData => ({
   isFirstBurn: (userData.yearsBurned ?? 0) === 0,
   previousCamps: userData.previousCamps || '',
   skills: userData.skills || [],
+  foodPreferences: normalizeFoodPreferences(userData.foodPreferences),
   interests: userData.interests || [],
   bio: userData.bio || '',
   profilePhoto: userData.profilePhoto,
@@ -63,6 +67,7 @@ const buildProfileUpdatePayload = (data: MemberProfileData): Partial<User> => ({
   yearsBurned: data.isFirstBurn ? 0 : data.yearsBurned,
   previousCamps: data.previousCamps,
   skills: data.skills,
+  foodPreferences: normalizeFoodPreferences(data.foodPreferences),
   interests: data.interests,
   bio: data.bio,
   profilePhoto: data.profilePhoto,
@@ -89,6 +94,7 @@ const MemberProfileEdit: React.FC = () => {
     isFirstBurn: false,
     previousCamps: '',
     skills: [],
+    foodPreferences: [],
     interests: [],
     bio: '',
     socialMedia: {}
@@ -411,6 +417,21 @@ const MemberProfileEdit: React.FC = () => {
               </label>
             ))}
           </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-h2 font-lato-bold text-custom-text mb-4">
+            Food Preferences
+          </h2>
+
+          {isEditing ? (
+            <FoodPreferenceMultiSelect
+              value={profileData.foodPreferences}
+              onChange={(foodPreferences) => handleInputChange('foodPreferences', foodPreferences)}
+            />
+          ) : (
+            <FoodPreferenceTags preferences={profileData.foodPreferences} />
+          )}
         </Card>
 
         {/* Interests */}

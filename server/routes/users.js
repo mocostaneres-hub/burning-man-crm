@@ -6,6 +6,10 @@ const { recordFieldChange, recordActivity } = require('../services/activityLogge
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
 const { normalizeEmail } = require('../utils/emailUtils');
 const { propagateUserEmailChange } = require('../services/emailPropagationService');
+const {
+  hasInvalidFoodPreference,
+  normalizeFoodPreferences
+} = require('../constants/foodPreferences');
 const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
@@ -46,6 +50,7 @@ router.put('/profile', authenticateToken, [
   body('socialMedia.facebook').optional().trim().custom((value) => value === '' || value.length <= 200),
   body('socialMedia.linkedin').optional().trim().custom((value) => value === '' || value.length <= 200),
   body('skills').optional().isArray(),
+  body('foodPreferences').optional().custom((value) => !hasInvalidFoodPreference(value)).withMessage('Invalid food preference selection'),
   body('interests').optional().isArray(),
   body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
   body('location').optional().custom((value) => {
@@ -97,14 +102,14 @@ router.put('/profile', authenticateToken, [
     const allowedFields = [];
     
            if (user.accountType === 'personal') {
-             allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+             allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
     } else if (user.accountType === 'camp') {
       // Camp accounts can update both personal and camp fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     } else {
       // Admin or other account types - allow all fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     }
 
@@ -124,7 +129,9 @@ router.put('/profile', authenticateToken, [
           updates[key] = _.merge({}, existingValue, req.body[key]);
         } else {
           // Direct assignment for non-nested fields and arrays
-          updates[key] = req.body[key];
+          updates[key] = key === 'foodPreferences'
+            ? normalizeFoodPreferences(req.body[key])
+            : req.body[key];
         }
       }
     });
@@ -232,7 +239,8 @@ router.put('/profile', authenticateToken, [
                 departureDate: updatedUser.departureDate,
                 interestedInEAP: updatedUser.interestedInEAP,
                 interestedInStrike: updatedUser.interestedInStrike,
-                skills: updatedUser.skills
+                skills: updatedUser.skills,
+                foodPreferences: updatedUser.foodPreferences
               }
             });
             console.log(`✅ [PUT /api/users/profile] Updated application ${application._id}`);
@@ -274,7 +282,8 @@ router.put('/profile', authenticateToken, [
                       departureDate: updatedUser.departureDate,
                       interestedInEAP: updatedUser.interestedInEAP,
                       interestedInStrike: updatedUser.interestedInStrike,
-                      skills: updatedUser.skills
+                      skills: updatedUser.skills,
+                      foodPreferences: updatedUser.foodPreferences
                     }
                   }
                 };
@@ -749,6 +758,7 @@ router.put('/:id', authenticateToken, requireAdmin, [
   body('socialMedia.facebook').optional().trim().custom((value) => value === '' || value.length <= 200),
   body('socialMedia.linkedin').optional().trim().custom((value) => value === '' || value.length <= 200),
   body('skills').optional().isArray(),
+  body('foodPreferences').optional().custom((value) => !hasInvalidFoodPreference(value)).withMessage('Invalid food preference selection'),
   body('interests').optional().isArray(),
   body('burningManExperience').optional().trim().custom((value) => value === '' || value.length <= 1000),
   body('location').optional().custom((value) => {
@@ -791,6 +801,9 @@ router.put('/:id', authenticateToken, requireAdmin, [
 
     const { id } = req.params;
     const updateData = req.body;
+    if (updateData.foodPreferences !== undefined) {
+      updateData.foodPreferences = normalizeFoodPreferences(updateData.foodPreferences);
+    }
 
     // Handle admin password reset safely: hash before persistence.
     if (updateData.newPassword) {
@@ -886,7 +899,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
                 departureDate: updatedUser.departureDate,
                 interestedInEAP: updatedUser.interestedInEAP,
                 interestedInStrike: updatedUser.interestedInStrike,
-                skills: updatedUser.skills
+                skills: updatedUser.skills,
+                foodPreferences: updatedUser.foodPreferences
               }
             });
             console.log(`✅ [PUT /api/users/:id] Updated application ${application._id}`);
@@ -928,7 +942,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
                       departureDate: updatedUser.departureDate,
                       interestedInEAP: updatedUser.interestedInEAP,
                       interestedInStrike: updatedUser.interestedInStrike,
-                      skills: updatedUser.skills
+                      skills: updatedUser.skills,
+                      foodPreferences: updatedUser.foodPreferences
                     }
                   }
                 };

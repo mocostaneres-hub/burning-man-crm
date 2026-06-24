@@ -9,6 +9,7 @@ const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
+const { FOOD_PREFERENCE_OPTIONS } = require('../constants/foodPreferences');
 
 const normalizeInviteRecipient = (value) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -31,7 +32,8 @@ const isPersonalProfileComplete = (user) => {
     yearsBurned: user.yearsBurned,
     bio: user.bio,
     burningPlans: user.burningPlans,
-    skills: user.skills
+    skills: user.skills,
+    foodPreferences: user.foodPreferences
   });
 
   const missingFields = [];
@@ -75,6 +77,15 @@ const isPersonalProfileComplete = (user) => {
   // Check skills (at least one required in ProfileCompletionModal)
   if (!user.skills || !Array.isArray(user.skills) || user.skills.length === 0) {
     missingFields.push('Skills (at least one)');
+  }
+
+  if (
+    !user.foodPreferences ||
+    !Array.isArray(user.foodPreferences) ||
+    user.foodPreferences.length === 0 ||
+    user.foodPreferences.some((preference) => !FOOD_PREFERENCE_OPTIONS.includes(preference))
+  ) {
+    missingFields.push('Food Preferences');
   }
 
   // Bio is optional in ProfileCompletionModal, so we don't validate it here

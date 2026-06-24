@@ -14,6 +14,10 @@ const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemp
 const { getCampMealPlanTemplate, SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES } = require('../utils/mealPlanTemplates');
 const { sendDuesEmail } = require('../services/emailService');
 const {
+  hasInvalidFoodPreference,
+  normalizeFoodPreferences
+} = require('../constants/foodPreferences');
+const {
   DUES_STATUS,
   normalizeDuesStatus,
   isAllowedTransition,
@@ -396,6 +400,7 @@ router.get('/', authenticateToken, async (req, res) => {
                   city: user.city,
                   yearsBurned: user.yearsBurned,
                   skills: user.skills,
+                  foodPreferences: user.foodPreferences,
                   socialMedia: user.socialMedia,
                   hasTicket: user.hasTicket,
                   hasVehiclePass: user.hasVehiclePass,
@@ -761,6 +766,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
                 city: user.city,
                 yearsBurned: user.yearsBurned,
                 skills: user.skills,
+                foodPreferences: user.foodPreferences,
                 socialMedia: user.socialMedia,
                 hasTicket: user.hasTicket,
                 hasVehiclePass: user.hasVehiclePass,
@@ -857,6 +863,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
       'City',
       'Years Burned',
       'Skills',
+      'Food Preferences',
       'Has Ticket',
       'Has Vehicle Pass',
       'Travel Plans',
@@ -877,6 +884,9 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
       const playaName = overrides.playaName !== undefined ? overrides.playaName : user.playaName;
       const yearsBurned = overrides.yearsBurned !== undefined ? overrides.yearsBurned : user.yearsBurned;
       const skills = overrides.skills !== undefined ? overrides.skills : user.skills;
+      const foodPreferences = normalizeFoodPreferences(
+        overrides.foodPreferences !== undefined ? overrides.foodPreferences : user.foodPreferences
+      );
       
       return [
         `"${user.firstName || 'N/A'}"`,
@@ -886,6 +896,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         `"${user.city || 'N/A'}"`,
         (yearsBurned === 0 || yearsBurned === '0') ? 'Virgin' : (yearsBurned || 0),
         `"${(skills || []).join(', ')}"`,
+        `"${foodPreferences.join(', ')}"`,
         formatTicketVPStatus(user.hasTicket),
         formatTicketVPStatus(user.hasVehiclePass),
         `"${formatTravelPlans(user.arrivalDate, user.departureDate)}"`,
@@ -1721,6 +1732,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 city: user.city,
                 yearsBurned: user.yearsBurned,
                 skills: user.skills,
+                foodPreferences: user.foodPreferences,
                 socialMedia: user.socialMedia,
                 hasTicket: user.hasTicket,
                 hasVehiclePass: user.hasVehiclePass,
@@ -2322,7 +2334,8 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       departureDate,
       city,
       state,
-      location
+      location,
+      foodPreferences
     } = req.body;
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
@@ -2434,6 +2447,21 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       }
       roster.members[memberIndex].overrides.skills = skills;
       console.log('📝 [Roster Override] Updated skills:', skills);
+    }
+    if (foodPreferences !== undefined) {
+      if (hasInvalidFoodPreference(foodPreferences)) {
+        return res.status(400).json({ message: 'Invalid food preference selection' });
+      }
+
+      const normalizedFoodPreferences = normalizeFoodPreferences(foodPreferences);
+      const oldValue = normalizeFoodPreferences(oldOverrides.foodPreferences);
+      const oldValueStr = JSON.stringify(oldValue);
+      const newValueStr = JSON.stringify(normalizedFoodPreferences);
+      if (oldValueStr !== newValueStr) {
+        changedFields.push({ field: 'foodPreferences', oldValue, newValue: normalizedFoodPreferences });
+      }
+      roster.members[memberIndex].overrides.foodPreferences = normalizedFoodPreferences;
+      console.log('📝 [Roster Override] Updated foodPreferences:', normalizedFoodPreferences);
     }
     if (hasTicket !== undefined) {
       const oldValue = oldOverrides.hasTicket;
@@ -2734,7 +2762,8 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
               playaName: user.playaName,
               city: user.city,
               yearsBurned: user.yearsBurned,
-              skills: user.skills
+              skills: user.skills,
+              foodPreferences: user.foodPreferences
             }
           });
         } else {
@@ -2759,7 +2788,8 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
               playaName: memberRecord.playaName || '',
               city: '',
               yearsBurned: 0,
-              skills: Array.isArray(memberRecord.skills) ? memberRecord.skills : []
+              skills: Array.isArray(memberRecord.skills) ? memberRecord.skills : [],
+              foodPreferences: []
             }
           });
         }
