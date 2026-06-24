@@ -1648,6 +1648,10 @@ const MemberRoster: React.FC = () => {
       return members;
     }
 
+    const selectedFoodPreferences = activeFilters
+      .filter((filter) => String(filter).startsWith('food:'))
+      .map((filter) => String(filter).replace('food:', ''));
+
     return members.filter(member => {
       const user = typeof member.user === 'object' ? member.user : null;
       const duesStatus = normalizeDuesStatus(member.duesStatus);
@@ -1657,6 +1661,12 @@ const MemberRoster: React.FC = () => {
           ? (member as any).overrides.foodPreferences
           : user?.foodPreferences
       );
+      if (
+        selectedFoodPreferences.length > 0 &&
+        !selectedFoodPreferences.some((preference) => foodPreferences.includes(preference as any))
+      ) {
+        return false;
+      }
       
       // Check each active filter
       for (const filter of activeFilters) {
@@ -1716,8 +1726,6 @@ const MemberRoster: React.FC = () => {
               break;
             }
             if (filter.startsWith('food:')) {
-              const targetPreference = filter.replace('food:', '');
-              if (!foodPreferences.includes(targetPreference as any)) return false;
               break;
             }
             if (filter.startsWith('cf:')) {

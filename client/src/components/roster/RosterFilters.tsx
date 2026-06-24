@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui';
 import { Filter, X } from 'lucide-react';
 import { FOOD_PREFERENCE_OPTIONS } from '../../constants/foodPreferences';
@@ -63,6 +63,25 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
   availableTags = [],
   customFieldOptions = []
 }) => {
+  const [foodFilterOpen, setFoodFilterOpen] = useState(false);
+  const foodFilterRef = useRef<HTMLDivElement | null>(null);
+  const activeFoodPreferences = activeFilters
+    .filter((filter) => String(filter).startsWith('food:'))
+    .map((filter) => String(filter).replace('food:', ''));
+
+  useEffect(() => {
+    if (!foodFilterOpen) return;
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!foodFilterRef.current?.contains(event.target as Node)) {
+        setFoodFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [foodFilterOpen]);
+
   const prettifyStatus = (status: string) =>
     status
       .replace(/_/g, ' ')
@@ -120,6 +139,15 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
 
   const clearAllFilters = () => {
     onFilterChange([]);
+  };
+
+  const toggleFoodPreferenceFilter = (preference: string) => {
+    const token = `food:${preference}`;
+    onFilterChange(
+      activeFilters.includes(token)
+        ? activeFilters.filter((filter) => filter !== token)
+        : [...activeFilters, token]
+    );
   };
 
   const hasActiveFilters = activeFilters.length > 0;
@@ -293,28 +321,35 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
           </select>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="relative flex items-center gap-1" ref={foodFilterRef}>
           <span className="text-sm font-medium text-gray-600">Food:</span>
-          <select
-            className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
-            value=""
-            onChange={(e) => {
-              const value = e.target.value;
-              if (!value) return;
-              const token = `food:${value}`;
-              if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
-            }}
+          <button
+            type="button"
+            className="min-w-[9rem] rounded-md border border-gray-300 bg-white px-3 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={() => setFoodFilterOpen((prev) => !prev)}
+            aria-haspopup="listbox"
+            aria-expanded={foodFilterOpen}
           >
-            <option value="">Select food pref...</option>
+            {activeFoodPreferences.length > 0 ? `${activeFoodPreferences.length} selected` : 'Select food prefs'}
+          </button>
+          {foodFilterOpen && (
+            <div className="absolute left-12 top-full z-30 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg">
             {FOOD_PREFERENCE_OPTIONS.map((preference) => {
               const token = `food:${preference}`;
               return (
-                <option key={preference} value={preference} disabled={activeFilters.includes(token)}>
-                  {preference}
-                </option>
+                <label key={preference} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.includes(token)}
+                    onChange={() => toggleFoodPreferenceFilter(preference)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>{preference}</span>
+                </label>
               );
             })}
-          </select>
+            </div>
+          )}
         </div>
 
         {availableTags.length > 0 && (

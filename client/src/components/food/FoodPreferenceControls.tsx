@@ -28,10 +28,9 @@ export const FoodPreferenceTags: React.FC<FoodPreferenceTagsProps> = ({
 
   if (compact) {
     const [firstPreference, ...additionalPreferences] = normalized;
-    const tooltip = normalized.join(', ');
 
     return (
-      <div className={`flex flex-nowrap items-center gap-1 ${className}`} title={tooltip}>
+      <div className={`group relative inline-flex flex-nowrap items-center gap-1 ${className}`}>
         <span
           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${getFoodPreferenceTagClass(firstPreference)}`}
         >
@@ -41,6 +40,20 @@ export const FoodPreferenceTags: React.FC<FoodPreferenceTagsProps> = ({
           <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 whitespace-nowrap">
             +{additionalPreferences.length}
           </span>
+        )}
+        {additionalPreferences.length > 0 && (
+          <div className="absolute left-0 top-full z-40 mt-1 hidden min-w-max rounded-md border border-gray-200 bg-white p-2 shadow-lg group-hover:block">
+            <div className="flex max-w-xs flex-wrap gap-1">
+              {normalized.map((preference) => (
+                <span
+                  key={preference}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${getFoodPreferenceTagClass(preference)}`}
+                >
+                  {preference}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     );
