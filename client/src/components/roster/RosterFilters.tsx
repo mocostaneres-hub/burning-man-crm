@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '../ui';
 import { Filter, X } from 'lucide-react';
+import { FOOD_PREFERENCE_OPTIONS } from '../../constants/foodPreferences';
 
 export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'meal-plan-paid' | 'meal-plan-unpaid' | 'meal-plan-instructed' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
 
@@ -92,6 +93,9 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
     }
     if (key.startsWith('tag:')) {
       return `Tag: ${key.replace('tag:', '')}`;
+    }
+    if (key.startsWith('food:')) {
+      return `Food: ${key.replace('food:', '')}`;
     }
     if (key.startsWith('cf:')) {
       const [, fieldKey, fieldValue] = key.split(':');
@@ -286,6 +290,30 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
                 {skill}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <span className="text-sm font-medium text-gray-600">Food:</span>
+          <select
+            className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+            value=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              const token = `food:${value}`;
+              if (!activeFilters.includes(token)) onFilterChange([...activeFilters, token]);
+            }}
+          >
+            <option value="">Select food pref...</option>
+            {FOOD_PREFERENCE_OPTIONS.map((preference) => {
+              const token = `food:${preference}`;
+              return (
+                <option key={preference} value={preference} disabled={activeFilters.includes(token)}>
+                  {preference}
+                </option>
+              );
+            })}
           </select>
         </div>
 

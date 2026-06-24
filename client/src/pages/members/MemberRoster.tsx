@@ -775,23 +775,6 @@ const MemberRoster: React.FC = () => {
     );
   };
 
-  const EditableFoodPreferences = ({ user, memberId }: { user: any; memberId: string }) => {
-    const currentEdits = localEdits[memberId] || {};
-    const member = members.find(m => m._id.toString() === memberId);
-    const overrides = member?.overrides || {};
-    const selectedPreferences = currentEdits?.foodPreferences !== undefined
-      ? currentEdits.foodPreferences
-      : (overrides?.foodPreferences !== undefined ? overrides.foodPreferences : user?.foodPreferences);
-
-    return (
-      <FoodPreferenceMultiSelect
-        value={selectedPreferences}
-        onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
-        buttonClassName="min-w-[10rem] py-1"
-      />
-    );
-  };
-
   const EditableLocation = ({ user, memberId }: { user: any; memberId: string }) => {
     const currentEdits = localEdits[memberId] || {};
     const member = members.find(m => m._id.toString() === memberId);
@@ -1669,6 +1652,11 @@ const MemberRoster: React.FC = () => {
       const user = typeof member.user === 'object' ? member.user : null;
       const duesStatus = normalizeDuesStatus(member.duesStatus);
       const mealPlanStatus = normalizeDuesStatus(member.mealPlanStatus);
+      const foodPreferences = normalizeFoodPreferences(
+        (member as any).overrides?.foodPreferences !== undefined
+          ? (member as any).overrides.foodPreferences
+          : user?.foodPreferences
+      );
       
       // Check each active filter
       for (const filter of activeFilters) {
@@ -1725,6 +1713,11 @@ const MemberRoster: React.FC = () => {
             if (filter.startsWith('tag:')) {
               const targetTag = filter.replace('tag:', '');
               if (!(member.tags || []).includes(targetTag)) return false;
+              break;
+            }
+            if (filter.startsWith('food:')) {
+              const targetPreference = filter.replace('food:', '');
+              if (!foodPreferences.includes(targetPreference as any)) return false;
               break;
             }
             if (filter.startsWith('cf:')) {
@@ -2056,8 +2049,12 @@ const MemberRoster: React.FC = () => {
                 const userName = derivedName || csvName || 'Unknown';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
+                const memberId = member._id.toString();
+                const editedFoodPreferences = localEdits[memberId]?.foodPreferences;
                 const effectiveFoodPreferences = normalizeFoodPreferences(
-                  (member as any).overrides?.foodPreferences !== undefined
+                  editedFoodPreferences !== undefined
+                    ? editedFoodPreferences
+                    : (member as any).overrides?.foodPreferences !== undefined
                     ? (member as any).overrides.foodPreferences
                     : user?.foodPreferences
                 );
@@ -2109,7 +2106,6 @@ const MemberRoster: React.FC = () => {
                               )}
                             </div>
                             {member.isCampLead && <CampLeadBadge size="sm" />}
-                            <FoodPreferenceTags preferences={effectiveFoodPreferences} emptyLabel="No food prefs" />
                             {extraResponses > 0 && (
                               <span
                                 className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 text-xs px-2 py-0.5"
@@ -2208,9 +2204,13 @@ const MemberRoster: React.FC = () => {
                     {/* Food Preferences */}
                     <td className="px-6 py-4 text-sm text-gray-900 min-w-[12rem]">
                       {isEditing ? (
-                        <EditableFoodPreferences user={user} memberId={member._id.toString()} />
+                        <FoodPreferenceMultiSelect
+                          value={effectiveFoodPreferences}
+                          onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
+                          buttonClassName="min-w-[10rem] py-1"
+                        />
                       ) : (
-                        <FoodPreferenceTags preferences={effectiveFoodPreferences} />
+                        <FoodPreferenceTags preferences={effectiveFoodPreferences} compact />
                       )}
                     </td>
                     {/* Ticket/VP */}

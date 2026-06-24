@@ -11,17 +11,39 @@ interface FoodPreferenceTagsProps {
   preferences?: unknown;
   emptyLabel?: string;
   className?: string;
+  compact?: boolean;
 }
 
 export const FoodPreferenceTags: React.FC<FoodPreferenceTagsProps> = ({
   preferences,
   emptyLabel = 'Not set',
-  className = ''
+  className = '',
+  compact = false
 }) => {
   const normalized = normalizeFoodPreferences(preferences);
 
   if (normalized.length === 0) {
     return <span className="text-gray-400 italic text-xs">{emptyLabel}</span>;
+  }
+
+  if (compact) {
+    const [firstPreference, ...additionalPreferences] = normalized;
+    const tooltip = normalized.join(', ');
+
+    return (
+      <div className={`flex flex-nowrap items-center gap-1 ${className}`} title={tooltip}>
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${getFoodPreferenceTagClass(firstPreference)}`}
+        >
+          {firstPreference}
+        </span>
+        {additionalPreferences.length > 0 && (
+          <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 whitespace-nowrap">
+            +{additionalPreferences.length}
+          </span>
+        )}
+      </div>
+    );
   }
 
   return (
