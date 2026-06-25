@@ -1998,7 +1998,7 @@ const MemberRoster: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   #
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="sticky left-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)] min-w-[16rem]">
                   Member
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2073,13 +2073,13 @@ const MemberRoster: React.FC = () => {
                   : 'Submitted as a grouped response';
                 
                 return (
-                  <tr key={member._id} className={`${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                  <tr key={member._id} className={`group ${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                     {/* Row Number */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
                       {index + 1}
                     </td>
                     {/* Member */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className={`sticky left-0 z-10 px-6 py-4 whitespace-nowrap shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)] min-w-[16rem] ${isEditing ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50'}`}>
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
                           {userPhoto ? (
