@@ -1,21 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, Input } from '../../components/ui';
 import Footer from '../../components/layout/Footer';
 import { Users, Building, Loader2, ArrowLeft } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { getSafeRedirectPath } from '../../utils/authRedirects';
 
 type CampLeadStep = 'choose' | 'enter_name';
 
 const SelectRole: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { updateUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [campName, setCampName] = useState('');
   const [campLeadStep, setCampLeadStep] = useState<CampLeadStep>('choose');
   const campNameInputRef = useRef<HTMLInputElement>(null);
+  const safeRedirect = getSafeRedirectPath(searchParams.get('redirect'));
 
   useEffect(() => {
     if (campLeadStep === 'enter_name') {
@@ -52,7 +55,9 @@ const SelectRole: React.FC = () => {
         updateUser(response.user);
         
         // Redirect based on the role selected
-        const redirectTo = response.redirectTo;
+        const redirectTo = role === 'member' && safeRedirect !== '/dashboard'
+          ? safeRedirect
+          : response.redirectTo;
         navigate(redirectTo, { replace: true });
       } else {
         setError('Failed to select role. Please try again.');

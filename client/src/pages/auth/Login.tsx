@@ -10,6 +10,7 @@ import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
 import { User } from '../../types';
+import { getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
 
 const schema = yup.object({
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -50,8 +51,7 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const requestedRedirect = searchParams.get('redirect');
-  const safeRedirect =
-    requestedRedirect && requestedRedirect.startsWith('/') ? requestedRedirect : '/dashboard';
+  const safeRedirect = getSafeRedirectPath(requestedRedirect);
 
   const {
     register,
@@ -80,7 +80,7 @@ const Login: React.FC = () => {
       // Check if user needs onboarding (only truly new users with unassigned role and no lastLogin)
       if ((user.role === 'unassigned' || !user.role) && !user.lastLogin) {
         console.log('✅ [Login] Redirecting to onboarding...');
-        navigate('/onboarding/select-role', { replace: true });
+        navigate(getOnboardingRedirectPath(safeRedirect), { replace: true });
         return;
       }
       
@@ -104,7 +104,7 @@ const Login: React.FC = () => {
       
       // Check if user needs onboarding
       if (result.needsOnboarding) {
-        navigate('/onboarding/select-role', { replace: true });
+        navigate(getOnboardingRedirectPath(safeRedirect), { replace: true });
         return;
       }
       
@@ -167,7 +167,7 @@ const Login: React.FC = () => {
       if (isNewUser) {
         // This is a brand new user created via OAuth
         console.log('✅ [Login] New user detected, redirecting to onboarding...');
-        window.location.href = '/onboarding/select-role';
+        window.location.href = getOnboardingRedirectPath(safeRedirect);
         return;
       }
       

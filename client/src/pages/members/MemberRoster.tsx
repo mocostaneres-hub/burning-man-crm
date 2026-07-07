@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import ShiftsOnlyRosterTable from '../../components/roster/ShiftsOnlyRosterTable';
-import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload } from 'lucide-react';
+import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload, ClipboardList, CheckCircle } from 'lucide-react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -43,6 +43,28 @@ const getObjectIdTimestampMs = (value?: string | null): number | null => {
   const epochSeconds = Number.parseInt(trimmed.slice(0, 8), 16);
   if (Number.isNaN(epochSeconds)) return null;
   return epochSeconds * 1000;
+};
+
+const getCampPublicIdentifier = (camp: any): string => {
+  const candidates = [camp?.slug, camp?.urlSlug, camp?._id];
+  return candidates.find((value) => typeof value === 'string' && value.trim())?.trim() || '';
+};
+
+const copyTextToClipboard = async (value: string) => {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
 };
 
 /**
@@ -449,6 +471,9 @@ const MemberRoster: React.FC = () => {
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
   const [campAcceptingApplications, setCampAcceptingApplications] = useState(false);
+  const [campPubliclyVisible, setCampPubliclyVisible] = useState(false);
+  const [campPublicIdentifier, setCampPublicIdentifier] = useState('');
+  const [campInvitationLinkCopied, setCampInvitationLinkCopied] = useState(false);
   const [campCreatedAtMs, setCampCreatedAtMs] = useState<number | null>(null);
   const [rosterModeState, setRosterModeState] = useState<{
     mode: RosterMode;
@@ -504,6 +529,11 @@ const MemberRoster: React.FC = () => {
   const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
   const canViewShiftsOnlyMetrics = canAccessRoster && hasShiftsOnlyRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
+  const campInvitationUrl = useMemo(() => {
+    if (!campPublicIdentifier) return '';
+    const params = new URLSearchParams({ camp: campPublicIdentifier });
+    return `${window.location.origin}/apply?${params.toString()}`;
+  }, [campPublicIdentifier]);
 
   useEffect(() => {
     if (!campId) return;
@@ -812,10 +842,14 @@ const MemberRoster: React.FC = () => {
           const campResponse = await api.get(`/camps/${user.campLeadCampId}`);
           const camp = campResponse?.camp || campResponse;
           setCampAcceptingApplications(Boolean(camp?.acceptingApplications));
+          setCampPubliclyVisible(Boolean(camp?.isPubliclyVisible ?? camp?.isPublic));
+          setCampPublicIdentifier(getCampPublicIdentifier(camp) || user.campLeadCampSlug || user.campLeadCampId);
           const createdAtMs = Date.parse(String(camp?.createdAt || ''));
           setCampCreatedAtMs(Number.isNaN(createdAtMs) ? null : createdAtMs);
         } catch (_campError) {
           setCampAcceptingApplications(false);
+          setCampPubliclyVisible(false);
+          setCampPublicIdentifier(user.campLeadCampSlug || user.campLeadCampId);
           setCampCreatedAtMs(null);
         }
         return;
@@ -825,11 +859,16 @@ const MemberRoster: React.FC = () => {
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
       setCampAcceptingApplications(Boolean((campData as any)?.acceptingApplications));
+      setCampPubliclyVisible(Boolean((campData as any)?.isPubliclyVisible ?? (campData as any)?.isPublic));
+      setCampPublicIdentifier(getCampPublicIdentifier(campData));
       const createdAtMs = Date.parse(String((campData as any)?.createdAt || ''));
       setCampCreatedAtMs(Number.isNaN(createdAtMs) ? null : createdAtMs);
     } catch (err) {
       console.error('Error fetching camp data:', err);
       setError('Failed to load camp data');
+      setCampAcceptingApplications(false);
+      setCampPubliclyVisible(false);
+      setCampPublicIdentifier('');
     }
   };
 
@@ -1547,6 +1586,27 @@ const MemberRoster: React.FC = () => {
     }
   };
 
+  const handleCopyCampInvitationUrl = async () => {
+    if (!campInvitationUrl) {
+      alert('Camp application URL is not available yet. Please try again after the camp profile finishes loading.');
+      return;
+    }
+
+    if (!campPubliclyVisible || !campAcceptingApplications) {
+      alert('Make the camp profile public and turn on applications before sharing this application URL.');
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(campInvitationUrl);
+      setCampInvitationLinkCopied(true);
+      window.setTimeout(() => setCampInvitationLinkCopied(false), 2500);
+    } catch (error) {
+      console.error('❌ Error copying camp application URL:', error);
+      alert('Failed to copy the application URL. Please try again.');
+    }
+  };
+
   // Collect emails for every roster member whose dues are marked as PAID,
   // dedupe (case-insensitive), and copy them to the clipboard. FMR-only:
   // shifts-only rosters do not track dues. The button that calls this
@@ -1580,21 +1640,7 @@ const MemberRoster: React.FC = () => {
 
     const joined = emails.join(', ');
     try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(joined);
-      } else {
-        // Legacy fallback for non-secure contexts (e.g. http://localhost on
-        // older browsers) where the async Clipboard API is unavailable.
-        const textarea = document.createElement('textarea');
-        textarea.value = joined;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'absolute';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
+      await copyTextToClipboard(joined);
       alert(`Copied ${emails.length} dues-paid member email${emails.length === 1 ? '' : 's'} to clipboard.`);
     } catch (error) {
       console.error('❌ Error copying paid member emails:', error);
@@ -1841,6 +1887,26 @@ const MemberRoster: React.FC = () => {
                   : 'Full-member invites are unavailable while applications are off.'}
               </p>
             </div>
+          )}
+
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyCampInvitationUrl}
+              disabled={!campInvitationUrl}
+              className="flex items-center gap-2 text-indigo-600 border-indigo-600 hover:bg-indigo-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+              title={
+                !campInvitationUrl
+                  ? 'Camp application URL is loading.'
+                  : !campPubliclyVisible || !campAcceptingApplications
+                    ? 'Make the camp profile public and turn on applications before sharing this URL.'
+                    : 'Copy a direct camp application URL for prospective members.'
+              }
+            >
+              {campInvitationLinkCopied ? <CheckCircle className="w-4 h-4" /> : <ClipboardList className="w-4 h-4" />}
+              {campInvitationLinkCopied ? 'Copied' : 'Copy Application URL'}
+            </Button>
           )}
 
           {/* Export Roster button - Only available when an active roster exists */}

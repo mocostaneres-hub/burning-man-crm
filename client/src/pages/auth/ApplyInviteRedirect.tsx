@@ -12,8 +12,25 @@ const ApplyInviteRedirect: React.FC = () => {
     let isMounted = true;
     const run = async () => {
       const token = searchParams.get('invite_token') || searchParams.get('invite');
+      const campIdentifier = searchParams.get('camp') || searchParams.get('camp_id');
+
+      if (campIdentifier) {
+        try {
+          const camp = await api.get(`/camps/public/${encodeURIComponent(campIdentifier)}`);
+          const resolvedCampIdentifier = camp?.slug || camp?._id || campIdentifier;
+          const target = `/camps/${encodeURIComponent(resolvedCampIdentifier)}?apply=1&source=camp_invite`;
+
+          if (!isMounted) return;
+          navigate(target, { replace: true });
+        } catch (err: any) {
+          if (!isMounted) return;
+          setError(err?.response?.data?.message || err?.message || 'Invalid camp application link.');
+        }
+        return;
+      }
+
       if (!token) {
-        setError('Missing invite token.');
+        setError('Missing invitation details.');
         return;
       }
 

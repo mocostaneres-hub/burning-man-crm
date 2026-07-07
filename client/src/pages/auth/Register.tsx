@@ -10,6 +10,7 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
+import { getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
 
 type FormData = {
   firstName: string;
@@ -49,8 +50,7 @@ const Register: React.FC = () => {
   const campSlug = searchParams.get('camp');
   const isShiftsOnlyInviteFromQuery = searchParams.get('shifts_only') === '1';
   const redirectPath = searchParams.get('redirect');
-  const safeRedirect =
-    redirectPath && redirectPath.startsWith('/') ? redirectPath : '/dashboard';
+  const safeRedirect = getSafeRedirectPath(redirectPath);
 
   const {
     register,
@@ -138,7 +138,7 @@ const Register: React.FC = () => {
       // Check if user needs onboarding
       if (user.role === 'unassigned' || !user.role) {
         console.log('✅ [Register] Redirecting to onboarding...');
-        navigate('/onboarding/select-role', { replace: true });
+        navigate(getOnboardingRedirectPath(safeRedirect), { replace: true });
         return;
       }
       
@@ -218,7 +218,7 @@ const Register: React.FC = () => {
       
       // Check if user needs onboarding
       if (result.needsOnboarding) {
-        navigate('/onboarding/select-role', { replace: true });
+        navigate(getOnboardingRedirectPath(safeRedirect), { replace: true });
         return;
       }
       
@@ -273,7 +273,7 @@ const Register: React.FC = () => {
       if (isNewUser) {
         // Brand new user - go to onboarding
         console.log('✅ [Register] New user, redirecting to onboarding...');
-        window.location.href = '/onboarding/select-role';
+        window.location.href = getOnboardingRedirectPath(safeRedirect);
       } else {
         // Existing user who clicked "Sign up" instead of "Sign in" - go to dashboard
         console.log('✅ [Register] Existing user, redirecting to dashboard...');
