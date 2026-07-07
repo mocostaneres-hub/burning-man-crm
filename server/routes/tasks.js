@@ -4,7 +4,7 @@ const router = express.Router();
 const { authenticateToken, requireCampAccount } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const Task = require('../models/Task');
-const { getUserCampId, canAccessCampResources, canManageCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCampResources, canManageEventPlanning } = require('../utils/permissionHelpers');
 const { generateUniqueTaskIdCode } = require('../utils/taskIdGenerator');
 const {
   sendTaskAssignmentEmail,
@@ -343,8 +343,8 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Camp not found' });
     }
 
-    // Check camp ownership using helper (includes Camp Leads!)
-    const isCampOwner = await canManageCamp(req, campId);
+    // Check camp ownership using helper (includes Camp Leads and Events Leads!)
+    const isCampOwner = await canManageEventPlanning(req, campId);
     
     // Check if user is an active roster member
     const isRosterMember = await db.findMember({ 
@@ -353,9 +353,9 @@ router.post('/', authenticateToken, async (req, res) => {
       status: 'active' 
     });
 
-    // Allow camp owners, Camp Leads, or active roster members
+    // Allow camp owners, Camp Leads, Events Leads, or active roster members
     if (!isCampOwner && !isRosterMember) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, or roster member' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, Events Lead, or roster member' });
     }
 
     console.log('✅ [POST /api/tasks] User authorized to create task:', {
@@ -599,7 +599,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Check comprehensive camp access (owner or active roster member)
     const hasCampAccess = await canAccessCampResources(req, task.campId);
-    const canManageTask = await canManageCamp(req, task.campId);
+    const canManageTask = await canManageEventPlanning(req, task.campId);
     
     // Check if user is specifically assigned or watching
     const currentUserId = req.user._id.toString();
@@ -794,17 +794,16 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user owns this camp (includes Camp Leads!)
+    // Check if user owns this camp (includes Camp Leads and Events Leads!)
     const camp = await db.findCamp({ _id: task.campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
     
-    // Check camp ownership using helper (includes Camp Leads)
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, task.campId);
+    // Check camp ownership using helper (includes Camp Leads and Events Leads)
+    const hasAccess = await canManageEventPlanning(req, task.campId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, or Events Lead' });
     }
 
     await db.deleteTask(id);
@@ -828,16 +827,16 @@ router.post('/:id/assign', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Check if user owns this camp (includes Camp Leads!)
+    // Check if user owns this camp (includes Camp Leads and Events Leads!)
     const camp = await db.findCamp({ _id: task.campId });
     if (!camp) {
       return res.status(404).json({ message: 'Camp not found' });
     }
     
-    // Check camp ownership using helper (includes Camp Leads)
-    const hasAccess = await canManageCamp(req, task.campId);
+    // Check camp ownership using helper (includes Camp Leads and Events Leads)
+    const hasAccess = await canManageEventPlanning(req, task.campId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, or Events Lead' });
     }
 
     const resolvedAssignedTo = await resolveAssignedUserIds({
@@ -1216,4 +1215,3 @@ router.get('/:id/comments', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { normalizeEmail } = require('../utils/emailUtils');
-const { getUserCampId, canManageCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
@@ -34,6 +34,58 @@ function getMemberEntryIndex(roster, memberId) {
     }
     return entry.member.toString() === memberId.toString();
   });
+}
+
+const DUES_FIELD_NAMES = [
+  'paid',
+  'duesPaid',
+  'duesStatus',
+  'duesInstructedAt',
+  'duesPaidAt',
+  'duesReceiptSentAt',
+  'duesPaidByUserId'
+];
+
+const APPLICATION_FIELD_NAMES = [
+  'applicationData',
+  'reviewNotes',
+  'appliedAt'
+];
+
+function removeEventsLeadRosterFields(target) {
+  if (!target || typeof target !== 'object') return;
+  DUES_FIELD_NAMES.forEach((field) => {
+    delete target[field];
+  });
+  APPLICATION_FIELD_NAMES.forEach((field) => {
+    delete target[field];
+  });
+}
+
+function concealEventsLeadRosterFields(roster) {
+  if (!roster) return roster;
+  const plainRoster = typeof roster.toObject === 'function' ? roster.toObject() : { ...roster };
+  if (!Array.isArray(plainRoster.members)) return plainRoster;
+
+  plainRoster.members = plainRoster.members.map((entry) => {
+    const plainEntry = typeof entry?.toObject === 'function' ? entry.toObject() : { ...entry };
+    removeEventsLeadRosterFields(plainEntry);
+    removeEventsLeadRosterFields(plainEntry.member);
+    removeEventsLeadRosterFields(plainEntry.memberDetails);
+    removeEventsLeadRosterFields(plainEntry.memberDetails?.userDetails);
+    removeEventsLeadRosterFields(plainEntry.user);
+    return plainEntry;
+  });
+
+  return plainRoster;
+}
+
+async function shouldConcealEventsLeadRosterFields(req, campId) {
+  const [hasFullManagement, hasEventsLeadAccess] = await Promise.all([
+    canManageCamp(req, campId),
+    isEventsLeadForCamp(req, campId)
+  ]);
+  return hasEventsLeadAccess && !hasFullManagement;
 }
 
 function resolveDuesVariables({ memberUser, camp, campDues, paymentDate }) {
@@ -463,9 +515,7 @@ router.get('/active', authenticateToken, async (req, res) => {
     if (req.query.campId) {
       campId = req.query.campId;
       
-      // Verify Camp Lead has access to this camp (use canManageCamp which includes Camp Leads!)
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, campId);
+      const hasAccess = await canViewCampRoster(req, campId);
       if (!hasAccess) {
         return res.status(403).json({ message: 'Access denied to this camp' });
       }
@@ -547,7 +597,11 @@ router.get('/active', authenticateToken, async (req, res) => {
       roster.sorInviteRemindersEnabled = process.env.SOR_ROSTER_REMINDERS_ENABLED === 'true';
     }
 
-    res.json(roster);
+    const responseRoster = await shouldConcealEventsLeadRosterFields(req, campId)
+      ? concealEventsLeadRosterFields(roster)
+      : roster;
+
+    res.json(responseRoster);
   } catch (error) {
     console.error('Get active roster error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -1730,9 +1784,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
+    const hasPermission = await canViewCampRoster(req, camp._id);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
     }
 
     // Populate member details
@@ -1779,7 +1833,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
       members: populatedMembers
     };
 
-    res.json(rosterWithMembers);
+    const responseRoster = await shouldConcealEventsLeadRosterFields(req, camp._id)
+      ? concealEventsLeadRosterFields(rosterWithMembers)
+      : rosterWithMembers;
+
+    res.json(responseRoster);
   } catch (error) {
     console.error('Get roster error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -2723,7 +2781,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
     console.log('✅ [GET /api/rosters/camp/:campId] Camp found:', camp._id);
 
     // Check if user is camp manager (owner/admin/lead) or member
-    const isCampOwner = await canManageCamp(req, camp._id);
+    const isCampOwner = await canViewCampRoster(req, camp._id);
     const isCampMember = await db.findMember({ camp: camp._id, user: req.user._id, status: 'active' });
     
     console.log('🔐 [GET /api/rosters/camp/:campId] Access check:', { isCampOwner, isCampMember: !!isCampMember });
@@ -2826,8 +2884,12 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
 
     console.log('✅ [GET /api/rosters/camp/:campId] Returning', membersWithDetails.length, 'members');
 
+    const responseMembers = await shouldConcealEventsLeadRosterFields(req, camp._id)
+      ? concealEventsLeadRosterFields({ members: membersWithDetails }).members
+      : membersWithDetails;
+
     res.json({
-      members: membersWithDetails
+      members: responseMembers
     });
   } catch (error) {
     console.error('❌ [GET /api/rosters/camp/:campId] Fatal error:', error);
@@ -3250,6 +3312,176 @@ router.post('/member/:memberId/revoke-camp-lead', authenticateToken, async (req,
   }
 });
 
+// @route   POST /api/rosters/member/:memberId/grant-events-lead
+// @desc    Grant Events Lead role to a roster member
+// @access  Private (Camp owners and Camp Leads)
+router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    console.log('📅 [GRANT EVENTS LEAD] Starting role assignment for memberId:', memberId);
+    const campId = req.body?.campId || req.query?.campId || req.user?.campLeadCampId || await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    const hasPermission = await canManageCamp(req, campId);
+    if (!hasPermission) {
+      console.log('❌ [GRANT EVENTS LEAD] Permission denied - cannot manage this camp');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (!activeRoster || !activeRoster.members) {
+      return res.status(404).json({ message: 'No active roster found for this camp' });
+    }
+
+    const memberIndex = getMemberEntryIndex(activeRoster, memberId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in roster' });
+    }
+
+    const memberEntry = activeRoster.members[memberIndex];
+    if (memberEntry.status !== 'approved') {
+      return res.status(400).json({
+        message: 'Events Lead role can only be assigned to approved roster members',
+        currentStatus: memberEntry.status
+      });
+    }
+
+    if (memberEntry.isEventsLead === true) {
+      return res.status(400).json({ message: 'Member is already an Events Lead' });
+    }
+
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      return res.status(404).json({ message: 'Member record not found' });
+    }
+
+    const user = await db.findUser({ _id: member.user });
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found' });
+    }
+
+    activeRoster.members[memberIndex].isEventsLead = true;
+    activeRoster.markModified('members');
+    activeRoster.updatedAt = new Date();
+    await activeRoster.save();
+
+    await recordActivity('MEMBER', user._id, req.user._id, 'EVENTS_LEAD_GRANTED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+    await recordActivity('CAMP', campId, req.user._id, 'EVENTS_LEAD_GRANTED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+
+    try {
+      const { sendEventsLeadGrantedEmail } = require('../services/emailService');
+      const camp = await db.findCamp({ _id: campId });
+      await sendEventsLeadGrantedEmail(user, camp);
+      console.log('✅ [GRANT EVENTS LEAD] Notification email sent');
+    } catch (emailError) {
+      console.error('⚠️ [GRANT EVENTS LEAD] Failed to send notification email:', emailError);
+    }
+
+    res.json({
+      message: 'Events Lead role granted successfully',
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      isEventsLead: true
+    });
+  } catch (error) {
+    console.error('❌ [GRANT EVENTS LEAD] Critical error:', error);
+    res.status(500).json({
+      message: 'Server error granting Events Lead role',
+      error: error.message
+    });
+  }
+});
+
+// @route   POST /api/rosters/member/:memberId/revoke-events-lead
+// @desc    Revoke Events Lead role from a roster member
+// @access  Private (Camp owners and Camp Leads)
+router.post('/member/:memberId/revoke-events-lead', authenticateToken, async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    console.log('🚫 [REVOKE EVENTS LEAD] Starting role revocation for memberId:', memberId);
+    const campId = req.body?.campId || req.query?.campId || req.user?.campLeadCampId || await getUserCampId(req);
+    if (!campId) {
+      return res.status(404).json({ message: 'Camp not found' });
+    }
+
+    const hasPermission = await canManageCamp(req, campId);
+    if (!hasPermission) {
+      console.log('❌ [REVOKE EVENTS LEAD] Permission denied - cannot manage this camp');
+      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    }
+
+    const activeRoster = await db.findActiveRoster({ camp: campId });
+    if (!activeRoster || !activeRoster.members) {
+      return res.status(404).json({ message: 'No active roster found for this camp' });
+    }
+
+    const memberIndex = getMemberEntryIndex(activeRoster, memberId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found in roster' });
+    }
+
+    const memberEntry = activeRoster.members[memberIndex];
+    if (memberEntry.isEventsLead !== true) {
+      return res.status(400).json({ message: 'Member is not currently an Events Lead' });
+    }
+
+    const member = await db.findMember({ _id: memberId });
+    if (!member) {
+      return res.status(404).json({ message: 'Member record not found' });
+    }
+
+    const user = await db.findUser({ _id: member.user });
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found' });
+    }
+
+    activeRoster.members[memberIndex].isEventsLead = false;
+    activeRoster.markModified('members');
+    activeRoster.updatedAt = new Date();
+    await activeRoster.save();
+
+    await recordActivity('MEMBER', user._id, req.user._id, 'EVENTS_LEAD_REVOKED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+    await recordActivity('CAMP', campId, req.user._id, 'EVENTS_LEAD_REVOKED', {
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      memberEmail: user.email,
+      campId
+    });
+
+    // No revocation email by design.
+
+    res.json({
+      message: 'Events Lead role revoked successfully',
+      memberId,
+      memberName: `${user.firstName} ${user.lastName}`,
+      isEventsLead: false
+    });
+  } catch (error) {
+    console.error('❌ [REVOKE EVENTS LEAD] Critical error:', error);
+    res.status(500).json({
+      message: 'Server error revoking Events Lead role',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/rosters/custom-fields
 // @desc    Get camp roster custom field schema
 // @access  Private (Camp admins/leads)
@@ -3257,8 +3489,8 @@ router.get('/custom-fields', authenticateToken, async (req, res) => {
   try {
     const campId = req.query.campId || await getUserCampId(req);
     if (!campId) return res.status(400).json({ message: 'campId is required' });
-    const hasAccess = await canManageCamp(req, campId);
-    if (!hasAccess) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    const hasAccess = await canViewCampRoster(req, campId);
+    if (!hasAccess) return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     const camp = await db.findCamp({ _id: campId });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
     res.json({ customFields: camp.rosterCustomFields || [] });

@@ -5,7 +5,7 @@ const { authenticateToken, requireCampLead, optionalAuth } = require('../middlew
 const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { findCampByIdentifier } = require('../utils/campIdentifier');
-const { getUserCampId, canAccessCamp, canManageCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canManageCamp, canViewCampRoster } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { applyRosterRemovalStatusUpdates, resolveMemberUserId } = require('../services/rosterMemberRemoval');
 const { createNotification } = require('../services/notificationService');
@@ -646,7 +646,7 @@ router.get('/public/:slug', optionalAuth, async (req, res) => {
     let isCampLeadForThisCamp = false;
     if (req.user && !isCampAdmin && !isSystemAdmin) {
       try {
-        isCampLeadForThisCamp = await canManageCamp(req, camp._id);
+        isCampLeadForThisCamp = await canViewCampRoster(req, camp._id);
       } catch (err) {
         console.warn('⚠️ [GET /api/camps/public/:slug] canManageCamp threw, treating as non-admin:', err?.message);
         isCampLeadForThisCamp = false;
@@ -955,7 +955,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       if (!req.user) {
         return res.status(403).json({ message: 'Camp not accessible' });
       }
-      const hasManagementAccess = await canManageCamp(req, camp._id);
+      const hasManagementAccess = await canViewCampRoster(req, camp._id);
       const isLegacyOwnerByEmail = camp.contactEmail && camp.contactEmail === req.user.email;
       if (!hasManagementAccess && !isLegacyOwnerByEmail) {
         return res.status(403).json({ message: 'Camp not accessible' });

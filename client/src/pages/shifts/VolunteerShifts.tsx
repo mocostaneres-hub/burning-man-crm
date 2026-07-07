@@ -107,6 +107,13 @@ const VolunteerShifts: React.FC = () => {
           console.error('❌ [VolunteerShifts] Camp Lead trying to access wrong camp. Redirecting...');
           navigate('/dashboard', { replace: true });
         }
+      } else if (user.isEventsLead && user.eventsLeadCampId) {
+        const identifierMatches = campIdentifier === user.eventsLeadCampId ||
+                                  campIdentifier === user.eventsLeadCampSlug;
+        if (!identifierMatches) {
+          console.error('❌ [VolunteerShifts] Events Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+        }
       }
     }
   }, [campIdentifier, user, navigate]);
@@ -180,11 +187,13 @@ const VolunteerShifts: React.FC = () => {
   // Check if user has admin/lead access (including Camp Leads)
   const isCampContext = user?.accountType === 'camp' 
     || (user?.accountType === 'admin' && user?.campId)
-    || (user?.isCampLead === true && user?.campLeadCampId);
+    || (user?.isCampLead === true && user?.campLeadCampId)
+    || (user?.isEventsLead === true && user?.eventsLeadCampId);
   
   const isAdminOrLead = user?.accountType === 'admin' 
     || user?.accountType === 'camp'
-    || (user?.isCampLead === true);
+    || (user?.isCampLead === true)
+    || (user?.isEventsLead === true);
   
   const canAccessShifts = isCampContext && isAdminOrLead;
 
@@ -443,6 +452,8 @@ const VolunteerShifts: React.FC = () => {
         campId = camp?._id;
       } else if (user?.isCampLead && user?.campLeadCampId) {
         campId = user.campLeadCampId;
+      } else if (user?.isEventsLead && user?.eventsLeadCampId) {
+        campId = user.eventsLeadCampId;
       }
 
       if (!campId) {
@@ -496,7 +507,7 @@ const VolunteerShifts: React.FC = () => {
         hasFullMembershipRoster: false
       });
     }
-  }, [normalizeRosterMember, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
+  }, [normalizeRosterMember, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -504,6 +515,8 @@ const VolunteerShifts: React.FC = () => {
       let url = '/shifts/events';
       if (user?.isCampLead && user?.campLeadCampId) {
         url += `?campId=${user.campLeadCampId}`;
+      } else if (user?.isEventsLead && user?.eventsLeadCampId) {
+        url += `?campId=${user.eventsLeadCampId}`;
       }
       
       const response = await api.get(url);
@@ -516,7 +529,7 @@ const VolunteerShifts: React.FC = () => {
       console.error('Error loading events:', error);
       setEvents([]);
     }
-  }, [user?.isCampLead, user?.campLeadCampId]);
+  }, [user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
 
   useEffect(() => {
     if (canAccessShifts) {
@@ -582,6 +595,9 @@ const VolunteerShifts: React.FC = () => {
       } else if (user?.isCampLead && user?.campLeadCampId) {
         console.log('🔍 [Event Creation] Detected Camp Lead account, using campLeadCampId...');
         campId = user.campLeadCampId;
+      } else if (user?.isEventsLead && user?.eventsLeadCampId) {
+        console.log('🔍 [Event Creation] Detected Events Lead account, using eventsLeadCampId...');
+        campId = user.eventsLeadCampId;
       }
 
       console.log('🔍 [Event Creation] Final campId:', campId);
@@ -1086,6 +1102,8 @@ const VolunteerShifts: React.FC = () => {
         campId = camp?._id;
       } else if (user?.isCampLead && user?.campLeadCampId) {
         campId = user.campLeadCampId;
+      } else if (user?.isEventsLead && user?.eventsLeadCampId) {
+        campId = user.eventsLeadCampId;
       }
 
       const response = await api.inviteEntireRosterToAllShifts(campId, {
@@ -1110,6 +1128,8 @@ const VolunteerShifts: React.FC = () => {
         campId = camp?._id;
       } else if (user?.isCampLead && user?.campLeadCampId) {
         campId = user.campLeadCampId;
+      } else if (user?.isEventsLead && user?.eventsLeadCampId) {
+        campId = user.eventsLeadCampId;
       }
       const response = await api.inviteEntireRosterToAllShifts(campId, {
         previewOnly: true,
@@ -1119,7 +1139,7 @@ const VolunteerShifts: React.FC = () => {
     } catch (_error) {
       setInvitePreview(null);
     }
-  }, [skipRecentDays, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId]);
+  }, [skipRecentDays, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
 
   useEffect(() => {
     if (showBulkInviteModal) {

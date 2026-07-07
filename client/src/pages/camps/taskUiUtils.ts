@@ -22,7 +22,8 @@ export const canShowTaskAssignmentOptions = (user: any): boolean => {
   return Boolean(
     user.accountType === 'camp' ||
       (user.accountType === 'admin' && user.campId) ||
-      user.isCampLead
+      user.isCampLead ||
+      user.isEventsLead
   );
 };
 

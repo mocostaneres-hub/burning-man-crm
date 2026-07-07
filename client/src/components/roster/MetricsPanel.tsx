@@ -5,6 +5,7 @@ import { Member } from '../../types';
 
 interface MetricsPanelProps {
   members: Member[];
+  showDuesPaid?: boolean;
 }
 
 interface MetricCardProps {
@@ -53,7 +54,8 @@ const normalizePaymentStatus = (status?: string | null): PaymentStatus => {
 };
 
 const MetricsPanel: React.FC<MetricsPanelProps> = ({
-  members
+  members,
+  showDuesPaid = true
 }) => {
   // Define camp standard dates (you can move these to environment variables)
   const CAMP_STANDARD_OPEN_DATE = new Date('2025-08-25');
@@ -123,13 +125,15 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
           icon={<Users className="w-6 h-6 text-purple-600" />}
           colorClass="text-purple-600"
         />
-        <MetricCard
-          title="Dues Paid"
-          count={duesPaidCount}
-          icon={<CheckCircle className="w-6 h-6 text-green-600" />}
-          colorClass="text-green-600"
-          percentage={calculatePercentage(duesPaidCount)}
-        />
+        {showDuesPaid && (
+          <MetricCard
+            title="Dues Paid"
+            count={duesPaidCount}
+            icon={<CheckCircle className="w-6 h-6 text-green-600" />}
+            colorClass="text-green-600"
+            percentage={calculatePercentage(duesPaidCount)}
+          />
+        )}
         <MetricCard
           title="Meal Plan Paid"
           count={mealPlanPaidCount}

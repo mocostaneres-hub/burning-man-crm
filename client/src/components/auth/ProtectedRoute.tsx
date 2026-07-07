@@ -8,13 +8,15 @@ interface ProtectedRouteProps {
   requireAdmin?: boolean;
   requireCampAccount?: boolean;
   requirePersonalAccount?: boolean;
+  allowEventsLead?: boolean;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   requireAdmin = false, 
   requireCampAccount = false, 
-  requirePersonalAccount = false 
+  requirePersonalAccount = false,
+  allowEventsLead = false
 }) => {
   const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
@@ -55,9 +57,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // 1. Camp accounts (accountType === 'camp')
   // 2. Admin accounts with campId
   // 3. Camp Leads (personal accounts with isCampLead === true)
+  // 4. Events Leads on explicitly allowed routes
   const hasCampAccess = user?.accountType === 'camp' 
     || (user?.accountType === 'admin' && user?.campId)
-    || (user?.isCampLead === true && user?.campLeadCampId);
+    || (user?.isCampLead === true && user?.campLeadCampId)
+    || (allowEventsLead && user?.isEventsLead === true && user?.eventsLeadCampId);
 
   if (requireCampAccount && !hasCampAccess) {
     console.log('🔍 [ProtectedRoute] Camp account access denied');
@@ -70,11 +74,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           Access Denied
         </h1>
         <p className="text-body text-custom-text-secondary">
-          This page is only accessible to camp accounts and camp leads.
+          This page is only accessible to camp accounts, camp leads, and authorized events leads.
         </p>
         <p className="text-sm text-custom-text-secondary">
           Current account type: {user?.accountType || 'None'}
           {user?.isCampLead && ' (Camp Lead)'}
+          {user?.isEventsLead && ' (Events Lead)'}
         </p>
       </div>
     );

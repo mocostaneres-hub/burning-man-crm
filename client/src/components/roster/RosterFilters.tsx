@@ -11,6 +11,7 @@ interface RosterFiltersProps {
   availableSkills: string[];
   availableTags?: string[];
   customFieldOptions?: Array<{ key: string; label: string; values: string[] }>;
+  showDuesFilters?: boolean;
 }
 
 interface FilterButtonProps {
@@ -61,7 +62,8 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
   onFilterChange,
   availableSkills,
   availableTags = [],
-  customFieldOptions = []
+  customFieldOptions = [],
+  showDuesFilters = true
 }) => {
   const [foodFilterOpen, setFoodFilterOpen] = useState(false);
   const foodFilterRef = useRef<HTMLDivElement | null>(null);
@@ -172,31 +174,32 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       </div>
       
       <div className="flex flex-wrap gap-1 items-center">
-        {/* Dues Status Filters */}
-        <div className="flex gap-1 mr-2">
-          <span className="text-sm font-medium text-gray-600 self-center">Dues:</span>
-          <FilterButton
-            label="Paid"
-            filterType="dues-paid"
-            isActive={activeFilters.includes('dues-paid')}
-            onClick={() => toggleFilter('dues-paid')}
-            variant="success"
-          />
-          <FilterButton
-            label="Unpaid"
-            filterType="dues-unpaid"
-            isActive={activeFilters.includes('dues-unpaid')}
-            onClick={() => toggleFilter('dues-unpaid')}
-            variant="warning"
-          />
-          <FilterButton
-            label="Instructed"
-            filterType="dues-instructed"
-            isActive={activeFilters.includes('dues-instructed')}
-            onClick={() => toggleFilter('dues-instructed')}
-            variant="primary"
-          />
-        </div>
+        {showDuesFilters && (
+          <div className="flex gap-1 mr-2">
+            <span className="text-sm font-medium text-gray-600 self-center">Dues:</span>
+            <FilterButton
+              label="Paid"
+              filterType="dues-paid"
+              isActive={activeFilters.includes('dues-paid')}
+              onClick={() => toggleFilter('dues-paid')}
+              variant="success"
+            />
+            <FilterButton
+              label="Unpaid"
+              filterType="dues-unpaid"
+              isActive={activeFilters.includes('dues-unpaid')}
+              onClick={() => toggleFilter('dues-unpaid')}
+              variant="warning"
+            />
+            <FilterButton
+              label="Instructed"
+              filterType="dues-instructed"
+              isActive={activeFilters.includes('dues-instructed')}
+              onClick={() => toggleFilter('dues-instructed')}
+              variant="primary"
+            />
+          </div>
+        )}
 
         {/* Meal Plan Status Filters */}
         <div className="flex gap-1 mr-2">

@@ -97,6 +97,16 @@ const TaskManagement: React.FC = () => {
           return;
         }
       }
+      else if (user.isEventsLead === true && user.eventsLeadCampId) {
+        const identifierMatches = campIdentifier === user.eventsLeadCampId ||
+                                  campIdentifier === user.eventsLeadCampSlug;
+
+        if (!identifierMatches) {
+          console.error('❌ [TaskManagement] Events Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
     }
   }, [campIdentifier, user, navigate]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +156,12 @@ const TaskManagement: React.FC = () => {
         setCampId(user.campLeadCampId);
         return;
       }
+
+      if (user?.isEventsLead && user?.eventsLeadCampId) {
+        console.log('🔍 [TaskManagement] Setting campId for Events Lead:', user.eventsLeadCampId);
+        setCampId(user.eventsLeadCampId);
+        return;
+      }
       
       // For camp accounts and admins
       const campData = await api.getMyCamp();
@@ -176,7 +192,7 @@ const TaskManagement: React.FC = () => {
 
   useEffect(() => {
     // Camp accounts can have camp context without user.campId in some flows.
-    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
+    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead || user?.isEventsLead) {
       fetchCampData();
     } else if (isPersonalEditFlow && editCampId) {
       setCampId(editCampId);
@@ -1282,4 +1298,3 @@ const TaskManagement: React.FC = () => {
 };
 
 export default TaskManagement;
-

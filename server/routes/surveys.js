@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const {
-  canManageCamp,
-  canAccessCamp
+  canManageEventPlanning
 } = require('../utils/permissionHelpers');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
@@ -189,12 +188,12 @@ async function buildCompletionStats({ survey, memberIds, memberMap }) {
 }
 
 function isManagerCampAdmin(req, campId) {
-  return canAccessCamp(req, campId);
+  return canManageEventPlanning(req, campId);
 }
 
 async function canUserRespondToSurvey(req, survey) {
   const [manager, assignment] = await Promise.all([
-    canManageCamp(req, survey.campId),
+    canManageEventPlanning(req, survey.campId),
     SurveyAssignment.exists({ surveyId: survey._id, userId: req.user._id })
   ]);
   if (manager) return { allowed: true, manager: true, assigned: !!assignment };
@@ -406,7 +405,7 @@ async function writeResponseWithCoverage({
 }
 
 // @route   POST /api/surveys/import-suggestion
-// @desc    Build survey draft suggestion from a public form URL (Camp Admin only)
+// @desc    Build survey draft suggestion from a public form URL
 // @access  Private
 router.post('/import-suggestion', authenticateToken, async (req, res) => {
   try {
@@ -423,7 +422,7 @@ router.post('/import-suggestion', authenticateToken, async (req, res) => {
     const hasCampOwnerAccess = await isManagerCampAdmin(req, campId);
     if (!hasCampOwnerAccess) {
       return res.status(403).json({
-        message: 'Only Camp Admins can create survey suggestions from public form links'
+        message: 'Camp admin, Camp Lead, or Events Lead access required'
       });
     }
 
@@ -533,9 +532,9 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'campId and title are required' });
     }
 
-    const hasPermission = await canManageCamp(req, campId);
+    const hasPermission = await canManageEventPlanning(req, campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const camp = await db.findCamp({ _id: campId });
@@ -573,9 +572,9 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
   try {
     if (!ensureMongoFeature(res)) return;
     const { campId } = req.params;
-    const hasPermission = await canManageCamp(req, campId);
+    const hasPermission = await canManageEventPlanning(req, campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const [surveys, rosterData] = await Promise.all([
@@ -611,9 +610,9 @@ router.get('/camp/:campId/roster-groups', authenticateToken, async (req, res) =>
   try {
     if (!ensureMongoFeature(res)) return;
     const { campId } = req.params;
-    const hasPermission = await canManageCamp(req, campId);
+    const hasPermission = await canManageEventPlanning(req, campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     let targetSurveyId = req.query.surveyId ? String(req.query.surveyId) : null;
@@ -798,7 +797,7 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
 
     const [manager, assignmentExists, submitterMember] = await Promise.all([
-      canManageCamp(req, survey.campId),
+      canManageEventPlanning(req, survey.campId),
       SurveyAssignment.exists({ surveyId, userId: req.user._id }),
       resolveSubmitterMember(req, survey.campId)
     ]);
@@ -875,9 +874,9 @@ router.put('/:surveyId', authenticateToken, async (req, res) => {
     const survey = await Survey.findById(surveyId);
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
 
-    const hasPermission = await canManageCamp(req, survey.campId);
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const { title, description, questions } = req.body || {};
@@ -919,9 +918,9 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
     const survey = await Survey.findById(surveyId);
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
 
-    const hasPermission = await canManageCamp(req, survey.campId);
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     if (survey.status !== 'draft' || survey.isLocked) {
@@ -1033,9 +1032,9 @@ router.post('/:surveyId/close', authenticateToken, async (req, res) => {
     if (!ensureMongoFeature(res)) return;
     const survey = await Survey.findById(req.params.surveyId);
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
-    const hasPermission = await canManageCamp(req, survey.campId);
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
     if (survey.status === 'closed') {
       return res.status(400).json({ message: 'Survey is already closed' });
@@ -1065,9 +1064,9 @@ router.get('/:surveyId/responses', authenticateToken, async (req, res) => {
     if (!ensureMongoFeature(res)) return;
     const survey = await Survey.findById(req.params.surveyId).lean();
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
-    const hasPermission = await canManageCamp(req, survey.campId);
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const responses = await SurveyResponse.find({ surveyId: survey._id })
@@ -1284,9 +1283,9 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
     const { surveyId, responseId } = req.params;
     const survey = await Survey.findById(surveyId).lean();
     if (!survey) return res.status(404).json({ message: 'Survey not found' });
-    const hasPermission = await canManageCamp(req, survey.campId);
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
     if (!hasPermission) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const response = await SurveyResponse.findOne({ _id: responseId, surveyId });

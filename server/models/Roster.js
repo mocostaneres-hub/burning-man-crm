@@ -129,6 +129,13 @@ const rosterSchema = new mongoose.Schema({
       // Can only be assigned by Main Camp Admin (camp owner)
       // User must be on roster with status='approved' to be eligible
     },
+    isEventsLead: {
+      type: Boolean,
+      default: false,
+      // Events Lead is a delegated planning role for this specific camp.
+      // Grants write access to events, tasks, and surveys while keeping roster
+      // and camp profile access read-only.
+    },
     // Legacy boolean field kept for migration safety.
     paid: {
       type: Boolean

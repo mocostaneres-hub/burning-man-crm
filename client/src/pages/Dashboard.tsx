@@ -69,6 +69,12 @@ const Dashboard: React.FC = () => {
     (user?.isCampLead === true && !!user?.campLeadCampId);
   const currentCampId = user?.campId?.toString() || user?.campLeadCampId || user?._id?.toString() || '';
   const campBasePath = currentCampId ? `/camp/${currentCampId}` : '';
+  const eventsLeadCampBasePath = user?.eventsLeadCampId ? `/camp/${user.eventsLeadCampId}` : '';
+  const eventsLeadCampProfilePath = user?.eventsLeadCampSlug
+    ? `/camps/${user.eventsLeadCampSlug}`
+    : user?.eventsLeadCampId
+      ? `/camps/${user.eventsLeadCampId}`
+      : '';
 
   // Security check: Verify camp identifier matches authenticated user's camp
   useEffect(() => {
@@ -237,6 +243,46 @@ const Dashboard: React.FC = () => {
     }
 
     if (user?.accountType === 'personal') {
+      const eventsLeadTiles: DashboardTile[] = user?.isEventsLead && eventsLeadCampBasePath
+        ? [
+            {
+              title: 'Camp Profile',
+              description: user.eventsLeadCampName || 'View camp profile',
+              icon: <User size={24} />,
+              path: eventsLeadCampProfilePath || eventsLeadCampBasePath,
+              color: 'bg-blue-500'
+            },
+            {
+              title: 'Camp Roster',
+              description: 'Read-only roster access',
+              icon: <People size={24} />,
+              path: `${eventsLeadCampBasePath}/roster`,
+              color: 'bg-orange-500'
+            },
+            {
+              title: 'Camp Tasks',
+              description: 'Manage camp tasks',
+              icon: <ClipboardCheck size={24} />,
+              path: `${eventsLeadCampBasePath}/tasks`,
+              color: 'bg-green-500'
+            },
+            {
+              title: 'Camp Surveys',
+              description: 'Build and send surveys',
+              icon: <Assignment size={24} />,
+              path: `${eventsLeadCampBasePath}/surveys`,
+              color: 'bg-cyan-500'
+            },
+            {
+              title: 'Camp Events',
+              description: 'Events and volunteer shifts',
+              icon: <Calendar size={24} />,
+              path: `${eventsLeadCampBasePath}/events`,
+              color: 'bg-teal-500'
+            }
+          ]
+        : [];
+
       return [
         ...commonTiles,
         {
@@ -252,7 +298,8 @@ const Dashboard: React.FC = () => {
           icon: <Assignment size={24} />,
           path: '/applications/my',
           color: 'bg-purple-500'
-        }
+        },
+        ...eventsLeadTiles
       ];
     }
 
@@ -318,7 +365,7 @@ const Dashboard: React.FC = () => {
     }
 
     if (user?.accountType === 'personal') {
-      return [
+      const personalActions = [
         {
           title: 'Find Camps',
           icon: <SearchIcon size={24} />,
@@ -332,6 +379,31 @@ const Dashboard: React.FC = () => {
           description: 'Check application status'
         }
       ];
+
+      if (user?.isEventsLead && eventsLeadCampBasePath) {
+        personalActions.push(
+          {
+            title: 'Manage Events',
+            icon: <Calendar size={24} />,
+            onClick: () => navigate(`${eventsLeadCampBasePath}/events`),
+            description: 'Create and manage events'
+          },
+          {
+            title: 'Manage Surveys',
+            icon: <Assignment size={24} />,
+            onClick: () => navigate(`${eventsLeadCampBasePath}/surveys`),
+            description: 'Build and send surveys'
+          },
+          {
+            title: 'Manage Camp Tasks',
+            icon: <ClipboardCheck size={24} />,
+            onClick: () => navigate(`${eventsLeadCampBasePath}/tasks`),
+            description: 'Assign and close tasks'
+          }
+        );
+      }
+
+      return personalActions;
     }
 
     return commonActions;

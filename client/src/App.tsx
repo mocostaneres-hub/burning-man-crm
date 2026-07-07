@@ -144,7 +144,7 @@ const CampRouteRedirect: React.FC<{ route: string }> = ({ route }) => {
   const queryCampId = params.get('campId');
   
   // Get camp identifier and redirect to new URL format
-  const derivedCampId = user?.campId?.toString() || '';
+  const derivedCampId = user?.campId?.toString() || user?.campLeadCampId || user?.eventsLeadCampId || '';
   let newPath = derivedCampId ? `/camp/${derivedCampId}${route}` : '/dashboard';
 
   // Personal assignees may hit /camp/tasks with explicit campId context from task edit flow.
@@ -209,7 +209,7 @@ const AppShell: React.FC = () => {
               </ProtectedRoute>
             } />
             <Route path="/camp/rosters" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <CampRouteRedirect route="/roster" />
               </ProtectedRoute>
             } />
@@ -224,12 +224,12 @@ const AppShell: React.FC = () => {
               </ProtectedRoute>
             } />
             <Route path="/camp/shifts" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <CampRouteRedirect route="/events" />
               </ProtectedRoute>
             } />
             <Route path="/camp/surveys" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <CampRouteRedirect route="/surveys" />
               </ProtectedRoute>
             } />
@@ -241,7 +241,7 @@ const AppShell: React.FC = () => {
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/roster" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <MemberRoster />
               </ProtectedRoute>
             } />
@@ -256,22 +256,22 @@ const AppShell: React.FC = () => {
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/events" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <VolunteerShifts />
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/events/:eventId" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <VolunteerShifts />
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/surveys" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <CampSurveys />
               </ProtectedRoute>
             } />
             <Route path="/camp/:campIdentifier/shifts/:shiftId" element={
-              <ProtectedRoute requireCampAccount>
+              <ProtectedRoute requireCampAccount allowEventsLead>
                 <VolunteerShifts />
               </ProtectedRoute>
             } />

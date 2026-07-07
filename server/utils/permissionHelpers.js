@@ -10,7 +10,7 @@ const db = require('../database/databaseAdapter');
  * Get the camp ID for the authenticated user
  * For camp/admin accounts: Uses req.user.campId (immutable identifier)
  * Falls back to email lookup only if campId is not available in JWT
- * 
+ *
  * @param {Object} req - Express request object with req.user
  * @returns {Promise<string|null>} - Camp ID or null
  */
@@ -38,7 +38,7 @@ async function getUserCampId(req) {
 /**
  * Check if user has permission to access a specific camp
  * RULE: Camp accounts and admin accounts with campId have FULL power over their own camp
- * 
+ *
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed
  * @returns {Promise<boolean>} - true if user has access
@@ -105,7 +105,7 @@ async function requireCampOwnership(req, res, next) {
 /**
  * Check if a personal account user is an active member of a camp's roster
  * RULE: Personal accounts must be on the active roster to access camp resources
- * 
+ *
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed
  * @returns {Promise<boolean>} - true if user is an active roster member
@@ -177,7 +177,7 @@ async function isActiveRosterMember(req, targetCampId) {
 /**
  * Check if user is a Camp Lead for a specific camp
  * Camp Leads have delegated admin permissions scoped to a single camp
- * 
+ *
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed
  * @returns {Promise<boolean>} - true if user is a Camp Lead for this camp
@@ -298,9 +298,122 @@ async function isCampLeadForCamp(req, targetCampId) {
 }
 
 /**
+ * Check if user is an Events Lead for a specific camp.
+ * Events Leads have delegated write permissions for events, tasks, and surveys
+ * plus read-only access to camp profile and roster data.
+ *
+ * @param {Object} req - Express request object with req.user
+ * @param {string} targetCampId - The camp ID being accessed
+ * @returns {Promise<boolean>} - true if user is an Events Lead for this camp
+ */
+async function isEventsLeadForCamp(req, targetCampId) {
+  if (!req.user) {
+    return false;
+  }
+
+  if (req.user.isEventsLead === true && req.user.eventsLeadCampId) {
+    const authEventsLeadCampId = req.user.eventsLeadCampId.toString();
+    if (authEventsLeadCampId === targetCampId.toString()) {
+      console.log('✅ [Permission] Events Lead access granted via auth context');
+      return true;
+    }
+  }
+
+  try {
+    const currentUserId = req.user._id.toString();
+    console.log('🔍 [Permission] Checking Events Lead status for user:', currentUserId);
+
+    const Member = require('../models/Member');
+    const members = await Member.find({ user: currentUserId });
+
+    if (!members || members.length === 0) {
+      console.log('❌ [Permission] No member records found for user');
+      return false;
+    }
+
+    const memberIds = members.map(m => m._id);
+    const memberIdsSet = new Set(memberIds.map(id => id.toString()));
+
+    const Roster = require('../models/Roster');
+    const roster = await Roster.findOne({
+      camp: targetCampId,
+      isActive: true,
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          member: { $in: memberIds },
+          isEventsLead: true,
+          $or: [
+            { status: { $in: ['approved', 'active'] } },
+            { status: { $exists: false } }
+          ]
+        }
+      }
+    }).select('_id');
+
+    if (roster) {
+      console.log('✅ [Permission] Events Lead access granted via roster query');
+      return true;
+    }
+
+    const roleBasedEventsLead = members.some((memberRecord) => {
+      const sameCamp = memberRecord.camp?.toString() === targetCampId.toString();
+      const normalizedRole = String(memberRecord.role || '').toLowerCase();
+      const hasEventsLeadRole = normalizedRole === 'events-lead' || normalizedRole === 'events_lead';
+      const normalizedStatus = String(memberRecord.status || '').toLowerCase();
+      const isRemovedStatus = ['inactive', 'rejected', 'withdrawn', 'suspended'].includes(normalizedStatus);
+      return sameCamp && hasEventsLeadRole && !isRemovedStatus;
+    });
+
+    if (roleBasedEventsLead) {
+      console.log('✅ [Permission] Events Lead access granted via member role');
+      return true;
+    }
+
+    const activeRoster = await db.findActiveRoster({ camp: targetCampId });
+    if (!activeRoster || !activeRoster.members || activeRoster.members.length === 0) {
+      console.log('❌ [Permission] No active roster found for camp:', targetCampId);
+      return false;
+    }
+
+    const rosterEntry = activeRoster.members.find(entry => {
+      if (!entry.member) return false;
+      const memberId = typeof entry.member === 'object' && entry.member._id
+        ? entry.member._id.toString()
+        : entry.member.toString();
+      return memberIdsSet.has(memberId);
+    });
+
+    if (!rosterEntry) {
+      console.log('❌ [Permission] Member not found in roster');
+      return false;
+    }
+
+    const isEventsLead = rosterEntry.isEventsLead === true;
+    const rosterStatus = rosterEntry.status || 'approved';
+    const isApproved = rosterStatus === 'approved' || rosterStatus === 'active';
+    const hasAccess = isEventsLead && isApproved;
+
+    console.log(`${hasAccess ? '✅' : '❌'} [Permission] Events Lead check (fallback):`, {
+      userId: currentUserId,
+      memberIds: Array.from(memberIdsSet),
+      campId: targetCampId.toString(),
+      isEventsLead,
+      isApproved,
+      hasAccess
+    });
+
+    return hasAccess;
+  } catch (error) {
+    console.error('❌ [Permission] Error checking Events Lead status:', error);
+    return false;
+  }
+}
+
+/**
  * Check if user has admin-level access to a camp
  * Includes: Camp owners, system admins, AND Camp Leads
- * 
+ *
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed
  * @returns {Promise<boolean>} - true if user has admin-level access
@@ -328,6 +441,54 @@ async function canManageCamp(req, targetCampId) {
   }
 
   console.log('❌ [Permission] No camp management access');
+  return false;
+}
+
+/**
+ * Check if user can manage camp planning surfaces.
+ * Includes normal camp managers plus Events Leads.
+ *
+ * @param {Object} req - Express request object with req.user
+ * @param {string} targetCampId - The camp ID being accessed
+ * @returns {Promise<boolean>} - true if user can write events, tasks, and surveys
+ */
+async function canManageEventPlanning(req, targetCampId) {
+  const canManage = await canManageCamp(req, targetCampId);
+  if (canManage) {
+    return true;
+  }
+
+  const isEventsLead = await isEventsLeadForCamp(req, targetCampId);
+  if (isEventsLead) {
+    console.log('✅ [Permission] Events Lead planning access granted');
+    return true;
+  }
+
+  console.log('❌ [Permission] No event-planning access');
+  return false;
+}
+
+/**
+ * Check if user can view camp roster data through delegated camp access.
+ * This intentionally excludes ordinary roster members.
+ *
+ * @param {Object} req - Express request object with req.user
+ * @param {string} targetCampId - The camp ID being accessed
+ * @returns {Promise<boolean>} - true if user can view roster management pages
+ */
+async function canViewCampRoster(req, targetCampId) {
+  const canManage = await canManageCamp(req, targetCampId);
+  if (canManage) {
+    return true;
+  }
+
+  const isEventsLead = await isEventsLeadForCamp(req, targetCampId);
+  if (isEventsLead) {
+    console.log('✅ [Permission] Events Lead roster view access granted');
+    return true;
+  }
+
+  console.log('❌ [Permission] No delegated roster view access');
   return false;
 }
 
@@ -369,6 +530,8 @@ module.exports = {
   isActiveRosterMember,
   canAccessCampResources,
   isCampLeadForCamp,
-  canManageCamp
+  isEventsLeadForCamp,
+  canManageCamp,
+  canManageEventPlanning,
+  canViewCampRoster
 };
-

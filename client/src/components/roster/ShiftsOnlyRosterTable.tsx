@@ -37,6 +37,7 @@ export interface SorMemberRow {
   /** Normalised user object (real User doc if linked, else a fallback built from Member). */
   user: any;
   isCampLead?: boolean;
+  isEventsLead?: boolean;
   rosterStatus?: string;
   responseGroupExtraCount?: number;
   responseGroupOtherNames?: string[];
@@ -48,6 +49,9 @@ interface Props {
   members: SorMemberRow[];
   canEdit: boolean;
   canAssignCampLead: boolean;
+  canAssignEventsLead?: boolean;
+  canOpenContactDetails?: boolean;
+  canSendReminders?: boolean;
   onDelete: (member: SorMemberRow) => void;
   /** Called after any mutation (reminder, edit, camp-lead change) to let the parent refresh roster data. */
   onRefresh?: () => void;
@@ -107,7 +111,9 @@ interface EditModalProps {
   open: boolean;
   member: SorMemberRow | null;
   rosterId: string | null;
+  campId: string | null;
   canAssignCampLead: boolean;
+  canAssignEventsLead: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -116,13 +122,17 @@ const EditMemberModal: React.FC<EditModalProps> = ({
   open,
   member,
   rosterId,
+  campId,
   canAssignCampLead,
+  canAssignEventsLead,
   onClose,
   onSaved
 }) => {
   const [playaName, setPlayaName] = useState('');
   const [isCampLead, setIsCampLead] = useState(false);
   const [initialIsCampLead, setInitialIsCampLead] = useState(false);
+  const [isEventsLead, setIsEventsLead] = useState(false);
+  const [initialIsEventsLead, setInitialIsEventsLead] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,8 +141,11 @@ const EditMemberModal: React.FC<EditModalProps> = ({
     if (open && member) {
       setPlayaName(memberPlayaName(member));
       const startingLead = !!member.isCampLead;
+      const startingEventsLead = !!member.isEventsLead;
       setIsCampLead(startingLead);
       setInitialIsCampLead(startingLead);
+      setIsEventsLead(startingEventsLead);
+      setInitialIsEventsLead(startingEventsLead);
       setError(null);
     }
   }, [open, member]);
@@ -146,7 +159,8 @@ const EditMemberModal: React.FC<EditModalProps> = ({
   const initialPlayaName = memberPlayaName(member);
   const playaNameChanged = playaName.trim() !== initialPlayaName.trim();
   const campLeadChanged = isCampLead !== initialIsCampLead;
-  const hasChanges = playaNameChanged || campLeadChanged;
+  const eventsLeadChanged = isEventsLead !== initialIsEventsLead;
+  const hasChanges = playaNameChanged || campLeadChanged || eventsLeadChanged;
 
   const handleSave = async () => {
     if (!rosterId || !hasChanges) return;
@@ -163,6 +177,10 @@ const EditMemberModal: React.FC<EditModalProps> = ({
       if (campLeadChanged) {
         if (isCampLead) await apiService.grantCampLeadRole(memberId);
         else await apiService.revokeCampLeadRole(memberId);
+      }
+      if (eventsLeadChanged) {
+        if (isEventsLead) await apiService.grantEventsLeadRole(memberId, campId || undefined);
+        else await apiService.revokeEventsLeadRole(memberId, campId || undefined);
       }
       onSaved();
       onClose();
@@ -236,6 +254,28 @@ const EditMemberModal: React.FC<EditModalProps> = ({
               </div>
             )}
 
+            {canAssignEventsLead && (
+              <div className="border-t pt-4">
+                <label className="flex items-start cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isEventsLead}
+                    onChange={(e) => setIsEventsLead(e.target.checked)}
+                    disabled={saving || !isActive}
+                    className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                  />
+                  <div className="ml-3">
+                    <div className="text-sm font-medium text-gray-900">Events Lead role</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {isActive
+                        ? 'Grants planning access for events, shifts, tasks, and surveys while keeping dues, applications, and roster admin controls hidden.'
+                        : "This member hasn't created an account yet. Events Lead role becomes available after they follow their invite link and sign up."}
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
                 {error}
@@ -269,6 +309,9 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   members,
   canEdit,
   canAssignCampLead,
+  canAssignEventsLead = false,
+  canOpenContactDetails = true,
+  canSendReminders: canSendRemindersProp,
   onDelete,
   onRefresh,
   inviteRemindersEnabled = false
@@ -282,13 +325,14 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   // Local overlay of lastReminderAt updates so the cooldown UI reflects a just-sent
   // reminder immediately (server will return the same value on the next refresh).
   const [localReminderOverrides, setLocalReminderOverrides] = useState<Record<string, string>>({});
+  const canSendReminders = canSendRemindersProp ?? canEdit;
 
   const rows = useMemo(() => {
     return members.map((m, index) => {
       const status = deriveStatus(m);
       const overriddenReminderAt = localReminderOverrides[m._id] || memberLastReminderAt(m);
       const cooldownText = formatCooldownRemaining(overriddenReminderAt);
-      const canRemindInvited = status === 'invited' && inviteRemindersEnabled && !cooldownText;
+      const canRemindInvited = canSendReminders && status === 'invited' && inviteRemindersEnabled && !cooldownText;
       return {
         member: m,
         index,
@@ -304,10 +348,10 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
         canRemind: canRemindInvited
       };
     });
-  }, [members, localReminderOverrides, inviteRemindersEnabled]);
+  }, [members, localReminderOverrides, inviteRemindersEnabled, canSendReminders]);
 
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.member._id));
-  const anySelected = selectedIds.size > 0;
+  const anySelected = canSendReminders && selectedIds.size > 0;
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -385,7 +429,11 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
     return (
       <div className="text-center py-12 text-gray-500">
         <Mail className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-        <p>No members in this roster yet. Import a CSV or add members manually to get started.</p>
+        <p>
+          {canEdit
+            ? 'No members in this roster yet. Import a CSV or add members manually to get started.'
+            : 'No members in this roster yet.'}
+        </p>
       </div>
     );
   }
@@ -445,15 +493,17 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                  aria-label="Select all members"
-                />
-              </th>
+              {canSendReminders && (
+                <th className="px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    aria-label="Select all members"
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Playa Name</th>
@@ -476,18 +526,20 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
 
               return (
                 <tr key={memberId} className={isSelected ? 'bg-orange-50' : 'hover:bg-gray-50'}>
-                  <td className="px-4 py-4">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleSelect(memberId)}
-                      className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                      aria-label={`Select ${name}`}
-                    />
-                  </td>
+                  {canSendReminders && (
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(memberId)}
+                        className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                        aria-label={`Select ${name}`}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-4 text-sm text-gray-500 font-medium">{index + 1}</td>
                   <td className="px-4 py-4 text-sm text-gray-900">
-                    {campId ? (
+                    {campId && canOpenContactDetails ? (
                       <Link to={contact360Link} className="text-orange-600 hover:text-orange-700 font-medium">
                         {name}
                       </Link>
@@ -497,6 +549,11 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                     {member.isCampLead && (
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 uppercase tracking-wide">
                         Lead
+                      </span>
+                    )}
+                    {member.isEventsLead && (
+                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 uppercase tracking-wide">
+                        Events
                       </span>
                     )}
                     {responseGroupExtraCount > 0 && (
@@ -530,12 +587,16 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                   </td>
                   <td className="px-4 py-4 text-sm">
                     {shiftCount > 0 ? (
-                      <Link
-                        to={`${contact360Link}#volunteer-shifts`}
-                        className="text-orange-600 hover:text-orange-700 font-medium"
-                      >
-                        {shiftCount} signed up →
-                      </Link>
+                      canOpenContactDetails ? (
+                        <Link
+                          to={`${contact360Link}#volunteer-shifts`}
+                          className="text-orange-600 hover:text-orange-700 font-medium"
+                        >
+                          {shiftCount} signed up →
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-gray-700">{shiftCount} signed up</span>
+                      )
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}
@@ -563,25 +624,27 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                   </td>
                   <td className="px-4 py-4 text-sm whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2 flex-nowrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="inline-flex items-center gap-1 shrink-0"
-                        onClick={() => handleRemindOne(memberId)}
-                        disabled={!canRemind || isReminderLoading}
-                        title={
-                          cooldownText
-                            ? `Already reminded — next allowed in ${cooldownText}`
-                            : status === 'active'
-                              ? 'Reminders are not sent after a member has signed up'
-                              : !inviteRemindersEnabled
-                                ? 'SOR invite reminders are turned off (set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable).'
-                                : 'Send a friendly reminder of the original invite'
-                        }
-                      >
-                        <Bell className="w-3 h-3" />
-                        {isReminderLoading ? 'Sending…' : 'Remind'}
-                      </Button>
+                      {canSendReminders && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="inline-flex items-center gap-1 shrink-0"
+                          onClick={() => handleRemindOne(memberId)}
+                          disabled={!canRemind || isReminderLoading}
+                          title={
+                            cooldownText
+                              ? `Already reminded — next allowed in ${cooldownText}`
+                              : status === 'active'
+                                ? 'Reminders are not sent after a member has signed up'
+                                : !inviteRemindersEnabled
+                                  ? 'SOR invite reminders are turned off (set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable).'
+                                  : 'Send a friendly reminder of the original invite'
+                          }
+                        >
+                          <Bell className="w-3 h-3" />
+                          {isReminderLoading ? 'Sending…' : 'Remind'}
+                        </Button>
+                      )}
                       {canEdit && (
                         <>
                           <Button
@@ -619,7 +682,9 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
         open={!!editingMember}
         member={editingMember}
         rosterId={rosterId}
+        campId={campId}
         canAssignCampLead={canAssignCampLead}
+        canAssignEventsLead={canAssignEventsLead}
         onClose={() => setEditingMember(null)}
         onSaved={() => {
           onRefresh?.();

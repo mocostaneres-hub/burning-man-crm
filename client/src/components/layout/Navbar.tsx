@@ -124,7 +124,9 @@ const Navbar: React.FC = () => {
 
     const campIdForRosterLookup = user?.isCampLead && user?.campLeadCampId
       ? user.campLeadCampId.toString()
-      : (campIdFromCamp || (user?.campId ? user.campId.toString() : null));
+      : user?.isEventsLead && user?.eventsLeadCampId
+        ? user.eventsLeadCampId.toString()
+        : (campIdFromCamp || (user?.campId ? user.campId.toString() : null));
 
     if (!campIdForRosterLookup) return;
 
@@ -296,6 +298,21 @@ const Navbar: React.FC = () => {
       ];
       if (canDiscoverCamps) {
         items.splice(3, 0, { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> });
+      }
+      if (user?.isEventsLead && user?.eventsLeadCampId) {
+        const campIdentifier = user.eventsLeadCampId;
+        const campProfilePath = user.eventsLeadCampSlug
+          ? `/camps/${user.eventsLeadCampSlug}`
+          : `/camps/${campIdentifier}`;
+        items.splice(
+          canDiscoverCamps ? 4 : 3,
+          0,
+          { label: 'Camp Profile', path: campProfilePath, icon: <HomeIcon size={18} /> },
+          { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
+          { label: 'Camp Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
+          { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
+          { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> }
+        );
       }
       if (user?.isSystemAdmin) {
         items.push({ label: 'Admin', path: '/admin', icon: <AdminPanelSettings size={18} /> });

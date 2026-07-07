@@ -116,14 +116,14 @@ router.get('/events', authenticateToken, async (req, res) => {
     }
     // For Camp Leads: get campId from query parameter
     else if (req.query.campId) {
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, req.query.campId);
+      const { canManageEventPlanning } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageEventPlanning(req, req.query.campId);
       if (!hasAccess) {
-        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
       }
       campId = req.query.campId;
     } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     // Get events for this camp
@@ -298,14 +298,14 @@ router.post('/events', authenticateToken, async (req, res) => {
     // For Camp Leads: get campId from body or query parameter
     else if (req.body.campId || req.query.campId) {
       const targetCampId = req.body.campId || req.query.campId;
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, targetCampId);
+      const { canManageEventPlanning } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageEventPlanning(req, targetCampId);
       if (!hasAccess) {
-        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
       }
       campId = targetCampId;
     } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     // Validate shifts
@@ -427,14 +427,14 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
       }
     } else if (req.body.campId || req.query.campId) {
       const targetCampId = req.body.campId || req.query.campId;
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, targetCampId);
+      const { canManageEventPlanning } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageEventPlanning(req, targetCampId);
       if (!hasAccess) {
-        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
       }
       campId = targetCampId;
     } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     // Ensure roster exists
@@ -744,11 +744,11 @@ router.post('/events/:eventId/send-task', authenticateToken, async (req, res) =>
 
     // Verify access for camp admins/leads
     const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     if (!hasAccess) {
-      console.log('❌ [TASK ASSIGNMENT] Permission denied - not camp owner or Camp Lead');
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      console.log('❌ [TASK ASSIGNMENT] Permission denied - not camp owner, Camp Lead, or Events Lead');
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const campId = eventCampId;
@@ -1155,14 +1155,14 @@ router.get('/reports/per-person', authenticateToken, async (req, res) => {
     }
     // For Camp Leads: get campId from query parameter
     else if (req.query.campId) {
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, req.query.campId);
+      const { canManageEventPlanning } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageEventPlanning(req, req.query.campId);
       if (!hasAccess) {
-        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
       }
       campId = req.query.campId;
     } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     // Get all events for this camp
@@ -1243,14 +1243,14 @@ router.get('/reports/per-day', authenticateToken, async (req, res) => {
     }
     // For Camp Leads: get campId from query parameter
     else if (req.query.campId) {
-      const { canManageCamp } = require('../utils/permissionHelpers');
-      const hasAccess = await canManageCamp(req, req.query.campId);
+      const { canManageEventPlanning } = require('../utils/permissionHelpers');
+      const hasAccess = await canManageEventPlanning(req, req.query.campId);
       if (!hasAccess) {
-        return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
       }
       campId = req.query.campId;
     } else {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     // Get all events for this camp
@@ -1351,11 +1351,11 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
 
     // Verify user has access to this camp (includes Camp Leads)
     const eventCampId = (existingEvent.campId && existingEvent.campId._id ? existingEvent.campId._id : existingEvent.campId).toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Access denied - must be camp owner or Camp Lead' });
+      return res.status(403).json({ message: 'Access denied - must be camp owner, Camp Lead, or Events Lead' });
     }
 
     // Validate shifts
@@ -1533,17 +1533,17 @@ router.delete('/events/:eventId', authenticateToken, async (req, res) => {
     }
     console.log('✅ [EVENT DELETION] Event found:', { id: event._id, name: event.eventName, campId: event.campId });
 
-    // PERMISSION CHECK: Use canManageCamp helper (includes Camp Leads)
+    // PERMISSION CHECK: Use canManageEventPlanning helper (includes Camp Leads)
     const eventCampId = event.campId?.toString() || event.campId;
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     
     if (!hasAccess) {
       console.log('❌ [EVENT DELETION] Permission denied');
       console.log('📝 [EVENT DELETION] User accountType:', req.user.accountType);
       console.log('📝 [EVENT DELETION] User campId:', req.user.campId);
       console.log('📝 [EVENT DELETION] User isCampLead:', req.user.isCampLead);
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required to delete events' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required to delete events' });
     }
 
     console.log('✅ [EVENT DELETION] Permission check passed');
@@ -1648,11 +1648,11 @@ router.delete('/events/:eventId/tasks', authenticateToken, async (req, res) => {
 
     // Verify access for camp admins/leads
     const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     if (!hasAccess) {
-      console.log('❌ [TASK DELETION] Access denied - not camp owner or Camp Lead');
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      console.log('❌ [TASK DELETION] Access denied - not camp owner, Camp Lead, or Events Lead');
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const campId = eventCampId;
@@ -1736,11 +1736,11 @@ router.put('/events/:eventId/task-assignments', authenticateToken, async (req, r
 
     // Verify access for camp admins/leads
     const eventCampIdStr = (event.campId && event.campId._id ? event.campId._id : event.campId).toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampIdStr);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampIdStr);
     if (!hasAccess) {
-      console.log('❌ [TASK SYNC] Access denied - not camp owner or Camp Lead');
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      console.log('❌ [TASK SYNC] Access denied - not camp owner, Camp Lead, or Events Lead');
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const campId = eventCampIdStr;
@@ -1957,10 +1957,10 @@ router.get('/shifts/:shiftId/assignees', authenticateToken, async (req, res) => 
     }
 
     const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const assignmentState = await getShiftAssignmentState({ shiftId: shift._id, campId: eventCampId });
@@ -2011,10 +2011,10 @@ router.post('/shifts/:shiftId/assignees/add', authenticateToken, async (req, res
     }
 
     const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
-    const { canManageCamp } = require('../utils/permissionHelpers');
-    const hasAccess = await canManageCamp(req, eventCampId);
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
     if (!hasAccess) {
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
     const assignmentState = await getShiftAssignmentState({ shiftId: shift._id, campId: eventCampId });

@@ -25,6 +25,7 @@ import { renderRichTextToHtml } from '../../utils/richText';
 interface RosterMember extends Member {
   member?: Member; // Nested member structure from API
   isCampLead?: boolean; // Camp Lead role
+  isEventsLead?: boolean; // Events Lead role
   rosterStatus?: string; // Roster-specific status (active, pending, approved, etc.)
   responseGroupExtraCount?: number;
   responseGroupOtherNames?: string[];
@@ -35,8 +36,10 @@ interface RosterMember extends Member {
 // 'full_membership']`, so 'mixed' is not a persistable state. We keep 'none'
 // for the UI-only case where a camp has no active roster yet.
 type RosterMode = 'none' | 'shifts_only' | 'full_membership';
+type DelegatedCampRole = 'campLead' | 'eventsLead';
 const SOR_IMPLEMENTATION_CUTOFF_ISO = '2026-04-01T00:00:00.000Z';
 const SOR_IMPLEMENTATION_CUTOFF_MS = Date.parse(SOR_IMPLEMENTATION_CUTOFF_ISO);
+const DUES_FILTER_TYPES = new Set<FilterType>(['dues-paid', 'dues-unpaid', 'dues-instructed']);
 const getObjectIdTimestampMs = (value?: string | null): number | null => {
   if (!value || typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -318,6 +321,17 @@ const MemberRoster: React.FC = () => {
           return;
         }
       }
+      // Events Leads - check eventsLeadCampId match
+      else if (user.isEventsLead === true && user.eventsLeadCampId) {
+        const identifierMatches = campIdentifier === user.eventsLeadCampId ||
+                                  campIdentifier === user.eventsLeadCampSlug;
+
+        if (!identifierMatches) {
+          console.error('❌ [MemberRoster] Events Lead trying to access wrong camp. Redirecting...');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      }
     }
   }, [campIdentifier, user, navigate]);
   const [members, setMembers] = useState<RosterMember[]>([]);
@@ -389,7 +403,8 @@ const MemberRoster: React.FC = () => {
     isOpen: boolean;
     member: RosterMember | null;
     action: 'grant' | 'revoke';
-  }>({ isOpen: false, member: null, action: 'grant' });
+    role: DelegatedCampRole;
+  }>({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
   const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
@@ -415,16 +430,27 @@ const MemberRoster: React.FC = () => {
   // 1. Camp accounts (accountType === 'camp')
   // 2. Admin accounts with campId
   // 3. Camp Leads (personal accounts with isCampLead === true)
+  // 4. Events Leads (read-only roster access)
   const isCampContext = user?.accountType === 'camp' 
     || (user?.accountType === 'admin' && user?.campId)
-    || (user?.isCampLead === true && user?.campLeadCampId);
+    || (user?.isCampLead === true && user?.campLeadCampId)
+    || (user?.isEventsLead === true && user?.eventsLeadCampId);
   
-  const isAdminOrLead = user?.accountType === 'admin' 
+  const isFullRosterManager = user?.accountType === 'admin'
     || user?.accountType === 'camp'
     || (user?.isCampLead === true);
+  const isEventsLeadForRoster = Boolean(
+    user?.isEventsLead === true &&
+      user?.eventsLeadCampId &&
+      (!campId || user.eventsLeadCampId === campId)
+  );
   
-  const canAccessRoster = isCampContext && isAdminOrLead;
-  const canEdit = canAccessRoster;
+  const canAccessRoster = Boolean(isCampContext && (isFullRosterManager || isEventsLeadForRoster));
+  const canEdit = Boolean(canAccessRoster && isFullRosterManager);
+  const canViewDuesData = canEdit;
+  const canViewApplicationData = canEdit;
+  const canUseContactDetails = canEdit;
+  const canAssignDelegatedRoles = canEdit && canAssignCampLeadRole(authUser, campId || undefined);
   const inferredCampCreatedAtMs = campCreatedAtMs ?? getObjectIdTimestampMs(campId);
   const isLegacyPreSorCamp = inferredCampCreatedAtMs !== null && inferredCampCreatedAtMs < SOR_IMPLEMENTATION_CUTOFF_MS;
   const activeRosterType: RosterMode = !hasActiveRoster
@@ -449,7 +475,7 @@ const MemberRoster: React.FC = () => {
     activeRosterType === 'full_membership'
     || rosterModeState.mode === 'full_membership'
   )) || isLikelyFullMembershipByCampSetting;
-  const canManageFullMembershipInvites = campAcceptingApplications || authUser?.isCampLead === true;
+  const canManageFullMembershipInvites = canEdit && (campAcceptingApplications || authUser?.isCampLead === true);
   const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
   const canViewShiftsOnlyMetrics = canAccessRoster && hasShiftsOnlyRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
@@ -778,6 +804,26 @@ const MemberRoster: React.FC = () => {
         }
         return;
       }
+
+      if (user?.isEventsLead && user?.eventsLeadCampId) {
+        console.log('🔍 [MemberRoster] Setting campId for Events Lead:', user.eventsLeadCampId);
+        setCampId(user.eventsLeadCampId);
+        try {
+          const campResponse = await api.get(`/camps/${user.eventsLeadCampId}`);
+          const camp = campResponse?.camp || campResponse;
+          setCampAcceptingApplications(false);
+          setCampPubliclyVisible(Boolean(camp?.isPubliclyVisible ?? camp?.isPublic));
+          setCampPublicIdentifier(getCampPublicIdentifier(camp) || user.eventsLeadCampSlug || user.eventsLeadCampId);
+          const createdAtMs = Date.parse(String(camp?.createdAt || ''));
+          setCampCreatedAtMs(Number.isNaN(createdAtMs) ? null : createdAtMs);
+        } catch (_campError) {
+          setCampAcceptingApplications(false);
+          setCampPubliclyVisible(false);
+          setCampPublicIdentifier(user.eventsLeadCampSlug || user.eventsLeadCampId);
+          setCampCreatedAtMs(null);
+        }
+        return;
+      }
       
       // For camp accounts and admins
       const campData = await api.getMyCamp();
@@ -918,6 +964,7 @@ const MemberRoster: React.FC = () => {
             mealPlanPaidAt: memberEntry.mealPlanPaidAt || null,
             mealPlanReceiptSentAt: memberEntry.mealPlanReceiptSentAt || null,
             isCampLead: memberEntry.isCampLead || false, // Camp Lead role
+            isEventsLead: memberEntry.isEventsLead || false, // Events Lead role
             addedAt: memberEntry.addedAt,
             addedBy: memberEntry.addedBy,
             rosterStatus: memberEntry.status || 'active',
@@ -984,10 +1031,11 @@ const MemberRoster: React.FC = () => {
     // 1. Camp accounts (accountType === 'camp')
     // 2. Admins with campId
     // 3. Camp Leads (isCampLead === true)
-    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead) {
+    // 4. Events Leads (isEventsLead === true)
+    if (user?.accountType === 'camp' || user?.campId || user?.isCampLead || user?.isEventsLead) {
       fetchCampData();
     }
-  }, [user?.accountType, user?.campId, user?.isCampLead]);
+  }, [user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
 
   useEffect(() => {
     if (campId) {
@@ -1034,8 +1082,17 @@ const MemberRoster: React.FC = () => {
 
 
   const handleFilterChange = (filters: FilterType[]) => {
-    setActiveFilters(filters);
+    setActiveFilters(
+      canViewDuesData
+        ? filters
+        : filters.filter((filter) => !DUES_FILTER_TYPES.has(filter))
+    );
   };
+
+  useEffect(() => {
+    if (canViewDuesData) return;
+    setActiveFilters((filters) => filters.filter((filter) => !DUES_FILTER_TYPES.has(filter)));
+  }, [canViewDuesData]);
 
 
   const handleViewMember = (member: Member) => {
@@ -1240,7 +1297,7 @@ const MemberRoster: React.FC = () => {
   }, [fetchMembers, pendingRosterBootstrapType]);
 
   const handleDuesClick = (member: any) => {
-    if (!canEdit) return; // Only allow admins/leads to toggle dues
+    if (!canEdit || !canViewDuesData) return; // Only full roster managers can see or change dues
 
     console.log('[DuesActionsModal] dues icon click:', {
       memberId: member?._id,
@@ -1390,33 +1447,55 @@ const MemberRoster: React.FC = () => {
     }
   };
 
-  // Camp Lead role management handlers
-  const handleCampLeadToggle = (member: RosterMember, currentStatus: boolean) => {
+  // Delegated camp role management handlers
+  const handleCampLeadToggle = (
+    member: RosterMember,
+    currentStatus: boolean,
+    role: DelegatedCampRole = 'campLead'
+  ) => {
     setCampLeadConfirmModal({
       isOpen: true,
       member,
-      action: currentStatus ? 'revoke' : 'grant'
+      action: currentStatus ? 'revoke' : 'grant',
+      role
     });
   };
 
+  const handleEventsLeadToggle = (member: RosterMember, currentStatus: boolean) => {
+    handleCampLeadToggle(member, currentStatus, 'eventsLead');
+  };
+
   const handleConfirmCampLeadChange = async () => {
-    const { member, action } = campLeadConfirmModal;
-    if (!member) return;
+    const { member, action, role } = campLeadConfirmModal;
+    if (!member || !canAssignDelegatedRoles) return;
 
     try {
       setCampLeadLoading(member._id.toString());
 
-      if (action === 'grant') {
-        await api.grantCampLeadRole(member._id.toString());
+      if (role === 'eventsLead') {
+        if (action === 'grant') {
+          await api.grantEventsLeadRole(member._id.toString(), campId || undefined);
+        } else {
+          await api.revokeEventsLeadRole(member._id.toString(), campId || undefined);
+        }
       } else {
-        await api.revokeCampLeadRole(member._id.toString());
+        if (action === 'grant') {
+          await api.grantCampLeadRole(member._id.toString());
+        } else {
+          await api.revokeCampLeadRole(member._id.toString());
+        }
       }
 
       // Update local state immediately
       setMembers(prevMembers =>
         prevMembers.map(m =>
           m._id === member._id
-            ? { ...m, isCampLead: action === 'grant' }
+            ? {
+                ...m,
+                ...(role === 'eventsLead'
+                  ? { isEventsLead: action === 'grant' }
+                  : { isCampLead: action === 'grant' })
+              }
             : m
         )
       );
@@ -1426,13 +1505,15 @@ const MemberRoster: React.FC = () => {
       const user = typeof memberData.user === 'object' ? memberData.user : null;
       const memberName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Member';
 
-      alert(`${action === 'grant' ? 'Granted' : 'Revoked'} Camp Lead role ${action === 'grant' ? 'to' : 'from'} ${memberName}`);
+      const roleName = role === 'eventsLead' ? 'Events Lead' : 'Camp Lead';
+      alert(`${action === 'grant' ? 'Granted' : 'Revoked'} ${roleName} role ${action === 'grant' ? 'to' : 'from'} ${memberName}`);
 
       // Close modal
-      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant' });
+      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
     } catch (error: any) {
-      console.error('❌ Error updating Camp Lead role:', error);
-      alert(error.response?.data?.message || `Failed to ${action} Camp Lead role`);
+      const roleName = role === 'eventsLead' ? 'Events Lead' : 'Camp Lead';
+      console.error(`❌ Error updating ${roleName} role:`, error);
+      alert(error.response?.data?.message || `Failed to ${action} ${roleName} role`);
     } finally {
       setCampLeadLoading(null);
     }
@@ -1440,12 +1521,13 @@ const MemberRoster: React.FC = () => {
 
   const handleCloseCampLeadModal = () => {
     if (!campLeadLoading) {
-      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant' });
+      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
     }
   };
 
   // Roster rename handlers
   const handleOpenRenameModal = () => {
+    if (!canEdit) return;
     setNewRosterName(rosterName);
     setRenameModalOpen(true);
   };
@@ -1456,6 +1538,7 @@ const MemberRoster: React.FC = () => {
   };
 
   const handleSaveRosterName = async () => {
+    if (!canEdit) return;
     if (!rosterId || !newRosterName.trim()) {
       alert('Please enter a valid roster name');
       return;
@@ -1476,6 +1559,7 @@ const MemberRoster: React.FC = () => {
   };
 
   const handleExportRoster = async () => {
+    if (!canEdit) return;
     if (!rosterId) {
       alert('No roster available to export');
       return;
@@ -1511,6 +1595,7 @@ const MemberRoster: React.FC = () => {
   };
 
   const handleCopyCampInvitationUrl = async () => {
+    if (!canEdit) return;
     if (!campInvitationUrl) {
       alert('Camp application URL is not available yet. Please try again after the camp profile finishes loading.');
       return;
@@ -1537,6 +1622,7 @@ const MemberRoster: React.FC = () => {
   // handler is gated on `isFullMembershipRoster`, but we re-check here as
   // a defense-in-depth guard.
   const handleCopyPaidMembersEmails = async () => {
+    if (!canViewDuesData) return;
     if (!isFullMembershipRoster) {
       alert('Copying paid members\u2019 emails is only available for full-membership rosters.');
       return;
@@ -1614,11 +1700,15 @@ const MemberRoster: React.FC = () => {
 
   // Filtering logic for members based on active filters
   const filteredMembers = useMemo(() => {
-    if (activeFilters.length === 0) {
+    const effectiveActiveFilters = canViewDuesData
+      ? activeFilters
+      : activeFilters.filter((filter) => !DUES_FILTER_TYPES.has(filter));
+
+    if (effectiveActiveFilters.length === 0) {
       return members;
     }
 
-    const selectedFoodPreferences = activeFilters
+    const selectedFoodPreferences = effectiveActiveFilters
       .filter((filter) => String(filter).startsWith('food:'))
       .map((filter) => String(filter).replace('food:', ''));
 
@@ -1639,7 +1729,7 @@ const MemberRoster: React.FC = () => {
       }
       
       // Check each active filter
-      for (const filter of activeFilters) {
+      for (const filter of effectiveActiveFilters) {
         switch (filter) {
           case 'dues-paid':
             if (duesStatus !== 'PAID') return false;
@@ -1715,7 +1805,7 @@ const MemberRoster: React.FC = () => {
       }
       return true;
     });
-  }, [members, activeFilters]);
+  }, [members, activeFilters, canViewDuesData]);
 
   // Early return for unauthorized access - STRICT enforcement
   if (!canAccessRoster) {
@@ -1726,10 +1816,10 @@ const MemberRoster: React.FC = () => {
             Access Restricted
           </h1>
           <p className="text-body text-custom-text-secondary mb-4">
-            Roster management is restricted to Camp Admins and Camp Leads only.
+            Roster access is restricted to Camp Admins, Camp Leads, and Events Leads only.
           </p>
           <p className="text-body text-custom-text-secondary">
-            Standard camp members do not have access to roster features.
+            Events Leads can view the roster but cannot manage roster settings, dues, or applications.
           </p>
         </div>
       </div>
@@ -1834,7 +1924,7 @@ const MemberRoster: React.FC = () => {
           )}
 
           {/* Export Roster button - Only available when an active roster exists */}
-          {rosterId && hasActiveRoster && (
+          {canEdit && rosterId && hasActiveRoster && (
             <Button
               variant="outline"
               onClick={handleExportRoster}
@@ -1849,7 +1939,7 @@ const MemberRoster: React.FC = () => {
           {/* Copy Paid Member Emails - FMR only.
               Shifts-only rosters do not track dues, so this action is
               only meaningful on full-membership rosters. */}
-          {rosterId && hasActiveRoster && isFullMembershipRoster && (
+          {canViewDuesData && rosterId && hasActiveRoster && isFullMembershipRoster && (
             <Button
               variant="outline"
               size="sm"
@@ -1920,6 +2010,7 @@ const MemberRoster: React.FC = () => {
       {canViewFullMembershipMetrics && (
         <MetricsPanel
           members={filteredMembers}
+          showDuesPaid={canViewDuesData}
         />
       )}
 
@@ -1937,6 +2028,7 @@ const MemberRoster: React.FC = () => {
           availableSkills={availableSkills}
           availableTags={availableTags}
           customFieldOptions={customFieldFilterOptions}
+          showDuesFilters={canViewDuesData}
         />
       )}
 
@@ -1975,7 +2067,10 @@ const MemberRoster: React.FC = () => {
               };
             }) as any}
             canEdit={canEdit}
-            canAssignCampLead={canAssignCampLeadRole(authUser, campId || undefined)}
+            canAssignCampLead={canAssignDelegatedRoles}
+            canAssignEventsLead={canAssignDelegatedRoles}
+            canOpenContactDetails={canUseContactDetails}
+            canSendReminders={canEdit}
             onDelete={(m) => handleDeleteMember(m as any)}
             onRefresh={fetchMembers}
             inviteRemindersEnabled={sorInviteRemindersEnabled}
@@ -1994,9 +2089,11 @@ const MemberRoster: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Playa Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dues
-                </th>
+                {canViewDuesData && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Dues
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Meal Plan
                 </th>
@@ -2021,9 +2118,14 @@ const MemberRoster: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   🛠️ Skills
                 </th>
-                {canEdit && canAssignCampLeadRole(authUser, campId || undefined) && (
+                {canAssignDelegatedRoles && (
                   <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Camp Lead
+                  </th>
+                )}
+                {canAssignDelegatedRoles && (
+                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Events Lead
                   </th>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2089,12 +2191,12 @@ const MemberRoster: React.FC = () => {
                         <div className="ml-4">
                           <div className="flex items-center gap-2">
                             <div className="text-sm font-medium text-gray-900">
-                              {canAccessRoster && campId && realUserId ? (
+                              {canUseContactDetails && campId && realUserId ? (
                                 // FMR / linked-account member → full Contact 360 view
                                 <Link to={`/camp/${campId}/contacts/${realUserId}`} className="text-black hover:underline">
                                   {userName}
                                 </Link>
-                              ) : canAccessRoster && campId && member._id ? (
+                              ) : canUseContactDetails && campId && member._id ? (
                                 // SOR member (no user account yet) → member-based 360 view
                                 <Link to={`/camp/${campId}/contacts/member/${member._id}`} className="text-black hover:underline">
                                   {userName}
@@ -2104,6 +2206,11 @@ const MemberRoster: React.FC = () => {
                               )}
                             </div>
                             {member.isCampLead && <CampLeadBadge size="sm" />}
+                            {member.isEventsLead && (
+                              <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
+                                Events
+                              </span>
+                            )}
                             {extraResponses > 0 && (
                               <span
                                 className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 text-xs px-2 py-0.5"
@@ -2135,38 +2242,39 @@ const MemberRoster: React.FC = () => {
                         )
                       )}
                     </td>
-                    {/* Dues */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {(() => {
-                        const duesStatus = normalizeDuesStatus(member.duesStatus);
-                        const duesColorClass = duesStatus === 'PAID'
-                          ? 'text-green-600 font-bold'
-                          : duesStatus === 'INSTRUCTED'
-                            ? 'text-orange-500 font-bold'
-                            : 'text-gray-400';
-                        const tooltipDetails = duesStatus === 'PAID'
-                          ? `Paid on: ${member.duesPaidAt ? formatDate(member.duesPaidAt as string) : 'N/A'}\nReceipt sent: ${member.duesReceiptSentAt ? formatDate(member.duesReceiptSentAt as string) : 'N/A'}`
-                          : duesStatus === 'INSTRUCTED'
-                            ? 'Payment instructions sent'
-                            : 'Unpaid';
-                        return (
-                      <button
-                        onClick={() => handleDuesClick(member)}
-                        disabled={!canEdit || duesLoading === member._id.toString()}
-                        className={`text-xl ${canEdit ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
-                          duesColorClass
-                        }`}
-                        title={tooltipDetails}
-                      >
-                        {duesLoading === member._id.toString() ? (
-                          <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                        ) : (
-                          '$'
-                        )}
-                      </button>
-                        );
-                      })()}
-                    </td>
+                    {canViewDuesData && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {(() => {
+                          const duesStatus = normalizeDuesStatus(member.duesStatus);
+                          const duesColorClass = duesStatus === 'PAID'
+                            ? 'text-green-600 font-bold'
+                            : duesStatus === 'INSTRUCTED'
+                              ? 'text-orange-500 font-bold'
+                              : 'text-gray-400';
+                          const tooltipDetails = duesStatus === 'PAID'
+                            ? `Paid on: ${member.duesPaidAt ? formatDate(member.duesPaidAt as string) : 'N/A'}\nReceipt sent: ${member.duesReceiptSentAt ? formatDate(member.duesReceiptSentAt as string) : 'N/A'}`
+                            : duesStatus === 'INSTRUCTED'
+                              ? 'Payment instructions sent'
+                              : 'Unpaid';
+                          return (
+                        <button
+                          onClick={() => handleDuesClick(member)}
+                          disabled={!canEdit || duesLoading === member._id.toString()}
+                          className={`text-xl ${canEdit ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
+                            duesColorClass
+                          }`}
+                          title={tooltipDetails}
+                        >
+                          {duesLoading === member._id.toString() ? (
+                            <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                          ) : (
+                            '$'
+                          )}
+                        </button>
+                          );
+                        })()}
+                      </td>
+                    )}
                     {/* Meal Plan */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {(() => {
@@ -2408,8 +2516,8 @@ const MemberRoster: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    {/* Camp Lead Role (Main Admin Only) */}
-                    {canEdit && canAssignCampLeadRole(authUser, campId || undefined) && (
+                    {/* Camp Lead Role */}
+                    {canAssignDelegatedRoles && (
                       <td className="px-6 py-4 whitespace-nowrap">
                         {isEditing ? (
                           <div className="flex items-center justify-center">
@@ -2439,6 +2547,44 @@ const MemberRoster: React.FC = () => {
                           <div className="text-center">
                             {member.isCampLead ? (
                               <span className="text-xs text-orange-600 font-medium">✓ Lead</span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
+                    {/* Events Lead Role */}
+                    {canAssignDelegatedRoles && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={member.isEventsLead || false}
+                                onChange={(e) => {
+                                  e.preventDefault();
+                                  handleEventsLeadToggle(member, member.isEventsLead || false);
+                                }}
+                                disabled={
+                                  campLeadLoading === member._id.toString() ||
+                                  member.rosterStatus !== 'approved'
+                                }
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                                title={
+                                  member.rosterStatus !== 'approved'
+                                    ? 'Member must be approved to become Events Lead'
+                                    : 'Grant or revoke Events Lead role'
+                                }
+                              />
+                              <span className="ml-2 text-xs text-gray-600">Events Lead</span>
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            {member.isEventsLead ? (
+                              <span className="text-xs text-blue-600 font-medium">✓ Events</span>
                             ) : (
                               <span className="text-xs text-gray-400">—</span>
                             )}
@@ -2819,56 +2965,56 @@ const MemberRoster: React.FC = () => {
                     </div>
                   </div>
 
-                      {/* Application Information */}
-                      <div className="space-y-4 pt-4 border-t border-gray-200">
-                        {selectedMember.applicationData?.motivation && (
-                  <div>
-                            <h4 className="text-label font-medium text-custom-text mb-2">Motivation</h4>
-                            <p className="text-body text-custom-text-secondary">
-                              {selectedMember.applicationData.motivation}
+                      {canViewApplicationData && (
+                        <div className="space-y-4 pt-4 border-t border-gray-200">
+                          {selectedMember.applicationData?.motivation && (
+                    <div>
+                              <h4 className="text-label font-medium text-custom-text mb-2">Motivation</h4>
+                              <p className="text-body text-custom-text-secondary">
+                                {selectedMember.applicationData.motivation}
+                              </p>
+                            </div>
+                          )}
+
+                          {selectedMember.applicationData?.experience && (
+                          <div>
+                              <h4 className="text-label font-medium text-custom-text mb-2">Experience</h4>
+                              <p className="text-body text-custom-text-secondary">
+                                {selectedMember.applicationData.experience}
                             </p>
                           </div>
                         )}
 
-                        {selectedMember.applicationData?.experience && (
-                        <div>
-                            <h4 className="text-label font-medium text-custom-text mb-2">Experience</h4>
-                            <p className="text-body text-custom-text-secondary">
-                              {selectedMember.applicationData.experience}
-                          </p>
-                        </div>
-                      )}
-
-                        {/* Chosen Call Time */}
-                        <div>
-                          <h4 className="text-label font-medium text-custom-text mb-2">📞 Chosen Call Time</h4>
-                          {selectedMember.applicationData?.callSlot ? (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                              <div className="flex items-center gap-3">
-                                <Calendar className="w-5 h-5 text-blue-600" />
-                                <div>
-                                  <div className="font-semibold text-blue-900">
-                                    {new Date(selectedMember.applicationData.callSlot.date).toLocaleDateString('en-US', {
-                                      weekday: 'short',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      year: 'numeric'
-                                    })}
-                    </div>
-                                  <div className="text-blue-700 flex items-center gap-2 mt-1">
-                                    <Clock className="w-4 h-4" />
-                                    {selectedMember.applicationData.callSlot.startTime} - {selectedMember.applicationData.callSlot.endTime}
+                          <div>
+                            <h4 className="text-label font-medium text-custom-text mb-2">📞 Chosen Call Time</h4>
+                            {selectedMember.applicationData?.callSlot ? (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                  <Calendar className="w-5 h-5 text-blue-600" />
+                                  <div>
+                                    <div className="font-semibold text-blue-900">
+                                      {new Date(selectedMember.applicationData.callSlot.date).toLocaleDateString('en-US', {
+                                        weekday: 'short',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      })}
+                      </div>
+                                    <div className="text-blue-700 flex items-center gap-2 mt-1">
+                                      <Clock className="w-4 h-4" />
+                                      {selectedMember.applicationData.callSlot.startTime} - {selectedMember.applicationData.callSlot.endTime}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          ) : selectedMember.applicationData?.selectedCallSlotId ? (
-                            <p className="text-body text-gray-500 italic">Call slot not available</p>
-                          ) : (
-                            <p className="text-body text-gray-500 italic">No call time selected</p>
-                          )}
+                            ) : selectedMember.applicationData?.selectedCallSlotId ? (
+                              <p className="text-body text-gray-500 italic">Call slot not available</p>
+                            ) : (
+                              <p className="text-body text-gray-500 italic">No call time selected</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Status & Review Notes */}
                       <div className="space-y-4 pt-4 border-t border-gray-200">
@@ -2881,7 +3027,7 @@ const MemberRoster: React.FC = () => {
                           </div>
                         </div>
 
-                        {selectedMember.reviewNotes && (
+                        {canViewApplicationData && selectedMember.reviewNotes && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Review Notes
@@ -2892,7 +3038,7 @@ const MemberRoster: React.FC = () => {
                           </div>
                         )}
 
-                        {selectedMember.appliedAt && (
+                        {canViewApplicationData && selectedMember.appliedAt && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Membership Information
@@ -3486,6 +3632,7 @@ const MemberRoster: React.FC = () => {
           return user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Member';
         })()}
         action={campLeadConfirmModal.action}
+        role={campLeadConfirmModal.role}
         loading={!!campLeadLoading}
       />
 

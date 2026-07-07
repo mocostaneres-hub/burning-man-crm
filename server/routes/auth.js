@@ -361,8 +361,11 @@ router.get('/me', authenticateToken, async (req, res) => {
       if (adminRecord && adminRecord.role === 'super-admin') isSystemAdmin = true;
     }
     
-    // Check if user is a Camp Lead in any roster
-    // Camp Leads are personal/member accounts with delegated admin permissions
+    const delegatedCampAccess = {};
+
+    // Check if user has delegated camp access in any roster.
+    // Camp Leads and Events Leads are personal/member accounts with scoped
+    // camp permissions layered on top of their normal account.
     if (user.accountType === 'personal' || user.role === 'member' || user.role === 'camp_lead') {
       const Member = require('../models/Member');
       const Roster = require('../models/Roster');
@@ -374,38 +377,54 @@ router.get('/me', authenticateToken, async (req, res) => {
       if (member) {
         console.log('🔍 [Auth /me] Found member record:', member._id);
         
-        // Find all active rosters where this MEMBER is a Camp Lead
+        // Find all active rosters where this MEMBER has delegated camp access.
         const rosters = await Roster.find({
           'members': {
             $elemMatch: {
               member: member._id, // ← FIXED: Use member._id, not user._id
-              isCampLead: true,
+              $or: [
+                { isCampLead: true },
+                { isEventsLead: true }
+              ],
               status: 'approved'
             }
           },
           isActive: true
-        }).select('camp _id').populate('camp', 'name slug _id');
+        }).select('camp members _id').populate('camp', 'name slug _id');
         
         if (rosters && rosters.length > 0) {
-          // User is Camp Lead! Return first camp
-          // Note: Users can only be Camp Lead in ONE camp at a time
-          const campLeadCamp = rosters[0].camp;
-          
-          console.log('✅ [Auth /me] User is Camp Lead for camp:', campLeadCamp.name);
-          
-          const userObj = user.toObject ? user.toObject() : { ...user };
-          return res.json({
-            user: {
-              ...userObj,
-              isSystemAdmin,
-              isCampLead: true,
-              campLeadCampId: campLeadCamp._id.toString(),
-              campLeadCampSlug: campLeadCamp.slug,
-              campLeadCampName: campLeadCamp.name
+          for (const roster of rosters) {
+            const matchingEntry = roster.members?.find((entry) => {
+              const entryMemberId = entry?.member?._id
+                ? entry.member._id.toString()
+                : entry?.member?.toString?.();
+              return entryMemberId === member._id.toString() && entry.status === 'approved';
+            });
+
+            if (!matchingEntry || !roster.camp) continue;
+
+            if (matchingEntry.isCampLead === true && !delegatedCampAccess.isCampLead) {
+              console.log('✅ [Auth /me] User is Camp Lead for camp:', roster.camp.name);
+              Object.assign(delegatedCampAccess, {
+                isCampLead: true,
+                campLeadCampId: roster.camp._id.toString(),
+                campLeadCampSlug: roster.camp.slug,
+                campLeadCampName: roster.camp.name
+              });
             }
-          });
+
+            if (matchingEntry.isEventsLead === true && !delegatedCampAccess.isEventsLead) {
+              console.log('✅ [Auth /me] User is Events Lead for camp:', roster.camp.name);
+              Object.assign(delegatedCampAccess, {
+                isEventsLead: true,
+                eventsLeadCampId: roster.camp._id.toString(),
+                eventsLeadCampSlug: roster.camp.slug,
+                eventsLeadCampName: roster.camp.name
+              });
+            }
+          }
         } else {
-          console.log('ℹ️ [Auth /me] Member found but not a Camp Lead');
+          console.log('ℹ️ [Auth /me] Member found but no delegated camp access');
         }
       } else {
         console.log('ℹ️ [Auth /me] No member record found for user');
@@ -424,11 +443,11 @@ router.get('/me', authenticateToken, async (req, res) => {
       isShiftsOnlyMember = !!shiftsOnlyMember;
     }
 
-    // Not a Camp Lead, return normal user data (include isSystemAdmin for frontend)
     const userObj = user.toObject ? user.toObject() : { ...user };
     res.json({
       user: {
         ...userObj,
+        ...delegatedCampAccess,
         isSystemAdmin,
         isShiftsOnlyMember,
         canApplyToCampsNow: !isShiftsOnlyMember || now >= applyCutoffDateUtc

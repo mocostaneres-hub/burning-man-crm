@@ -9,6 +9,7 @@ describe('taskUiUtils', () => {
     expect(canShowTaskAssignmentOptions({ accountType: 'camp' })).toBe(true);
     expect(canShowTaskAssignmentOptions({ accountType: 'admin', campId: 'camp-1' })).toBe(true);
     expect(canShowTaskAssignmentOptions({ accountType: 'personal', isCampLead: true })).toBe(true);
+    expect(canShowTaskAssignmentOptions({ accountType: 'personal', isEventsLead: true })).toBe(true);
     expect(canShowTaskAssignmentOptions({ accountType: 'personal' })).toBe(false);
   });
 

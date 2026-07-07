@@ -158,13 +158,13 @@ const CampSurveys: React.FC = () => {
   const [savingResponse, setSavingResponse] = useState(false);
 
   const canImportFromPublicLink = useMemo(
-    () => user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId),
-    [user?.accountType, user?.campId]
+    () => user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId) || user?.isEventsLead === true,
+    [user?.accountType, user?.campId, user?.isEventsLead]
   );
 
   const canManageCamp = useMemo(
-    () => user?.accountType === 'camp' || user?.isCampLead === true || (user?.accountType === 'admin' && !!user?.campId),
-    [user?.accountType, user?.isCampLead, user?.campId]
+    () => user?.accountType === 'camp' || user?.isCampLead === true || user?.isEventsLead === true || (user?.accountType === 'admin' && !!user?.campId),
+    [user?.accountType, user?.isCampLead, user?.isEventsLead, user?.campId]
   );
 
   const loadCampContext = useCallback(async () => {
@@ -175,6 +175,9 @@ const CampSurveys: React.FC = () => {
     }
     if (user.isCampLead && user.campLeadCampId) {
       return user.campLeadCampId;
+    }
+    if (user.isEventsLead && user.eventsLeadCampId) {
+      return user.eventsLeadCampId;
     }
     return '';
   }, [user]);
@@ -225,7 +228,12 @@ const CampSurveys: React.FC = () => {
           setLoading(false);
           return;
         }
-        if (campIdentifier && campIdentifier !== resolvedCampId && campIdentifier !== user?.campLeadCampSlug) {
+        if (
+          campIdentifier &&
+          campIdentifier !== resolvedCampId &&
+          campIdentifier !== user?.campLeadCampSlug &&
+          campIdentifier !== user?.eventsLeadCampSlug
+        ) {
           navigate('/dashboard', { replace: true });
           return;
         }
@@ -241,7 +249,7 @@ const CampSurveys: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [campIdentifier, loadCampContext, loadSurveys, navigate, user?.campLeadCampSlug]);
+  }, [campIdentifier, loadCampContext, loadSurveys, navigate, user?.campLeadCampSlug, user?.eventsLeadCampSlug]);
 
   useEffect(() => {
     const editSurveyId = searchParams.get('editSurveyId');

@@ -956,6 +956,22 @@ class ApiService {
     return response.data;
   }
 
+  async grantEventsLeadRole(memberId: string, campId?: string): Promise<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> {
+    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> = await this.api.post(
+      `/rosters/member/${memberId}/grant-events-lead`,
+      campId ? { campId } : undefined
+    );
+    return response.data;
+  }
+
+  async revokeEventsLeadRole(memberId: string, campId?: string): Promise<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> {
+    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> = await this.api.post(
+      `/rosters/member/${memberId}/revoke-events-lead`,
+      campId ? { campId } : undefined
+    );
+    return response.data;
+  }
+
   async previewDuesEmail(
     rosterId: string,
     memberId: string,

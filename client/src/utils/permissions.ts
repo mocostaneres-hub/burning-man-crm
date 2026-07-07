@@ -45,6 +45,24 @@ export function canManageCamp(
 }
 
 /**
+ * Check if user can manage event-planning surfaces for a camp.
+ * Includes full camp managers plus Events Leads.
+ */
+export function canManageEventPlanning(
+  user: User | null,
+  campId: string | undefined
+): boolean {
+  if (canManageCamp(user, campId)) return true;
+
+  return Boolean(
+    user &&
+      campId &&
+      user.isEventsLead === true &&
+      user.eventsLeadCampId === campId
+  );
+}
+
+/**
  * Check if user is the Main Camp Admin (owner)
  * Camp Leads have limited permissions compared to Main Admin
  * @param user - Current authenticated user
@@ -168,6 +186,14 @@ export function hasCampManagementAccess(user: User | null): boolean {
 }
 
 /**
+ * Check if user has event-planning camp access.
+ */
+export function hasEventPlanningAccess(user: User | null): boolean {
+  if (hasCampManagementAccess(user)) return true;
+  return Boolean(user?.isEventsLead === true && user?.eventsLeadCampId);
+}
+
+/**
  * Get the camp identifier for a user (campId for camp accounts, campLeadCampId for camp leads)
  * @param user - Current authenticated user
  * @returns string | undefined - the camp ID/identifier
@@ -178,6 +204,11 @@ export function getUserCampIdentifier(user: User | null): string | undefined {
   // Camp Lead - use their delegated camp ID
   if (user.isCampLead === true && user.campLeadCampId) {
     return user.campLeadCampId;
+  }
+
+  // Events Lead - use their delegated camp ID
+  if (user.isEventsLead === true && user.eventsLeadCampId) {
+    return user.eventsLeadCampId;
   }
 
   // Camp account or admin with camp affiliation

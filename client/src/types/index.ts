@@ -62,6 +62,11 @@ export interface User {
   campLeadCampId?: string;
   campLeadCampSlug?: string;
   campLeadCampName?: string;
+  // Events Lead role (when user has reduced camp access for planning)
+  isEventsLead?: boolean;
+  eventsLeadCampId?: string;
+  eventsLeadCampSlug?: string;
+  eventsLeadCampName?: string;
   isShiftsOnlyMember?: boolean;
   canApplyToCampsNow?: boolean;
   isActive: boolean;
@@ -259,6 +264,8 @@ export interface Member {
   };
   // Camp Lead role (roster-level, camp-scoped admin permissions)
   isCampLead?: boolean;
+  // Events Lead role (roster-level, camp-scoped planning permissions)
+  isEventsLead?: boolean;
   // Roster-specific overrides (for roster view only, doesn't affect user account)
   overrides?: {
     playaName?: string;

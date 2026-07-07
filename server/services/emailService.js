@@ -560,6 +560,94 @@ Questions about your new role? Reach out to your Main Camp Admin or check the He
 };
 
 /**
+ * Send Events Lead role granted notification email.
+ * @param {Object} user - User object who was granted Events Lead role
+ * @param {Object} camp - Camp object
+ */
+const sendEventsLeadGrantedEmail = async (user, camp) => {
+  const campName = getCampDisplayName(camp);
+  const clientUrl = process.env.CLIENT_URL || 'https://g8road.com';
+  const campId = camp?._id?.toString?.() || camp?._id || '';
+
+  return sendEmail({
+    to: user.email,
+    subject: `You've been made an Events Lead for ${campName}`,
+    fromName: getCampSenderName(camp),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5;">
+        <div style="background: linear-gradient(135deg, #14B8A6, #0EA5E9); padding: 30px 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 30px;">Events Lead Access Granted</h1>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 17px;">You can now help plan camp operations.</p>
+        </div>
+
+        <div style="padding: 30px 20px; background: #f9f9f9;">
+          <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #333; margin-top: 0; font-size: 24px;">Hey ${user.firstName || 'there'},</h2>
+            <p style="color: #555; font-size: 16px; line-height: 1.6;">
+              You've been granted <strong>Events Lead</strong> access for <strong>${campName}</strong>.
+            </p>
+            <p style="color: #555; font-size: 16px; line-height: 1.6;">
+              Your member account stays the same. You now also have camp-level planning tools for events, tasks, and surveys.
+            </p>
+          </div>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #0F766E; margin-top: 0; font-size: 20px;">What You Can Do</h3>
+            <ul style="color: #333; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+              <li>Create, edit, and manage events and shifts</li>
+              <li>Create, edit, assign, and close camp tasks</li>
+              <li>Create, send, close, and review surveys</li>
+              <li>View the camp profile</li>
+              <li>View the roster</li>
+            </ul>
+          </div>
+
+          <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border-left: 4px solid #64748B; margin-bottom: 20px;">
+            <h3 style="color: #334155; margin-top: 0; font-size: 18px;">What Stays Hidden</h3>
+            <ul style="color: #555; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+              <li>Applications</li>
+              <li>Dues/payment details and dues actions</li>
+              <li>Roster exports, archiving, renaming, and full-membership invites</li>
+              <li>Camp profile editing and account settings</li>
+            </ul>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${clientUrl}${campId ? `/camp/${campId}/events` : '/dashboard'}"
+               style="background: #0F766E; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Open Events
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+    text: `Events Lead Access Granted - ${campName}
+
+Hey ${user.firstName || 'there'},
+
+You've been granted Events Lead access for ${campName}.
+
+Your member account stays the same. You now also have camp-level planning tools for events, tasks, and surveys.
+
+WHAT YOU CAN DO:
+- Create, edit, and manage events and shifts
+- Create, edit, assign, and close camp tasks
+- Create, send, close, and review surveys
+- View the camp profile
+- View the roster
+
+WHAT STAYS HIDDEN:
+- Applications
+- Dues/payment details and dues actions
+- Roster exports, archiving, renaming, and full-membership invites
+- Camp profile editing and account settings
+
+Open Events: ${clientUrl}${campId ? `/camp/${campId}/events` : '/dashboard'}
+`
+  });
+};
+
+/**
  * Send dues-related email using pre-rendered content.
  */
 const sendDuesEmail = async ({ to, subject, body, camp }) => {
@@ -704,6 +792,7 @@ module.exports = {
   sendInviteEmail,
   sendTestEmail,
   sendCampLeadGrantedEmail,
+  sendEventsLeadGrantedEmail,
   sendDuesEmail,
   sendSupportContactEmail,
   sendTemplate
