@@ -443,14 +443,16 @@ const MyTasks: React.FC = () => {
 
           {completedSurveys.length > 0 && (
             <div className="mt-4 border-t border-gray-200 pt-3">
-              <h3 className="text-sm font-semibold text-custom-text mb-2">Completed by Group Coverage</h3>
+              <h3 className="text-sm font-semibold text-custom-text mb-2">Completed Surveys</h3>
               <div className="space-y-2">
                 {completedSurveys.slice(0, 6).map((survey) => (
-                  <div key={`${survey.surveyId}-completed`} className="text-xs text-gray-600 flex items-center justify-between">
-                    <span>
+                  <div key={`${survey.surveyId}-completed`} className="text-xs text-gray-600">
+                    <span className="font-medium text-custom-text">
                       {survey.title} ({survey.campName})
                     </span>
-                    <span>Covered by {survey.coveredBySubmitterName || 'another responder'}</span>
+                    <span className="block">
+                      {survey.coveredBySubmitterName || 'A camp member'} has responded to this survey on your behalf. For any questions, please contact your camp lead.
+                    </span>
                   </div>
                 ))}
               </div>

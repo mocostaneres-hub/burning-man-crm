@@ -14,7 +14,25 @@ type EligibleMember = {
   coveredByResponseId?: string | null;
 };
 
-type SurveyAnswerValue = string | number | string[] | null;
+type PeopleAnswerValue = {
+  memberId: string;
+  name: string;
+  email?: string;
+};
+
+type SurveyAnswerValue = string | number | string[] | PeopleAnswerValue[] | null;
+
+type SurveySection = {
+  id: string;
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+};
+
+const SUBMIT_TARGET = '__SUBMIT__';
+
+const getQuestionKey = (question: SurveyQuestion): string =>
+  question._id || question.localId || String(question.order);
 
 const answerableBlockTypes = new Set([
   'short_answer',
@@ -23,6 +41,7 @@ const answerableBlockTypes = new Set([
   'checkboxes',
   'dropdown',
   'linear_scale',
+  'people',
   'date',
   'time'
 ]);
@@ -51,6 +70,9 @@ const SurveyRespond: React.FC = () => {
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, SurveyAnswerValue>>({});
+  const [peopleQueryByQuestion, setPeopleQueryByQuestion] = useState<Record<string, string>>({});
+  const [currentSectionId, setCurrentSectionId] = useState<string>('');
+  const [sectionHistory, setSectionHistory] = useState<string[]>([]);
   const isViewMode = searchParams.get('mode') === 'view' || searchParams.get('view') === '1';
 
   const loadSurvey = useCallback(async () => {
@@ -60,8 +82,16 @@ const SurveyRespond: React.FC = () => {
       setError(null);
       const detail = await api.getSurveyDetails(surveyId);
       setSurvey(detail.survey);
-      setQuestions(detail.questions || []);
+      setQuestions(
+        (detail.questions || []).map((question: SurveyQuestion, index: number) => ({
+          ...question,
+          order: index,
+          localId: question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${index + 1}`
+        }))
+      );
       setViewer(detail.viewer || {});
+      setCurrentSectionId('');
+      setSectionHistory([]);
 
       if (detail.viewer?.canRespond || isViewMode) {
         try {
@@ -103,19 +133,6 @@ const SurveyRespond: React.FC = () => {
     loadSurvey();
   }, [loadSurvey]);
 
-  useEffect(() => {
-    if (!surveyId || !viewer?.canRespond) return;
-    const timer = setTimeout(async () => {
-      try {
-        const result = await api.getSurveyEligibleMembers(surveyId, memberQuery.trim() || undefined);
-        setEligibleMembers(result.eligibleMembers || []);
-      } catch (_err) {
-        // Keep current list on transient search errors.
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [memberQuery, surveyId, viewer?.canRespond]);
-
   const selectedMembers = useMemo(
     () =>
       selectedMemberIds
@@ -136,6 +153,51 @@ const SurveyRespond: React.FC = () => {
     [eligibleMembers, selectedMemberIds, memberQuery]
   );
 
+  const sections = useMemo<SurveySection[]>(() => {
+    const grouped: SurveySection[] = [];
+    let current: SurveySection = {
+      id: 'intro',
+      title: survey?.title || 'Survey',
+      description: '',
+      questions: []
+    };
+
+    for (const question of questions) {
+      if (question.blockType === 'section_header') {
+        if (current.questions.length > 0 || current.id !== 'intro') {
+          grouped.push(current);
+        }
+        current = {
+          id: question.localId || `section_${grouped.length + 1}`,
+          title: question.prompt || `Section ${grouped.length + 1}`,
+          description: question.helpText || '',
+          questions: []
+        };
+      } else {
+        current.questions.push(question);
+      }
+    }
+
+    if (current.questions.length > 0 || grouped.length === 0 || current.id !== 'intro') {
+      grouped.push(current);
+    }
+
+    return grouped;
+  }, [questions, survey?.title]);
+
+  useEffect(() => {
+    if (sections.length === 0) return;
+    setCurrentSectionId((prev) => {
+      if (prev && sections.some((section) => section.id === prev)) return prev;
+      return sections[0].id;
+    });
+  }, [sections]);
+
+  const currentSection = useMemo(
+    () => sections.find((section) => section.id === currentSectionId) || sections[0],
+    [currentSectionId, sections]
+  );
+
   const setAnswer = (questionKey: string, value: SurveyAnswerValue) => {
     setAnswersByQuestion((prev) => ({ ...prev, [questionKey]: value }));
   };
@@ -151,6 +213,47 @@ const SurveyRespond: React.FC = () => {
     });
   };
 
+  const getPeopleAnswer = (questionKey: string): PeopleAnswerValue[] => {
+    const value = answersByQuestion[questionKey];
+    if (!Array.isArray(value)) return [];
+    return (value as unknown[]).filter(
+      (item): item is PeopleAnswerValue =>
+        typeof item === 'object' && item !== null && 'memberId' in item
+    );
+  };
+
+  const getPeopleSuggestions = (questionKey: string) => {
+    const query = String(peopleQueryByQuestion[questionKey] || '').trim().toLowerCase();
+    const selectedIds = new Set(getPeopleAnswer(questionKey).map((member) => member.memberId));
+    if (!query) return [];
+    return eligibleMembers.filter((member) => {
+      const searchable = `${member.name} ${member.email || ''}`.toLowerCase();
+      return searchable.includes(query) && !selectedIds.has(member.memberId);
+    });
+  };
+
+  const addPeopleAnswer = (questionKey: string, member: EligibleMember) => {
+    if (!member.eligible) return;
+    setAnswersByQuestion((prev) => {
+      const current = Array.isArray(prev[questionKey])
+        ? (prev[questionKey] as PeopleAnswerValue[]).filter((item) => typeof item === 'object' && item !== null)
+        : [];
+      if (current.some((item) => item.memberId === member.memberId)) return prev;
+      return {
+        ...prev,
+        [questionKey]: [...current, { memberId: member.memberId, name: member.name, email: member.email }]
+      };
+    });
+    setPeopleQueryByQuestion((prev) => ({ ...prev, [questionKey]: '' }));
+  };
+
+  const removePeopleAnswer = (questionKey: string, memberId: string) => {
+    setAnswersByQuestion((prev) => ({
+      ...prev,
+      [questionKey]: getPeopleAnswer(questionKey).filter((member) => member.memberId !== memberId)
+    }));
+  };
+
   const addMember = (member: EligibleMember) => {
     setSelectedMemberIds((prev) => (prev.includes(member.memberId) ? prev : [...prev, member.memberId]));
     setMemberQuery('');
@@ -161,14 +264,22 @@ const SurveyRespond: React.FC = () => {
     setSelectedMemberIds((prev) => prev.filter((id) => id !== memberId));
   };
 
-  const validateBeforeSubmit = () => {
-    if (!survey || !viewer?.canRespond) return false;
-    if (!selectedMemberIds.includes(viewer?.submitterMemberId)) {
+  const getSubmittableQuestions = () => {
+    const activeVisitedIds = new Set([...sectionHistory, currentSection?.id].filter(Boolean));
+    return sections
+      .filter((section) => activeVisitedIds.has(section.id))
+      .flatMap((section) => section.questions)
+      .filter((question) => answerableBlockTypes.has(question.blockType));
+  };
+
+  const validateQuestions = (questionsToValidate: SurveyQuestion[]) => {
+    if (!survey || (!viewer?.canRespond && !isViewMode)) return false;
+    if (!isViewMode && !selectedMemberIds.includes(viewer?.submitterMemberId)) {
       setError('Your own roster profile must remain selected.');
       return false;
     }
-    for (const question of questions) {
-      const key = question._id || String(question.order);
+    for (const question of questionsToValidate) {
+      const key = getQuestionKey(question);
       if (!question.required || !answerableBlockTypes.has(question.blockType)) continue;
       const value = answersByQuestion[key];
       if (Array.isArray(value)) {
@@ -184,6 +295,60 @@ const SurveyRespond: React.FC = () => {
     return true;
   };
 
+  const validateBeforeSubmit = () => validateQuestions(getSubmittableQuestions());
+
+  const getSectionRouteTarget = (section: SurveySection | undefined) => {
+    if (!section) return '';
+    for (const question of section.questions) {
+      if (question.blockType !== 'multiple_choice' && question.blockType !== 'dropdown') continue;
+      const value = answersByQuestion[getQuestionKey(question)];
+      if (!value || Array.isArray(value)) continue;
+      const matchedOption = (question.options || []).find((option) => option.value === String(value));
+      if (matchedOption?.nextSectionId) {
+        return matchedOption.nextSectionId;
+      }
+    }
+    return '';
+  };
+
+  const getDefaultNextSectionId = (section: SurveySection | undefined) => {
+    if (!section) return null;
+    const currentIndex = sections.findIndex((item) => item.id === section.id);
+    return currentIndex >= 0 ? sections[currentIndex + 1]?.id || null : null;
+  };
+
+  const getResolvedNextSectionId = (section: SurveySection | undefined) => {
+    const target = getSectionRouteTarget(section);
+    if (target === SUBMIT_TARGET) return null;
+    if (target && sections.some((item) => item.id === target)) return target;
+    return getDefaultNextSectionId(section);
+  };
+
+  const goToPreviousSection = () => {
+    setSectionHistory((prev) => {
+      const nextHistory = [...prev];
+      const previousSectionId = nextHistory.pop();
+      if (previousSectionId) {
+        setCurrentSectionId(previousSectionId);
+      }
+      return nextHistory;
+    });
+  };
+
+  const goToNextSection = async () => {
+    if (!currentSection) return;
+    if (!validateQuestions(currentSection.questions)) return;
+    const nextSectionId = getResolvedNextSectionId(currentSection);
+    if (!nextSectionId) {
+      if (isViewMode) return;
+      await submitSurvey();
+      return;
+    }
+    setSectionHistory((prev) => [...prev, currentSection.id]);
+    setCurrentSectionId(nextSectionId);
+    setError(null);
+  };
+
   const submitSurvey = async () => {
     if (!surveyId || !survey) return;
     if (!validateBeforeSubmit()) return;
@@ -192,10 +357,14 @@ const SurveyRespond: React.FC = () => {
       setSubmitting(true);
       setError(null);
 
-      const answers = questions
-        .filter((question) => answerableBlockTypes.has(question.blockType))
+      const questionsToSubmit = getSubmittableQuestions();
+      const peopleCoveredMemberIds = questionsToSubmit
+        .filter((question) => question.blockType === 'people')
+        .flatMap((question) => getPeopleAnswer(getQuestionKey(question)).map((member) => member.memberId));
+
+      const answers = questionsToSubmit
         .map((question) => {
-          const questionKey = question._id || String(question.order);
+          const questionKey = getQuestionKey(question);
           return {
             questionId: question._id || questionKey,
             blockType: question.blockType,
@@ -205,7 +374,7 @@ const SurveyRespond: React.FC = () => {
         });
 
       await api.submitSurveyResponse(surveyId, {
-        coveredMemberIds: selectedMemberIds,
+        coveredMemberIds: Array.from(new Set([...selectedMemberIds, ...peopleCoveredMemberIds])),
         answers
       });
 
@@ -218,7 +387,7 @@ const SurveyRespond: React.FC = () => {
   };
 
   const renderQuestionInput = (question: SurveyQuestion) => {
-    const key = question._id || String(question.order);
+    const key = getQuestionKey(question);
     const value = answersByQuestion[key];
     const labelClassName = 'block text-sm font-medium text-custom-text mb-1';
 
@@ -231,7 +400,12 @@ const SurveyRespond: React.FC = () => {
     }
 
     if (question.blockType === 'description') {
-      return <p className="text-sm text-custom-text-secondary">{question.prompt}</p>;
+      return (
+        <div
+          className="text-sm text-custom-text-secondary"
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(question.prompt || question.helpText || '') }}
+        />
+      );
     }
 
     if (question.blockType === 'image_block' || question.blockType === 'video_block') {
@@ -290,7 +464,7 @@ const SurveyRespond: React.FC = () => {
                 <label key={option.value} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={Array.isArray(value) ? value.includes(option.value) : false}
+                    checked={Array.isArray(value) ? (value as string[]).includes(option.value) : false}
                     onChange={() => toggleCheckboxOption(key, option.value)}
                   />
                   <span>{option.label}</span>
@@ -317,6 +491,76 @@ const SurveyRespond: React.FC = () => {
             </select>
           </div>
         );
+      case 'people': {
+        const selectedPeople = getPeopleAnswer(key);
+        const suggestions = getPeopleSuggestions(key);
+        const query = peopleQueryByQuestion[key] || '';
+        return (
+          <div>
+            <label className={labelClassName}>{question.prompt}</label>
+            {question.helpText && (
+              <div
+                className="text-xs text-custom-text-secondary mb-2"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(question.helpText) }}
+              />
+            )}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {selectedPeople.map((member) => (
+                <span
+                  key={member.memberId}
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 text-xs px-3 py-1"
+                >
+                  {member.name}
+                  <button onClick={() => removePeopleAnswer(key, member.memberId)} className="text-emerald-700 hover:text-emerald-900">
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) =>
+                  setPeopleQueryByQuestion((prev) => ({
+                    ...prev,
+                    [key]: e.target.value
+                  }))
+                }
+                className="w-full border border-gray-300 rounded pl-9 pr-3 py-2 text-sm"
+                placeholder="Start typing a roster name"
+              />
+            </div>
+            {query.trim() && (
+              <div className="mt-2 border border-gray-200 rounded max-h-48 overflow-y-auto">
+                {suggestions.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-gray-500">No roster members found.</p>
+                ) : (
+                  suggestions.map((member) => (
+                    <button
+                      type="button"
+                      key={member.memberId}
+                      onClick={() => addPeopleAnswer(key, member)}
+                      disabled={!member.eligible}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 disabled:cursor-not-allowed disabled:bg-gray-50 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-sm text-custom-text">{member.name}</p>
+                        {member.email && <p className="text-xs text-gray-500">{member.email}</p>}
+                      </div>
+                      {member.eligible ? (
+                        <UserPlus size={14} className="text-gray-400" />
+                      ) : (
+                        <span className="text-xs text-gray-500">Already covered</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
       case 'linear_scale': {
         const min = Number(question.linearScale?.min || 1);
         const max = Number(question.linearScale?.max || 5);
@@ -379,6 +623,11 @@ const SurveyRespond: React.FC = () => {
   const isCovered = viewer?.isCovered;
   const canRespond = viewer?.canRespond;
   const showInteractiveForm = canRespond || isViewMode;
+  const currentSectionIndex = currentSection
+    ? Math.max(sections.findIndex((section) => section.id === currentSection.id), 0)
+    : 0;
+  const nextSectionId = getResolvedNextSectionId(currentSection);
+  const hasNextSection = !!nextSectionId;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -407,13 +656,13 @@ const SurveyRespond: React.FC = () => {
             Preview mode: this behaves like recipient view, but submit is disabled.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {viewer?.canEditSurveyDefinition && survey.status === 'draft' && (
+            {viewer?.canEditSurveyDefinition && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigate(`/camp/${survey.campId}/surveys?editSurveyId=${survey._id}`)}
               >
-                Edit Draft
+                Edit Survey
               </Button>
             )}
             {canRespond && (
@@ -438,7 +687,9 @@ const SurveyRespond: React.FC = () => {
             <p className="font-medium">You are already marked complete for this survey.</p>
           </div>
           <p className="text-sm text-green-700 mt-1">
-            This can happen if another roster member submitted a grouped response that included you.
+            {viewer?.coveredBySelf
+              ? 'You have responded to this survey.'
+              : `${viewer?.coveredBySubmitterName || 'A camp member'} has responded to this survey on your behalf. For any questions, please contact your camp lead.`}
           </p>
           <div className="mt-3">
             <Button variant="outline" onClick={() => navigate('/tasks')}>
@@ -515,20 +766,49 @@ const SurveyRespond: React.FC = () => {
           </Card>
 
           <Card className="p-5 space-y-4">
-            {questions.map((question, index) => (
+            {currentSection && (sections.length > 1 || currentSection.description) && (
+              <div className="border-b border-gray-200 pb-4">
+                {sections.length > 1 && (
+                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                    Section {currentSectionIndex + 1} of {sections.length}
+                  </p>
+                )}
+                <h2 className="text-lg font-semibold text-custom-text">{currentSection.title}</h2>
+                {currentSection.description && (
+                  <div
+                    className="text-sm text-custom-text-secondary mt-1"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(currentSection.description) }}
+                  />
+                )}
+              </div>
+            )}
+            {(currentSection?.questions || []).map((question, index) => (
               <div key={question._id || `${question.blockType}-${index}`} className="space-y-1">
                 {renderQuestionInput(question)}
               </div>
             ))}
           </Card>
 
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            {sectionHistory.length > 0 && (
+              <Button variant="outline" onClick={goToPreviousSection}>
+                Back
+              </Button>
+            )}
             <Button variant="outline" onClick={() => navigate('/tasks')}>
               Cancel
             </Button>
-            {!isViewMode && (
+            {hasNextSection ? (
+              <Button variant="primary" onClick={goToNextSection} disabled={submitting}>
+                Next
+              </Button>
+            ) : !isViewMode ? (
               <Button variant="primary" onClick={submitSurvey} disabled={submitting}>
                 {submitting ? 'Submitting...' : 'Submit Survey'}
+              </Button>
+            ) : (
+              <Button variant="primary" disabled>
+                Submit Survey
               </Button>
             )}
           </div>

@@ -445,6 +445,7 @@ export type SurveyBlockType =
   | 'linear_scale'
   | 'multiple_choice_grid'
   | 'checkbox_grid'
+  | 'people'
   | 'date'
   | 'time'
   | 'unsupported';
@@ -453,12 +454,14 @@ export interface SurveyOption {
   label: string;
   value: string;
   isOther?: boolean;
+  nextSectionId?: string;
 }
 
 export interface SurveyQuestion {
   _id?: string;
   surveyId?: string;
   order: number;
+  localId?: string;
   blockType: SurveyBlockType;
   prompt: string;
   helpText?: string;
@@ -480,6 +483,9 @@ export interface SurveyQuestion {
     min?: number | null;
     max?: number | null;
     pattern?: string | null;
+  };
+  navigation?: {
+    defaultNextSectionId?: string;
   };
   isSuggestion?: boolean;
 }

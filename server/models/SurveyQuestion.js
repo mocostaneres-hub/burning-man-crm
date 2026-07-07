@@ -4,7 +4,8 @@ const surveyOptionSchema = new mongoose.Schema(
   {
     label: { type: String, required: true, trim: true, maxlength: 1000 },
     value: { type: String, required: true, trim: true, maxlength: 1000 },
-    isOther: { type: Boolean, default: false }
+    isOther: { type: Boolean, default: false },
+    nextSectionId: { type: String, default: '', trim: true, maxlength: 120 }
   },
   { _id: false }
 );
@@ -20,6 +21,12 @@ const surveyQuestionSchema = new mongoose.Schema(
     order: {
       type: Number,
       required: true
+    },
+    localId: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 120
     },
     blockType: {
       type: String,
@@ -37,6 +44,7 @@ const surveyQuestionSchema = new mongoose.Schema(
         'linear_scale',
         'multiple_choice_grid',
         'checkbox_grid',
+        'people',
         'date',
         'time',
         'unsupported'
@@ -85,6 +93,9 @@ const surveyQuestionSchema = new mongoose.Schema(
       min: { type: Number, default: null },
       max: { type: Number, default: null },
       pattern: { type: String, default: null }
+    },
+    navigation: {
+      defaultNextSectionId: { type: String, default: '', trim: true, maxlength: 120 }
     },
     mediaUrl: {
       type: String,

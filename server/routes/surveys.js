@@ -49,20 +49,59 @@ function dedupeIdList(values) {
   return [...new Set((Array.isArray(values) ? values : []).map((item) => toIdString(item)).filter(Boolean))];
 }
 
+const SUPPORTED_BLOCK_TYPES = new Set([
+  'form_title',
+  'description',
+  'section_header',
+  'image_block',
+  'video_block',
+  'short_answer',
+  'paragraph',
+  'multiple_choice',
+  'checkboxes',
+  'dropdown',
+  'linear_scale',
+  'multiple_choice_grid',
+  'checkbox_grid',
+  'people',
+  'date',
+  'time',
+  'unsupported'
+]);
+
+function normalizeLocalId(value, fallback) {
+  const raw = String(value || fallback || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .slice(0, 120);
+  return raw || fallback;
+}
+
+function normalizeSectionTarget(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .slice(0, 120);
+}
+
 function normalizeQuestionInput(question, fallbackOrder) {
-  const blockType = String(question?.blockType || 'short_answer');
+  const requestedBlockType = String(question?.blockType || 'short_answer');
+  const blockType = SUPPORTED_BLOCK_TYPES.has(requestedBlockType) ? requestedBlockType : 'unsupported';
   const options = Array.isArray(question?.options)
     ? question.options
         .map((option) => ({
           label: String(option?.label || option?.value || '').trim(),
           value: String(option?.value || option?.label || '').trim(),
-          isOther: option?.isOther === true
+          isOther: option?.isOther === true,
+          nextSectionId: normalizeSectionTarget(option?.nextSectionId)
         }))
         .filter((option) => option.label && option.value)
     : [];
+  const fallbackLocalId = `${blockType === 'section_header' ? 'section' : 'question'}_${fallbackOrder + 1}`;
 
   return {
     order: Number.isFinite(Number(question?.order)) ? Number(question.order) : fallbackOrder,
+    localId: normalizeLocalId(question?.localId || question?.clientId, fallbackLocalId),
     blockType,
     prompt: String(question?.prompt || '').trim(),
     helpText: String(question?.helpText || '').trim(),
@@ -83,6 +122,9 @@ function normalizeQuestionInput(question, fallbackOrder) {
       min: Number.isFinite(Number(question?.validation?.min)) ? Number(question.validation.min) : null,
       max: Number.isFinite(Number(question?.validation?.max)) ? Number(question.validation.max) : null,
       pattern: question?.validation?.pattern ? String(question.validation.pattern) : null
+    },
+    navigation: {
+      defaultNextSectionId: normalizeSectionTarget(question?.navigation?.defaultNextSectionId)
     },
     mediaUrl: question?.mediaUrl ? String(question.mediaUrl).trim() : null,
     supportLevel: ['supported', 'partial', 'unsupported'].includes(question?.supportLevel)
@@ -170,8 +212,30 @@ function getMemberDisplayName(memberDoc, userById) {
   return memberDoc.name || memberDoc.playaName || memberDoc.nickname || 'Unknown';
 }
 
+function getRosterMemberDisplayName(memberDoc) {
+  if (!memberDoc) return 'Unknown';
+  if (memberDoc.user && typeof memberDoc.user === 'object') {
+    const combined = `${memberDoc.user.firstName || ''} ${memberDoc.user.lastName || ''}`.trim();
+    if (combined) return combined;
+    if (memberDoc.user.email) return memberDoc.user.email;
+  }
+  return memberDoc.name || memberDoc.playaName || memberDoc.nickname || memberDoc.email || 'Unknown';
+}
+
 async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = null } = {}) {
   const normalized = rawQuestions.map((question, index) => normalizeQuestionInput(question, index));
+  const usedLocalIds = new Set();
+  for (const question of normalized) {
+    const baseLocalId = question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${question.order + 1}`;
+    let nextLocalId = baseLocalId;
+    let suffix = 2;
+    while (usedLocalIds.has(nextLocalId)) {
+      nextLocalId = normalizeLocalId(`${baseLocalId}_${suffix}`, `${baseLocalId}_${suffix}`);
+      suffix += 1;
+    }
+    question.localId = nextLocalId;
+    usedLocalIds.add(nextLocalId);
+  }
   await SurveyQuestion.deleteMany({ surveyId }).session(session || null);
   if (!normalized.length) return [];
   const docs = normalized.map((question) => ({
@@ -180,6 +244,66 @@ async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = n
   }));
   const created = await SurveyQuestion.insertMany(docs, { session: session || undefined });
   return created;
+}
+
+function extractPeopleMemberIdsFromAnswerValue(value) {
+  if (!Array.isArray(value)) return [];
+  return dedupeIdList(
+    value.map((item) => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        return item.memberId || item._id || item.id || item.value;
+      }
+      return null;
+    })
+  );
+}
+
+function getQuestionForAnswer(answer, questionById) {
+  const questionId = toIdString(answer?.questionId);
+  return questionId ? questionById.get(questionId) : null;
+}
+
+function extractPeopleMemberIdsFromAnswers(answers, questionById) {
+  const selectedIds = [];
+  for (const answer of Array.isArray(answers) ? answers : []) {
+    const question = getQuestionForAnswer(answer, questionById);
+    const blockType = answer?.blockType || question?.blockType;
+    if (blockType !== 'people') continue;
+    selectedIds.push(...extractPeopleMemberIdsFromAnswerValue(answer.value));
+  }
+  return dedupeIdList(selectedIds);
+}
+
+function normalizeSurveyAnswers(rawAnswers, questionById, memberMap = null) {
+  if (!Array.isArray(rawAnswers)) return [];
+  return rawAnswers
+    .filter((answer) => answer?.questionId)
+    .map((answer) => {
+      const question = getQuestionForAnswer(answer, questionById);
+      const blockType = answer.blockType || question?.blockType || 'short_answer';
+      if (blockType !== 'people') {
+        return {
+          questionId: answer.questionId,
+          blockType,
+          value: answer.value ?? null,
+          valueType: answer.valueType || typeof answer.value
+        };
+      }
+
+      const memberIds = extractPeopleMemberIdsFromAnswerValue(answer.value).filter((memberId) =>
+        memberMap ? memberMap.has(memberId) : true
+      );
+      return {
+        questionId: answer.questionId,
+        blockType: 'people',
+        value: memberIds.map((memberId) => ({
+          memberId,
+          name: getRosterMemberDisplayName(memberMap?.get(memberId))
+        })),
+        valueType: 'array'
+      };
+    });
 }
 
 async function writeResponseWithCoverage({
@@ -685,6 +809,19 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
     const coveredResponse = coveredDoc
       ? await SurveyResponse.findById(coveredDoc.responseId).lean()
       : null;
+    let coveredBySubmitterName = null;
+    let coveredBySelf = false;
+    if (coveredResponse) {
+      coveredBySelf = toIdString(coveredResponse.submittedByMemberId) === toIdString(submitterMember?._id);
+      const coveredSubmitterMember = await Member.findById(coveredResponse.submittedByMemberId).lean();
+      const coveredSubmitterUser = coveredSubmitterMember?.user
+        ? await User.findById(coveredSubmitterMember.user).select('firstName lastName email').lean()
+        : null;
+      const userById = coveredSubmitterUser
+        ? new Map([[toIdString(coveredSubmitterUser._id), coveredSubmitterUser]])
+        : new Map();
+      coveredBySubmitterName = getMemberDisplayName(coveredSubmitterMember, userById);
+    }
 
     const canAccess = manager || assignmentExists || !!coveredDoc;
     if (!canAccess) {
@@ -696,13 +833,15 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
       questions,
       viewer: {
         canManage: manager,
-        canEditSurveyDefinition: manager && survey.status === 'draft' && survey.isLocked !== true,
+        canEditSurveyDefinition: manager,
         canEditSubmittedResponses: manager,
         isAssigned: !!assignmentExists,
         canRespond: !!submitterMember && survey.status === 'sent' && !coveredDoc,
         submitterMemberId: submitterMember?._id || null,
         isCovered: !!coveredDoc,
-        coveredByResponseId: coveredDoc?.responseId || null
+        coveredByResponseId: coveredDoc?.responseId || null,
+        coveredBySubmitterName,
+        coveredBySelf
       }
     };
 
@@ -727,7 +866,7 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
 });
 
 // @route   PUT /api/surveys/:surveyId
-// @desc    Update survey draft content/questions (locked after send)
+// @desc    Update survey content/questions
 // @access  Private (Camp admins/leads)
 router.put('/:surveyId', authenticateToken, async (req, res) => {
   try {
@@ -739,12 +878,6 @@ router.put('/:surveyId', authenticateToken, async (req, res) => {
     const hasPermission = await canManageCamp(req, survey.campId);
     if (!hasPermission) {
       return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
-    }
-
-    if (survey.status !== 'draft' || survey.isLocked === true) {
-      return res.status(400).json({
-        message: 'Sent surveys are locked. Create a new survey to make changes.'
-      });
     }
 
     const { title, description, questions } = req.body || {};
@@ -1065,8 +1198,12 @@ router.post('/:surveyId/responses', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'You are not eligible to submit this survey' });
     }
 
+    const surveyQuestions = await SurveyQuestion.find({ surveyId: survey._id }).select('_id blockType').lean();
+    const questionById = new Map(surveyQuestions.map((question) => [toIdString(question._id), question]));
+    const preliminaryAnswers = normalizeSurveyAnswers(req.body?.answers, questionById);
+    const peopleMemberIds = extractPeopleMemberIdsFromAnswers(preliminaryAnswers, questionById);
     const selectedMemberIds = dedupeIdList(req.body?.coveredMemberIds || []);
-    const coveredMemberIds = dedupeIdList([submitterMember._id, ...selectedMemberIds]);
+    const coveredMemberIds = dedupeIdList([submitterMember._id, ...selectedMemberIds, ...peopleMemberIds]);
     if (coveredMemberIds.length === 0) {
       return res.status(400).json({ message: 'At least one roster member must be covered' });
     }
@@ -1083,16 +1220,7 @@ router.post('/:surveyId/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    const normalizedAnswers = Array.isArray(req.body?.answers)
-      ? req.body.answers
-          .filter((answer) => answer?.questionId)
-          .map((answer) => ({
-            questionId: answer.questionId,
-            blockType: answer.blockType || 'short_answer',
-            value: answer.value ?? null,
-            valueType: answer.valueType || typeof answer.value
-          }))
-      : [];
+    const normalizedAnswers = normalizeSurveyAnswers(req.body?.answers, questionById, memberMap);
 
     const response = await writeResponseWithCoverage({
       survey,
@@ -1166,24 +1294,31 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
       return res.status(404).json({ message: 'Response not found for this survey' });
     }
 
-    const nextAnswers = Array.isArray(req.body?.answers)
-      ? req.body.answers
-          .filter((answer) => answer?.questionId)
-          .map((answer) => ({
-            questionId: answer.questionId,
-            blockType: answer.blockType || 'short_answer',
-            value: answer.value ?? null,
-            valueType: answer.valueType || typeof answer.value
-          }))
+    const surveyQuestions = Array.isArray(req.body?.answers)
+      ? await SurveyQuestion.find({ surveyId: survey._id }).select('_id blockType').lean()
+      : [];
+    const questionById = new Map(surveyQuestions.map((question) => [toIdString(question._id), question]));
+    const rosterDataForAnswerEdit = Array.isArray(req.body?.answers)
+      ? await getActiveRosterMemberMap(survey.campId)
       : null;
+    const nextAnswers = Array.isArray(req.body?.answers)
+      ? normalizeSurveyAnswers(req.body.answers, questionById, rosterDataForAnswerEdit?.memberMap || null)
+      : null;
+    const peopleMemberIdsFromNextAnswers = nextAnswers
+      ? extractPeopleMemberIdsFromAnswers(nextAnswers, questionById)
+      : [];
 
     const requestedCoveredMembers = Array.isArray(req.body?.coveredMemberIds)
       ? dedupeIdList(req.body.coveredMemberIds)
       : null;
 
-    if (requestedCoveredMembers) {
-      const safeCoverage = dedupeIdList([response.submittedByMemberId, ...requestedCoveredMembers]);
-      const { memberMap } = await getActiveRosterMemberMap(survey.campId);
+    if (requestedCoveredMembers || peopleMemberIdsFromNextAnswers.length > 0) {
+      const safeCoverage = dedupeIdList([
+        response.submittedByMemberId,
+        ...(requestedCoveredMembers || response.coveredMemberIds || []),
+        ...peopleMemberIdsFromNextAnswers
+      ]);
+      const { memberMap } = rosterDataForAnswerEdit || (await getActiveRosterMemberMap(survey.campId));
       const invalidIds = safeCoverage.filter((memberId) => !memberMap.has(memberId));
       if (invalidIds.length > 0) {
         return res.status(400).json({

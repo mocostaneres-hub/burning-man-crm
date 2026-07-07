@@ -8,8 +8,12 @@ import { Plus, Send, Clock, ClipboardList, Eye } from 'lucide-react';
 
 type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
 
+const createLocalId = (prefix: 'question' | 'section' = 'question'): string =>
+  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
 const defaultQuestion = (): SurveyQuestion => ({
   order: 0,
+  localId: createLocalId('question'),
   blockType: 'short_answer',
   prompt: '',
   required: false,
@@ -17,7 +21,19 @@ const defaultQuestion = (): SurveyQuestion => ({
   supportLevel: 'supported'
 });
 
+const defaultSection = (): SurveyQuestion => ({
+  order: 0,
+  localId: createLocalId('section'),
+  blockType: 'section_header',
+  prompt: 'New section',
+  helpText: '',
+  required: false,
+  options: [],
+  supportLevel: 'supported'
+});
+
 const optionBlockTypes = new Set(['multiple_choice', 'checkboxes', 'dropdown']);
+const routingBlockTypes = new Set(['multiple_choice', 'dropdown']);
 
 const sanitizeRichTextHtml = (value: string): string =>
   String(value || '')
@@ -31,6 +47,79 @@ const stripHtmlToText = (value: string): string =>
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+type RichTextEditorProps = {
+  value: string;
+  onChange: (value: string) => void;
+  minHeightClass?: string;
+};
+
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHeightClass = 'min-h-[120px]' }) => {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  useEffect(() => {
+    if (!editorRef.current || previewMode || document.activeElement === editorRef.current) return;
+    if (editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || '';
+    }
+  }, [previewMode, value]);
+
+  const applyFormat = (command: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false);
+    onChange(editorRef.current?.innerHTML || '');
+  };
+
+  const insertLink = () => {
+    const href = window.prompt('Enter URL', 'https://');
+    if (!href) return;
+    editorRef.current?.focus();
+    document.execCommand('createLink', false, href);
+    onChange(editorRef.current?.innerHTML || '');
+  };
+
+  return (
+    <div className="rounded border border-gray-200">
+      <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => applyFormat('bold')}>Bold</Button>
+        <Button variant="outline" size="sm" onClick={() => applyFormat('italic')}>Italic</Button>
+        <Button variant="outline" size="sm" onClick={() => applyFormat('insertUnorderedList')}>Bullets</Button>
+        <Button variant="outline" size="sm" onClick={insertLink}>Link</Button>
+        <Button
+          variant={previewMode ? 'primary' : 'outline'}
+          size="sm"
+          onClick={() => setPreviewMode((prev) => !prev)}
+        >
+          {previewMode ? 'Editing' : 'Preview'}
+        </Button>
+      </div>
+      {!previewMode ? (
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={() => onChange(editorRef.current?.innerHTML || '')}
+          className={`${minHeightClass} p-3 outline-none text-sm`}
+        />
+      ) : (
+        <div
+          className={`${minHeightClass} p-3 text-sm prose max-w-none`}
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(value || '<p class="text-gray-500">No content yet.</p>') }}
+        />
+      )}
+    </div>
+  );
+};
+
+const withQuestionDefaults = (question: SurveyQuestion, index: number): SurveyQuestion => ({
+  ...question,
+  order: index,
+  localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
+  options: Array.isArray(question.options)
+    ? question.options.map((option) => ({ ...option, nextSectionId: option.nextSectionId || '' }))
+    : []
+});
 
 const CampSurveys: React.FC = () => {
   const { user } = useAuth();
@@ -49,9 +138,6 @@ const CampSurveys: React.FC = () => {
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultQuestion()]);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [descriptionPreviewMode, setDescriptionPreviewMode] = useState(false);
-  const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
-  const [descriptionEditorInitialHtml, setDescriptionEditorInitialHtml] = useState('');
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -173,20 +259,13 @@ const CampSurveys: React.FC = () => {
     setEditingSurveyId(null);
     setTitle('');
     setDescription('');
-    setDescriptionEditorInitialHtml('');
     setQuestions([defaultQuestion()]);
     setImportWarnings([]);
-    setDescriptionPreviewMode(false);
   };
 
   const openCreateModal = () => {
     resetEditor();
     setEditorOpen(true);
-    setTimeout(() => {
-      if (descriptionEditorRef.current) {
-        descriptionEditorRef.current.innerHTML = '';
-      }
-    }, 0);
   };
 
   const openEditModal = async (survey: Survey) => {
@@ -196,24 +275,23 @@ const CampSurveys: React.FC = () => {
       setEditingSurveyId(survey._id);
       setTitle(detail.survey.title || '');
       setDescription(nextDescription);
-      setDescriptionEditorInitialHtml(nextDescription);
-      setQuestions((detail.questions || []).map((question: any, index: number) => ({ ...question, order: index })));
+      setQuestions((detail.questions || []).map((question: any, index: number) => withQuestionDefaults(question, index)));
       setEditorOpen(true);
-      setDescriptionPreviewMode(false);
-      setTimeout(() => {
-        if (descriptionEditorRef.current) {
-          descriptionEditorRef.current.innerHTML = nextDescription;
-        }
-      }, 0);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load survey details');
     }
   };
 
-  useEffect(() => {
-    if (!editorOpen || !descriptionEditorRef.current) return;
-    descriptionEditorRef.current.innerHTML = descriptionEditorInitialHtml || '';
-  }, [editorOpen, editingSurveyId, descriptionEditorInitialHtml]);
+  const surveySections = useMemo(
+    () =>
+      questions
+        .filter((question) => question.blockType === 'section_header')
+        .map((question, index) => ({
+          id: question.localId || `section_${index + 1}`,
+          label: question.prompt?.trim() || `Section ${index + 1}`
+        })),
+    [questions]
+  );
 
   const setQuestion = (index: number, patch: Partial<SurveyQuestion>) => {
     setQuestions((prev) =>
@@ -223,6 +301,10 @@ const CampSurveys: React.FC = () => {
 
   const addQuestion = () => {
     setQuestions((prev) => [...prev, { ...defaultQuestion(), order: prev.length }]);
+  };
+
+  const addSection = () => {
+    setQuestions((prev) => [...prev, { ...defaultSection(), order: prev.length }]);
   };
 
   const reorderQuestions = (fromIndex: number, toIndex: number) => {
@@ -247,7 +329,7 @@ const CampSurveys: React.FC = () => {
         qIndex === questionIndex
           ? {
               ...question,
-              options: [...(question.options || []), { label: '', value: '' }]
+              options: [...(question.options || []), { label: '', value: '', nextSectionId: '' }]
             }
           : question
       )
@@ -262,7 +344,22 @@ const CampSurveys: React.FC = () => {
         nextOptions[optionIndex] = {
           ...(nextOptions[optionIndex] || { isOther: false }),
           label: nextLabel,
-          value: nextLabel
+          value: nextLabel,
+          nextSectionId: nextOptions[optionIndex]?.nextSectionId || ''
+        };
+        return { ...question, options: nextOptions };
+      })
+    );
+  };
+
+  const setOptionRouting = (questionIndex: number, optionIndex: number, nextSectionId: string) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) => {
+        if (qIndex !== questionIndex) return question;
+        const nextOptions = [...(question.options || [])];
+        nextOptions[optionIndex] = {
+          ...(nextOptions[optionIndex] || { label: '', value: '' }),
+          nextSectionId
         };
         return { ...question, options: nextOptions };
       })
@@ -304,49 +401,45 @@ const CampSurveys: React.FC = () => {
     setQuestions((prev) =>
       prev.map((question, qIndex) => {
         if (qIndex !== questionIndex) return question;
+        if (nextType === 'section_header') {
+          return {
+            ...question,
+            blockType: nextType,
+            localId: question.localId || createLocalId('section'),
+            required: false,
+            options: []
+          };
+        }
         if (optionBlockTypes.has(nextType)) {
           const currentOptions = Array.isArray(question.options) ? question.options : [];
           return {
             ...question,
             blockType: nextType,
-            options: currentOptions.length > 0 ? currentOptions : [{ label: '', value: '' }]
+            localId: question.localId || createLocalId('question'),
+            options: currentOptions.length > 0 ? currentOptions : [{ label: '', value: '', nextSectionId: '' }]
           };
         }
-        return { ...question, blockType: nextType };
+        return { ...question, blockType: nextType, localId: question.localId || createLocalId('question'), options: [] };
       })
     );
-  };
-
-  const applyDescriptionFormat = (command: string) => {
-    document.execCommand(command, false);
-    if (descriptionEditorRef.current) {
-      setDescription(descriptionEditorRef.current.innerHTML);
-    }
-  };
-
-  const insertDescriptionLink = () => {
-    const href = window.prompt('Enter URL', 'https://');
-    if (!href) return;
-    document.execCommand('createLink', false, href);
-    if (descriptionEditorRef.current) {
-      setDescription(descriptionEditorRef.current.innerHTML);
-    }
   };
 
   const openSurveyViewMode = (surveyId: string) => {
     navigate(`/surveys/${surveyId}?mode=view`);
   };
 
-  const saveDraft = async () => {
+  const saveDraft = async (options: { preview?: boolean } = {}) => {
     if (!campId || !title.trim()) {
       setError('Survey title is required');
-      return;
+      return null;
     }
     const sanitizedQuestions = questions
       .map((question, index) => ({
         ...question,
         order: index,
+        localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
         prompt: String(question.prompt || '').trim(),
+        helpText: String(question.helpText || '').trim(),
         options: Array.isArray(question.options)
           ? question.options
               .map((option) => {
@@ -354,41 +447,54 @@ const CampSurveys: React.FC = () => {
                 return {
                   ...option,
                   label: nextLabel,
-                  value: nextLabel
+                  value: nextLabel,
+                  nextSectionId: option.nextSectionId || ''
                 };
               })
               .filter((option) => option.label && option.value)
           : []
       }))
-      .filter((question) => question.blockType === 'section_header' || question.blockType === 'description' || question.prompt);
+      .filter((question) => {
+        if (question.blockType === 'section_header') return !!question.prompt || !!question.helpText;
+        if (question.blockType === 'description') return !!question.prompt || !!question.helpText;
+        return !!question.prompt;
+      });
 
     if (sanitizedQuestions.length === 0) {
       setError('Add at least one question or section before saving');
-      return;
+      return null;
     }
 
     try {
       setSavingDraft(true);
       setError(null);
+      let savedSurveyId = editingSurveyId;
       if (editingSurveyId) {
-        await api.updateSurveyDraft(editingSurveyId, {
+        const response = await api.updateSurveyDraft(editingSurveyId, {
           title: title.trim(),
           description: description.trim(),
           questions: sanitizedQuestions
         });
+        savedSurveyId = response.survey?._id || editingSurveyId;
       } else {
-        await api.createSurveyDraft({
+        const response = await api.createSurveyDraft({
           campId,
           title: title.trim(),
           description: description.trim(),
           questions: sanitizedQuestions
         });
+        savedSurveyId = response.survey?._id || null;
       }
       setEditorOpen(false);
       resetEditor();
       await loadSurveys();
+      if (options.preview && savedSurveyId) {
+        openSurveyViewMode(savedSurveyId);
+      }
+      return savedSurveyId;
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to save survey draft');
+      return null;
     } finally {
       setSavingDraft(false);
     }
@@ -627,7 +733,7 @@ const CampSurveys: React.FC = () => {
                             Open View
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
-                            Edit Draft
+                            Edit Survey
                           </Button>
                           <Button
                             variant="primary"
@@ -652,6 +758,9 @@ const CampSurveys: React.FC = () => {
                         <Button variant="outline" size="sm" onClick={() => openResponsesModal(survey)}>
                           Review Responses
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
+                          Edit Survey
+                        </Button>
                         {survey.status === 'sent' && (
                           <Button
                             variant="outline"
@@ -672,7 +781,7 @@ const CampSurveys: React.FC = () => {
         </div>
       )}
 
-      <Modal isOpen={editorOpen} onClose={() => setEditorOpen(false)} title={editingSurveyId ? 'Edit Survey Draft' : 'Create Survey Draft'} size="xl">
+      <Modal isOpen={editorOpen} onClose={() => setEditorOpen(false)} title={editingSurveyId ? 'Edit Survey' : 'Create Survey Draft'} size="xl">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Survey title</label>
@@ -685,35 +794,7 @@ const CampSurveys: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <div className="rounded border border-gray-200">
-              <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('bold')}>Bold</Button>
-                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('italic')}>Italic</Button>
-                <Button variant="outline" size="sm" onClick={() => applyDescriptionFormat('insertUnorderedList')}>Bullets</Button>
-                <Button variant="outline" size="sm" onClick={insertDescriptionLink}>Link</Button>
-                <Button
-                  variant={descriptionPreviewMode ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => setDescriptionPreviewMode((prev) => !prev)}
-                >
-                  {descriptionPreviewMode ? 'Editing' : 'Preview'}
-                </Button>
-              </div>
-              {!descriptionPreviewMode ? (
-                <div
-                  ref={descriptionEditorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={() => setDescription(descriptionEditorRef.current?.innerHTML || '')}
-                  className="min-h-[120px] p-3 outline-none text-sm"
-                />
-              ) : (
-                <div
-                  className="min-h-[120px] p-3 text-sm prose max-w-none"
-                  dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(description || '<p class="text-gray-500">No description yet.</p>') }}
-                />
-              )}
-            </div>
+            <RichTextEditor value={description} onChange={setDescription} />
             <div className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
               <p className="font-semibold mb-1">Formatting guide</p>
               <p>Use bold, italic, bullets, and links to explain survey context. Toggle preview to check exactly what roster members will read.</p>
@@ -723,9 +804,14 @@ const CampSurveys: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-custom-text">Questions</h3>
-              <Button variant="outline" size="sm" onClick={addQuestion}>
-                Add Question
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={addSection}>
+                  Add Section
+                </Button>
+                <Button variant="outline" size="sm" onClick={addQuestion}>
+                  Add Question
+                </Button>
+              </div>
             </div>
             {questions.map((question, index) => (
               <div key={`question-${index}`} className="border border-gray-200 rounded p-3 space-y-2">
@@ -747,18 +833,21 @@ const CampSurveys: React.FC = () => {
                   }}
                 >
                   <p className="text-xs font-semibold text-gray-600">
-                    Question #{index + 1} <span className="text-gray-400 ml-1">(drag to reorder)</span>
+                    {question.blockType === 'section_header' ? 'Section' : 'Question'} #{index + 1}{' '}
+                    <span className="text-gray-400 ml-1">(drag to reorder)</span>
                   </p>
                   <span className="text-gray-400 text-sm">::</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-600 mb-1">Prompt</label>
+                    <label className="block text-xs text-gray-600 mb-1">
+                      {question.blockType === 'section_header' ? 'Section title' : 'Prompt'}
+                    </label>
                     <input
                       value={question.prompt}
                       onChange={(e) => setQuestion(index, { prompt: e.target.value })}
                       className="w-full border border-gray-300 rounded px-2 py-1"
-                      placeholder="Question prompt"
+                      placeholder={question.blockType === 'section_header' ? 'Section title' : 'Question prompt'}
                     />
                   </div>
                   <div>
@@ -773,6 +862,7 @@ const CampSurveys: React.FC = () => {
                       <option value="multiple_choice">Multiple Choice</option>
                       <option value="checkboxes">Checkboxes</option>
                       <option value="dropdown">Dropdown</option>
+                      <option value="people">People</option>
                       <option value="linear_scale">Linear Scale</option>
                       <option value="date">Date</option>
                       <option value="time">Time</option>
@@ -781,6 +871,17 @@ const CampSurveys: React.FC = () => {
                   </div>
                 </div>
 
+                {question.blockType === 'section_header' && (
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Section information</label>
+                    <RichTextEditor
+                      value={question.helpText || ''}
+                      onChange={(nextValue) => setQuestion(index, { helpText: nextValue })}
+                      minHeightClass="min-h-[90px]"
+                    />
+                  </div>
+                )}
+
                 {optionBlockTypes.has(question.blockType) && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-2">Options</label>
@@ -788,7 +889,7 @@ const CampSurveys: React.FC = () => {
                       {(question.options || []).map((option, optionIndex) => (
                         <div
                           key={`option-${index}-${optionIndex}`}
-                          className="flex items-center gap-2 cursor-grab active:cursor-grabbing"
+                          className="grid grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,1fr)_minmax(180px,240px)_auto] gap-2 items-center cursor-grab active:cursor-grabbing"
                           draggable
                           onDragStart={(event) => {
                             event.dataTransfer.setData(
@@ -818,9 +919,26 @@ const CampSurveys: React.FC = () => {
                           <input
                             value={option.label}
                             onChange={(e) => setOptionField(index, optionIndex, e.target.value)}
-                            className="flex-1 border border-gray-300 rounded px-2 py-1"
+                            className="min-w-0 border border-gray-300 rounded px-2 py-1"
                             placeholder={`Option ${optionIndex + 1}`}
                           />
+                          {routingBlockTypes.has(question.blockType) && (
+                            <select
+                              value={option.nextSectionId || ''}
+                              onChange={(e) => setOptionRouting(index, optionIndex, e.target.value)}
+                              className="col-span-2 md:col-span-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                            >
+                              <option value="">Next section</option>
+                              <option value="__SUBMIT__">Submit survey</option>
+                              {surveySections
+                                .filter((section) => section.id !== question.localId)
+                                .map((section) => (
+                                  <option key={section.id} value={section.id}>
+                                    Go to {section.label}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -838,14 +956,16 @@ const CampSurveys: React.FC = () => {
                   </div>
                 )}
 
-                <label className="inline-flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={question.required === true}
-                    onChange={(e) => setQuestion(index, { required: e.target.checked })}
-                  />
-                  Required question
-                </label>
+                {question.blockType !== 'section_header' && (
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={question.required === true}
+                      onChange={(e) => setQuestion(index, { required: e.target.checked })}
+                    />
+                    Required question
+                  </label>
+                )}
 
                 <div className="flex justify-end">
                   <Button variant="outline" size="sm" onClick={() => removeQuestion(index)} disabled={questions.length === 1}>
@@ -857,16 +977,14 @@ const CampSurveys: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            {editingSurveyId && (
-              <Button variant="outline" onClick={() => openSurveyViewMode(editingSurveyId)}>
-                Preview as Recipient
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => saveDraft({ preview: true })} disabled={savingDraft}>
+              Preview as Recipient
+            </Button>
             <Button variant="outline" onClick={() => setEditorOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={saveDraft} disabled={savingDraft}>
-              {savingDraft ? 'Saving...' : editingSurveyId ? 'Save Draft' : 'Create Draft'}
+            <Button variant="primary" onClick={() => saveDraft()} disabled={savingDraft}>
+              {savingDraft ? 'Saving...' : editingSurveyId ? 'Save Survey' : 'Create Draft'}
             </Button>
           </div>
         </div>
