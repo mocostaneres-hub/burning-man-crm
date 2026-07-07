@@ -108,6 +108,24 @@ interface Camp {
   };
 }
 
+const hasApplicationProfileCity = (user: any): boolean => (
+  Boolean(user?.city?.trim()) || Boolean(user?.location?.city?.trim())
+);
+
+const isApplicationProfileIncomplete = (user: any): boolean => (
+  !user.firstName ||
+  !user.lastName ||
+  !user.playaName ||
+  !hasApplicationProfileCity(user) ||
+  !user.phoneNumber ||
+  !user.skills ||
+  user.skills.length === 0 ||
+  !user.foodPreferences ||
+  user.foodPreferences.length === 0 ||
+  user.yearsBurned === undefined ||
+  !user.burningPlans
+);
+
 // Helper function to dynamically render Lucide icons
 const renderIcon = (iconName: string) => {
   const IconComponent = (LucideIcons as any)[iconName];
@@ -167,20 +185,7 @@ const PublicCampProfile: React.FC = () => {
     const pendingInvite = localStorage.getItem('pendingInvite');
     if (!pendingInvite) return;
     
-    // Check if profile is complete - must match backend validation in applications.js
-    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills, foodPreferences
-    const isProfileIncomplete = 
-      !user.firstName || 
-      !user.lastName || 
-      !user.playaName || 
-      !user.city || 
-      !user.phoneNumber || 
-      !user.skills || 
-      user.skills.length === 0 || 
-      !user.foodPreferences ||
-      user.foodPreferences.length === 0 ||
-      user.yearsBurned === undefined ||
-      !user.burningPlans;
+    const isProfileIncomplete = isApplicationProfileIncomplete(user);
     
     if (isProfileIncomplete) {
       console.log('🎟️ [PublicCampProfile] Showing profile completion modal');
@@ -246,20 +251,7 @@ const PublicCampProfile: React.FC = () => {
       return;
     }
     
-    // Check if profile is complete - must match backend validation in applications.js
-    // Required fields: firstName, lastName, playaName, phoneNumber, city, yearsBurned, burningPlans, skills, foodPreferences
-    const isProfileIncomplete = 
-      !user.firstName || 
-      !user.lastName || 
-      !user.playaName || 
-      !user.city || 
-      !user.phoneNumber || 
-      !user.skills || 
-      user.skills.length === 0 || 
-      !user.foodPreferences ||
-      user.foodPreferences.length === 0 ||
-      user.yearsBurned === undefined ||
-      !user.burningPlans;
+    const isProfileIncomplete = isApplicationProfileIncomplete(user);
       
     if (isProfileIncomplete) {
       setShowProfileCompletionModal(true);

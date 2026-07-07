@@ -809,7 +809,10 @@ class MockDatabase {
       if (query._id && member._id.toString() !== query._id.toString()) {
         matches = false;
       }
-      if (query.user && member.user.toString() !== query.user.toString()) {
+      if (query.user && (!member.user || member.user.toString() !== query.user.toString())) {
+        matches = false;
+      }
+      if (query.email && String(member.email || '').toLowerCase() !== String(query.email).toLowerCase()) {
         matches = false;
       }
       if (query.camp && member.camp.toString() !== query.camp.toString()) {
@@ -836,6 +839,12 @@ class MockDatabase {
     
     if (query.camp) {
       members = members.filter(member => member.camp && member.camp.toString() === query.camp.toString());
+    }
+    if (query.user) {
+      members = members.filter(member => member.user && member.user.toString() === query.user.toString());
+    }
+    if (query.email) {
+      members = members.filter(member => String(member.email || '').toLowerCase() === String(query.email).toLowerCase());
     }
     if (query.status) {
       members = members.filter(member => member.status === query.status);

@@ -14,6 +14,25 @@ interface ProfileCompletionModalProps {
   onComplete: () => void;
 }
 
+const isValidProfilePhoneNumber = (value: string): boolean => {
+  const digitCount = value.replace(/\D/g, '').length;
+  return digitCount >= 7 && digitCount <= 20;
+};
+
+const getProfileUpdateErrorMessage = (err: any): string => {
+  const serverMessage = err.response?.data?.message;
+  if (serverMessage) return serverMessage;
+
+  const firstValidationError = err.response?.data?.errors?.[0];
+  if (firstValidationError?.msg) return firstValidationError.msg;
+
+  if (err.code === 'ECONNABORTED') {
+    return 'The profile save took too long. Please check your connection and try again.';
+  }
+
+  return 'Failed to update profile';
+};
+
 const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({ 
   isOpen, 
   onClose,
@@ -117,6 +136,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     e.preventDefault();
     setLoading(true);
     setError('');
+    const phoneNumber = formData.phoneNumber.trim();
 
     // Validate required fields
     if (!formData.playaName.trim()) {
@@ -129,8 +149,13 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       setLoading(false);
       return;
     }
-    if (!formData.phoneNumber.trim()) {
+    if (!phoneNumber) {
       setError('Phone number is required');
+      setLoading(false);
+      return;
+    }
+    if (!isValidProfilePhoneNumber(phoneNumber)) {
+      setError('Phone number must contain 7 to 20 digits');
       setLoading(false);
       return;
     }
@@ -150,6 +175,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       // Prepare data for submission: send structured location (required by API)
       const submitData: Record<string, unknown> = {
         ...formData,
+        phoneNumber,
         location: formData.location || undefined,
         city: formData.location?.city ?? '',
         arrivalDate: formData.arrivalDate ? new Date(formData.arrivalDate) : undefined,
@@ -157,7 +183,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       };
 
       // Update user profile
-      await api.put('/users/profile', submitData);
+      await api.put('/users/profile', submitData, { timeout: 30000 });
       
       // Refresh user data
       await refreshUser();
@@ -168,7 +194,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       onComplete();
     } catch (err: any) {
       console.error('❌ [ProfileCompletionModal] Error updating profile:', err);
-      setError(err.response?.data?.message || 'Failed to update profile');
+      setError(getProfileUpdateErrorMessage(err));
     } finally {
       setLoading(false);
     }

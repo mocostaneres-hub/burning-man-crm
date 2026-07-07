@@ -18,6 +18,57 @@ interface ExtendedUser extends UserType {
   userHistory?: any[];
 }
 
+interface AdminCampSummary {
+  _id: string;
+  name: string;
+  slug?: string | null;
+  isPubliclyVisible?: boolean;
+  acceptingApplications?: boolean;
+}
+
+interface AdminMemberRecord {
+  _id: string;
+  camp: AdminCampSummary;
+  status?: string | null;
+  role?: string | null;
+  signupSource?: string | null;
+  isShiftsOnly?: boolean;
+  name?: string;
+  email?: string;
+  playaName?: string;
+  phone?: string;
+  tags?: string[];
+  skills?: string[];
+  interests?: string[];
+  customFieldValues?: Record<string, any>;
+  applicationData?: Record<string, any>;
+  appliedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewNotes?: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+interface AdminSubmittedApplication {
+  _id: string;
+  camp: AdminCampSummary;
+  status?: string | null;
+  applicationData?: Record<string, any>;
+  reviewNotes?: string;
+  notes?: string;
+  duesStatus?: string | null;
+  appliedAt?: string | null;
+  reviewedAt?: string | null;
+  lastUpdated?: string | null;
+  createdAt?: string | null;
+}
+
+interface AdminMemberDetail {
+  user: UserType;
+  memberships: AdminMemberRecord[];
+  applications: AdminSubmittedApplication[];
+}
+
 interface DashboardStats {
   // All users (including camp and admin accounts)
   totalUsers: number;
@@ -236,6 +287,9 @@ const AdminDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<AdminMemberDetail | null>(null);
+  const [showMemberDetailModal, setShowMemberDetailModal] = useState(false);
+  const [memberDetailLoadingId, setMemberDetailLoadingId] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
@@ -529,17 +583,17 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleUserView = (user: UserType) => {
-    // For personal accounts, open public profile if available
-    if (user.accountType === 'personal') {
-      // Try to open public member profile
-      window.open(`/members/${user._id}`, '_blank');
-    } else {
-      // For camp/admin accounts, open their camp profile if available
-      if (user.campId || user.urlSlug) {
-        const slug = user.urlSlug || user.campId;
-        window.open(`/camps/${slug}`, '_blank');
-      }
+  const handleUserView = async (user: UserType) => {
+    try {
+      setMemberDetailLoadingId(user._id);
+      const response = await apiService.get(`/admin/users/${user._id}/member-detail`);
+      setSelectedMemberDetail(response as AdminMemberDetail);
+      setShowMemberDetailModal(true);
+    } catch (err: any) {
+      console.error('Error loading member detail:', err);
+      alert(err.response?.data?.message || 'Failed to load member details.');
+    } finally {
+      setMemberDetailLoadingId(null);
     }
   };
 
@@ -1025,10 +1079,15 @@ const AdminDashboard: React.FC = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleUserView(user)}
+                            disabled={memberDetailLoadingId === user._id}
                             className="flex items-center gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
                           >
-                            <Eye className="w-3 h-3" />
-                            View
+                            {memberDetailLoadingId === user._id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Eye className="w-3 h-3" />
+                            )}
+                            {memberDetailLoadingId === user._id ? 'Loading' : 'View'}
                           </Button>
                           <Button
                             variant="outline"
@@ -1680,6 +1739,17 @@ const AdminDashboard: React.FC = () => {
         </Modal>
       )}
 
+      {/* Member Detail Modal */}
+      {showMemberDetailModal && selectedMemberDetail && (
+        <AdminMemberDetailModal
+          detail={selectedMemberDetail}
+          onClose={() => {
+            setShowMemberDetailModal(false);
+            setSelectedMemberDetail(null);
+          }}
+        />
+      )}
+
       {/* User Edit Modal */}
       {showUserModal && selectedUser && (
         <UserEditModal
@@ -1901,6 +1971,269 @@ const ImpersonateButton: React.FC<{
         </Modal>
       )}
     </>
+  );
+};
+
+const formatAdminDate = (value?: string | Date | null): string => {
+  if (!value) return 'Not provided';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not provided';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const formatBooleanDisplay = (value?: boolean | null): string => {
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  return 'Not informed';
+};
+
+const formatFieldLabel = (key: string): string =>
+  key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatDetailValue = (value: any): string => {
+  if (value === null || value === undefined || value === '') return 'Not provided';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.length ? value.map(formatDetailValue).join(', ') : 'Not provided';
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).filter(([, nestedValue]) => (
+      nestedValue !== null &&
+      nestedValue !== undefined &&
+      nestedValue !== '' &&
+      !(Array.isArray(nestedValue) && nestedValue.length === 0)
+    ));
+    if (entries.length === 0) return 'Not provided';
+    return entries.map(([nestedKey, nestedValue]) => `${formatFieldLabel(nestedKey)}: ${formatDetailValue(nestedValue)}`).join('; ');
+  }
+  return String(value);
+};
+
+const getSocialUrl = (platform: 'instagram' | 'facebook' | 'linkedin', value?: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const cleaned = raw.replace(/^@/, '');
+  if (platform === 'instagram') return `https://instagram.com/${cleaned}`;
+  if (platform === 'facebook') return `https://facebook.com/${cleaned}`;
+  return `https://linkedin.com/in/${cleaned}`;
+};
+
+const DetailField: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => {
+  const hasValue = value !== null && value !== undefined && value !== '';
+
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-1 text-sm text-gray-900 break-words">{hasValue ? value : 'Not provided'}</div>
+    </div>
+  );
+};
+
+const DataObjectGrid: React.FC<{ data?: Record<string, any> }> = ({ data }) => {
+  const entries = Object.entries(data || {}).filter(([, value]) => (
+    value !== null &&
+    value !== undefined &&
+    value !== '' &&
+    !(Array.isArray(value) && value.length === 0)
+  ));
+
+  if (entries.length === 0) {
+    return <p className="text-sm text-gray-500">No submitted field data.</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {entries.map(([key, value]) => (
+        <DetailField
+          key={key}
+          label={formatFieldLabel(key)}
+          value={formatDetailValue(value)}
+        />
+      ))}
+    </div>
+  );
+};
+
+const AdminMemberDetailModal: React.FC<{
+  detail: AdminMemberDetail;
+  onClose: () => void;
+}> = ({ detail, onClose }) => {
+  const { user, memberships, applications } = detail;
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+  const city = user.location?.city || user.city || 'Not provided';
+  const socialLinks = [
+    { label: 'Instagram', value: user.socialMedia?.instagram, url: getSocialUrl('instagram', user.socialMedia?.instagram) },
+    { label: 'Facebook', value: user.socialMedia?.facebook, url: getSocialUrl('facebook', user.socialMedia?.facebook) },
+    { label: 'LinkedIn', value: user.socialMedia?.linkedin, url: getSocialUrl('linkedin', user.socialMedia?.linkedin) }
+  ].filter((link) => link.value && link.url);
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={`Member View: ${fullName}`}
+      size="lg"
+    >
+      <div className="max-h-[80vh] overflow-y-auto space-y-6">
+        <div className="flex items-start gap-4 rounded-lg border bg-gray-50 p-4">
+          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-gray-200 flex items-center justify-center">
+            {user.profilePhoto ? (
+              <img src={user.profilePhoto} alt={fullName} className="h-full w-full object-cover" />
+            ) : (
+              <UserIcon className="h-8 w-8 text-gray-400" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xl font-semibold text-gray-900">{fullName}</h3>
+              <Badge variant={user.isActive ? 'success' : 'error'}>
+                {user.isActive ? 'Active' : 'Inactive'}
+              </Badge>
+              <Badge variant="neutral">{user.accountType}</Badge>
+            </div>
+            {user.playaName && (
+              <p className="mt-1 text-sm font-medium text-orange-600">"{user.playaName}"</p>
+            )}
+            <p className="mt-1 text-sm text-gray-600">{user.email}</p>
+            <p className="mt-1 text-xs text-gray-500 font-mono">ID: {user._id}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="text-lg font-medium text-custom-text mb-4">Profile Data</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <DetailField label="First Name" value={user.firstName || 'Not provided'} />
+            <DetailField label="Last Name" value={user.lastName || 'Not provided'} />
+            <DetailField label="Playa Name" value={user.playaName || 'Not provided'} />
+            <DetailField label="City" value={city} />
+            <DetailField label="Region" value={user.location?.state || 'Not provided'} />
+            <DetailField label="Country" value={user.location?.country || 'Not provided'} />
+            <DetailField label="Phone" value={user.phoneNumber || 'Not provided'} />
+            <DetailField label="Years Burned" value={user.yearsBurned ?? 'Not provided'} />
+            <DetailField label="Burning Plans" value={user.burningPlans || 'Not provided'} />
+            <DetailField label="Ticket" value={formatBooleanDisplay(user.hasTicket)} />
+            <DetailField label="Vehicle Pass" value={formatBooleanDisplay(user.hasVehiclePass)} />
+            <DetailField label="Food Preferences" value={user.foodPreferences?.length ? user.foodPreferences.join(', ') : 'Not provided'} />
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <DetailField label="Arrival Date" value={formatAdminDate(user.arrivalDate)} />
+            <DetailField label="Departure Date" value={formatAdminDate(user.departureDate)} />
+            <DetailField label="Early Arrival Interest" value={formatBooleanDisplay(user.interestedInEAP)} />
+            <DetailField label="Strike Interest" value={formatBooleanDisplay(user.interestedInStrike)} />
+          </div>
+
+          <div className="mt-4">
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Social Media</div>
+            {socialLinks.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {socialLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded border border-blue-200 px-3 py-1 text-sm text-blue-700 hover:bg-blue-50"
+                  >
+                    {link.label}: {link.value}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-gray-500">Not provided</p>
+            )}
+          </div>
+
+          {user.bio && (
+            <div className="mt-4">
+              <DetailField label="Bio" value={user.bio} />
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="text-lg font-medium text-custom-text mb-4">Camp Membership Records</h3>
+          {memberships.length === 0 ? (
+            <p className="text-sm text-gray-500">No camp membership records found.</p>
+          ) : (
+            <div className="space-y-4">
+              {memberships.map((member) => (
+                <div key={member._id} className="rounded-lg border border-gray-200 p-4">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <div className="font-semibold text-gray-900">{member.camp?.name || 'Unknown camp'}</div>
+                    {member.status && <Badge variant="neutral">{member.status}</Badge>}
+                    {member.role && <Badge variant="info">{member.role}</Badge>}
+                    {member.signupSource && <Badge variant="neutral">{member.signupSource}</Badge>}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <DetailField label="Roster Name" value={member.name || 'Not provided'} />
+                    <DetailField label="Roster Email" value={member.email || 'Not provided'} />
+                    <DetailField label="Roster Playa Name" value={member.playaName || 'Not provided'} />
+                    <DetailField label="Roster Phone" value={member.phone || 'Not provided'} />
+                    <DetailField label="Applied At" value={formatAdminDate(member.appliedAt)} />
+                    <DetailField label="Tags" value={member.tags?.length ? member.tags.join(', ') : 'Not provided'} />
+                  </div>
+                  {member.applicationData && Object.keys(member.applicationData).length > 0 && (
+                    <div className="mt-4 border-t pt-4">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3">Membership Submitted Data</h4>
+                      <DataObjectGrid data={member.applicationData} />
+                    </div>
+                  )}
+                  {member.reviewNotes && (
+                    <div className="mt-4">
+                      <DetailField label="Review Notes" value={member.reviewNotes} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border bg-white p-4">
+          <h3 className="text-lg font-medium text-custom-text mb-4">Applications Submitted to Camps</h3>
+          {applications.length === 0 ? (
+            <p className="text-sm text-gray-500">No submitted applications found.</p>
+          ) : (
+            <div className="space-y-4">
+              {applications.map((application) => (
+                <div key={application._id} className="rounded-lg border border-gray-200 p-4">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <div className="font-semibold text-gray-900">{application.camp?.name || 'Unknown camp'}</div>
+                    {application.status && <Badge variant="info">{application.status}</Badge>}
+                    {application.duesStatus && <Badge variant="neutral">Dues: {application.duesStatus}</Badge>}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <DetailField label="Applied At" value={formatAdminDate(application.appliedAt)} />
+                    <DetailField label="Reviewed At" value={formatAdminDate(application.reviewedAt)} />
+                    <DetailField label="Last Updated" value={formatAdminDate(application.lastUpdated)} />
+                  </div>
+                  <DataObjectGrid data={application.applicationData} />
+                  {(application.reviewNotes || application.notes) && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {application.reviewNotes && <DetailField label="Review Notes" value={application.reviewNotes} />}
+                      {application.notes && <DetailField label="Notes" value={application.notes} />}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

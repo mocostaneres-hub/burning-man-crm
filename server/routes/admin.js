@@ -33,6 +33,58 @@ const upload = multer({
 
 const router = express.Router();
 
+const toPlainObject = (value) => {
+  if (!value) return value;
+  return typeof value.toObject === 'function' ? value.toObject() : value;
+};
+
+const toIdString = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object' && value._id) return value._id.toString();
+  return value.toString();
+};
+
+const sanitizeUserForAdminDetail = (user) => {
+  const plainUser = toPlainObject(user) || {};
+  const {
+    password,
+    passwordResetToken,
+    passwordResetTokenExpiry,
+    googleId,
+    appleId,
+    ...safeUser
+  } = plainUser;
+  return safeUser;
+};
+
+const getCampSummary = async (campId) => {
+  const id = toIdString(campId);
+  if (!id) return null;
+
+  try {
+    const camp = await db.findCamp({ _id: id });
+    if (!camp) return { _id: id, name: 'Unknown camp' };
+
+    const plainCamp = toPlainObject(camp);
+    return {
+      _id: toIdString(plainCamp._id),
+      name: plainCamp.name || plainCamp.campName || 'Unnamed camp',
+      slug: plainCamp.slug || plainCamp.urlSlug || null,
+      isPubliclyVisible: plainCamp.isPubliclyVisible,
+      acceptingApplications: plainCamp.acceptingApplications
+    };
+  } catch (error) {
+    console.warn('⚠️ [Admin Member Detail] Could not resolve camp:', id, error?.message);
+    return { _id: id, name: 'Unknown camp' };
+  }
+};
+
+const getCampSummaryMap = async (campIds) => {
+  const uniqueIds = [...new Set(campIds.map(toIdString).filter(Boolean))];
+  const entries = await Promise.all(uniqueIds.map(async (id) => [id, await getCampSummary(id)]));
+  return new Map(entries);
+};
+
 // @route   GET /api/admin/dashboard
 // @desc    Get admin dashboard statistics
 // @access  Private (Admin only)
@@ -388,6 +440,98 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/users/:id/member-detail
+// @desc    Get full member profile context for System Admin member view
+// @access  Private (Admin only)
+router.get('/users/:id/member-detail', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await db.findUserById(id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const safeUser = sanitizeUserForAdminDetail(user);
+    const userId = toIdString(safeUser._id);
+    const userEmail = String(safeUser.email || '').trim().toLowerCase();
+
+    const [linkedMemberships, emailMemberships, applications] = await Promise.all([
+      db.findMembers({ user: userId }),
+      userEmail ? db.findMembers({ email: userEmail }) : Promise.resolve([]),
+      db.findMemberApplications({ applicant: userId })
+    ]);
+
+    const membershipMap = new Map();
+    [...(linkedMemberships || []), ...(emailMemberships || [])].forEach((member) => {
+      const plainMember = toPlainObject(member);
+      const memberId = toIdString(plainMember?._id);
+      if (memberId) membershipMap.set(memberId, plainMember);
+    });
+
+    const allMemberships = [...membershipMap.values()];
+    const allApplications = (applications || []).map(toPlainObject);
+    const campMap = await getCampSummaryMap([
+      ...allMemberships.map((member) => member.camp),
+      ...allApplications.map((application) => application.camp)
+    ]);
+
+    const memberships = allMemberships.map((member) => {
+      const campId = toIdString(member.camp);
+      const camp = campMap.get(campId) || { _id: campId, name: 'Unknown camp' };
+      return {
+        _id: toIdString(member._id),
+        camp,
+        status: member.status || null,
+        role: member.role || null,
+        signupSource: member.signupSource || null,
+        isShiftsOnly: member.isShiftsOnly === true,
+        name: member.name || '',
+        email: member.email || '',
+        playaName: member.playaName || '',
+        phone: member.phone || '',
+        tags: Array.isArray(member.tags) ? member.tags : [],
+        skills: Array.isArray(member.skills) ? member.skills : [],
+        interests: Array.isArray(member.interests) ? member.interests : [],
+        customFieldValues: member.customFieldValues || {},
+        applicationData: member.applicationData || {},
+        appliedAt: member.appliedAt || null,
+        reviewedAt: member.reviewedAt || null,
+        reviewNotes: member.reviewNotes || '',
+        createdAt: member.createdAt || null,
+        updatedAt: member.updatedAt || null
+      };
+    });
+
+    const submittedApplications = allApplications.map((application) => {
+      const campId = toIdString(application.camp);
+      const camp = campMap.get(campId) || { _id: campId, name: 'Unknown camp' };
+      return {
+        _id: toIdString(application._id),
+        camp,
+        status: application.status || null,
+        applicationData: application.applicationData || {},
+        reviewNotes: application.reviewNotes || '',
+        notes: application.notes || '',
+        duesStatus: application.duesStatus || null,
+        appliedAt: application.appliedAt || null,
+        reviewedAt: application.reviewedAt || null,
+        lastUpdated: application.lastUpdated || application.updatedAt || null,
+        createdAt: application.createdAt || null
+      };
+    });
+
+    res.json({
+      user: safeUser,
+      memberships,
+      applications: submittedApplications
+    });
+  } catch (error) {
+    console.error('Get admin member detail error:', error);
+    res.status(500).json({ message: 'Server error loading member details' });
   }
 });
 

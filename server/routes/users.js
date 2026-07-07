@@ -14,6 +14,19 @@ const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
 
+const isValidProfilePhoneNumber = (value) => {
+  if (value === '' || value === null || value === undefined) return true;
+  const digitCount = String(value).replace(/\D/g, '').length;
+  return digitCount >= 7 && digitCount <= 20;
+};
+
+const getValidationErrorMessage = (errors) => {
+  const firstError = errors[0];
+  if (!firstError) return 'Invalid profile data';
+  if (firstError.msg && firstError.msg !== 'Invalid value') return firstError.msg;
+  return `Invalid value for ${firstError.path || firstError.param || 'profile field'}`;
+};
+
 // @route   GET /api/users/profile
 // @desc    Get current user profile
 // @access  Private
@@ -40,7 +53,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 router.put('/profile', authenticateToken, [
   body('firstName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
   body('lastName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
-  body('phoneNumber').optional().trim().custom((value) => value === '' || (value.length >= 10 && value.length <= 20)),
+  body('phoneNumber').optional().trim().custom(isValidProfilePhoneNumber).withMessage('Phone number must contain 7 to 20 digits'),
   body('city').optional().trim().custom((value) => value === '' || value.length <= 100),
   body('yearsBurned').optional().custom((value) => value === '' || value === null || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50)),
   body('previousCamps').optional().trim().custom((value) => value === '' || value.length <= 1000),
@@ -76,7 +89,11 @@ router.put('/profile', authenticateToken, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      const validationErrors = errors.array();
+      return res.status(400).json({
+        message: getValidationErrorMessage(validationErrors),
+        errors: validationErrors
+      });
     }
 
     // When location is provided as structured object, validate and normalize; otherwise allow legacy string city
@@ -145,7 +162,7 @@ router.put('/profile', authenticateToken, [
     for (const [field, newValue] of Object.entries(updates)) {
       // Skip internal fields
       if (field === 'updatedAt' || field === '__v' || field === 'photos' || field === 'profilePhoto') continue;
-      
+
       const oldValue = user[field];
       
       // Deep comparison for objects and arrays
@@ -167,13 +184,29 @@ router.put('/profile', authenticateToken, [
     let updatedUser;
     try {
       updatedUser = await db.updateUser(user.email, updates);
-      
-      // Record each field change in ActivityLog (user updating their own profile)
+
+      // Debug: Log the updated user
+      console.log('🔍 [PUT /api/users/profile] Updated user playaName:', updatedUser?.playaName);
+      console.log('🔍 [PUT /api/users/profile] Full updated user:', JSON.stringify(updatedUser, null, 2));
+
+      if (!updatedUser) {
+        console.error('❌ [PUT /api/users/profile] updateUser returned null/undefined');
+        return res.status(404).json({ message: 'User not found or update failed' });
+      }
+    } catch (dbError) {
+      console.error('❌ [PUT /api/users/profile] Database error:', dbError);
+      return res.status(500).json({
+        message: 'Internal server error during user update',
+        error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+      });
+    }
+
+    const recordProfileFieldChanges = async () => {
       for (const change of fieldChanges) {
         // Format values for better display
         let formattedOldValue = change.oldValue;
         let formattedNewValue = change.newValue;
-        
+
         // Handle arrays and objects
         if (Array.isArray(change.oldValue)) {
           formattedOldValue = JSON.stringify(change.oldValue);
@@ -187,125 +220,113 @@ router.put('/profile', authenticateToken, [
         if (typeof change.newValue === 'object' && change.newValue !== null) {
           formattedNewValue = JSON.stringify(change.newValue);
         }
-        
+
         // Use req.user._id as the acting user (the person making the change)
         await recordFieldChange('MEMBER', user._id, req.user._id, change.field, formattedOldValue, formattedNewValue, 'PROFILE_UPDATE');
       }
-      
-      // Debug: Log the updated user
-      console.log('🔍 [PUT /api/users/profile] Updated user playaName:', updatedUser?.playaName);
-      console.log('🔍 [PUT /api/users/profile] Full updated user:', JSON.stringify(updatedUser, null, 2));
-      
-      if (!updatedUser) {
-        console.error('❌ [PUT /api/users/profile] updateUser returned null/undefined');
-        return res.status(404).json({ message: 'User not found or update failed' });
-      }
-    } catch (dbError) {
-      console.error('❌ [PUT /api/users/profile] Database error:', dbError);
-      return res.status(500).json({ 
-        message: 'Internal server error during user update',
-        error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
-      });
-    }
+    };
     
-    // Update related applications and roster entries to reflect profile changes
-    // This is done in a separate try-catch so profile updates succeed even if sync fails
-    try {
-      console.log('🔄 [PUT /api/users/profile] Starting applications and roster sync...');
+    // Update related applications and roster entries after responding. This is
+    // denormalized snapshot sync, so a slow roster scan should not make mobile
+    // profile setup requests time out.
+    const syncProfileReferences = async () => {
+      try {
+        console.log('🔄 [PUT /api/users/profile] Starting applications and roster sync...');
       
-      // Update applications where this user is the applicant
-      const applications = await db.findMemberApplications({ applicant: user._id });
-      console.log(`🔍 [PUT /api/users/profile] Found ${applications.length} applications to update`);
+        // Update applications where this user is the applicant
+        const applications = await db.findMemberApplications({ applicant: user._id });
+        console.log(`🔍 [PUT /api/users/profile] Found ${applications.length} applications to update`);
       
-      for (const application of applications) {
-        if (application && application.applicant) {
-          try {
-            await db.updateMemberApplication(application._id, {
-              applicantDetails: {
-                firstName: updatedUser.firstName,
-                lastName: updatedUser.lastName,
-                email: updatedUser.email,
-                profilePhoto: updatedUser.profilePhoto,
-                bio: updatedUser.bio,
-                playaName: updatedUser.playaName,
-                city: updatedUser.city,
-                location: updatedUser.location,
-                yearsBurned: updatedUser.yearsBurned,
-                previousCamps: updatedUser.previousCamps,
-                socialMedia: updatedUser.socialMedia,
-                hasTicket: updatedUser.hasTicket,
-                hasVehiclePass: updatedUser.hasVehiclePass,
-                arrivalDate: updatedUser.arrivalDate,
-                departureDate: updatedUser.departureDate,
-                interestedInEAP: updatedUser.interestedInEAP,
-                interestedInStrike: updatedUser.interestedInStrike,
-                skills: updatedUser.skills,
-                foodPreferences: updatedUser.foodPreferences
-              }
-            });
-            console.log(`✅ [PUT /api/users/profile] Updated application ${application._id}`);
-          } catch (appError) {
-            console.error(`❌ [PUT /api/users/profile] Failed to update application ${application._id}:`, appError);
-          }
-        }
-      }
-
-      // Update roster entries where this user is a member
-      const rosters = await db.findRosters({});
-      console.log(`🔍 [PUT /api/users/profile] Found ${rosters.length} rosters to check`);
-      
-      for (const roster of rosters) {
-        if (roster.members && roster.members.length > 0) {
-          try {
-            let rosterUpdated = false;
-            const updatedMembers = roster.members.map(memberEntry => {
-              if (memberEntry && memberEntry.member && memberEntry.member.toString() === user._id.toString()) {
-                rosterUpdated = true;
-                return {
-                  ...memberEntry,
-                  memberDetails: {
-                    userDetails: {
-                      firstName: updatedUser.firstName,
-                      lastName: updatedUser.lastName,
-                      email: updatedUser.email,
-                      profilePhoto: updatedUser.profilePhoto,
-                      bio: updatedUser.bio,
-                      playaName: updatedUser.playaName,
-                      city: updatedUser.city,
-                      location: updatedUser.location,
-                      yearsBurned: updatedUser.yearsBurned,
-                      previousCamps: updatedUser.previousCamps,
-                      socialMedia: updatedUser.socialMedia,
-                      hasTicket: updatedUser.hasTicket,
-                      hasVehiclePass: updatedUser.hasVehiclePass,
-                      arrivalDate: updatedUser.arrivalDate,
-                      departureDate: updatedUser.departureDate,
-                      interestedInEAP: updatedUser.interestedInEAP,
-                      interestedInStrike: updatedUser.interestedInStrike,
-                      skills: updatedUser.skills,
-                      foodPreferences: updatedUser.foodPreferences
-                    }
-                  }
-                };
-              }
-              return memberEntry;
-            });
-
-            if (rosterUpdated) {
-              await db.updateRoster(roster._id, { members: updatedMembers });
-              console.log(`✅ [PUT /api/users/profile] Updated roster ${roster._id}`);
+        for (const application of applications) {
+          if (application && application.applicant) {
+            try {
+              await db.updateMemberApplication(application._id, {
+                applicantDetails: {
+                  firstName: updatedUser.firstName,
+                  lastName: updatedUser.lastName,
+                  email: updatedUser.email,
+                  profilePhoto: updatedUser.profilePhoto,
+                  bio: updatedUser.bio,
+                  playaName: updatedUser.playaName,
+                  city: updatedUser.city,
+                  location: updatedUser.location,
+                  yearsBurned: updatedUser.yearsBurned,
+                  previousCamps: updatedUser.previousCamps,
+                  socialMedia: updatedUser.socialMedia,
+                  hasTicket: updatedUser.hasTicket,
+                  hasVehiclePass: updatedUser.hasVehiclePass,
+                  arrivalDate: updatedUser.arrivalDate,
+                  departureDate: updatedUser.departureDate,
+                  interestedInEAP: updatedUser.interestedInEAP,
+                  interestedInStrike: updatedUser.interestedInStrike,
+                  skills: updatedUser.skills,
+                  foodPreferences: updatedUser.foodPreferences
+                }
+              });
+              console.log(`✅ [PUT /api/users/profile] Updated application ${application._id}`);
+            } catch (appError) {
+              console.error(`❌ [PUT /api/users/profile] Failed to update application ${application._id}:`, appError);
             }
-          } catch (rosterError) {
-            console.error(`❌ [PUT /api/users/profile] Failed to update roster ${roster._id}:`, rosterError);
           }
         }
-      }
+
+        // Update roster entries where this user is a member
+        const rosters = await db.findRosters({});
+        console.log(`🔍 [PUT /api/users/profile] Found ${rosters.length} rosters to check`);
       
-      console.log('✅ [PUT /api/users/profile] Applications and roster sync completed');
-    } catch (syncError) {
-      console.error('❌ [PUT /api/users/profile] Error during applications/roster sync:', syncError);
-      // Don't fail the profile update if sync fails - this is non-critical
-    }
+        for (const roster of rosters) {
+          if (roster.members && roster.members.length > 0) {
+            try {
+              let rosterUpdated = false;
+              const updatedMembers = roster.members.map(memberEntry => {
+                if (memberEntry && memberEntry.member && memberEntry.member.toString() === user._id.toString()) {
+                  rosterUpdated = true;
+                  return {
+                    ...memberEntry,
+                    memberDetails: {
+                      userDetails: {
+                        firstName: updatedUser.firstName,
+                        lastName: updatedUser.lastName,
+                        email: updatedUser.email,
+                        profilePhoto: updatedUser.profilePhoto,
+                        bio: updatedUser.bio,
+                        playaName: updatedUser.playaName,
+                        city: updatedUser.city,
+                        location: updatedUser.location,
+                        yearsBurned: updatedUser.yearsBurned,
+                        previousCamps: updatedUser.previousCamps,
+                        socialMedia: updatedUser.socialMedia,
+                        hasTicket: updatedUser.hasTicket,
+                        hasVehiclePass: updatedUser.hasVehiclePass,
+                        arrivalDate: updatedUser.arrivalDate,
+                        departureDate: updatedUser.departureDate,
+                        interestedInEAP: updatedUser.interestedInEAP,
+                        interestedInStrike: updatedUser.interestedInStrike,
+                        skills: updatedUser.skills,
+                        foodPreferences: updatedUser.foodPreferences
+                      }
+                    }
+                  };
+                }
+                return memberEntry;
+              });
+
+              if (rosterUpdated) {
+                await db.updateRoster(roster._id, { members: updatedMembers });
+                console.log(`✅ [PUT /api/users/profile] Updated roster ${roster._id}`);
+              }
+            } catch (rosterError) {
+              console.error(`❌ [PUT /api/users/profile] Failed to update roster ${roster._id}:`, rosterError);
+            }
+          }
+        }
+      
+        console.log('✅ [PUT /api/users/profile] Applications and roster sync completed');
+      } catch (syncError) {
+        console.error('❌ [PUT /api/users/profile] Error during applications/roster sync:', syncError);
+        // Don't fail the profile update if sync fails - this is non-critical
+      }
+    };
     
     // Final safety check before sending response
     if (!updatedUser) {
@@ -323,6 +344,13 @@ router.put('/profile', authenticateToken, [
       message: 'Profile updated successfully',
       user: userResponse
     });
+
+    setImmediate(() => {
+      recordProfileFieldChanges().catch((logError) => {
+        console.error('❌ [PUT /api/users/profile] Error during async profile field logging:', logError);
+      });
+    });
+    setImmediate(syncProfileReferences);
 
   } catch (error) {
     console.error('❌ [PUT /api/users/profile] Update profile error:', error);
