@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Input } from '../ui';
-import { X, CheckCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import CityAutocomplete from '../location/CityAutocomplete';
@@ -174,10 +174,19 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     }
   };
 
+  const handleRequestClose = () => {
+    if (loading) return;
+
+    const shouldLeave = window.confirm("Are you sure you'd like to leave the application?");
+    if (shouldLeave) {
+      onClose();
+    }
+  };
+
   return (
     <Modal 
       isOpen={isOpen} 
-      onClose={onClose}
+      onClose={handleRequestClose}
       title="Complete Your Profile"
       size="lg"
     >
@@ -445,7 +454,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
             <Button
               type="submit"
               disabled={loading}
-              className="flex-1 flex items-center justify-center gap-2"
+              className="w-full flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -458,16 +467,6 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
                   Complete Profile
                 </>
               )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Skip for Now
             </Button>
           </div>
         </form>

@@ -22,7 +22,9 @@ const applyVariables = (text: string, variables?: RichTextVariables): string => 
 const formatInline = (text: string): string => {
   let output = escapeHtml(text);
   output = output.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  output = output.replace(/__(.+?)__/g, '<strong>$1</strong>');
   output = output.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  output = output.replace(/_(.+?)_/g, '<em>$1</em>');
   return output;
 };
 
@@ -43,7 +45,7 @@ export const renderRichTextToHtml = (body: string = '', variables?: RichTextVari
     const line = raw.trim();
     if (!line) {
       closeList();
-      html.push('<div style="height:8px"></div>');
+      html.push('<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>');
       continue;
     }
 
@@ -56,30 +58,32 @@ export const renderRichTextToHtml = (body: string = '', variables?: RichTextVari
           : titleMatch[1].toLowerCase() === 'subtitle'
             ? 'h3'
             : 'h4';
-      html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${formatInline(titleMatch[2])}</${level}>`);
+      const size = level === 'h2' ? '18px' : level === 'h3' ? '16px' : '14px';
+      html.push(`<${level} style="margin:0 0 6px 0;font-size:${size};line-height:1.3;font-weight:700;">${formatInline(titleMatch[2])}</${level}>`);
       continue;
     }
 
-    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    const headingMatch = line.match(/^(#{1,3})\s*(.+)$/);
     if (headingMatch) {
       closeList();
       const level = headingMatch[1].length === 1 ? 'h2' : headingMatch[1].length === 2 ? 'h3' : 'h4';
-      html.push(`<${level} style="margin:8px 0 4px 0;font-weight:700;">${formatInline(headingMatch[2])}</${level}>`);
+      const size = level === 'h2' ? '18px' : level === 'h3' ? '16px' : '14px';
+      html.push(`<${level} style="margin:0 0 6px 0;font-size:${size};line-height:1.3;font-weight:700;">${formatInline(headingMatch[2])}</${level}>`);
       continue;
     }
 
     const listMatch = line.match(/^[-*•]\s+(.+)$/);
     if (listMatch) {
       if (!inList) {
-        html.push('<ul style="margin:6px 0 6px 18px;padding:0;list-style:disc;">');
+        html.push('<ul style="margin:0 0 6px 20px;padding:0;line-height:1.5;list-style:disc;">');
         inList = true;
       }
-      html.push(`<li style="margin:2px 0;">${formatInline(listMatch[1])}</li>`);
+      html.push(`<li style="margin:0 0 2px 0;">${formatInline(listMatch[1])}</li>`);
       continue;
     }
 
     closeList();
-    html.push(`<p style="margin:6px 0;line-height:1.5;">${formatInline(line)}</p>`);
+    html.push(`<p style="margin:0;line-height:1.5;">${formatInline(line)}</p>`);
   }
 
   closeList();

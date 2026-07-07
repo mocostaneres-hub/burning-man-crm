@@ -54,33 +54,33 @@ const renderDuesBodyHtml = (body = '') => {
 
     if (!trimmed) {
       closeListIfOpen();
-      htmlParts.push('<p style="margin: 0 0 12px 0;">&nbsp;</p>');
+      htmlParts.push('<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>');
       return;
     }
 
     const heading = getHeadingMeta(trimmed);
     if (heading) {
       closeListIfOpen();
-      const tag = heading.level === 1 ? 'h1' : heading.level === 2 ? 'h2' : 'h3';
-      const size = heading.level === 1 ? '24px' : heading.level === 2 ? '20px' : '16px';
+      const tag = heading.level === 1 ? 'h2' : heading.level === 2 ? 'h3' : 'h4';
+      const size = heading.level === 1 ? '18px' : heading.level === 2 ? '16px' : '14px';
       htmlParts.push(
-        `<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(heading.text)}</${tag}>`
+        `<${tag} style="margin:0 0 6px 0;font-size:${size};line-height:1.3;font-weight:700;">${applyInlineFormatting(heading.text)}</${tag}>`
       );
       return;
     }
 
-    const listMatch = trimmed.match(/^[-*•]\s*(.+)$/);
+    const listMatch = trimmed.match(/^[-*•]\s+(.+)$/);
     if (listMatch) {
       if (!inList) {
-        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding-left: 20px; list-style-type: disc; list-style-position: outside;">');
+        htmlParts.push('<ul style="margin:0 0 6px 20px;padding:0;line-height:1.5;list-style:disc;">');
         inList = true;
       }
-      htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
+      htmlParts.push(`<li style="margin:0 0 2px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
       return;
     }
 
     closeListIfOpen();
-    htmlParts.push(`<p style="margin: 0 0 12px 0;">${applyInlineFormatting(line)}</p>`);
+    htmlParts.push(`<p style="margin:0;line-height:1.5;">${applyInlineFormatting(line)}</p>`);
   });
 
   closeListIfOpen();

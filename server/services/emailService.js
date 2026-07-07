@@ -580,7 +580,7 @@ const sendDuesEmail = async ({ to, subject, body, camp }) => {
     to,
     subject: safeSubject,
     text: safeBody,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${htmlBody}</div>`,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151; font-size: 14px; line-height: 1.5;">${htmlBody}</div>`,
     fromName: camp ? getCampSenderName(camp) : undefined
   });
 };

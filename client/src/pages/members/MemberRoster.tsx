@@ -19,6 +19,7 @@ import CampLeadConfirmModal from '../../components/modals/CampLeadConfirmModal';
 import { canAssignCampLeadRole } from '../../utils/permissions';
 import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../../components/food/FoodPreferenceControls';
 import { normalizeFoodPreferences } from '../../constants/foodPreferences';
+import { renderRichTextToHtml } from '../../utils/richText';
 
 // Extended type for roster members that includes nested member data
 interface RosterMember extends Member {
@@ -175,83 +176,6 @@ const normalizeDuesStatus = (status?: string | null): DuesStatus => {
 
   console.warn('[MemberRoster] Unknown dues status received:', status, '-> defaulting to UNPAID');
   return 'UNPAID';
-};
-
-const escapeHtml = (value: string = '') => value
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;');
-
-const applyInlineFormatting = (value: string = '') => {
-  let formatted = escapeHtml(value);
-  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
-  return formatted;
-};
-
-const renderRichTextPreview = (body: string = '') => {
-  const lines = body.split('\n');
-  const htmlParts: string[] = [];
-  let inList = false;
-
-  const closeListIfOpen = () => {
-    if (inList) {
-      htmlParts.push('</ul>');
-      inList = false;
-    }
-  };
-
-  lines.forEach((rawLine) => {
-    const line = rawLine || '';
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      closeListIfOpen();
-      htmlParts.push('<p style="margin: 0 0 12px 0;">&nbsp;</p>');
-      return;
-    }
-
-    const markdownHeading = trimmed.match(/^(#{1,3})\s*(.+)$/);
-    if (markdownHeading) {
-      closeListIfOpen();
-      const level = markdownHeading[1].length;
-      const tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
-      const size = level === 1 ? '24px' : level === 2 ? '20px' : '16px';
-      htmlParts.push(`<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(markdownHeading[2])}</${tag}>`);
-      return;
-    }
-
-    const labeledHeading = trimmed.match(/^(title|subtitle|section)\s*:\s*(.+)$/i);
-    if (labeledHeading) {
-      closeListIfOpen();
-      const label = labeledHeading[1].toLowerCase();
-      const level = label === 'title' ? 1 : label === 'subtitle' ? 2 : 3;
-      const tag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
-      const size = level === 1 ? '24px' : level === 2 ? '20px' : '16px';
-      htmlParts.push(`<${tag} style="margin: 0 0 12px 0; font-size: ${size}; line-height: 1.3;">${applyInlineFormatting(labeledHeading[2])}</${tag}>`);
-      return;
-    }
-
-    const listMatch = trimmed.match(/^[-*•]\s*(.+)$/);
-    if (listMatch) {
-      if (!inList) {
-        htmlParts.push('<ul style="margin: 0 0 12px 20px; padding-left: 20px; list-style-type: disc; list-style-position: outside;">');
-        inList = true;
-      }
-      htmlParts.push(`<li style="margin: 0 0 6px 0;">${applyInlineFormatting(listMatch[1])}</li>`);
-      return;
-    }
-
-    closeListIfOpen();
-    htmlParts.push(`<p style="margin: 0 0 12px 0;">${applyInlineFormatting(line)}</p>`);
-  });
-
-  closeListIfOpen();
-  return htmlParts.join('');
 };
 
 const toStructuredLocationOrNull = (location?: Partial<StructuredLocation> | null): StructuredLocation | null => {
@@ -3398,7 +3322,7 @@ const MemberRoster: React.FC = () => {
             <p className="font-semibold text-sm mb-2">{emailPreviewModal.subject}</p>
             <div
               className="text-sm text-gray-700"
-              dangerouslySetInnerHTML={{ __html: renderRichTextPreview(emailPreviewModal.body) }}
+              dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(emailPreviewModal.body) }}
             />
           </div>
 
