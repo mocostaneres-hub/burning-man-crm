@@ -1,4 +1,8 @@
-import { getOnboardingRedirectPath, getSafeRedirectPath } from '../authRedirects';
+import {
+  getMemberApplicationCampIdentifier,
+  getOnboardingRedirectPath,
+  getSafeRedirectPath
+} from '../authRedirects';
 
 describe('authRedirects', () => {
   it('keeps internal redirect paths, including query strings', () => {
@@ -16,5 +20,12 @@ describe('authRedirects', () => {
       '/onboarding/select-role?redirect=%2Fcamps%2Fmudskippers%3Fapply%3D1'
     );
     expect(getOnboardingRedirectPath('/dashboard')).toBe('/onboarding/select-role');
+  });
+
+  it('detects camp application redirects', () => {
+    expect(getMemberApplicationCampIdentifier('/camps/mudskippers?apply=1')).toBe('mudskippers');
+    expect(getMemberApplicationCampIdentifier('/camps/public/mudskippers?apply=1')).toBe('mudskippers');
+    expect(getMemberApplicationCampIdentifier('/camps/mudskippers')).toBeNull();
+    expect(getMemberApplicationCampIdentifier('//example.com/camps/mudskippers?apply=1')).toBeNull();
   });
 });

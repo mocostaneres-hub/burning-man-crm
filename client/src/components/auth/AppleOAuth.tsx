@@ -15,13 +15,17 @@ interface AppleOAuthProps {
    * for full rationale.
    */
   inviteToken?: string | null;
+  signupIntent?: 'member_application' | null;
+  applicationCampIdentifier?: string | null;
 }
 
 const AppleOAuth: React.FC<AppleOAuthProps> = ({
   onSuccess,
   onError,
   disabled = false,
-  inviteToken = null
+  inviteToken = null,
+  signupIntent = null,
+  applicationCampIdentifier = null
 }) => {
   // Check if Apple OAuth is properly configured
   const appleClientId = process.env.REACT_APP_APPLE_CLIENT_ID;
@@ -42,13 +46,16 @@ const AppleOAuth: React.FC<AppleOAuthProps> = ({
         name: fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}` : '',
         appleId: user,
         profilePicture: '', // Apple doesn't provide profile pictures
-        ...(inviteToken ? { inviteToken } : {})
+        ...(inviteToken ? { inviteToken } : {}),
+        ...(signupIntent && applicationCampIdentifier
+          ? { signupIntent, applicationCampIdentifier }
+          : {})
       }).then((apiResponse: any) => {
-        if (apiResponse.data.token && apiResponse.data.user) {
+        if (apiResponse.token && apiResponse.user) {
           // Store token and user data
-          localStorage.setItem('token', apiResponse.data.token);
-          localStorage.setItem('user', JSON.stringify(apiResponse.data.user));
-          onSuccess(apiResponse.data.user);
+          localStorage.setItem('token', apiResponse.token);
+          localStorage.setItem('user', JSON.stringify(apiResponse.user));
+          onSuccess(apiResponse);
         } else {
           onError('Failed to authenticate with Apple');
         }

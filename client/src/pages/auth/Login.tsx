@@ -10,7 +10,7 @@ import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
 import { User } from '../../types';
-import { getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
+import { getMemberApplicationCampIdentifier, getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
 
 const schema = yup.object({
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -52,6 +52,7 @@ const Login: React.FC = () => {
   const [oauthLoading, setOauthLoading] = useState(false);
   const requestedRedirect = searchParams.get('redirect');
   const safeRedirect = getSafeRedirectPath(requestedRedirect);
+  const applicationCampIdentifier = getMemberApplicationCampIdentifier(safeRedirect);
 
   const {
     register,
@@ -164,6 +165,12 @@ const Login: React.FC = () => {
       console.log('🔄 [Login] Reloading to update AuthContext...');
       
       // TRUST THE BACKEND: Use isNewUser flag instead of re-checking user fields
+      if (isNewUser && applicationCampIdentifier) {
+        console.log('✅ [Login] New member application user, redirecting to camp application...');
+        window.location.href = safeRedirect;
+        return;
+      }
+
       if (isNewUser) {
         // This is a brand new user created via OAuth
         console.log('✅ [Login] New user detected, redirecting to onboarding...');
@@ -223,11 +230,15 @@ const Login: React.FC = () => {
               onError={handleOAuthError}
               disabled={oauthLoading || loading}
               mode="signin"
+              signupIntent={applicationCampIdentifier ? 'member_application' : null}
+              applicationCampIdentifier={applicationCampIdentifier}
             />
             <AppleOAuth
               onSuccess={handleOAuthSuccess}
               onError={handleOAuthError}
               disabled={oauthLoading || loading}
+              signupIntent={applicationCampIdentifier ? 'member_application' : null}
+              applicationCampIdentifier={applicationCampIdentifier}
             />
           </div>
           <div className="relative my-6">

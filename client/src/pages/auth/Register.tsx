@@ -10,7 +10,7 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
-import { getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
+import { getMemberApplicationCampIdentifier, getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
 
 type FormData = {
   firstName: string;
@@ -51,6 +51,7 @@ const Register: React.FC = () => {
   const isShiftsOnlyInviteFromQuery = searchParams.get('shifts_only') === '1';
   const redirectPath = searchParams.get('redirect');
   const safeRedirect = getSafeRedirectPath(redirectPath);
+  const applicationCampIdentifier = getMemberApplicationCampIdentifier(safeRedirect);
 
   const {
     register,
@@ -190,7 +191,13 @@ const Register: React.FC = () => {
       const userData = {
         ...registerData,
         accountType: 'personal' as const,
-        inviteToken: inviteTokenForSignup
+        inviteToken: inviteTokenForSignup,
+        ...(applicationCampIdentifier && !inviteTokenForSignup
+          ? {
+              signupIntent: 'member_application' as const,
+              applicationCampIdentifier
+            }
+          : {})
       };
       
       const result = await registerUser(userData);
@@ -217,7 +224,7 @@ const Register: React.FC = () => {
       }
       
       // Check if user needs onboarding
-      if (result.needsOnboarding) {
+      if (result.needsOnboarding && !applicationCampIdentifier) {
         navigate(getOnboardingRedirectPath(safeRedirect), { replace: true });
         return;
       }
@@ -270,7 +277,10 @@ const Register: React.FC = () => {
       }
       
       // TRUST THE BACKEND: Use isNewUser flag
-      if (isNewUser) {
+      if (isNewUser && applicationCampIdentifier) {
+        console.log('✅ [Register] New member application user, redirecting to camp application...');
+        window.location.href = safeRedirect;
+      } else if (isNewUser) {
         // Brand new user - go to onboarding
         console.log('✅ [Register] New user, redirecting to onboarding...');
         window.location.href = getOnboardingRedirectPath(safeRedirect);
@@ -327,12 +337,16 @@ const Register: React.FC = () => {
                 disabled={oauthLoading || loading}
                 mode="signup"
                 inviteToken={inviteToken}
+                signupIntent={applicationCampIdentifier && !inviteToken ? 'member_application' : null}
+                applicationCampIdentifier={applicationCampIdentifier}
               />
               <AppleOAuth
                 onSuccess={handleOAuthSuccess}
                 onError={handleOAuthError}
                 disabled={oauthLoading || loading}
                 inviteToken={inviteToken}
+                signupIntent={applicationCampIdentifier && !inviteToken ? 'member_application' : null}
+                applicationCampIdentifier={applicationCampIdentifier}
               />
             </div>
             <div className="relative my-6">

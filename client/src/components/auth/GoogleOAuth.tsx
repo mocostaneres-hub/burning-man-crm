@@ -46,6 +46,8 @@ interface GoogleOAuthProps {
    * pre-signup state.
    */
   inviteToken?: string | null;
+  signupIntent?: 'member_application' | null;
+  applicationCampIdentifier?: string | null;
 }
 
 /**
@@ -72,16 +74,22 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
   onError, 
   disabled = false,
   mode = 'signin',
-  inviteToken = null
+  inviteToken = null,
+  signupIntent = null,
+  applicationCampIdentifier = null
 }) => {
   // Keep the latest inviteToken in a ref so the credential callback (which
   // is registered with Google's SDK at mount time) reads the current value.
   // Without the ref the callback would close over the initial null/empty
   // value because Google Identity Services caches the callback identity.
   const inviteTokenRef = useRef<string | null>(inviteToken);
+  const signupIntentRef = useRef<'member_application' | null>(signupIntent);
+  const applicationCampIdentifierRef = useRef<string | null>(applicationCampIdentifier);
   useEffect(() => {
     inviteTokenRef.current = inviteToken;
-  }, [inviteToken]);
+    signupIntentRef.current = signupIntent;
+    applicationCampIdentifierRef.current = applicationCampIdentifier;
+  }, [inviteToken, signupIntent, applicationCampIdentifier]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
@@ -203,7 +211,13 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
       // pre-existing Member document — see GoogleOAuthProps.inviteToken.
       const apiResponse = await api.post('/oauth/google', {
         idToken: response.credential,
-        ...(inviteTokenRef.current ? { inviteToken: inviteTokenRef.current } : {})
+        ...(inviteTokenRef.current ? { inviteToken: inviteTokenRef.current } : {}),
+        ...(signupIntentRef.current && applicationCampIdentifierRef.current
+          ? {
+              signupIntent: signupIntentRef.current,
+              applicationCampIdentifier: applicationCampIdentifierRef.current
+            }
+          : {})
       });
 
       console.log('✅ [GoogleOAuth] Backend response:', apiResponse);
@@ -305,4 +319,3 @@ const GoogleOAuth: React.FC<GoogleOAuthProps> = ({
 };
 
 export default GoogleOAuth;
-

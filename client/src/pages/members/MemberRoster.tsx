@@ -841,7 +841,7 @@ const MemberRoster: React.FC = () => {
         try {
           const campResponse = await api.get(`/camps/${user.campLeadCampId}`);
           const camp = campResponse?.camp || campResponse;
-          setCampAcceptingApplications(Boolean(camp?.acceptingApplications));
+          setCampAcceptingApplications(camp?.acceptingApplications !== undefined ? Boolean(camp.acceptingApplications) : true);
           setCampPubliclyVisible(Boolean(camp?.isPubliclyVisible ?? camp?.isPublic));
           setCampPublicIdentifier(getCampPublicIdentifier(camp) || user.campLeadCampSlug || user.campLeadCampId);
           const createdAtMs = Date.parse(String(camp?.createdAt || ''));
@@ -858,7 +858,7 @@ const MemberRoster: React.FC = () => {
       // For camp accounts and admins
       const campData = await api.getMyCamp();
       setCampId(campData._id.toString());
-      setCampAcceptingApplications(Boolean((campData as any)?.acceptingApplications));
+      setCampAcceptingApplications((campData as any)?.acceptingApplications !== undefined ? Boolean((campData as any).acceptingApplications) : true);
       setCampPubliclyVisible(Boolean((campData as any)?.isPubliclyVisible ?? (campData as any)?.isPublic));
       setCampPublicIdentifier(getCampPublicIdentifier(campData));
       const createdAtMs = Date.parse(String((campData as any)?.createdAt || ''));

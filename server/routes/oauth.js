@@ -7,6 +7,7 @@ const { sendWelcomeEmail } = require('../services/emailService');
 const { normalizeEmail } = require('../utils/emailUtils');
 const { recordActivity } = require('../services/activityLogger');
 const { acceptInviteForUser } = require('../services/inviteAcceptance');
+const { resolveMemberApplicationSignup } = require('../utils/memberApplicationSignup');
 
 const router = express.Router();
 
@@ -119,7 +120,9 @@ async function verifyGoogleIdToken(idToken) {
 // Response: { token: string, user: User, isNewUser: boolean }
 router.post('/google', [
   body('idToken').notEmpty().withMessage('ID token is required'),
-  body('inviteToken').optional().isString().trim()
+  body('inviteToken').optional().isString().trim(),
+  body('signupIntent').optional().isIn(['member_application']),
+  body('applicationCampIdentifier').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -135,7 +138,7 @@ router.post('/google', [
     // pre-existing Member and mark the invite as applied. Without this the
     // OAuth path leaves the camp's roster permanently stuck at "Invited"
     // for anyone who signs up with Google.
-    const { idToken, inviteToken } = req.body;
+    const { idToken, inviteToken, signupIntent, applicationCampIdentifier } = req.body;
 
     // Verify Google ID token (works for web, iOS, Android)
     const googleUser = await verifyGoogleIdToken(idToken);
@@ -146,6 +149,11 @@ router.post('/google', [
       });
     }
     const normalizedGoogleEmail = normalizeEmail(googleUser.email);
+    const memberApplicationSignup = await resolveMemberApplicationSignup(db, signupIntent, applicationCampIdentifier);
+    if (memberApplicationSignup.error) {
+      return res.status(memberApplicationSignup.error.status).json({ message: memberApplicationSignup.error.message });
+    }
+    const isMemberApplicationSignup = memberApplicationSignup.isMemberApplicationSignup;
 
     // ============================================================================
     // CRITICAL: OAuth Provider Linking and Account Identity
@@ -239,7 +247,7 @@ router.post('/google', [
         googleId: googleUser.googleId,
         profilePhoto: googleUser.picture || '',
         lastLogin: new Date(),
-        role: 'unassigned', // New OAuth users start with unassigned role
+        role: isMemberApplicationSignup ? 'member' : 'unassigned',
         isVerified: googleUser.emailVerified || false,
         authProviders: ['google'] // Track that this user uses Google OAuth
       });
@@ -278,6 +286,15 @@ router.post('/google', [
         // Defensive — acceptInviteForUser already swallows internal errors.
         console.error('❌ [OAuth] Unexpected invite acceptance failure:', inviteErr?.message);
       }
+    }
+
+    if (
+      isMemberApplicationSignup &&
+      user.accountType === 'personal' &&
+      (!user.role || user.role === 'unassigned')
+    ) {
+      await db.updateUserById(user._id, { role: 'member', updatedAt: new Date() });
+      user.role = 'member';
     }
 
     // Generate our own JWT token for session management
@@ -349,7 +366,9 @@ router.post('/apple', [
   body('name').optional().trim(),
   body('appleId').notEmpty(),
   body('profilePicture').optional().isURL(),
-  body('inviteToken').optional().isString().trim()
+  body('inviteToken').optional().isString().trim(),
+  body('signupIntent').optional().isIn(['member_application']),
+  body('applicationCampIdentifier').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -358,8 +377,13 @@ router.post('/apple', [
     }
 
     // See Google handler for invite-token rationale; Apple flow mirrors it.
-    const { email, name, appleId, profilePicture, inviteToken } = req.body;
+    const { email, name, appleId, profilePicture, inviteToken, signupIntent, applicationCampIdentifier } = req.body;
     const normalizedAppleEmail = normalizeEmail(email);
+    const memberApplicationSignup = await resolveMemberApplicationSignup(db, signupIntent, applicationCampIdentifier);
+    if (memberApplicationSignup.error) {
+      return res.status(memberApplicationSignup.error.status).json({ message: memberApplicationSignup.error.message });
+    }
+    const isMemberApplicationSignup = memberApplicationSignup.isMemberApplicationSignup;
 
     // OAuth must be account-type agnostic and support account linking
     // (see Google OAuth handler for comprehensive explanation)
@@ -423,7 +447,7 @@ router.post('/apple', [
         appleId,
         profilePhoto: profilePicture || '',
         lastLogin: new Date(),
-        role: 'unassigned', // New OAuth users start with unassigned role
+        role: isMemberApplicationSignup ? 'member' : 'unassigned',
         authProviders: ['apple'] // Track that this user uses Apple OAuth
       });
       
@@ -453,6 +477,15 @@ router.post('/apple', [
       } catch (inviteErr) {
         console.error('❌ [OAuth] Unexpected Apple invite acceptance failure:', inviteErr?.message);
       }
+    }
+
+    if (
+      isMemberApplicationSignup &&
+      user.accountType === 'personal' &&
+      (!user.role || user.role === 'unassigned')
+    ) {
+      await db.updateUserById(user._id, { role: 'member', updatedAt: new Date() });
+      user.role = 'member';
     }
 
     // Generate token

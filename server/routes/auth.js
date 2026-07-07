@@ -13,6 +13,7 @@ const { recordActivity } = require('../services/activityLogger');
 const { normalizeEmail } = require('../utils/emailUtils');
 const { propagateUserEmailChange } = require('../services/emailPropagationService');
 const { acceptInviteForUser } = require('../services/inviteAcceptance');
+const { resolveMemberApplicationSignup } = require('../utils/memberApplicationSignup');
 
 const router = express.Router();
 
@@ -60,7 +61,9 @@ router.post('/register', [
   body('firstName').optional().trim(),
   body('lastName').optional().trim(),
   body('campName').optional().trim(),
-  body('inviteToken').optional().isString().trim()
+  body('inviteToken').optional().isString().trim(),
+  body('signupIntent').optional().isIn(['member_application']),
+  body('applicationCampIdentifier').optional().isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -68,7 +71,17 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password, accountType, firstName, lastName, campName, inviteToken } = req.body;
+    const {
+      email,
+      password,
+      accountType,
+      firstName,
+      lastName,
+      campName,
+      inviteToken,
+      signupIntent,
+      applicationCampIdentifier
+    } = req.body;
 
     // Normalize email for consistency
     const normalizedEmail = normalizeEmail(email);
@@ -82,6 +95,7 @@ router.post('/register', [
     let effectiveAccountType = accountType;
     let effectiveRole = 'unassigned';
     let inviteContext = null;
+    let isMemberApplicationSignup = false;
 
     // Invitation-based signup is always a member-style personal account.
     // Backend enforces this so role/accountType cannot be escalated by client payloads.
@@ -110,6 +124,15 @@ router.post('/register', [
         return res.status(400).json({ message: 'Camp not found for this invitation' });
       }
 
+      effectiveAccountType = 'personal';
+      effectiveRole = 'member';
+    } else if (signupIntent === 'member_application') {
+      const result = await resolveMemberApplicationSignup(db, signupIntent, applicationCampIdentifier);
+      if (result.error) {
+        return res.status(result.error.status).json({ message: result.error.message });
+      }
+
+      isMemberApplicationSignup = result.isMemberApplicationSignup;
       effectiveAccountType = 'personal';
       effectiveRole = 'member';
     }
@@ -208,6 +231,8 @@ router.post('/register', [
       newValue: effectiveAccountType,
       note: inviteContext
         ? 'User signed up via invitation link'
+        : isMemberApplicationSignup
+          ? 'User signed up via camp application link'
         : 'User signed up via email/password'
     });
 

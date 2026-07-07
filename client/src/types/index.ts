@@ -369,6 +369,8 @@ export interface RegisterData {
   firstName: string;
   lastName: string;
   inviteToken?: string;
+  signupIntent?: 'member_application';
+  applicationCampIdentifier?: string;
 }
 
 export interface CallSlot {
