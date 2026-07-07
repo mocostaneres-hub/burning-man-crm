@@ -13,6 +13,7 @@ describe('renderRichTextToHtml', () => {
     const html = renderRichTextToHtml('**Amount Due:** {{amount}}', { amount: '$100' });
 
     expect(html).toBe('<div style="margin:0;line-height:1.4;"><strong>Amount Due:</strong> $100</div>');
+    expect(html).not.toContain('<em>Amount Due:</em>');
   });
 
   it('formats bold and italic inside bullet-heavy payment instructions', () => {
@@ -29,5 +30,15 @@ describe('renderRichTextToHtml', () => {
     expect(html).toContain('<strong>OR IF YOU ARE FEELING GENEROUS - SEE BELOW:</strong>');
     expect(html).not.toContain('**Tier 1:**');
     expect(html).not.toContain('*$500*');
+  });
+
+  it('does not reinterpret bold markers as italic', () => {
+    const html = renderRichTextToHtml('**bold** and *italic* and ***both***');
+
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).toContain('<em>italic</em>');
+    expect(html).toContain('<strong><em>both</em></strong>');
+    expect(html).not.toContain('<em>bold</em>');
+    expect(html).not.toContain('<strong><em>bold</strong></em>');
   });
 });

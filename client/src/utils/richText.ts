@@ -20,11 +20,27 @@ const applyVariables = (text: string, variables?: RichTextVariables): string => 
 };
 
 const formatInline = (text: string): string => {
+  const tokens: string[] = [];
+  const protect = (html: string): string => {
+    const token = `\u0000${tokens.length}\u0000`;
+    tokens.push(html);
+    return token;
+  };
+  const formatItalic = (value: string): string =>
+    value
+      .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+      .replace(/_([^_\n]+?)_/g, '<em>$1</em>');
+
   let output = escapeHtml(text);
-  output = output.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  output = output.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  output = output.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  output = output.replace(/_(.+?)_/g, '<em>$1</em>');
+  output = output.replace(/\*\*\*([^*\n]+?)\*\*\*/g, (_match, content: string) => protect(`<strong><em>${content}</em></strong>`));
+  output = output.replace(/___([^_\n]+?)___/g, (_match, content: string) => protect(`<strong><em>${content}</em></strong>`));
+  output = output.replace(/\*\*([^*\n]+?)\*\*/g, (_match, content: string) => protect(`<strong>${formatItalic(content)}</strong>`));
+  output = output.replace(/__([^_\n]+?)__/g, (_match, content: string) => protect(`<strong>${formatItalic(content)}</strong>`));
+  output = formatItalic(output);
+
+  tokens.forEach((html, index) => {
+    output = output.replace(new RegExp(`\u0000${index}\u0000`, 'g'), html);
+  });
   return output;
 };
 

@@ -15,6 +15,7 @@ describe('dues email formatter', () => {
 
     expect(html).toContain('<strong>Amount Due:</strong> $100');
     expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+    expect(html).not.toContain('<em>Amount Due:</em>');
   });
 
   test('renders headings and lists with the same compact rhythm', () => {
@@ -39,5 +40,15 @@ describe('dues email formatter', () => {
     expect(html).toContain('<strong>OR IF YOU ARE FEELING GENEROUS - SEE BELOW:</strong>');
     expect(html).not.toContain('**Tier 1:**');
     expect(html).not.toContain('*$500*');
+  });
+
+  test('does not reinterpret bold markers as italic', () => {
+    const html = renderDuesBodyHtml('**bold** and *italic* and ***both***');
+
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).toContain('<em>italic</em>');
+    expect(html).toContain('<strong><em>both</em></strong>');
+    expect(html).not.toContain('<em>bold</em>');
+    expect(html).not.toContain('<strong><em>bold</strong></em>');
   });
 });

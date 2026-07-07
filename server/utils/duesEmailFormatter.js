@@ -7,11 +7,26 @@ const escapeHtml = (value = '') => value
 
 const applyInlineFormatting = (value = '') => {
   // Escape first, then allow a small safe subset of markdown-like formatting.
+  const tokens = [];
+  const protect = (html) => {
+    const token = `\u0000${tokens.length}\u0000`;
+    tokens.push(html);
+    return token;
+  };
+  const formatItalic = (text) => text
+    .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+    .replace(/_([^_\n]+?)_/g, '<em>$1</em>');
+
   let formatted = escapeHtml(value);
-  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  formatted = formatted.replace(/_(.+?)_/g, '<em>$1</em>');
+  formatted = formatted.replace(/\*\*\*([^*\n]+?)\*\*\*/g, (_match, content) => protect(`<strong><em>${content}</em></strong>`));
+  formatted = formatted.replace(/___([^_\n]+?)___/g, (_match, content) => protect(`<strong><em>${content}</em></strong>`));
+  formatted = formatted.replace(/\*\*([^*\n]+?)\*\*/g, (_match, content) => protect(`<strong>${formatItalic(content)}</strong>`));
+  formatted = formatted.replace(/__([^_\n]+?)__/g, (_match, content) => protect(`<strong>${formatItalic(content)}</strong>`));
+  formatted = formatItalic(formatted);
+
+  tokens.forEach((html, index) => {
+    formatted = formatted.replace(new RegExp(`\u0000${index}\u0000`, 'g'), html);
+  });
   return formatted;
 };
 
