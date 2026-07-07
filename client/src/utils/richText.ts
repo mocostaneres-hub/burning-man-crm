@@ -45,7 +45,7 @@ export const renderRichTextToHtml = (body: string = '', variables?: RichTextVari
     const line = raw.trim();
     if (!line) {
       closeList();
-      html.push('<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>');
+      html.push('<div style="height:6px;line-height:6px;font-size:6px;">&nbsp;</div>');
       continue;
     }
 
@@ -83,7 +83,7 @@ export const renderRichTextToHtml = (body: string = '', variables?: RichTextVari
     }
 
     closeList();
-    html.push(`<p style="margin:0;line-height:1.5;">${formatInline(line)}</p>`);
+    html.push(`<div style="margin:0;line-height:1.4;">${formatInline(line)}</div>`);
   }
 
   closeList();
@@ -94,5 +94,5 @@ export const FAQ_RICH_TEXT_GUIDE = [
   'Headings: # Title, ## Subtitle, ### Section',
   'Style: **bold** and *italic*',
   'Bullets: - item (or * item or • item)',
-  'Blank line creates spacing between paragraphs'
+  'Blank line creates a small paragraph break'
 ];

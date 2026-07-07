@@ -1493,8 +1493,9 @@ const CampProfile: React.FC = () => {
             <p className="font-semibold text-gray-800">Rich text + variables guide</p>
             <p>Formatting: <code># Heading</code>, <code>## Subheading</code>, <code>**bold**</code>, <code>*italic*</code>, and bullet lists with <code>- item</code>.</p>
             <p>Insert camp name: <code>{'{{camp_name}}'}</code></p>
-            <p>Insert member name: <code>{'{{member_name}}'}</code></p>
+            <p>Insert member first name: <code>{'{{member_name}}'}</code> or <code>{'{{first_name}}'}</code></p>
             <p>Insert today's date: <code>{'{{today_date}}'}</code></p>
+            <p>Enter starts a new line; a blank line adds a small paragraph break.</p>
             <p className="text-gray-500">Other supported variables: <code>{'{{dues_amount}}'}</code>, <code>{'{{due_date}}'}</code>, <code>{'{{payment_link}}'}</code>, <code>{'{{payment_date}}'}</code>.</p>
           </div>
 
@@ -1520,7 +1521,8 @@ const CampProfile: React.FC = () => {
                 dangerouslySetInnerHTML={{
                   __html: renderRichTextToHtml(duesTemplatesForm.instructionsBody, {
                     camp_name: campData.campName || 'Your Camp',
-                    member_name: 'Member Name',
+                    member_name: 'Member',
+                    first_name: 'Member',
                     today_date: new Date().toLocaleDateString('en-US'),
                     dues_amount: 'USD 0',
                     due_date: new Date().toLocaleDateString('en-US'),
@@ -1554,7 +1556,8 @@ const CampProfile: React.FC = () => {
                 dangerouslySetInnerHTML={{
                   __html: renderRichTextToHtml(duesTemplatesForm.receiptBody, {
                     camp_name: campData.campName || 'Your Camp',
-                    member_name: 'Member Name',
+                    member_name: 'Member',
+                    first_name: 'Member',
                     today_date: new Date().toLocaleDateString('en-US'),
                     dues_amount: 'USD 0',
                     due_date: new Date().toLocaleDateString('en-US'),

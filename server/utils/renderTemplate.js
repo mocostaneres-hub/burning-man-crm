@@ -1,5 +1,6 @@
 const ALLOWED_TEMPLATE_VARIABLES = new Set([
   'member_name',
+  'first_name',
   'camp_name',
   'dues_amount',
   'meal_plan_amount',

@@ -38,8 +38,10 @@ function getMemberEntryIndex(roster, memberId) {
 
 function resolveDuesVariables({ memberUser, camp, campDues, paymentDate }) {
   const todayDate = new Date().toLocaleDateString('en-US');
+  const memberFirstName = (memberUser?.firstName || '').trim() || 'Member';
   return {
-    member_name: `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim() || 'Member',
+    member_name: memberFirstName,
+    first_name: memberFirstName,
     camp_name: camp?.name || camp?.campName || 'Your Camp',
     dues_amount: campDues?.amount ? `${campDues.currency || 'USD'} ${campDues.amount}` : 'TBD',
     due_date: campDues?.dueDate ? new Date(campDues.dueDate).toLocaleDateString('en-US') : 'TBD',
@@ -71,8 +73,10 @@ async function buildDuesEmailPreview({ camp, memberUser, type, paymentDate, over
 
 function resolveMealPlanVariables({ memberUser, camp, paymentDate }) {
   const todayDate = new Date().toLocaleDateString('en-US');
+  const memberFirstName = (memberUser?.firstName || '').trim() || 'Member';
   return {
-    member_name: `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim() || 'Member',
+    member_name: memberFirstName,
+    first_name: memberFirstName,
     camp_name: camp?.name || camp?.campName || 'Your Camp',
     meal_plan_amount: 'TBD',
     due_date: 'TBD',
@@ -80,6 +84,27 @@ function resolveMealPlanVariables({ memberUser, camp, paymentDate }) {
     payment_date: paymentDate ? new Date(paymentDate).toLocaleDateString('en-US') : todayDate,
     today_date: todayDate
   };
+}
+
+function escapeRegExp(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function restoreMemberNamePlaceholder(value, memberUser) {
+  if (typeof value !== 'string' || !value) return value || null;
+
+  const firstName = (memberUser?.firstName || '').trim();
+  const fullName = `${memberUser?.firstName || ''} ${memberUser?.lastName || ''}`.trim();
+  let restored = value;
+
+  [fullName, firstName]
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+    .sort((a, b) => b.length - a.length)
+    .forEach((name) => {
+      restored = restored.replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g'), '{{member_name}}');
+    });
+
+  return restored;
 }
 
 async function buildMealPlanEmailPreview({ camp, memberUser, type, paymentDate, overrideSubject, overrideBody }) {
@@ -1862,12 +1887,12 @@ router.post('/:rosterId/members/:memberId/dues/send-email', authenticateToken, a
     if (saveAsCampDefault === true) {
       const updateData = actionType === 'instructions'
         ? {
-            duesInstructionsSubject: subject || null,
-            duesInstructionsBody: body || null
+            duesInstructionsSubject: restoreMemberNamePlaceholder(subject, memberUser),
+            duesInstructionsBody: restoreMemberNamePlaceholder(body, memberUser)
           }
         : {
-            duesReceiptSubject: subject || null,
-            duesReceiptBody: body || null
+            duesReceiptSubject: restoreMemberNamePlaceholder(subject, memberUser),
+            duesReceiptBody: restoreMemberNamePlaceholder(body, memberUser)
           };
       await db.updateCamp({ _id: camp._id }, updateData);
     }
@@ -1973,12 +1998,12 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
       if (saveAsCampDefault === true) {
         const updateData = emailTriggerType === 'instructions'
           ? {
-              duesInstructionsSubject: emailPreview.subject,
-              duesInstructionsBody: emailPreview.body
+              duesInstructionsSubject: restoreMemberNamePlaceholder(emailPreview.subject, memberUser),
+              duesInstructionsBody: restoreMemberNamePlaceholder(emailPreview.body, memberUser)
             }
           : {
-              duesReceiptSubject: emailPreview.subject,
-              duesReceiptBody: emailPreview.body
+              duesReceiptSubject: restoreMemberNamePlaceholder(emailPreview.subject, memberUser),
+              duesReceiptBody: restoreMemberNamePlaceholder(emailPreview.body, memberUser)
             };
         await db.updateCamp({ _id: camp._id }, updateData);
       }
@@ -2140,12 +2165,12 @@ router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateTok
     if (saveAsCampDefault === true) {
       const updateData = actionType === 'instructions'
         ? {
-            mealPlanInstructionsSubject: subject || null,
-            mealPlanInstructionsBody: body || null
+            mealPlanInstructionsSubject: restoreMemberNamePlaceholder(subject, memberUser),
+            mealPlanInstructionsBody: restoreMemberNamePlaceholder(body, memberUser)
           }
         : {
-            mealPlanReceiptSubject: subject || null,
-            mealPlanReceiptBody: body || null
+            mealPlanReceiptSubject: restoreMemberNamePlaceholder(subject, memberUser),
+            mealPlanReceiptBody: restoreMemberNamePlaceholder(body, memberUser)
           };
       await db.updateCamp({ _id: camp._id }, updateData);
     }
@@ -2251,12 +2276,12 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
       if (saveAsCampDefault === true) {
         const updateData = emailTriggerType === 'instructions'
           ? {
-              mealPlanInstructionsSubject: emailPreview.subject,
-              mealPlanInstructionsBody: emailPreview.body
+              mealPlanInstructionsSubject: restoreMemberNamePlaceholder(emailPreview.subject, memberUser),
+              mealPlanInstructionsBody: restoreMemberNamePlaceholder(emailPreview.body, memberUser)
             }
           : {
-              mealPlanReceiptSubject: emailPreview.subject,
-              mealPlanReceiptBody: emailPreview.body
+              mealPlanReceiptSubject: restoreMemberNamePlaceholder(emailPreview.subject, memberUser),
+              mealPlanReceiptBody: restoreMemberNamePlaceholder(emailPreview.body, memberUser)
             };
         await db.updateCamp({ _id: camp._id }, updateData);
       }

@@ -4,6 +4,7 @@ import { Loader2, Mail, RefreshCw, Send, Upload, Users, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatDate } from '../../utils/dateFormatters';
+import { renderRichTextToHtml } from '../../utils/richText';
 
 interface InviteMembersModalProps {
   isOpen: boolean;
@@ -344,7 +345,10 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({ isOpen, onClose
               ) : (
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="text-sm text-gray-600 mb-2">This message will be sent to each recipient:</div>
-                  <div className="bg-white p-3 rounded border text-sm text-gray-900 whitespace-pre-wrap">{getCurrentTemplate()}</div>
+                  <div
+                    className="bg-white p-3 rounded border text-sm text-gray-900"
+                    dangerouslySetInnerHTML={{ __html: renderRichTextToHtml(getCurrentTemplate()) }}
+                  />
                   {templates && (
                     <div className="text-xs text-gray-500 mt-2">
                       Placeholders like <code>{'{{campName}}'}</code> and <code>{'{{link}}'}</code> will be automatically replaced.

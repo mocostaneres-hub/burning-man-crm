@@ -3306,6 +3306,7 @@ const MemberRoster: React.FC = () => {
               <p>Titles: <code># Title</code>, <code>## Subtitle</code>, <code>### Section</code> or <code>Title:</code>, <code>Subtitle:</code>, <code>Section:</code></p>
               <p>Text styles: <code>**bold**</code>, <code>*italic*</code></p>
               <p>Bullets (one per line): <code>- item</code>, <code>* item</code>, or <code>• item</code></p>
+              <p>Enter starts a new line; a blank line adds a small paragraph break.</p>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">

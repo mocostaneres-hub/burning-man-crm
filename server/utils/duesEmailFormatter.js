@@ -54,7 +54,7 @@ const renderDuesBodyHtml = (body = '') => {
 
     if (!trimmed) {
       closeListIfOpen();
-      htmlParts.push('<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>');
+      htmlParts.push('<div style="height:6px;line-height:6px;font-size:6px;">&nbsp;</div>');
       return;
     }
 
@@ -80,7 +80,7 @@ const renderDuesBodyHtml = (body = '') => {
     }
 
     closeListIfOpen();
-    htmlParts.push(`<p style="margin:0;line-height:1.5;">${applyInlineFormatting(line)}</p>`);
+    htmlParts.push(`<div style="margin:0;line-height:1.4;">${applyInlineFormatting(line)}</div>`);
   });
 
   closeListIfOpen();

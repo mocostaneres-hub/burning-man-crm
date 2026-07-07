@@ -357,6 +357,8 @@ const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customM
   
   // Use custom message if provided (placeholders already replaced), otherwise use default
   const messageText = customMessage || `Hello! You've been personally invited to apply to join our camp, ${campName}, for Burning Man. Click here to start your application: ${inviteLink}`;
+  const messageBodyText = messageText.includes(inviteLink) ? messageText : `${messageText}\n\n${inviteLink}`;
+  const messageHtml = renderDuesBodyHtml(messageBodyText);
   
   return sendEmail({
     to: recipientEmail,
@@ -380,9 +382,9 @@ const sendInviteEmail = async (recipientEmail, camp, sender, inviteLink, customM
             </p>
             
             <div style="background: #FFF3E0; padding: 20px; border-radius: 8px; border-left: 4px solid #FF6B35; margin: 20px 0;">
-              <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0;">
-                ${messageText.includes(inviteLink) ? messageText : `${messageText}<br><br><a href="${inviteLink}" style="color: #FF6B35; font-weight: bold;">${inviteLink}</a>`}
-              </p>
+              <div style="color: #555; font-size: 15px; line-height: 1.4; margin: 0;">
+                ${messageHtml}
+              </div>
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -580,7 +582,7 @@ const sendDuesEmail = async ({ to, subject, body, camp }) => {
     to,
     subject: safeSubject,
     text: safeBody,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151; font-size: 14px; line-height: 1.5;">${htmlBody}</div>`,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151; font-size: 14px; line-height: 1.4;">${htmlBody}</div>`,
     fromName: camp ? getCampSenderName(camp) : undefined
   });
 };
