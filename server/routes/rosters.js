@@ -1376,7 +1376,13 @@ router.post('/:rosterId/members', authenticateToken, async (req, res) => {
           </div>
         `;
 
-        await sendEmail({ to: memberRecord.email, subject: inviteSubject, html: inviteHtml, text: inviteText });
+        await sendEmail({
+          to: memberRecord.email,
+          subject: inviteSubject,
+          html: inviteHtml,
+          text: inviteText,
+          fromName: campName
+        });
         inviteSent = true;
         console.log(`✅ [manual-add] Invite sent → ${memberRecord.email} (member ${memberRecord._id})`);
       } catch (inviteErr) {
@@ -1553,7 +1559,8 @@ async function sendSorReminder({ member, camp, senderUser, Member, reqUser }) {
       to: member.email,
       subject: emailPayload.subject,
       html: emailPayload.html,
-      text: emailPayload.text
+      text: emailPayload.text,
+      fromName: campName
     });
 
     // Persist cooldown timestamp — ONLY on successful send.

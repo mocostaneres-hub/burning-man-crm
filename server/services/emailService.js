@@ -36,8 +36,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 console.log('✅ Resend initialized successfully');
 console.log('📧 Sending emails from:', process.env.RESEND_FROM_EMAIL);
 
+const sanitizeSenderName = (name) => {
+  if (!name) return '';
+  return String(name)
+    .replace(/[\r\n<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const getCampDisplayName = (camp = {}) => camp?.name || camp?.campName || 'Your Camp';
-const getCampSenderName = (camp = {}) => `${getCampDisplayName(camp)} via G8Road Camp CRM`;
+const getCampSenderName = (camp = {}) => sanitizeSenderName(getCampDisplayName(camp)) || 'Your Camp';
+const getTemplateSenderName = (data = {}) => (
+  sanitizeSenderName(data.fromName || data.camp_name || data.campName)
+);
 
 /**
  * Send an email using Resend
@@ -77,8 +88,9 @@ const sendEmail = async ({
       throw new Error('Email must have either HTML or text content');
     }
 
-    // Resend requires from to be in "Name <email>" format or just email
-    const fromEmail = fromName ? `${fromName} <${from}>` : from;
+    // Resend requires from to be in "Name <email>" format or just email.
+    const safeFromName = sanitizeSenderName(fromName);
+    const fromEmail = safeFromName ? `${safeFromName} <${from}>` : from;
 
     console.log(`📧 Sending email to: ${to}`);
     console.log(`📧 Subject: ${subject}`);
@@ -779,7 +791,8 @@ const sendTemplate = async (templateKey, userId, data = {}) => {
     to: user.email,
     subject,
     html,
-    text
+    text,
+    fromName: getTemplateSenderName(data) || undefined
   });
 };
 

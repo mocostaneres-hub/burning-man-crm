@@ -134,7 +134,8 @@ async function sendSorReminder({
       to: member.email,
       subject: emailPayload.subject,
       html: emailPayload.html,
-      text: emailPayload.text
+      text: emailPayload.text,
+      fromName: campName
     });
 
     await Member.findByIdAndUpdate(member._id, { $set: { lastReminderAt: now } });
@@ -323,6 +324,7 @@ describe('sendSorReminder — active vs invited routing', () => {
     expect(sendEmail).toHaveBeenCalledTimes(1);
     const call = sendEmail.mock.calls[0][0];
     expect(call.subject).toMatch(/friendly reminder/i);
+    expect(call.fromName).toBe('Camp Dusty');
     expect(call.html).toContain('/apply?invite_token=tok-123');
     expect(call.text).toContain('/apply?invite_token=tok-123');
   });

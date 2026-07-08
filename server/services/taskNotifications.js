@@ -9,6 +9,24 @@ const getTaskUrl = (taskIdCode) => {
   return `${clientUrl}/tasks/${taskIdCode}`;
 };
 
+const getCampDisplayName = (camp = {}) => camp?.name || camp?.campName || '';
+
+const resolveTaskSenderName = async (task) => {
+  const inlineCampName = getCampDisplayName(task?.camp || task?.campId);
+  if (inlineCampName) return inlineCampName;
+
+  const campId = task?.campId?._id || task?.campId || task?.camp?._id || task?.camp;
+  if (!campId) return undefined;
+
+  try {
+    const camp = await db.findCamp({ _id: campId });
+    return getCampDisplayName(camp) || undefined;
+  } catch (error) {
+    console.warn('⚠️  Could not resolve task camp sender name:', error.message);
+    return undefined;
+  }
+};
+
 /**
  * Fetch user emails from user IDs or user objects
  */
@@ -42,10 +60,12 @@ const sendTaskAssignmentEmail = async (task, newAssigneeIdsOrObjects) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `You have been assigned to task ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -92,10 +112,12 @@ const sendTaskWatcherEmail = async (task, newWatcherIdsOrObjects) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `You are now watching task ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -148,10 +170,12 @@ const sendTaskStatusChangeEmail = async (task, oldStatus, newStatus) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `Status updated for ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -203,10 +227,12 @@ const sendTaskClosedEmail = async (task) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `Task Closed: ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -257,10 +283,12 @@ const sendTaskPriorityChangeEmail = async (task, oldPriority, newPriority) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `Priority updated for ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -321,6 +349,7 @@ const sendTaskCommentEmail = async (task, commentText, commentAuthor) => {
     }
 
     const taskUrl = getTaskUrl(task.taskIdCode);
+    const fromName = await resolveTaskSenderName(task);
     const authorName = commentAuthor.firstName && commentAuthor.lastName 
       ? `${commentAuthor.firstName} ${commentAuthor.lastName}`
       : commentAuthor.email || 'Someone';
@@ -328,6 +357,7 @@ const sendTaskCommentEmail = async (task, commentText, commentAuthor) => {
     for (const email of emails) {
       await sendEmail({
         to: email,
+        fromName,
         subject: `New Comment on ${task.taskIdCode}: ${task.title}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -369,4 +399,3 @@ module.exports = {
   sendTaskCommentEmail,
   sendTaskPriorityChangeEmail
 };
-

@@ -587,7 +587,8 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
             to: email,
             subject,
             html: htmlBody,
-            text: textBody
+            text: textBody,
+            fromName: campName
           });
         } catch (emailError) {
           console.error('Bulk shift invite email error for user', userId, emailError);
@@ -633,7 +634,8 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
             to: recipient.email,
             subject: inviteSubject,
             html: inviteHtmlBody,
-            text: inviteTextBody
+            text: inviteTextBody,
+            fromName: campName
           });
         } catch (emailError) {
           console.error('Bulk shifts-only invite email error for member', recipient.memberId, emailError);

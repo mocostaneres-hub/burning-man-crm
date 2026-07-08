@@ -956,7 +956,13 @@ router.post('/import-csv', authenticateToken, handleUpload, async (req, res) => 
                 </div>
               `;
 
-              await sendEmail({ to: member.email, subject: inviteSubject, html: inviteHtml, text: inviteText });
+              await sendEmail({
+                to: member.email,
+                subject: inviteSubject,
+                html: inviteHtml,
+                text: inviteText,
+                fromName: campName
+              });
               invitesSent++;
               console.log(`✅ [import-csv] Step 1c — invite sent → ${member.email} (member ${member._id})`);
             } catch (perMemberErr) {
