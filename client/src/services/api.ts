@@ -31,6 +31,26 @@ const sanitizeForLog = (value: any): any => {
   return value;
 };
 
+type LeadRoleGrantOptions = {
+  replaceExistingRole?: boolean;
+};
+
+type CampLeadRoleResponse = {
+  message: string;
+  memberId: string;
+  memberName: string;
+  isCampLead: boolean;
+  isEventsLead?: boolean;
+};
+
+type EventsLeadRoleResponse = {
+  message: string;
+  memberId: string;
+  memberName: string;
+  isEventsLead: boolean;
+  isCampLead?: boolean;
+};
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -946,8 +966,14 @@ class ApiService {
   }
 
   // Camp Lead role management methods
-  async grantCampLeadRole(memberId: string): Promise<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> {
-    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isCampLead: boolean }> = await this.api.post(`/rosters/member/${memberId}/grant-camp-lead`);
+  async grantCampLeadRole(
+    memberId: string,
+    options: LeadRoleGrantOptions = {}
+  ): Promise<CampLeadRoleResponse> {
+    const response: AxiosResponse<CampLeadRoleResponse> = await this.api.post(
+      `/rosters/member/${memberId}/grant-camp-lead`,
+      options.replaceExistingRole ? { replaceExistingRole: true } : undefined
+    );
     return response.data;
   }
 
@@ -956,10 +982,18 @@ class ApiService {
     return response.data;
   }
 
-  async grantEventsLeadRole(memberId: string, campId?: string): Promise<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> {
-    const response: AxiosResponse<{ message: string; memberId: string; memberName: string; isEventsLead: boolean }> = await this.api.post(
+  async grantEventsLeadRole(
+    memberId: string,
+    campId?: string,
+    options: LeadRoleGrantOptions = {}
+  ): Promise<EventsLeadRoleResponse> {
+    const payload = {
+      ...(campId ? { campId } : {}),
+      ...(options.replaceExistingRole ? { replaceExistingRole: true } : {})
+    };
+    const response: AxiosResponse<EventsLeadRoleResponse> = await this.api.post(
       `/rosters/member/${memberId}/grant-events-lead`,
-      campId ? { campId } : undefined
+      Object.keys(payload).length > 0 ? payload : undefined
     );
     return response.data;
   }

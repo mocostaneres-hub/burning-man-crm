@@ -8,6 +8,7 @@ interface CampLeadConfirmModalProps {
   memberName: string;
   action: 'grant' | 'revoke';
   role?: 'campLead' | 'eventsLead';
+  replaceExistingRole?: boolean;
   loading?: boolean;
 }
 
@@ -18,6 +19,7 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
   memberName,
   action,
   role = 'campLead',
+  replaceExistingRole = false,
   loading = false
 }) => {
   if (!isOpen) return null;
@@ -25,17 +27,35 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
   const isGrant = action === 'grant';
   const isEventsLead = role === 'eventsLead';
   const roleName = isEventsLead ? 'Events Lead' : 'Camp Lead';
+  const existingRoleName = isEventsLead ? 'Camp Lead' : 'Events Lead';
+  const isReplacingRole = isGrant && replaceExistingRole;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isGrant ? `Grant ${roleName} Access` : `Revoke ${roleName} Access`}
+      title={
+        isReplacingRole
+          ? `Replace ${existingRoleName} Access`
+          : isGrant
+            ? `Grant ${roleName} Access`
+            : `Revoke ${roleName} Access`
+      }
     >
       <div className="space-y-4">
         {/* Main Message */}
         <div className="text-gray-700">
-          {isGrant ? (
+          {isReplacingRole ? (
+            <div className="space-y-2">
+              <p className="text-base">
+                <strong>{memberName}</strong> already has {existingRoleName} access.
+              </p>
+              <p className="text-base">
+                A roster member can only have one lead role. Replace {existingRoleName} access with{' '}
+                {roleName} access?
+              </p>
+            </div>
+          ) : isGrant ? (
             <p className="text-base">
               Grant <strong>{memberName}</strong> {roleName} permissions?
             </p>
@@ -47,7 +67,16 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
         </div>
 
         {/* Permissions Explanation */}
-        {isGrant && isEventsLead ? (
+        {isReplacingRole ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h4 className="font-semibold text-yellow-900 mb-2">This will:</h4>
+            <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+              <li>Remove {existingRoleName} access immediately</li>
+              <li>Grant {roleName} access immediately</li>
+              <li>Send only the {roleName} granted email</li>
+            </ul>
+          </div>
+        ) : isGrant && isEventsLead ? (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-semibold text-blue-900 mb-2">This allows them to:</h4>
             <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
@@ -113,7 +142,11 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
             loading={loading}
             className={isGrant ? '' : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'}
           >
-            {isGrant ? `Grant ${roleName}` : `Revoke ${roleName}`}
+            {isReplacingRole
+              ? `Replace with ${roleName}`
+              : isGrant
+                ? `Grant ${roleName}`
+                : `Revoke ${roleName}`}
           </Button>
         </div>
       </div>

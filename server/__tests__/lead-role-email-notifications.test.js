@@ -160,6 +160,43 @@ describe('lead role email notifications', () => {
     expect(emailService.sendEventsLeadGrantedEmail).not.toHaveBeenCalled();
   });
 
+  test('rejects Camp Lead grant when Events Lead access already exists without replacement', async () => {
+    const roster = makeRoster({ isEventsLead: true });
+    db.findActiveRoster.mockResolvedValue(roster);
+
+    const response = await post(app, '/api/rosters/member/member-1/grant-camp-lead');
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'LEAD_ROLE_CONFLICT',
+      existingRole: 'eventsLead',
+      requestedRole: 'campLead'
+    });
+    expect(roster.save).not.toHaveBeenCalled();
+    expect(roster.members[0].isCampLead).toBe(false);
+    expect(roster.members[0].isEventsLead).toBe(true);
+    expect(emailService.sendCampLeadGrantedEmail).not.toHaveBeenCalled();
+    expect(emailService.sendEventsLeadGrantedEmail).not.toHaveBeenCalled();
+  });
+
+  test('replaces Events Lead access when granting Camp Lead with explicit replacement', async () => {
+    const roster = makeRoster({ isEventsLead: true });
+    db.findActiveRoster.mockResolvedValue(roster);
+    db.findRoster.mockResolvedValue(roster);
+
+    const response = await post(
+      app,
+      '/api/rosters/member/member-1/grant-camp-lead',
+      { replaceExistingRole: true }
+    );
+
+    expect(response.status).toBe(200);
+    expect(roster.members[0].isCampLead).toBe(true);
+    expect(roster.members[0].isEventsLead).toBe(false);
+    expect(emailService.sendCampLeadGrantedEmail).toHaveBeenCalledWith(user, camp);
+    expect(emailService.sendEventsLeadGrantedEmail).not.toHaveBeenCalled();
+  });
+
   test('does not send a Camp Lead email when access is revoked', async () => {
     const roster = makeRoster({ isCampLead: true });
     db.findActiveRoster.mockResolvedValue(roster);
@@ -180,6 +217,42 @@ describe('lead role email notifications', () => {
     const response = await post(app, '/api/rosters/member/member-1/grant-events-lead');
 
     expect(response.status).toBe(200);
+    expect(roster.members[0].isEventsLead).toBe(true);
+    expect(emailService.sendEventsLeadGrantedEmail).toHaveBeenCalledWith(user, camp);
+    expect(emailService.sendCampLeadGrantedEmail).not.toHaveBeenCalled();
+  });
+
+  test('rejects Events Lead grant when Camp Lead access already exists without replacement', async () => {
+    const roster = makeRoster({ isCampLead: true });
+    db.findActiveRoster.mockResolvedValue(roster);
+
+    const response = await post(app, '/api/rosters/member/member-1/grant-events-lead');
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      code: 'LEAD_ROLE_CONFLICT',
+      existingRole: 'campLead',
+      requestedRole: 'eventsLead'
+    });
+    expect(roster.save).not.toHaveBeenCalled();
+    expect(roster.members[0].isCampLead).toBe(true);
+    expect(roster.members[0].isEventsLead).toBe(false);
+    expect(emailService.sendCampLeadGrantedEmail).not.toHaveBeenCalled();
+    expect(emailService.sendEventsLeadGrantedEmail).not.toHaveBeenCalled();
+  });
+
+  test('replaces Camp Lead access when granting Events Lead with explicit replacement', async () => {
+    const roster = makeRoster({ isCampLead: true });
+    db.findActiveRoster.mockResolvedValue(roster);
+
+    const response = await post(
+      app,
+      '/api/rosters/member/member-1/grant-events-lead',
+      { replaceExistingRole: true }
+    );
+
+    expect(response.status).toBe(200);
+    expect(roster.members[0].isCampLead).toBe(false);
     expect(roster.members[0].isEventsLead).toBe(true);
     expect(emailService.sendEventsLeadGrantedEmail).toHaveBeenCalledWith(user, camp);
     expect(emailService.sendCampLeadGrantedEmail).not.toHaveBeenCalled();

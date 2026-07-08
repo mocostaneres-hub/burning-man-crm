@@ -36,6 +36,22 @@ function getMemberEntryIndex(roster, memberId) {
   });
 }
 
+function shouldReplaceExistingLeadRole(req) {
+  return req.body?.replaceExistingRole === true;
+}
+
+function sendLeadRoleConflict(res, existingRole, requestedRole) {
+  const existingRoleName = existingRole === 'campLead' ? 'Camp Lead' : 'Events Lead';
+  const requestedRoleName = requestedRole === 'campLead' ? 'Camp Lead' : 'Events Lead';
+
+  return res.status(409).json({
+    code: 'LEAD_ROLE_CONFLICT',
+    existingRole,
+    requestedRole,
+    message: `Member already has ${existingRoleName} access. Replace that role before granting ${requestedRoleName} access.`
+  });
+}
+
 const DUES_FIELD_NAMES = [
   'paid',
   'duesPaid',
@@ -3133,6 +3149,12 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
       return res.status(400).json({ message: 'Member is already a Camp Lead' });
     }
 
+    const replaceExistingRole = shouldReplaceExistingLeadRole(req);
+    const replacingEventsLead = memberEntry.isEventsLead === true;
+    if (replacingEventsLead && !replaceExistingRole) {
+      return sendLeadRoleConflict(res, 'eventsLead', 'campLead');
+    }
+
     // Get member details for logging and notification
     const member = await db.findMember({ _id: memberId });
     if (!member) {
@@ -3146,6 +3168,9 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
 
     // Update the member entry to grant Camp Lead role
     activeRoster.members[memberIndex].isCampLead = true;
+    if (replacingEventsLead) {
+      activeRoster.members[memberIndex].isEventsLead = false;
+    }
 
     // CRITICAL: Mark the members array as modified for Mongoose to save it
     activeRoster.markModified('members');
@@ -3176,6 +3201,22 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
       memberEmail: user.email,
       campId
     });
+    if (replacingEventsLead) {
+      await recordActivity('MEMBER', user._id, req.user._id, 'EVENTS_LEAD_REVOKED', {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId,
+        source: 'lead_role_replacement'
+      });
+      await recordActivity('CAMP', campId, req.user._id, 'EVENTS_LEAD_REVOKED', {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId,
+        source: 'lead_role_replacement'
+      });
+    }
 
     // Send email notification
     try {
@@ -3193,7 +3234,8 @@ router.post('/member/:memberId/grant-camp-lead', authenticateToken, async (req, 
       message: 'Camp Lead role granted successfully',
       memberId,
       memberName: `${user.firstName} ${user.lastName}`,
-      isCampLead: true
+      isCampLead: true,
+      isEventsLead: false
     });
   } catch (error) {
     console.error('❌ [GRANT CAMP LEAD] Critical error:', error);
@@ -3359,6 +3401,12 @@ router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req
       return res.status(400).json({ message: 'Member is already an Events Lead' });
     }
 
+    const replaceExistingRole = shouldReplaceExistingLeadRole(req);
+    const replacingCampLead = memberEntry.isCampLead === true;
+    if (replacingCampLead && !replaceExistingRole) {
+      return sendLeadRoleConflict(res, 'campLead', 'eventsLead');
+    }
+
     const member = await db.findMember({ _id: memberId });
     if (!member) {
       return res.status(404).json({ message: 'Member record not found' });
@@ -3370,6 +3418,9 @@ router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req
     }
 
     activeRoster.members[memberIndex].isEventsLead = true;
+    if (replacingCampLead) {
+      activeRoster.members[memberIndex].isCampLead = false;
+    }
     activeRoster.markModified('members');
     activeRoster.updatedAt = new Date();
     await activeRoster.save();
@@ -3386,6 +3437,22 @@ router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req
       memberEmail: user.email,
       campId
     });
+    if (replacingCampLead) {
+      await recordActivity('MEMBER', user._id, req.user._id, 'CAMP_LEAD_REVOKED', {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId,
+        source: 'lead_role_replacement'
+      });
+      await recordActivity('CAMP', campId, req.user._id, 'CAMP_LEAD_REVOKED', {
+        memberId,
+        memberName: `${user.firstName} ${user.lastName}`,
+        memberEmail: user.email,
+        campId,
+        source: 'lead_role_replacement'
+      });
+    }
 
     try {
       const { sendEventsLeadGrantedEmail } = require('../services/emailService');
@@ -3400,7 +3467,8 @@ router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req
       message: 'Events Lead role granted successfully',
       memberId,
       memberName: `${user.firstName} ${user.lastName}`,
-      isEventsLead: true
+      isEventsLead: true,
+      isCampLead: false
     });
   } catch (error) {
     console.error('❌ [GRANT EVENTS LEAD] Critical error:', error);

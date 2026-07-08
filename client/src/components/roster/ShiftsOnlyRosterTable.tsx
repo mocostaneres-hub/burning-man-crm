@@ -106,6 +106,13 @@ function memberLastReminderAt(member: SorMemberRow): string | null {
   return member.member?.lastReminderAt || null;
 }
 
+function confirmLeadRoleReplacement(memberName: string, existingRoleName: string, requestedRoleName: string): boolean {
+  return window.confirm(
+    `${memberName} already has ${existingRoleName} access.\n\n` +
+    `A roster member can only have one lead role. Replace ${existingRoleName} access with ${requestedRoleName} access?`
+  );
+}
+
 // ─── Edit modal ─────────────────────────────────────────────────────────────
 interface EditModalProps {
   open: boolean;
@@ -174,13 +181,22 @@ const EditMemberModal: React.FC<EditModalProps> = ({
       // 2) Persist the Camp Lead role change (if changed). The backend rejects
       //    this when the member has no linked User, so we only ever call it
       //    for Active members — the checkbox is disabled otherwise.
-      if (campLeadChanged) {
-        if (isCampLead) await apiService.grantCampLeadRole(memberId);
-        else await apiService.revokeCampLeadRole(memberId);
-      }
-      if (eventsLeadChanged) {
-        if (isEventsLead) await apiService.grantEventsLeadRole(memberId, campId || undefined);
-        else await apiService.revokeEventsLeadRole(memberId, campId || undefined);
+      const replacingEventsWithCamp = campLeadChanged && isCampLead && initialIsEventsLead;
+      const replacingCampWithEvents = eventsLeadChanged && isEventsLead && initialIsCampLead;
+
+      if (replacingEventsWithCamp) {
+        await apiService.grantCampLeadRole(memberId, { replaceExistingRole: true });
+      } else if (replacingCampWithEvents) {
+        await apiService.grantEventsLeadRole(memberId, campId || undefined, { replaceExistingRole: true });
+      } else {
+        if (campLeadChanged) {
+          if (isCampLead) await apiService.grantCampLeadRole(memberId);
+          else await apiService.revokeCampLeadRole(memberId);
+        }
+        if (eventsLeadChanged) {
+          if (isEventsLead) await apiService.grantEventsLeadRole(memberId, campId || undefined);
+          else await apiService.revokeEventsLeadRole(memberId, campId || undefined);
+        }
       }
       onSaved();
       onClose();
@@ -189,6 +205,24 @@ const EditMemberModal: React.FC<EditModalProps> = ({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCampLeadChange = (checked: boolean) => {
+    if (checked && isEventsLead) {
+      const confirmed = confirmLeadRoleReplacement(name, 'Events Lead', 'Camp Lead');
+      if (!confirmed) return;
+      setIsEventsLead(false);
+    }
+    setIsCampLead(checked);
+  };
+
+  const handleEventsLeadChange = (checked: boolean) => {
+    if (checked && isCampLead) {
+      const confirmed = confirmLeadRoleReplacement(name, 'Camp Lead', 'Events Lead');
+      if (!confirmed) return;
+      setIsCampLead(false);
+    }
+    setIsEventsLead(checked);
   };
 
   return (
@@ -238,7 +272,7 @@ const EditMemberModal: React.FC<EditModalProps> = ({
                   <input
                     type="checkbox"
                     checked={isCampLead}
-                    onChange={(e) => setIsCampLead(e.target.checked)}
+                    onChange={(e) => handleCampLeadChange(e.target.checked)}
                     disabled={saving || !isActive}
                     className="mt-0.5 h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded disabled:opacity-50"
                   />
@@ -260,7 +294,7 @@ const EditMemberModal: React.FC<EditModalProps> = ({
                   <input
                     type="checkbox"
                     checked={isEventsLead}
-                    onChange={(e) => setIsEventsLead(e.target.checked)}
+                    onChange={(e) => handleEventsLeadChange(e.target.checked)}
                     disabled={saving || !isActive}
                     className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
                   />

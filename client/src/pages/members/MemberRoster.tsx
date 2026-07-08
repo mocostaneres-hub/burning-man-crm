@@ -404,7 +404,14 @@ const MemberRoster: React.FC = () => {
     member: RosterMember | null;
     action: 'grant' | 'revoke';
     role: DelegatedCampRole;
-  }>({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
+    replaceExistingRole: boolean;
+  }>({
+    isOpen: false,
+    member: null,
+    action: 'grant',
+    role: 'campLead',
+    replaceExistingRole: false
+  });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
   const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
@@ -1453,11 +1460,18 @@ const MemberRoster: React.FC = () => {
     currentStatus: boolean,
     role: DelegatedCampRole = 'campLead'
   ) => {
+    const isGrant = !currentStatus;
+    const replaceExistingRole = isGrant && (
+      (role === 'campLead' && member.isEventsLead === true) ||
+      (role === 'eventsLead' && member.isCampLead === true)
+    );
+
     setCampLeadConfirmModal({
       isOpen: true,
       member,
-      action: currentStatus ? 'revoke' : 'grant',
-      role
+      action: isGrant ? 'grant' : 'revoke',
+      role,
+      replaceExistingRole
     });
   };
 
@@ -1466,7 +1480,7 @@ const MemberRoster: React.FC = () => {
   };
 
   const handleConfirmCampLeadChange = async () => {
-    const { member, action, role } = campLeadConfirmModal;
+    const { member, action, role, replaceExistingRole } = campLeadConfirmModal;
     if (!member || !canAssignDelegatedRoles) return;
 
     try {
@@ -1474,13 +1488,13 @@ const MemberRoster: React.FC = () => {
 
       if (role === 'eventsLead') {
         if (action === 'grant') {
-          await api.grantEventsLeadRole(member._id.toString(), campId || undefined);
+          await api.grantEventsLeadRole(member._id.toString(), campId || undefined, { replaceExistingRole });
         } else {
           await api.revokeEventsLeadRole(member._id.toString(), campId || undefined);
         }
       } else {
         if (action === 'grant') {
-          await api.grantCampLeadRole(member._id.toString());
+          await api.grantCampLeadRole(member._id.toString(), { replaceExistingRole });
         } else {
           await api.revokeCampLeadRole(member._id.toString());
         }
@@ -1493,8 +1507,14 @@ const MemberRoster: React.FC = () => {
             ? {
                 ...m,
                 ...(role === 'eventsLead'
-                  ? { isEventsLead: action === 'grant' }
-                  : { isCampLead: action === 'grant' })
+                  ? {
+                      isEventsLead: action === 'grant',
+                      ...(action === 'grant' && replaceExistingRole ? { isCampLead: false } : {})
+                    }
+                  : {
+                      isCampLead: action === 'grant',
+                      ...(action === 'grant' && replaceExistingRole ? { isEventsLead: false } : {})
+                    })
               }
             : m
         )
@@ -1509,7 +1529,13 @@ const MemberRoster: React.FC = () => {
       alert(`${action === 'grant' ? 'Granted' : 'Revoked'} ${roleName} role ${action === 'grant' ? 'to' : 'from'} ${memberName}`);
 
       // Close modal
-      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
+      setCampLeadConfirmModal({
+        isOpen: false,
+        member: null,
+        action: 'grant',
+        role: 'campLead',
+        replaceExistingRole: false
+      });
     } catch (error: any) {
       const roleName = role === 'eventsLead' ? 'Events Lead' : 'Camp Lead';
       console.error(`❌ Error updating ${roleName} role:`, error);
@@ -1521,7 +1547,13 @@ const MemberRoster: React.FC = () => {
 
   const handleCloseCampLeadModal = () => {
     if (!campLeadLoading) {
-      setCampLeadConfirmModal({ isOpen: false, member: null, action: 'grant', role: 'campLead' });
+      setCampLeadConfirmModal({
+        isOpen: false,
+        member: null,
+        action: 'grant',
+        role: 'campLead',
+        replaceExistingRole: false
+      });
     }
   };
 
@@ -3633,6 +3665,7 @@ const MemberRoster: React.FC = () => {
         })()}
         action={campLeadConfirmModal.action}
         role={campLeadConfirmModal.role}
+        replaceExistingRole={campLeadConfirmModal.replaceExistingRole}
         loading={!!campLeadLoading}
       />
 
