@@ -299,8 +299,8 @@ async function isCampLeadForCamp(req, targetCampId) {
 
 /**
  * Check if user is an Events Lead for a specific camp.
- * Events Leads have delegated write permissions for events, tasks, and surveys
- * plus read-only access to camp profile and roster data.
+ * Events Leads have delegated write permissions for events, tasks, surveys,
+ * meal-plan operations, and food preferences plus scoped roster visibility.
  *
  * @param {Object} req - Express request object with req.user
  * @param {string} targetCampId - The camp ID being accessed

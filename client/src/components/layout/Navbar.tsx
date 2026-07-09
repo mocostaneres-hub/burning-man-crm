@@ -308,7 +308,7 @@ const Navbar: React.FC = () => {
           canDiscoverCamps ? 4 : 3,
           0,
           { label: 'Camp Profile', path: campProfilePath, icon: <HomeIcon size={18} /> },
-          { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
+          { label: 'Meals/Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
           { label: 'Camp Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
           { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
           { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> }

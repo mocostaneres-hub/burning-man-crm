@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FOOD_PREFERENCE_OPTIONS,
   FoodPreference,
@@ -76,36 +76,45 @@ export const FoodPreferenceTags: React.FC<FoodPreferenceTagsProps> = ({
 interface FoodPreferenceMultiSelectProps {
   value?: unknown;
   onChange: (preferences: FoodPreference[]) => void;
+  onClose?: () => void;
   label?: string;
   required?: boolean;
   disabled?: boolean;
   buttonClassName?: string;
+  defaultOpen?: boolean;
 }
 
 export const FoodPreferenceMultiSelect: React.FC<FoodPreferenceMultiSelectProps> = ({
   value,
   onChange,
+  onClose,
   label,
   required = false,
   disabled = false,
-  buttonClassName = ''
+  buttonClassName = '',
+  defaultOpen = false
 }) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const normalized = normalizeFoodPreferences(value);
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    onClose?.();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
 
     const handleDocumentClick = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+        closeMenu();
       }
     };
 
     document.addEventListener('mousedown', handleDocumentClick);
     return () => document.removeEventListener('mousedown', handleDocumentClick);
-  }, [open]);
+  }, [open, closeMenu]);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -117,7 +126,13 @@ export const FoodPreferenceMultiSelect: React.FC<FoodPreferenceMultiSelectProps>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          if (open) {
+            closeMenu();
+          } else {
+            setOpen(true);
+          }
+        }}
         className={`w-full min-w-[11rem] rounded border border-gray-300 bg-white px-3 py-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${buttonClassName}`}
         aria-haspopup="listbox"
         aria-expanded={open}

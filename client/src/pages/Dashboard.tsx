@@ -253,8 +253,8 @@ const Dashboard: React.FC = () => {
               color: 'bg-blue-500'
             },
             {
-              title: 'Camp Roster',
-              description: 'Read-only roster access',
+              title: 'Meals & Roster',
+              description: 'Meal payments and preferences',
               icon: <People size={24} />,
               path: `${eventsLeadCampBasePath}/roster`,
               color: 'bg-orange-500'
@@ -382,6 +382,12 @@ const Dashboard: React.FC = () => {
 
       if (user?.isEventsLead && eventsLeadCampBasePath) {
         personalActions.push(
+          {
+            title: 'Manage Meals',
+            icon: <People size={24} />,
+            onClick: () => navigate(`${eventsLeadCampBasePath}/roster`),
+            description: 'Meal payments and preferences'
+          },
           {
             title: 'Manage Events',
             icon: <Calendar size={24} />,

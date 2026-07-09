@@ -342,6 +342,7 @@ const MemberRoster: React.FC = () => {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingFoodPreferencesMemberId, setEditingFoodPreferencesMemberId] = useState<string | null>(null);
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<any>>>({});
   const [hasActiveRoster, setHasActiveRoster] = useState(false); // Will be set to true if active roster is found
   const [archiveLoading, setArchiveLoading] = useState(false);
@@ -378,6 +379,7 @@ const MemberRoster: React.FC = () => {
   });
   const [duesLoading, setDuesLoading] = useState<string | null>(null);
   const [mealPlanLoading, setMealPlanLoading] = useState<string | null>(null);
+  const [foodPreferenceSavingId, setFoodPreferenceSavingId] = useState<string | null>(null);
   const [mealPlanTemplatesLoading, setMealPlanTemplatesLoading] = useState(false);
   const [mealPlanTemplatesModalOpen, setMealPlanTemplatesModalOpen] = useState(false);
   const [mealPlanTemplatesForm, setMealPlanTemplatesForm] = useState({
@@ -564,13 +566,15 @@ const MemberRoster: React.FC = () => {
 
   // Start editing a member
   const handleStartEdit = (memberId: string) => {
-    if (!canEdit && !canEditFoodPreferences) return;
+    if (!canEdit) return;
+    setEditingFoodPreferencesMemberId(null);
     setEditingMemberId(memberId);
   };
 
   // Cancel editing
   const handleCancelEdit = () => {
     setEditingMemberId(null);
+    setEditingFoodPreferencesMemberId(null);
     // Clear any unsaved local edits for this member
     setLocalEdits(prev => {
       const newEdits = { ...prev };
@@ -590,6 +594,48 @@ const MemberRoster: React.FC = () => {
         [field]: value
       }
     }));
+  };
+
+  const handleStartFoodPreferencesEdit = (memberId: string) => {
+    if (!canEditFoodPreferences) return;
+    setEditingFoodPreferencesMemberId(memberId);
+  };
+
+  const handleCloseFoodPreferencesEdit = async (memberId: string) => {
+    if (editingFoodPreferencesMemberId !== memberId) return;
+
+    const currentEdits = localEdits[memberId] || {};
+    if (currentEdits.foodPreferences === undefined) {
+      setEditingFoodPreferencesMemberId(null);
+      return;
+    }
+
+    if (!rosterId) {
+      setEditingFoodPreferencesMemberId(null);
+      alert('Roster ID not found');
+      return;
+    }
+
+    try {
+      setFoodPreferenceSavingId(memberId);
+      await api.put(`/rosters/${rosterId}/members/${memberId}/overrides`, {
+        foodPreferences: normalizeFoodPreferences(currentEdits.foodPreferences)
+      });
+
+      setLocalEdits(prev => {
+        const newEdits = { ...prev };
+        delete newEdits[memberId];
+        return newEdits;
+      });
+      setEditingFoodPreferencesMemberId(null);
+      await fetchMembers();
+    } catch (error: any) {
+      console.error('Error saving food preferences:', error);
+      alert(error?.response?.data?.message || 'Failed to save food preferences. Please try again.');
+      setEditingFoodPreferencesMemberId(null);
+    } finally {
+      setFoodPreferenceSavingId(null);
+    }
   };
 
   // Save local edits
@@ -652,7 +698,8 @@ const MemberRoster: React.FC = () => {
         delete newEdits[memberId];
         return newEdits;
       });
-    setEditingMemberId(null);
+      setEditingMemberId(null);
+      setEditingFoodPreferencesMemberId(null);
 
       // Refresh the members data to show the updated values
       await fetchMembers();
@@ -1026,6 +1073,7 @@ const MemberRoster: React.FC = () => {
       // Clear any local edits when data is refreshed
       setLocalEdits({});
       setEditingMemberId(null);
+      setEditingFoodPreferencesMemberId(null);
     } catch (err) {
       console.error('❌ [MemberRoster] Unexpected error fetching roster:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -2264,8 +2312,10 @@ const MemberRoster: React.FC = () => {
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
                 const canEditMemberDetails = isEditing && canEdit;
-                const canEditFoodPreferenceCell = isEditing && canEditFoodPreferences;
                 const memberId = member._id.toString();
+                const isFoodPreferenceCellEditing = editingFoodPreferencesMemberId === memberId;
+                const canEditFoodPreferenceCell = canEditFoodPreferences && (isEditing || isFoodPreferenceCellEditing);
+                const isSavingFoodPreferences = foodPreferenceSavingId === memberId;
                 const editedFoodPreferences = localEdits[memberId]?.foodPreferences;
                 const effectiveFoodPreferences = normalizeFoodPreferences(
                   editedFoodPreferences !== undefined
@@ -2424,13 +2474,30 @@ const MemberRoster: React.FC = () => {
                       })()}
                     </td>
                     {/* Food Preferences */}
-                    <td className="px-6 py-4 text-sm text-gray-900 min-w-[12rem]">
+                    <td
+                      className={`px-6 py-4 text-sm text-gray-900 min-w-[12rem] ${canEditFoodPreferences ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+                      onClick={() => {
+                        if (!canEditFoodPreferenceCell && canEditFoodPreferences) {
+                          handleStartFoodPreferencesEdit(memberId);
+                        }
+                      }}
+                      title={canEditFoodPreferences ? 'Click to edit meal preferences' : undefined}
+                    >
                       {canEditFoodPreferenceCell ? (
-                        <FoodPreferenceMultiSelect
-                          value={effectiveFoodPreferences}
-                          onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
-                          buttonClassName="min-w-[10rem] py-1"
-                        />
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <FoodPreferenceMultiSelect
+                            value={effectiveFoodPreferences}
+                            onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
+                            onClose={!isEditing ? () => handleCloseFoodPreferencesEdit(memberId) : undefined}
+                            defaultOpen={!isEditing && isFoodPreferenceCellEditing}
+                            buttonClassName="min-w-[10rem] py-1"
+                          />
+                        </div>
+                      ) : isSavingFoodPreferences ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving
+                        </div>
                       ) : (
                         <FoodPreferenceTags preferences={effectiveFoodPreferences} compact />
                       )}

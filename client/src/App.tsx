@@ -105,6 +105,11 @@ const DashboardRedirect: React.FC = () => {
       return <Navigate to={dashboardPath} replace />;
     }
   }
+
+  if (user?.isEventsLead === true && user?.eventsLeadCampId) {
+    console.log('🔍 [DashboardRedirect] Showing Events Lead dashboard');
+    return <Dashboard />;
+  }
   
   // Personal accounts go to profile
   if (user?.accountType === 'personal') {
