@@ -22,6 +22,7 @@ jest.mock('../database/databaseAdapter', () => ({
 jest.mock('../utils/permissionHelpers', () => ({
   getUserCampId: jest.fn(async () => 'camp-1'),
   canManageCamp: jest.fn(async () => true),
+  canManageMealPlan: jest.fn(async () => true),
   canViewCampRoster: jest.fn(async () => true),
   isEventsLeadForCamp: jest.fn(async () => false)
 }));

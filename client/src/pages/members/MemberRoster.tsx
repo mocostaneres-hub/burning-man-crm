@@ -378,6 +378,14 @@ const MemberRoster: React.FC = () => {
   });
   const [duesLoading, setDuesLoading] = useState<string | null>(null);
   const [mealPlanLoading, setMealPlanLoading] = useState<string | null>(null);
+  const [mealPlanTemplatesLoading, setMealPlanTemplatesLoading] = useState(false);
+  const [mealPlanTemplatesModalOpen, setMealPlanTemplatesModalOpen] = useState(false);
+  const [mealPlanTemplatesForm, setMealPlanTemplatesForm] = useState({
+    instructionsSubject: '',
+    instructionsBody: '',
+    receiptSubject: '',
+    receiptBody: ''
+  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<RosterMember | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -437,7 +445,7 @@ const MemberRoster: React.FC = () => {
   // 1. Camp accounts (accountType === 'camp')
   // 2. Admin accounts with campId
   // 3. Camp Leads (personal accounts with isCampLead === true)
-  // 4. Events Leads (read-only roster access)
+  // 4. Events Leads (roster view plus meal-plan and food-preference operations)
   const isCampContext = user?.accountType === 'camp' 
     || (user?.accountType === 'admin' && user?.campId)
     || (user?.isCampLead === true && user?.campLeadCampId)
@@ -454,6 +462,8 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = Boolean(isCampContext && (isFullRosterManager || isEventsLeadForRoster));
   const canEdit = Boolean(canAccessRoster && isFullRosterManager);
+  const canManageMealPlan = Boolean(canAccessRoster && (canEdit || isEventsLeadForRoster));
+  const canEditFoodPreferences = canManageMealPlan;
   const canViewDuesData = canEdit;
   const canViewApplicationData = canEdit;
   const canUseContactDetails = canEdit;
@@ -554,6 +564,7 @@ const MemberRoster: React.FC = () => {
 
   // Start editing a member
   const handleStartEdit = (memberId: string) => {
+    if (!canEdit && !canEditFoodPreferences) return;
     setEditingMemberId(memberId);
   };
 
@@ -602,19 +613,19 @@ const MemberRoster: React.FC = () => {
 
       // Extract all editable fields for roster overrides
       const overridesData: any = {};
-      if (allEdits.playaName !== undefined) overridesData.playaName = allEdits.playaName;
-      if (allEdits.yearsBurned !== undefined) overridesData.yearsBurned = allEdits.yearsBurned;
-      if (allEdits.skills !== undefined) overridesData.skills = allEdits.skills;
-      if (allEdits.foodPreferences !== undefined) overridesData.foodPreferences = normalizeFoodPreferences(allEdits.foodPreferences);
-      if (allEdits.hasTicket !== undefined) overridesData.hasTicket = allEdits.hasTicket;
-      if (allEdits.hasVehiclePass !== undefined) overridesData.hasVehiclePass = allEdits.hasVehiclePass;
-      if (allEdits.interestedInEAP !== undefined) overridesData.interestedInEAP = allEdits.interestedInEAP;
-      if (allEdits.interestedInStrike !== undefined) overridesData.interestedInStrike = allEdits.interestedInStrike;
-      if (allEdits.arrivalDate !== undefined) overridesData.arrivalDate = allEdits.arrivalDate;
-      if (allEdits.departureDate !== undefined) overridesData.departureDate = allEdits.departureDate;
-      if (allEdits.city !== undefined) overridesData.city = allEdits.city;
-      if (allEdits.state !== undefined) overridesData.state = allEdits.state;
-      if (allEdits.location !== undefined) {
+      if (canEdit && allEdits.playaName !== undefined) overridesData.playaName = allEdits.playaName;
+      if (canEdit && allEdits.yearsBurned !== undefined) overridesData.yearsBurned = allEdits.yearsBurned;
+      if (canEdit && allEdits.skills !== undefined) overridesData.skills = allEdits.skills;
+      if (canEditFoodPreferences && allEdits.foodPreferences !== undefined) overridesData.foodPreferences = normalizeFoodPreferences(allEdits.foodPreferences);
+      if (canEdit && allEdits.hasTicket !== undefined) overridesData.hasTicket = allEdits.hasTicket;
+      if (canEdit && allEdits.hasVehiclePass !== undefined) overridesData.hasVehiclePass = allEdits.hasVehiclePass;
+      if (canEdit && allEdits.interestedInEAP !== undefined) overridesData.interestedInEAP = allEdits.interestedInEAP;
+      if (canEdit && allEdits.interestedInStrike !== undefined) overridesData.interestedInStrike = allEdits.interestedInStrike;
+      if (canEdit && allEdits.arrivalDate !== undefined) overridesData.arrivalDate = allEdits.arrivalDate;
+      if (canEdit && allEdits.departureDate !== undefined) overridesData.departureDate = allEdits.departureDate;
+      if (canEdit && allEdits.city !== undefined) overridesData.city = allEdits.city;
+      if (canEdit && allEdits.state !== undefined) overridesData.state = allEdits.state;
+      if (canEdit && allEdits.location !== undefined) {
         overridesData.location = allEdits.location;
         if (allEdits.location) {
           overridesData.city = allEdits.location.city;
@@ -623,6 +634,11 @@ const MemberRoster: React.FC = () => {
           overridesData.city = '';
           overridesData.state = '';
         }
+      }
+
+      if (Object.keys(overridesData).length === 0) {
+        setEditingMemberId(null);
+        return;
       }
 
       console.log('💾 [MemberRoster] Saving overrides:', overridesData);
@@ -1321,7 +1337,7 @@ const MemberRoster: React.FC = () => {
   };
 
   const handleMealPlanClick = (member: any) => {
-    if (!canEdit) return;
+    if (!canManageMealPlan) return;
 
     console.log('[DuesActionsModal] meal plan icon click:', {
       memberId: member?._id,
@@ -1348,6 +1364,8 @@ const MemberRoster: React.FC = () => {
     paymentKind: PaymentKind = duesActionModal.paymentKind
   ) => {
     if (!rosterId) return;
+    if (paymentKind === 'dues' && !canEdit) return;
+    if (paymentKind === 'mealPlan' && !canManageMealPlan) return;
 
     try {
       const response = paymentKind === 'dues'
@@ -1383,6 +1401,9 @@ const MemberRoster: React.FC = () => {
     paymentKind: PaymentKind = duesActionModal.paymentKind
   ) => {
     if (!rosterId) return;
+    if (paymentKind === 'dues' && !canEdit) return;
+    if (paymentKind === 'mealPlan' && !canManageMealPlan) return;
+
     const setLoading = paymentKind === 'dues' ? setDuesLoading : setMealPlanLoading;
     setLoading(member._id.toString());
     try {
@@ -1403,6 +1424,8 @@ const MemberRoster: React.FC = () => {
 
   const handleSendPreviewEmail = async () => {
     if (!rosterId || !emailPreviewModal.member || !emailPreviewModal.actionType) return;
+    if (emailPreviewModal.paymentKind === 'dues' && !canEdit) return;
+    if (emailPreviewModal.paymentKind === 'mealPlan' && !canManageMealPlan) return;
 
     setEmailPreviewModal(prev => ({ ...prev, sending: true }));
     try {
@@ -1451,6 +1474,51 @@ const MemberRoster: React.FC = () => {
       console.error(`Failed to send ${PAYMENT_LABELS[emailPreviewModal.paymentKind].errorNoun} email:`, error);
       setEmailPreviewModal(prev => ({ ...prev, sending: false }));
       alert(error?.response?.data?.message || `Failed to send ${PAYMENT_LABELS[emailPreviewModal.paymentKind].errorNoun} email.`);
+    }
+  };
+
+  const handleOpenMealPlanTemplates = async () => {
+    if (!rosterId || !canManageMealPlan) return;
+
+    try {
+      setMealPlanTemplatesLoading(true);
+      const response = await api.getMealPlanTemplates(rosterId);
+      setMealPlanTemplatesForm({
+        instructionsSubject: response?.templates?.instructions?.subject || '',
+        instructionsBody: response?.templates?.instructions?.body || '',
+        receiptSubject: response?.templates?.receipt?.subject || '',
+        receiptBody: response?.templates?.receipt?.body || ''
+      });
+      setMealPlanTemplatesModalOpen(true);
+    } catch (error: any) {
+      console.error('Failed to load meal-plan templates:', error);
+      alert(error?.response?.data?.message || 'Failed to load meal-plan email templates.');
+    } finally {
+      setMealPlanTemplatesLoading(false);
+    }
+  };
+
+  const handleSaveMealPlanTemplates = async () => {
+    if (!rosterId || !canManageMealPlan) return;
+
+    try {
+      setMealPlanTemplatesLoading(true);
+      await api.updateMealPlanTemplates(rosterId, {
+        instructions: {
+          subject: mealPlanTemplatesForm.instructionsSubject,
+          body: mealPlanTemplatesForm.instructionsBody
+        },
+        receipt: {
+          subject: mealPlanTemplatesForm.receiptSubject,
+          body: mealPlanTemplatesForm.receiptBody
+        }
+      });
+      setMealPlanTemplatesModalOpen(false);
+    } catch (error: any) {
+      console.error('Failed to save meal-plan templates:', error);
+      alert(error?.response?.data?.message || 'Failed to save meal-plan email templates.');
+    } finally {
+      setMealPlanTemplatesLoading(false);
     }
   };
 
@@ -1851,7 +1919,7 @@ const MemberRoster: React.FC = () => {
             Roster access is restricted to Camp Admins, Camp Leads, and Events Leads only.
           </p>
           <p className="text-body text-custom-text-secondary">
-            Events Leads can view the roster but cannot manage roster settings, dues, or applications.
+            Events Leads can view the roster and manage meal-plan payment, food preferences, and meal-plan communications.
           </p>
         </div>
       </div>
@@ -1981,6 +2049,20 @@ const MemberRoster: React.FC = () => {
             >
               <Mail className="w-4 h-4" />
               Copy Paid Emails
+            </Button>
+          )}
+
+          {canManageMealPlan && rosterId && hasActiveRoster && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenMealPlanTemplates}
+              disabled={mealPlanTemplatesLoading}
+              className="flex items-center gap-2 text-teal-700 border-teal-700 hover:bg-teal-50 disabled:text-gray-400 disabled:border-gray-300 disabled:hover:bg-white"
+              title="Edit the default meal-plan payment instruction and receipt emails."
+            >
+              <Mail className={`w-4 h-4 ${mealPlanTemplatesLoading ? 'animate-pulse' : ''}`} />
+              Meal Emails
             </Button>
           )}
 
@@ -2181,6 +2263,8 @@ const MemberRoster: React.FC = () => {
                 const userName = derivedName || csvName || 'Unknown';
                 const userPhoto = user?.profilePhoto;
                 const isEditing = editingMemberId === member._id.toString();
+                const canEditMemberDetails = isEditing && canEdit;
+                const canEditFoodPreferenceCell = isEditing && canEditFoodPreferences;
                 const memberId = member._id.toString();
                 const editedFoodPreferences = localEdits[memberId]?.foodPreferences;
                 const effectiveFoodPreferences = normalizeFoodPreferences(
@@ -2258,7 +2342,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Playa Name */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <input
                           type="text"
                           value={localEdits[member._id.toString()]?.playaName !== undefined 
@@ -2324,8 +2408,8 @@ const MemberRoster: React.FC = () => {
                         return (
                       <button
                         onClick={() => handleMealPlanClick(member)}
-                        disabled={!canEdit || mealPlanLoading === member._id.toString()}
-                        className={`text-xl ${canEdit ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
+                        disabled={!canManageMealPlan || mealPlanLoading === member._id.toString()}
+                        className={`text-xl ${canManageMealPlan ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
                           mealPlanColorClass
                         }`}
                         title={tooltipDetails}
@@ -2341,7 +2425,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Food Preferences */}
                     <td className="px-6 py-4 text-sm text-gray-900 min-w-[12rem]">
-                      {isEditing ? (
+                      {canEditFoodPreferenceCell ? (
                         <FoodPreferenceMultiSelect
                           value={effectiveFoodPreferences}
                           onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
@@ -2353,7 +2437,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Ticket/VP */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <EditableTicketVP user={user} memberId={member._id.toString()} />
                       ) : (
                         (() => {
@@ -2386,7 +2470,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* EA/LD */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <EditableEALD user={user} memberId={member._id.toString()} />
                       ) : (
                         (() => {
@@ -2403,7 +2487,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Arrival/Departure */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <EditableArrivalDeparture user={user} memberId={member._id.toString()} />
                       ) : (
                         <div className="text-sm">
@@ -2414,7 +2498,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* City */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <EditableLocation user={user} memberId={member._id.toString()} />
                       ) : (
                         (() => {
@@ -2431,7 +2515,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Burns */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <input
                           type="number"
                           min="0"
@@ -2458,7 +2542,7 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Skills */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {isEditing ? (
+                      {canEditMemberDetails ? (
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-1">
                             {(() => {
@@ -2551,7 +2635,7 @@ const MemberRoster: React.FC = () => {
                     {/* Camp Lead Role */}
                     {canAssignDelegatedRoles && (
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {isEditing ? (
+                        {canEditMemberDetails ? (
                           <div className="flex items-center justify-center">
                             <label className="flex items-center cursor-pointer">
                               <input
@@ -2589,7 +2673,7 @@ const MemberRoster: React.FC = () => {
                     {/* Events Lead Role */}
                     {canAssignDelegatedRoles && (
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {isEditing ? (
+                        {canEditMemberDetails ? (
                           <div className="flex items-center justify-center">
                             <label className="flex items-center cursor-pointer">
                               <input
@@ -2661,7 +2745,7 @@ const MemberRoster: React.FC = () => {
                               <Eye className="w-3 h-3" />
                               View
                             </Button>
-                            {canEdit && (
+                            {(canEdit || canEditFoodPreferences) && (
                               <>
                                 <Button
                                   variant="outline"
@@ -2670,17 +2754,19 @@ const MemberRoster: React.FC = () => {
                                   onClick={() => handleStartEdit(member._id.toString())}
                                 >
                                   <Edit className="w-3 h-3" />
-                                  Edit
+                                  {canEdit ? 'Edit' : 'Edit Prefs'}
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
-                                  onClick={() => handleDeleteMember(member)}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  Delete
-                                </Button>
+                                {canEdit && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50"
+                                    onClick={() => handleDeleteMember(member)}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    Delete
+                                  </Button>
+                                )}
                               </>
                             )}
                           </>
@@ -3401,6 +3487,116 @@ const MemberRoster: React.FC = () => {
         )}
       </Modal>
 
+      {/* Meal Plan Template Defaults Modal */}
+      <Modal
+        isOpen={mealPlanTemplatesModalOpen}
+        onClose={() => !mealPlanTemplatesLoading && setMealPlanTemplatesModalOpen(false)}
+        title="Meal Plan Email Template Defaults"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            These defaults are used for meal-plan payment instructions and receipts.
+          </p>
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
+            <p className="font-semibold text-gray-800">Rich text + variables guide</p>
+            <p>Formatting: <code># Heading</code>, <code>## Subheading</code>, <code>**bold**</code>, <code>*italic*</code>, and bullet lists with <code>- item</code>.</p>
+            <p>Insert camp name: <code>{'{{camp_name}}'}</code></p>
+            <p>Insert member first name: <code>{'{{member_name}}'}</code> or <code>{'{{first_name}}'}</code></p>
+            <p>Insert today's date: <code>{'{{today_date}}'}</code></p>
+            <p>Enter starts a new line; a blank line adds a small paragraph break.</p>
+            <p className="text-gray-500">Other supported variables: <code>{'{{meal_plan_amount}}'}</code>, <code>{'{{due_date}}'}</code>, <code>{'{{payment_link}}'}</code>, <code>{'{{payment_date}}'}</code>.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Subject</label>
+            <Input
+              value={mealPlanTemplatesForm.instructionsSubject}
+              onChange={(e) => setMealPlanTemplatesForm(prev => ({ ...prev, instructionsSubject: e.target.value }))}
+              placeholder="Meal Plan Payment Instructions for {{camp_name}}"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={mealPlanTemplatesForm.instructionsBody}
+              onChange={(e) => setMealPlanTemplatesForm(prev => ({ ...prev, instructionsBody: e.target.value }))}
+            />
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{
+                  __html: renderRichTextToHtml(mealPlanTemplatesForm.instructionsBody, {
+                    camp_name: campPublicIdentifier || 'Your Camp',
+                    member_name: 'Member',
+                    first_name: 'Member',
+                    today_date: new Date().toLocaleDateString('en-US'),
+                    meal_plan_amount: 'USD 0',
+                    due_date: new Date().toLocaleDateString('en-US'),
+                    payment_link: window.location.origin,
+                    payment_date: new Date().toLocaleDateString('en-US')
+                  })
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Subject</label>
+            <Input
+              value={mealPlanTemplatesForm.receiptSubject}
+              onChange={(e) => setMealPlanTemplatesForm(prev => ({ ...prev, receiptSubject: e.target.value }))}
+              placeholder="Meal Plan Payment Received - {{camp_name}}"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Body</label>
+            <textarea
+              className="w-full min-h-[140px] border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={mealPlanTemplatesForm.receiptBody}
+              onChange={(e) => setMealPlanTemplatesForm(prev => ({ ...prev, receiptBody: e.target.value }))}
+            />
+            <div className="mt-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+              <p className="text-xs text-gray-500 mb-1">Live Preview</p>
+              <div
+                className="text-sm text-gray-700"
+                dangerouslySetInnerHTML={{
+                  __html: renderRichTextToHtml(mealPlanTemplatesForm.receiptBody, {
+                    camp_name: campPublicIdentifier || 'Your Camp',
+                    member_name: 'Member',
+                    first_name: 'Member',
+                    today_date: new Date().toLocaleDateString('en-US'),
+                    meal_plan_amount: 'USD 0',
+                    due_date: new Date().toLocaleDateString('en-US'),
+                    payment_link: window.location.origin,
+                    payment_date: new Date().toLocaleDateString('en-US')
+                  })
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setMealPlanTemplatesModalOpen(false)}
+              disabled={mealPlanTemplatesLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveMealPlanTemplates}
+              disabled={mealPlanTemplatesLoading}
+            >
+              {mealPlanTemplatesLoading ? 'Saving...' : 'Save Defaults'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Dues Action Modal */}
       <Modal
         isOpen={duesActionModal.isOpen}
@@ -3418,7 +3614,10 @@ const MemberRoster: React.FC = () => {
                 ? duesActionModal.member.duesStatus
                 : duesActionModal.member.mealPlanStatus
             );
-            const canMarkUnpaid = canEdit;
+            const canManageActivePaymentKind = duesActionModal.paymentKind === 'dues'
+              ? canEdit
+              : canManageMealPlan;
+            const canMarkUnpaid = canManageActivePaymentKind;
             return (
               <>
                 {duesStatus === 'UNPAID' && (

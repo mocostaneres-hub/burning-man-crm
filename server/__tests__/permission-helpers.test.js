@@ -18,6 +18,7 @@ const {
   isEventsLeadForCamp,
   canManageCamp,
   canManageEventPlanning,
+  canManageMealPlan,
   canViewCampRoster
 } = require('../utils/permissionHelpers');
 
@@ -129,6 +130,7 @@ describe('permissionHelpers camp-lead role fallback', () => {
 
     await expect(isEventsLeadForCamp(req, 'camp-1')).resolves.toBe(true);
     await expect(canManageEventPlanning(req, 'camp-1')).resolves.toBe(true);
+    await expect(canManageMealPlan(req, 'camp-1')).resolves.toBe(true);
     await expect(canViewCampRoster(req, 'camp-1')).resolves.toBe(true);
   });
 

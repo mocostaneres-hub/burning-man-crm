@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { normalizeEmail } = require('../utils/emailUtils');
-const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp } = require('../utils/permissionHelpers');
+const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp, canManageMealPlan } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
@@ -278,7 +278,7 @@ router.put('/:rosterId/dues/templates', authenticateToken, async (req, res) => {
 
 // @route   GET /api/rosters/:rosterId/meal-plan/templates
 // @desc    Get camp-level meal plan template defaults for roster's camp
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.get('/:rosterId/meal-plan/templates', authenticateToken, async (req, res) => {
   try {
     const { rosterId } = req.params;
@@ -289,8 +289,8 @@ router.get('/:rosterId/meal-plan/templates', authenticateToken, async (req, res)
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     res.json({
       templates: {
@@ -316,7 +316,7 @@ router.get('/:rosterId/meal-plan/templates', authenticateToken, async (req, res)
 
 // @route   PUT /api/rosters/:rosterId/meal-plan/templates
 // @desc    Update camp-level meal plan template defaults for roster's camp
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.put('/:rosterId/meal-plan/templates', authenticateToken, async (req, res) => {
   try {
     const { rosterId } = req.params;
@@ -328,8 +328,8 @@ router.put('/:rosterId/meal-plan/templates', authenticateToken, async (req, res)
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     const normalizeField = (value) => {
       if (value === null || value === undefined) return null;
@@ -2147,7 +2147,7 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
 
 // @route   POST /api/rosters/:rosterId/members/:memberId/meal-plan/preview
 // @desc    Build editable meal plan email preview before sending
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.post('/:rosterId/members/:memberId/meal-plan/preview', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -2159,8 +2159,8 @@ router.post('/:rosterId/members/:memberId/meal-plan/preview', authenticateToken,
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     const memberIndex = getMemberEntryIndex(roster, memberId);
     if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
@@ -2201,7 +2201,7 @@ router.post('/:rosterId/members/:memberId/meal-plan/preview', authenticateToken,
 
 // @route   POST /api/rosters/:rosterId/members/:memberId/meal-plan/send-email
 // @desc    Send meal plan instruction/receipt without changing status
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -2217,8 +2217,8 @@ router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateTok
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     const memberIndex = getMemberEntryIndex(roster, memberId);
     if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
@@ -2279,7 +2279,7 @@ router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateTok
 
 // @route   PUT /api/rosters/:rosterId/members/:memberId/meal-plan
 // @desc    Update structured meal plan status for a roster member
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -2296,8 +2296,8 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     const memberIndex = getMemberEntryIndex(roster, memberId);
     if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
@@ -2424,7 +2424,7 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
 
 // @route   PUT /api/rosters/:rosterId/members/:memberId/overrides
 // @desc    Update roster-specific member overrides (playaName, yearsBurned, skills)
-// @access  Private (Camp owners and Camp Leads)
+// @access  Private (Camp owners and Camp Leads; Events Leads for food preferences only)
 router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -2470,11 +2470,20 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     console.log('✅ [Roster Override] Camp found:', { campId: camp._id, campName: camp.name });
 
-    // Check if user has permission (camp owner OR Camp Lead)
-    const hasPermission = await canManageCamp(req, camp._id);
+    const requestedOverrideFields = Object.keys(req.body || {});
+    const isFoodPreferencesOnlyUpdate = requestedOverrideFields.length > 0
+      && requestedOverrideFields.every((field) => field === 'foodPreferences');
+
+    const hasPermission = isFoodPreferencesOnlyUpdate
+      ? await canManageMealPlan(req, camp._id)
+      : await canManageCamp(req, camp._id);
     if (!hasPermission) {
-      console.log('❌ [Roster Override] Permission denied - not camp owner or Camp Lead');
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      console.log('❌ [Roster Override] Permission denied');
+      return res.status(403).json({
+        message: isFoodPreferencesOnlyUpdate
+          ? 'Camp owner, Camp Lead, or Events Lead access required'
+          : 'Camp owner or Camp Lead access required'
+      });
     }
 
     // Verify roster belongs to this camp (defensive)

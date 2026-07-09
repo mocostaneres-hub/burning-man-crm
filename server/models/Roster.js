@@ -133,8 +133,9 @@ const rosterSchema = new mongoose.Schema({
       type: Boolean,
       default: false,
       // Events Lead is a delegated planning role for this specific camp.
-      // Grants write access to events, tasks, and surveys while keeping roster
-      // and camp profile access read-only.
+      // Grants write access to events, tasks, surveys, meal-plan payment,
+      // meal-plan communications, and food preferences while keeping dues,
+      // applications, roster administration, and camp profile editing restricted.
     },
     // Legacy boolean field kept for migration safety.
     paid: {

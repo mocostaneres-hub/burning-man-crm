@@ -5,7 +5,7 @@ const { authenticateToken, requireCampLead, optionalAuth } = require('../middlew
 const db = require('../database/databaseAdapter');
 const { generateUniqueCampSlug } = require('../utils/slugGenerator');
 const { findCampByIdentifier } = require('../utils/campIdentifier');
-const { getUserCampId, canAccessCamp, canManageCamp, canViewCampRoster } = require('../utils/permissionHelpers');
+const { getUserCampId, canAccessCamp, canManageCamp, canManageMealPlan, canViewCampRoster } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { applyRosterRemovalStatusUpdates, resolveMemberUserId } = require('../services/rosterMemberRemoval');
 const { createNotification } = require('../services/notificationService');
@@ -861,15 +861,15 @@ router.put('/:id/dues/templates', authenticateToken, async (req, res) => {
 
 // @route   GET /api/camps/:id/meal-plan/templates
 // @desc    Get camp-level meal plan template defaults
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.get('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const camp = await db.findCamp({ _id: id });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     res.json({
       templates: {
@@ -895,7 +895,7 @@ router.get('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
 
 // @route   PUT /api/camps/:id/meal-plan/templates
 // @desc    Update camp-level meal plan template defaults
-// @access  Private (Camp admins/leads)
+// @access  Private (Camp admins/leads/events leads)
 router.put('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -904,8 +904,8 @@ router.put('/:id/meal-plan/templates', authenticateToken, async (req, res) => {
     const camp = await db.findCamp({ _id: id });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp admin or Camp Lead access required' });
+    const hasPermission = await canManageMealPlan(req, camp._id);
+    if (!hasPermission) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
 
     const normalizeField = (value) => {
       if (value === null || value === undefined) return null;

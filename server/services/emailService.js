@@ -599,7 +599,7 @@ const sendEventsLeadGrantedEmail = async (user, camp) => {
               You've been granted <strong>Events Lead</strong> access for <strong>${campName}</strong>.
             </p>
             <p style="color: #555; font-size: 16px; line-height: 1.6;">
-              Your member account stays the same. You now also have camp-level planning tools for events, tasks, and surveys.
+              Your member account stays the same. You now also have camp-level planning tools for events, tasks, surveys, and meal-plan coordination.
             </p>
           </div>
 
@@ -609,6 +609,8 @@ const sendEventsLeadGrantedEmail = async (user, camp) => {
               <li>Create, edit, and manage events and shifts</li>
               <li>Create, edit, assign, and close camp tasks</li>
               <li>Create, send, close, and review surveys</li>
+              <li>Update meal-plan payment status and food preferences</li>
+              <li>Send and edit meal-plan payment communications</li>
               <li>View the camp profile</li>
               <li>View the roster</li>
             </ul>
@@ -618,7 +620,7 @@ const sendEventsLeadGrantedEmail = async (user, camp) => {
             <h3 style="color: #334155; margin-top: 0; font-size: 18px;">What Stays Hidden</h3>
             <ul style="color: #555; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
               <li>Applications</li>
-              <li>Dues/payment details and dues actions</li>
+              <li>Dues payment details and dues actions</li>
               <li>Roster exports, archiving, renaming, and full-membership invites</li>
               <li>Camp profile editing and account settings</li>
             </ul>
@@ -639,18 +641,20 @@ Hey ${user.firstName || 'there'},
 
 You've been granted Events Lead access for ${campName}.
 
-Your member account stays the same. You now also have camp-level planning tools for events, tasks, and surveys.
+Your member account stays the same. You now also have camp-level planning tools for events, tasks, surveys, and meal-plan coordination.
 
 WHAT YOU CAN DO:
 - Create, edit, and manage events and shifts
 - Create, edit, assign, and close camp tasks
 - Create, send, close, and review surveys
+- Update meal-plan payment status and food preferences
+- Send and edit meal-plan payment communications
 - View the camp profile
 - View the roster
 
 WHAT STAYS HIDDEN:
 - Applications
-- Dues/payment details and dues actions
+- Dues payment details and dues actions
 - Roster exports, archiving, renaming, and full-membership invites
 - Camp profile editing and account settings
 

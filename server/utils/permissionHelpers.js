@@ -469,6 +469,31 @@ async function canManageEventPlanning(req, targetCampId) {
 }
 
 /**
+ * Check if user can manage meal-plan operations for a camp.
+ * Includes normal camp managers plus Events Leads.
+ *
+ * @param {Object} req - Express request object with req.user
+ * @param {string} targetCampId - The camp ID being accessed
+ * @returns {Promise<boolean>} - true if user can write meal-plan payment,
+ *   meal-plan communication, and food-preference updates
+ */
+async function canManageMealPlan(req, targetCampId) {
+  const canManage = await canManageCamp(req, targetCampId);
+  if (canManage) {
+    return true;
+  }
+
+  const isEventsLead = await isEventsLeadForCamp(req, targetCampId);
+  if (isEventsLead) {
+    console.log('✅ [Permission] Events Lead meal-plan access granted');
+    return true;
+  }
+
+  console.log('❌ [Permission] No meal-plan management access');
+  return false;
+}
+
+/**
  * Check if user can view camp roster data through delegated camp access.
  * This intentionally excludes ordinary roster members.
  *
@@ -533,5 +558,6 @@ module.exports = {
   isEventsLeadForCamp,
   canManageCamp,
   canManageEventPlanning,
+  canManageMealPlan,
   canViewCampRoster
 };

@@ -81,6 +81,8 @@ const CampLeadConfirmModal: React.FC<CampLeadConfirmModalProps> = ({
             <h4 className="font-semibold text-blue-900 mb-2">This allows them to:</h4>
             <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
               <li>View and update events, volunteer shifts, tasks, and surveys</li>
+              <li>Update meal-plan payment status and food preferences</li>
+              <li>Send and edit meal-plan payment communications</li>
               <li>View the camp profile and member roster</li>
               <li>Keep their regular member-account features unchanged</li>
             </ul>
