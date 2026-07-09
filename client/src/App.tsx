@@ -50,6 +50,7 @@ import ShiftsOnlyOnboarding from './pages/onboarding/ShiftsOnlyOnboarding';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import CampHelpWidget from './components/help/CampHelpWidget';
 import { useLocation } from 'react-router-dom';
+import { getDefaultLandingPath } from './utils/authRedirects';
 
 // Conditional Navbar component that hides on onboarding pages
 const ConditionalNavbar: React.FC = () => {
@@ -79,16 +80,6 @@ const ConditionalMain: React.FC<ConditionalMainProps> = ({ children }) => {
   return <main className="pt-16">{children}</main>;
 };
 
-const getCampDashboardPath = (user: ReturnType<typeof useAuth>['user']): string => {
-  const campIdentifier =
-    user?.campId?.toString() ||
-    user?.campLeadCampId ||
-    (user?.accountType === 'camp' ? user?._id?.toString() : '') ||
-    '';
-
-  return campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard';
-};
-
 // Dashboard redirect component for personal accounts and camp accounts
 const DashboardRedirect: React.FC = () => {
   const { user } = useAuth();
@@ -96,34 +87,16 @@ const DashboardRedirect: React.FC = () => {
   console.log('🔍 [DashboardRedirect] User account type:', user?.accountType);
   console.log('🔍 [DashboardRedirect] User data:', user);
 
-  // Camp Leads are personal/member accounts, but their landing page should be
-  // the camp admin dashboard they are delegated to manage.
-  if (user?.isCampLead === true && user?.campLeadCampId) {
-    const dashboardPath = getCampDashboardPath(user);
-    if (dashboardPath !== '/dashboard') {
-      console.log('🔍 [DashboardRedirect] Redirecting Camp Lead to camp dashboard');
-      return <Navigate to={dashboardPath} replace />;
-    }
-  }
-
-  if (user?.isEventsLead === true && user?.eventsLeadCampId) {
-    console.log('🔍 [DashboardRedirect] Showing Events Lead dashboard');
-    return <Dashboard />;
+  const landingPath = getDefaultLandingPath(user);
+  if (landingPath !== '/dashboard') {
+    console.log('🔍 [DashboardRedirect] Redirecting camp/lead user to roster landing page');
+    return <Navigate to={landingPath} replace />;
   }
   
   // Personal accounts go to profile
   if (user?.accountType === 'personal') {
     console.log('🔍 [DashboardRedirect] Redirecting personal account to /user/profile');
     return <Navigate to="/user/profile" replace />;
-  }
-  
-  // Camp accounts redirect to identifier-based dashboard URL
-  if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
-    const dashboardPath = getCampDashboardPath(user);
-    if (dashboardPath !== '/dashboard') {
-      console.log('🔍 [DashboardRedirect] Redirecting camp account to identifier-based dashboard');
-      return <Navigate to={dashboardPath} replace />;
-    }
   }
   
   console.log('🔍 [DashboardRedirect] Showing dashboard for account type:', user?.accountType);

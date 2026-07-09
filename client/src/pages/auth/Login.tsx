@@ -9,8 +9,12 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
-import { User } from '../../types';
-import { getMemberApplicationCampIdentifier, getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
+import {
+  getDefaultLandingPath,
+  getMemberApplicationCampIdentifier,
+  getOnboardingRedirectPath,
+  getSafeRedirectPath
+} from '../../utils/authRedirects';
 
 const schema = yup.object({
   email: yup.string().email('Invalid email').required('Email is required'),
@@ -20,24 +24,6 @@ const schema = yup.object({
 type FormData = {
   email: string;
   password: string;
-};
-
-const getCampDashboardPath = (account?: Pick<User, '_id' | 'accountType' | 'campId' | 'campLeadCampId'> | null): string => {
-  const campIdentifier =
-    account?.campId?.toString() ||
-    account?.campLeadCampId ||
-    (account?.accountType === 'camp' ? account?._id?.toString() : '') ||
-    '';
-
-  return campIdentifier ? `/camp/${campIdentifier}/dashboard` : '/dashboard';
-};
-
-const getDefaultLandingPath = (account?: Pick<User, '_id' | 'accountType' | 'campId' | 'campLeadCampId'> | null): string => {
-  if (account?.accountType === 'camp' || account?.campId || account?.campLeadCampId) {
-    return getCampDashboardPath(account);
-  }
-
-  return '/dashboard';
 };
 
 const Login: React.FC = () => {
@@ -85,14 +71,10 @@ const Login: React.FC = () => {
         return;
       }
       
-      // Redirect based on account type
-      if (user.accountType === 'camp') {
-        console.log('✅ [Login] Redirecting to camp dashboard...');
-        navigate(safeRedirect === '/dashboard' ? getCampDashboardPath(user) : safeRedirect, { replace: true });
-      } else {
-        console.log('✅ [Login] Redirecting to member dashboard...');
-        navigate(safeRedirect, { replace: true });
-      }
+      const defaultLandingPath = getDefaultLandingPath(user);
+      const destination = safeRedirect === '/dashboard' ? defaultLandingPath : safeRedirect;
+      console.log('✅ [Login] Redirecting authenticated user to:', destination);
+      navigate(destination, { replace: true });
     }
   }, [user, authLoading, navigate, safeRedirect]);
 
