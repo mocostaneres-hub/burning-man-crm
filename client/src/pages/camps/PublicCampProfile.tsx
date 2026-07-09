@@ -436,6 +436,18 @@ const PublicCampProfile: React.FC = () => {
     console.log('⚠️ [PublicCampProfile] Not a camp owner');
     return false;
   })();
+  const isEventsLeadViewingAssignedCamp = Boolean(
+    user?.isEventsLead &&
+      camp &&
+      (
+        user.eventsLeadCampId === camp._id ||
+        user.eventsLeadCampSlug === camp.slug ||
+        user.eventsLeadCampSlug === slug
+      )
+  );
+  const isShiftsOnlyApplicationLocked = Boolean(
+    (user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow
+  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -699,7 +711,7 @@ const PublicCampProfile: React.FC = () => {
                 </div>
               ) : camp.acceptingApplications ? (
                 // Apply only for personal accounts or guests; camp logins cannot apply
-                ((user?.accountType === 'personal' || !user) && !((user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow)) ? (
+                ((user?.accountType === 'personal' || !user) && !isShiftsOnlyApplicationLocked) ? (
                   <Button 
                     onClick={handleApplyNow}
                     size="lg"
@@ -712,7 +724,7 @@ const PublicCampProfile: React.FC = () => {
                   <p className="text-sm text-custom-text-secondary text-center lg:text-left">
                     Member accounts can apply
                   </p>
-                ) : (user as any)?.isShiftsOnlyMember && !(user as any)?.canApplyToCampsNow ? (
+                ) : isShiftsOnlyApplicationLocked && !isEventsLeadViewingAssignedCamp ? (
                   <p className="text-sm text-custom-text-secondary text-center lg:text-left">
                     Shifts-only members can apply to camps after September 15
                   </p>

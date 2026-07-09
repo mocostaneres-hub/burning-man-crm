@@ -289,26 +289,23 @@ const Navbar: React.FC = () => {
       const now = new Date();
       const cutoff = new Date(Date.UTC(now.getUTCFullYear(), 8, 15, 0, 0, 0)); // Sep 15
       const canDiscoverCamps = !(user as any)?.isShiftsOnlyMember || now >= cutoff;
+      const isEventsLead = Boolean(user?.isEventsLead && user?.eventsLeadCampId);
       const items = [
         { label: 'My Profile', path: '/user/profile', icon: <AccountCircle size={18} /> },
         { label: 'To-dos', path: '/tasks', icon: <Task size={18} /> },
         { label: 'My Shifts', path: '/my-shifts', icon: <Calendar size={18} /> },
-        { label: 'Principles', path: '/principles', icon: <Book size={18} /> },
+        ...(!isEventsLead ? [{ label: 'Principles', path: '/principles', icon: <Book size={18} /> }] : []),
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
       ];
       if (canDiscoverCamps) {
         items.splice(3, 0, { label: 'Discover Camps', path: '/camps', icon: <SearchIcon size={18} /> });
       }
-      if (user?.isEventsLead && user?.eventsLeadCampId) {
+      if (isEventsLead) {
         const campIdentifier = user.eventsLeadCampId;
-        const campProfilePath = user.eventsLeadCampSlug
-          ? `/camps/${user.eventsLeadCampSlug}`
-          : `/camps/${campIdentifier}`;
         items.splice(
-          canDiscoverCamps ? 4 : 3,
+          items.length - 1,
           0,
-          { label: 'Camp Profile', path: campProfilePath, icon: <HomeIcon size={18} /> },
-          { label: 'Meals/Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
+          { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
           { label: 'Camp Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
           { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
           { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> }
