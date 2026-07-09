@@ -52,6 +52,8 @@ interface Props {
   canAssignEventsLead?: boolean;
   canOpenContactDetails?: boolean;
   canSendReminders?: boolean;
+  currentUserId?: string;
+  limitRoleBadgesToCurrentUser?: boolean;
   onDelete: (member: SorMemberRow) => void;
   /** Called after any mutation (reminder, edit, camp-lead change) to let the parent refresh roster data. */
   onRefresh?: () => void;
@@ -104,6 +106,16 @@ function memberShiftCount(member: SorMemberRow): number {
 
 function memberLastReminderAt(member: SorMemberRow): string | null {
   return member.member?.lastReminderAt || null;
+}
+
+function toIdString(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof (value as { toString?: () => string }).toString === 'function') {
+    const stringValue = (value as { toString: () => string }).toString();
+    return stringValue === '[object Object]' ? '' : stringValue;
+  }
+  return '';
 }
 
 function confirmLeadRoleReplacement(memberName: string, existingRoleName: string, requestedRoleName: string): boolean {
@@ -346,6 +358,8 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   canAssignEventsLead = false,
   canOpenContactDetails = true,
   canSendReminders: canSendRemindersProp,
+  currentUserId,
+  limitRoleBadgesToCurrentUser = false,
   onDelete,
   onRefresh,
   inviteRemindersEnabled = false
@@ -552,6 +566,9 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
               const { member, index, status, name, playaName, skills, shiftCount, cooldownText, canRemind, responseGroupExtraCount, responseGroupOtherNames } = row;
               const memberId = member._id;
               const realUserId = member.member?.user?._id || (typeof member.member?.user === 'string' ? member.member.user : null);
+              const linkedUserId = toIdString(realUserId || member.user?._id);
+              const canViewRoleBadges =
+                !limitRoleBadgesToCurrentUser || (!!currentUserId && linkedUserId === currentUserId);
               const contact360Link = realUserId
                 ? `/camp/${campId}/contacts/${realUserId}`
                 : `/camp/${campId}/contacts/member/${memberId}`;
@@ -580,12 +597,12 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                     ) : (
                       <span className="font-medium">{name}</span>
                     )}
-                    {member.isCampLead && (
+                    {canViewRoleBadges && member.isCampLead && (
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 uppercase tracking-wide">
                         Lead
                       </span>
                     )}
-                    {member.isEventsLead && (
+                    {canViewRoleBadges && member.isEventsLead && (
                       <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 uppercase tracking-wide">
                         Events
                       </span>

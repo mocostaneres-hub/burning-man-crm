@@ -5,6 +5,7 @@ import { Member } from '../../types';
 
 interface ShiftsOnlyMetricsPanelProps {
   members: Member[];
+  showRoleMetrics?: boolean;
 }
 
 interface MetricCardProps {
@@ -57,7 +58,7 @@ const getSkills = (member: any): string[] => {
   return userSkills.length >= memberSkills.length ? userSkills : memberSkills;
 };
 
-const ShiftsOnlyMetricsPanel: React.FC<ShiftsOnlyMetricsPanelProps> = ({ members }) => {
+const ShiftsOnlyMetricsPanel: React.FC<ShiftsOnlyMetricsPanelProps> = ({ members, showRoleMetrics = true }) => {
   const totalMembers = members.length;
   const activeAccountsCount = members.filter(hasLinkedUserAccount).length;
   const invitedCount = totalMembers - activeAccountsCount;
@@ -73,7 +74,7 @@ const ShiftsOnlyMetricsPanel: React.FC<ShiftsOnlyMetricsPanelProps> = ({ members
   return (
     <div className="mb-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${showRoleMetrics ? 'lg:grid-cols-7' : 'lg:grid-cols-6'} gap-4`}>
         <MetricCard
           title="Total Members"
           count={totalMembers}
@@ -108,13 +109,15 @@ const ShiftsOnlyMetricsPanel: React.FC<ShiftsOnlyMetricsPanelProps> = ({ members
           colorClass="text-rose-600"
           percentage={calculatePercentage(noShiftsCount)}
         />
-        <MetricCard
-          title="Camp Leads"
-          count={campLeadsCount}
-          icon={<Shield className="w-6 h-6 text-indigo-600" />}
-          colorClass="text-indigo-600"
-          percentage={calculatePercentage(campLeadsCount)}
-        />
+        {showRoleMetrics && (
+          <MetricCard
+            title="Camp Leads"
+            count={campLeadsCount}
+            icon={<Shield className="w-6 h-6 text-indigo-600" />}
+            colorClass="text-indigo-600"
+            percentage={calculatePercentage(campLeadsCount)}
+          />
+        )}
         <MetricCard
           title="Skills Listed"
           count={skillsListedCount}

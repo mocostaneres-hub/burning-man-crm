@@ -54,6 +54,16 @@ const getCampPublicIdentifier = (camp: any): string => {
   return candidates.find((value) => typeof value === 'string' && value.trim())?.trim() || '';
 };
 
+const toIdString = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof (value as { toString?: () => string }).toString === 'function') {
+    const stringValue = (value as { toString: () => string }).toString();
+    return stringValue === '[object Object]' ? '' : stringValue;
+  }
+  return '';
+};
+
 const copyTextToClipboard = async (value: string) => {
   if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
     await navigator.clipboard.writeText(value);
@@ -470,6 +480,8 @@ const MemberRoster: React.FC = () => {
   const canViewApplicationData = canEdit;
   const canUseContactDetails = canEdit;
   const canAssignDelegatedRoles = canEdit && canAssignCampLeadRole(authUser, campId || undefined);
+  const authUserId = toIdString(authUser?._id);
+  const limitDelegatedRoleVisibilityToSelf = isEventsLeadForRoster && !canEdit;
   const inferredCampCreatedAtMs = campCreatedAtMs ?? getObjectIdTimestampMs(campId);
   const isLegacyPreSorCamp = inferredCampCreatedAtMs !== null && inferredCampCreatedAtMs < SOR_IMPLEMENTATION_CUTOFF_MS;
   const activeRosterType: RosterMode = !hasActiveRoster
@@ -2179,6 +2191,7 @@ const MemberRoster: React.FC = () => {
       {canViewShiftsOnlyMetrics && (
         <ShiftsOnlyMetricsPanel
           members={filteredMembers}
+          showRoleMetrics={!limitDelegatedRoleVisibilityToSelf}
         />
       )}
 
@@ -2233,6 +2246,8 @@ const MemberRoster: React.FC = () => {
             canAssignEventsLead={canAssignDelegatedRoles}
             canOpenContactDetails={canUseContactDetails}
             canSendReminders={canEdit}
+            currentUserId={authUserId}
+            limitRoleBadgesToCurrentUser={limitDelegatedRoleVisibilityToSelf}
             onDelete={(m) => handleDeleteMember(m as any)}
             onRefresh={fetchMembers}
             inviteRemindersEnabled={sorInviteRemindersEnabled}
@@ -2304,6 +2319,11 @@ const MemberRoster: React.FC = () => {
                 const user = (member as any).user || (typeof memberData.user === 'object' ? memberData.user : null);
                 // realUserId: only set when an actual User account is linked (FMR/invited).
                 const realUserId = (memberData.user as any)?._id ?? null;
+                const linkedUserId = toIdString(
+                  (memberData.user as any)?._id ??
+                    (typeof memberData.user === 'string' ? memberData.user : null) ??
+                    user?._id
+                );
                 const csvName = (memberData as any).name || '';
                 const derivedName = user
                   ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
@@ -2313,6 +2333,8 @@ const MemberRoster: React.FC = () => {
                 const isEditing = editingMemberId === member._id.toString();
                 const canEditMemberDetails = isEditing && canEdit;
                 const memberId = member._id.toString();
+                const canViewDelegatedRoleBadges =
+                  !limitDelegatedRoleVisibilityToSelf || (!!authUserId && linkedUserId === authUserId);
                 const isFoodPreferenceCellEditing = editingFoodPreferencesMemberId === memberId;
                 const canEditFoodPreferenceCell = canEditFoodPreferences && (isEditing || isFoodPreferenceCellEditing);
                 const isSavingFoodPreferences = foodPreferenceSavingId === memberId;
@@ -2371,8 +2393,8 @@ const MemberRoster: React.FC = () => {
                                 <>{userName}</>
                               )}
                             </div>
-                            {member.isCampLead && <CampLeadBadge size="sm" />}
-                            {member.isEventsLead && (
+                            {canViewDelegatedRoleBadges && member.isCampLead && <CampLeadBadge size="sm" />}
+                            {canViewDelegatedRoleBadges && member.isEventsLead && (
                               <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 text-xs px-2 py-0.5 font-medium">
                                 Events
                               </span>
