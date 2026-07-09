@@ -374,6 +374,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   // reminder immediately (server will return the same value on the next refresh).
   const [localReminderOverrides, setLocalReminderOverrides] = useState<Record<string, string>>({});
   const canSendReminders = canSendRemindersProp ?? canEdit;
+  const showActionsColumn = canEdit || canSendReminders;
 
   const rows = useMemo(() => {
     return members.map((m, index) => {
@@ -558,7 +559,9 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shifts</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Actions</th>
+              {showActionsColumn && (
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Actions</th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -673,55 +676,57 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-4 text-sm whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-2 flex-nowrap">
-                      {canSendReminders && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="inline-flex items-center gap-1 shrink-0"
-                          onClick={() => handleRemindOne(memberId)}
-                          disabled={!canRemind || isReminderLoading}
-                          title={
-                            cooldownText
-                              ? `Already reminded — next allowed in ${cooldownText}`
-                              : status === 'active'
-                                ? 'Reminders are not sent after a member has signed up'
-                                : !inviteRemindersEnabled
-                                  ? 'SOR invite reminders are turned off (set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable).'
-                                  : 'Send a friendly reminder of the original invite'
-                          }
-                        >
-                          <Bell className="w-3 h-3" />
-                          {isReminderLoading ? 'Sending…' : 'Remind'}
-                        </Button>
-                      )}
-                      {canEdit && (
-                        <>
+                  {showActionsColumn && (
+                    <td className="px-4 py-4 text-sm whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2 flex-nowrap">
+                        {canSendReminders && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0"
-                            onClick={() => setEditingMember(member)}
-                            title="Edit member"
-                            aria-label={`Edit ${name}`}
+                            className="inline-flex items-center gap-1 shrink-0"
+                            onClick={() => handleRemindOne(memberId)}
+                            disabled={!canRemind || isReminderLoading}
+                            title={
+                              cooldownText
+                                ? `Already reminded — next allowed in ${cooldownText}`
+                                : status === 'active'
+                                  ? 'Reminders are not sent after a member has signed up'
+                                  : !inviteRemindersEnabled
+                                    ? 'SOR invite reminders are turned off (set SOR_ROSTER_REMINDERS_ENABLED=true on the server to enable).'
+                                    : 'Send a friendly reminder of the original invite'
+                            }
                           >
-                            <Edit className="w-4 h-4" aria-hidden="true" />
+                            <Bell className="w-3 h-3" />
+                            {isReminderLoading ? 'Sending…' : 'Remind'}
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600 border-red-600 hover:bg-red-50"
-                            onClick={() => onDelete(member)}
-                            title="Delete member"
-                            aria-label={`Delete ${name}`}
-                          >
-                            <Trash2 className="w-4 h-4" aria-hidden="true" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                        )}
+                        {canEdit && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0"
+                              onClick={() => setEditingMember(member)}
+                              title="Edit member"
+                              aria-label={`Edit ${name}`}
+                            >
+                              <Edit className="w-4 h-4" aria-hidden="true" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center p-0 text-red-600 border-red-600 hover:bg-red-50"
+                              onClick={() => onDelete(member)}
+                              title="Delete member"
+                              aria-label={`Delete ${name}`}
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}

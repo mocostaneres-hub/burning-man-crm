@@ -480,6 +480,7 @@ const MemberRoster: React.FC = () => {
   const canViewApplicationData = canEdit;
   const canUseContactDetails = canEdit;
   const canAssignDelegatedRoles = canEdit && canAssignCampLeadRole(authUser, campId || undefined);
+  const canViewRosterActions = canEdit;
   const authUserId = toIdString(authUser?._id);
   const limitDelegatedRoleVisibilityToSelf = isEventsLeadForRoster && !canEdit;
   const inferredCampCreatedAtMs = campCreatedAtMs ?? getObjectIdTimestampMs(campId);
@@ -2305,9 +2306,11 @@ const MemberRoster: React.FC = () => {
                     Events Lead
                   </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                {canViewRosterActions && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -2797,55 +2800,55 @@ const MemberRoster: React.FC = () => {
                         )}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        {isEditing ? (
-                          <>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="flex items-center gap-1"
-                              onClick={() => {
-                                const currentEdits = localEdits[member._id.toString()] || {};
-                                handleSaveEdit(member._id.toString(), currentEdits);
-                              }}
-                            >
-                              <Save className="w-3 h-3" />
-                              Save
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-1"
-                              onClick={handleCancelEdit}
-                            >
-                              <X className="w-3 h-3" />
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-1"
-                              onClick={() => handleViewMember(member)}
-                            >
-                              <Eye className="w-3 h-3" />
-                              View
-                            </Button>
-                            {(canEdit || canEditFoodPreferences) && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex items-center gap-1"
-                                  onClick={() => handleStartEdit(member._id.toString())}
-                                >
-                                  <Edit className="w-3 h-3" />
-                                  {canEdit ? 'Edit' : 'Edit Prefs'}
-                                </Button>
-                                {canEdit && (
+                    {canViewRosterActions && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                className="flex items-center gap-1"
+                                onClick={() => {
+                                  const currentEdits = localEdits[member._id.toString()] || {};
+                                  handleSaveEdit(member._id.toString(), currentEdits);
+                                }}
+                              >
+                                <Save className="w-3 h-3" />
+                                Save
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1"
+                                onClick={handleCancelEdit}
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1"
+                                onClick={() => handleViewMember(member)}
+                              >
+                                <Eye className="w-3 h-3" />
+                                View
+                              </Button>
+                              {canEdit && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-1"
+                                    onClick={() => handleStartEdit(member._id.toString())}
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    Edit
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2855,13 +2858,13 @@ const MemberRoster: React.FC = () => {
                                     <Trash2 className="w-3 h-3" />
                                     Delete
                                   </Button>
-                                )}
-                              </>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
