@@ -577,6 +577,7 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
           firstName: applicant.firstName,
           lastName: applicant.lastName,
           email: applicant.email,
+          phoneNumber: applicant.phoneNumber,
           profilePhoto: applicant.profilePhoto,
           bio: applicant.bio,
           playaName: applicant.playaName,

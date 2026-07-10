@@ -13,6 +13,7 @@ interface Application {
     firstName: string;
     lastName: string;
     email: string;
+    phoneNumber?: string;
     profilePhoto?: string;
     playaName?: string;
     city?: string;
@@ -516,6 +517,9 @@ const ApplicationManagementTable: React.FC = () => {
                         </div>
                         <div className="text-sm text-gray-500">
                           {application.applicant?.email || 'No email'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {application.applicant?.phoneNumber || 'No phone'}
                         </div>
                       </div>
                     </div>
