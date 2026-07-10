@@ -9,6 +9,11 @@ import EmailTemplateEditor from '../../components/admin/EmailTemplateEditor';
 import { useSkills } from '../../hooks/useSkills';
 import { useAuth } from '../../contexts/AuthContext';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
+import {
+  PHONE_COUNTRY_CODE_OPTIONS,
+  formatPhoneForDisplay,
+  guessPhoneCountryCodeFromNumber
+} from '../../utils/phone';
 
 // Extended User interface for admin editing with all fields
 interface ExtendedUser extends UserType {
@@ -2114,7 +2119,7 @@ const AdminMemberDetailModal: React.FC<{
             <DetailField label="City" value={city} />
             <DetailField label="Region" value={user.location?.state || 'Not provided'} />
             <DetailField label="Country" value={user.location?.country || 'Not provided'} />
-            <DetailField label="Phone" value={user.phoneNumber || 'Not provided'} />
+            <DetailField label="Phone" value={formatPhoneForDisplay(user.phoneNumber, user.phoneCountryCode) || 'Not provided'} />
             <DetailField label="Years Burned" value={user.yearsBurned ?? 'Not provided'} />
             <DetailField label="Burning Plans" value={user.burningPlans || 'Not provided'} />
             <DetailField label="Ticket" value={formatBooleanDisplay(user.hasTicket)} />
@@ -2245,6 +2250,7 @@ const UserEditModal: React.FC<{
   const { skills: availableSkills, loading: skillsLoading } = useSkills();
   const [formData, setFormData] = useState<ExtendedUser>({
     ...user,
+    phoneCountryCode: user.phoneCountryCode || guessPhoneCountryCodeFromNumber(user.phoneNumber) || '+1',
     skills: user.skills || [],
     location: toStructuredLocationOrNull(user.location) || undefined
   } as ExtendedUser);
@@ -2503,12 +2509,28 @@ const UserEditModal: React.FC<{
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-label font-medium text-custom-text mb-2">
-                Phone Number
+                Phone
               </label>
-              <Input
-                value={formData.phoneNumber || ''}
-                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-              />
+              <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                <Input
+                  value={formData.phoneCountryCode || ''}
+                  onChange={(e) => setFormData({ ...formData, phoneCountryCode: e.target.value })}
+                  placeholder="+1"
+                  list="admin-user-phone-country-codes"
+                />
+                <Input
+                  value={formData.phoneNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                  placeholder="Phone number"
+                />
+                <datalist id="admin-user-phone-country-codes">
+                  {PHONE_COUNTRY_CODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
             </div>
             <div>
               <CityAutocomplete

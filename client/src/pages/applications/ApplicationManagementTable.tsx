@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Badge } from '../../components/ui';
-import { CheckCircle as CheckCircleIcon, X, Eye, Filter as FilterIcon, Loader2, RefreshCw, Linkedin, Instagram, Facebook, MapPin, Calendar, Clock } from 'lucide-react';
+import { CheckCircle as CheckCircleIcon, X, Eye, Filter as FilterIcon, Loader2, RefreshCw, Linkedin, Instagram, Facebook, MapPin, Calendar, Clock, MessageCircle, Phone } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { formatDate } from '../../utils/dateFormatters';
+import { buildSmsLink, buildWhatsAppLink, formatPhoneForDisplay } from '../../utils/phone';
 
 interface Application {
   _id: string;
@@ -13,7 +14,10 @@ interface Application {
     firstName: string;
     lastName: string;
     email: string;
+    phoneCountryCode?: string;
     phoneNumber?: string;
+    phoneDisplay?: string;
+    phoneMessagingNumber?: string;
     profilePhoto?: string;
     playaName?: string;
     city?: string;
@@ -98,6 +102,12 @@ const formatQueueLabel = (status: ApplicationQueueFilter): string => {
       return 'All';
   }
 };
+
+const getApplicantPhoneDisplay = (applicant?: Application['applicant']): string => (
+  applicant?.phoneDisplay ||
+  formatPhoneForDisplay(applicant?.phoneNumber, applicant?.phoneCountryCode) ||
+  ''
+);
 
 const ApplicationManagementTable: React.FC = () => {
   const { user } = useAuth();
@@ -311,6 +321,46 @@ const ApplicationManagementTable: React.FC = () => {
     }
   };
 
+  const renderPhoneContact = (applicant?: Application['applicant']) => {
+    const phoneDisplay = getApplicantPhoneDisplay(applicant);
+    const smsHref = buildSmsLink(applicant?.phoneNumber, applicant?.phoneCountryCode);
+    const whatsAppHref = buildWhatsAppLink(applicant?.phoneNumber, applicant?.phoneCountryCode);
+
+    if (!phoneDisplay) {
+      return <span className="text-sm text-gray-500">No phone</span>;
+    }
+
+    return (
+      <div className="space-y-1">
+        <div className="text-sm text-gray-500">{phoneDisplay}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {smsHref && (
+            <a
+              href={smsHref}
+              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+              title={`Send SMS to ${phoneDisplay}`}
+            >
+              <Phone className="w-3 h-3" />
+              SMS
+            </a>
+          )}
+          {whatsAppHref && (
+            <a
+              href={whatsAppHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"
+              title={`Send WhatsApp message to ${phoneDisplay}`}
+            >
+              <MessageCircle className="w-3 h-3" />
+              WhatsApp
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Using shared date formatting utility
 
   const formatArrivalDepartureDate = (dateString: string) => {
@@ -518,9 +568,7 @@ const ApplicationManagementTable: React.FC = () => {
                         <div className="text-sm text-gray-500">
                           {application.applicant?.email || 'No email'}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {application.applicant?.phoneNumber || 'No phone'}
-                        </div>
+                        {renderPhoneContact(application.applicant)}
                       </div>
                     </div>
                   </td>
@@ -762,6 +810,9 @@ const ApplicationManagementTable: React.FC = () => {
                     <p className="text-body text-custom-text-secondary">
                       {selectedApplication.applicant?.email || 'No email'}
                     </p>
+                    <div className="mt-1">
+                      {renderPhoneContact(selectedApplication.applicant)}
+                    </div>
                     
                     {/* City and Social Media */}
                     <div className="flex items-center gap-4 mt-2">

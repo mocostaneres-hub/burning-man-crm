@@ -11,11 +11,17 @@ import MyTasksList from '../../components/profile/MyTasksList';
 import MyShiftsList from '../../components/profile/MyShiftsList';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { StructuredLocation } from '../../types';
+import {
+  PHONE_COUNTRY_CODE_OPTIONS,
+  formatPhoneForDisplay,
+  guessPhoneCountryCodeFromNumber
+} from '../../utils/phone';
 
 interface UserProfileData {
   firstName: string;
   lastName: string;
   email: string;
+  phoneCountryCode: string;
   phoneNumber: string;
   location: StructuredLocation | null;
   yearsBurned: number;
@@ -48,6 +54,7 @@ const UserProfile: React.FC = () => {
     firstName: '',
     lastName: '',
     email: '',
+    phoneCountryCode: '+1',
     phoneNumber: '',
     location: null,
     yearsBurned: 0,
@@ -96,6 +103,7 @@ const UserProfile: React.FC = () => {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
+        phoneCountryCode: user.phoneCountryCode || guessPhoneCountryCodeFromNumber(user.phoneNumber) || '+1',
         phoneNumber: user.phoneNumber || '',
         location: user.location?.city && user.location?.country && user.location?.countryCode &&
           user.location?.lat !== undefined && user.location?.lng !== undefined
@@ -178,6 +186,7 @@ const UserProfile: React.FC = () => {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
+        phoneCountryCode: user.phoneCountryCode || guessPhoneCountryCodeFromNumber(user.phoneNumber) || '+1',
         phoneNumber: user.phoneNumber || '',
         location: user.location?.city && user.location?.country && user.location?.countryCode &&
           user.location?.lat !== undefined && user.location?.lng !== undefined
@@ -410,16 +419,30 @@ const UserProfile: React.FC = () => {
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</p>
                 {isEditing ? (
-                  <Input
-                    value={profileData.phoneNumber}
-                    onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                    placeholder="Enter phone number"
-                    className="mt-1"
-                  />
+                  <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 mt-1">
+                    <Input
+                      value={profileData.phoneCountryCode}
+                      onChange={(e) => handleInputChange('phoneCountryCode', e.target.value)}
+                      placeholder="+1"
+                      list="user-profile-phone-country-codes"
+                    />
+                    <Input
+                      value={profileData.phoneNumber}
+                      onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                      placeholder="Enter phone number"
+                    />
+                    <datalist id="user-profile-phone-country-codes">
+                      {PHONE_COUNTRY_CODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
                 ) : (
                   <p className="text-sm text-custom-text mt-1 flex items-center gap-1">
                     <Phone className="w-4 h-4 text-gray-400" />
-                    {profileData.phoneNumber || 'Not provided'}
+                    {formatPhoneForDisplay(profileData.phoneNumber, profileData.phoneCountryCode) || 'Not provided'}
                   </p>
                 )}
               </div>

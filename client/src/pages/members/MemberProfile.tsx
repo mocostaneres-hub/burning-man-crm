@@ -4,6 +4,7 @@ import { Edit, Phone as PhoneIcon, MapPin, Calendar, Instagram, Facebook, Linked
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { StructuredLocation } from '../../types';
+import { formatPhoneForDisplay } from '../../utils/phone';
 
 const formatLocationLabel = (location?: StructuredLocation): string => {
   if (!location) return '';
@@ -91,7 +92,7 @@ const MemberProfile: React.FC = () => {
                 Phone Number
               </label>
               <p className="text-body text-custom-text">
-                {user.phoneNumber || 'Not provided'}
+                {formatPhoneForDisplay(user.phoneNumber, user.phoneCountryCode) || 'Not provided'}
               </p>
             </div>
 

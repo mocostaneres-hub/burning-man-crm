@@ -9,10 +9,16 @@ import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { StructuredLocation, User } from '../../types';
 import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../../components/food/FoodPreferenceControls';
 import { normalizeFoodPreferences } from '../../constants/foodPreferences';
+import {
+  PHONE_COUNTRY_CODE_OPTIONS,
+  formatPhoneForDisplay,
+  guessPhoneCountryCodeFromNumber
+} from '../../utils/phone';
 
 interface MemberProfileData {
   firstName: string;
   lastName: string;
+  phoneCountryCode: string;
   phoneNumber: string;
   location: StructuredLocation | null;
   yearsBurned: number;
@@ -39,6 +45,7 @@ const formatLocationLabel = (location: StructuredLocation | null | undefined): s
 const mapApiUserToMemberProfileData = (userData: User): MemberProfileData => ({
   firstName: userData.firstName || '',
   lastName: userData.lastName || '',
+  phoneCountryCode: userData.phoneCountryCode || guessPhoneCountryCodeFromNumber(userData.phoneNumber) || '+1',
   phoneNumber: userData.phoneNumber || '',
   location:
     userData.location?.city &&
@@ -62,6 +69,7 @@ const mapApiUserToMemberProfileData = (userData: User): MemberProfileData => ({
 const buildProfileUpdatePayload = (data: MemberProfileData): Partial<User> => ({
   firstName: data.firstName,
   lastName: data.lastName,
+  phoneCountryCode: data.phoneCountryCode,
   phoneNumber: data.phoneNumber,
   location: data.location ?? undefined,
   yearsBurned: data.isFirstBurn ? 0 : data.yearsBurned,
@@ -88,6 +96,7 @@ const MemberProfileEdit: React.FC = () => {
   const [profileData, setProfileData] = useState<MemberProfileData>({
     firstName: '',
     lastName: '',
+    phoneCountryCode: '+1',
     phoneNumber: '',
     location: null,
     yearsBurned: 0,
@@ -288,13 +297,30 @@ const MemberProfileEdit: React.FC = () => {
                   Phone Number
                 </label>
                 {isEditing ? (
-                  <Input
-                    value={profileData.phoneNumber}
-                    onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                    placeholder="Enter phone number"
-                  />
+                  <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                    <Input
+                      value={profileData.phoneCountryCode}
+                      onChange={(e) => handleInputChange('phoneCountryCode', e.target.value)}
+                      placeholder="+1"
+                      list="member-profile-phone-country-codes"
+                    />
+                    <Input
+                      value={profileData.phoneNumber}
+                      onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                      placeholder="Enter phone number"
+                    />
+                    <datalist id="member-profile-phone-country-codes">
+                      {PHONE_COUNTRY_CODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
                 ) : (
-                  <p className="text-body text-custom-text">{profileData.phoneNumber}</p>
+                  <p className="text-body text-custom-text">
+                    {formatPhoneForDisplay(profileData.phoneNumber, profileData.phoneCountryCode) || 'Not provided'}
+                  </p>
                 )}
               </div>
 

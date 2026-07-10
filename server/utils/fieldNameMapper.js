@@ -9,6 +9,7 @@ const fieldNameMap = {
   'firstName': 'First Name',
   'lastName': 'Last Name',
   'email': 'Email',
+  'phoneCountryCode': 'Phone Country Code',
   'phoneNumber': 'Phone Number',
   'playaName': 'Playa Name',
   'city': 'City',
@@ -114,4 +115,3 @@ module.exports = {
   formatFieldValue,
   fieldNameMap
 };
-

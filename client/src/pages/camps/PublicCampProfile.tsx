@@ -117,6 +117,7 @@ const isApplicationProfileIncomplete = (user: any): boolean => (
   !user.lastName ||
   !user.playaName ||
   !hasApplicationProfileCity(user) ||
+  !user.phoneCountryCode ||
   !user.phoneNumber ||
   !user.skills ||
   user.skills.length === 0 ||

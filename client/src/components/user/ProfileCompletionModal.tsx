@@ -7,6 +7,12 @@ import CityAutocomplete from '../location/CityAutocomplete';
 import { StructuredLocation } from '../../types';
 import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../food/FoodPreferenceControls';
 import { normalizeFoodPreferences } from '../../constants/foodPreferences';
+import {
+  PHONE_COUNTRY_CODE_OPTIONS,
+  guessPhoneCountryCodeFromNumber,
+  isValidPhoneCountryCode,
+  normalizePhoneCountryCode
+} from '../../utils/phone';
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;
@@ -49,6 +55,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     location: (user?.location as StructuredLocation) || null as StructuredLocation | null,
     yearsBurned: user?.yearsBurned || 0,
     bio: user?.bio || '',
+    phoneCountryCode: user?.phoneCountryCode || guessPhoneCountryCodeFromNumber(user?.phoneNumber) || '+1',
     phoneNumber: user?.phoneNumber || '',
     skills: user?.skills || [] as string[],
     foodPreferences: normalizeFoodPreferences(user?.foodPreferences),
@@ -77,6 +84,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
         location: hasStructuredLocation ? (user.location as StructuredLocation) : prev.location,
         yearsBurned: user.yearsBurned ?? prev.yearsBurned,
         bio: user.bio ?? prev.bio,
+        phoneCountryCode: user.phoneCountryCode || guessPhoneCountryCodeFromNumber(user.phoneNumber) || prev.phoneCountryCode,
         phoneNumber: user.phoneNumber ?? prev.phoneNumber,
         skills: Array.isArray(user.skills) ? user.skills : prev.skills,
         foodPreferences: Array.isArray(user.foodPreferences) ? normalizeFoodPreferences(user.foodPreferences) : prev.foodPreferences,
@@ -136,6 +144,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     e.preventDefault();
     setLoading(true);
     setError('');
+    const phoneCountryCode = normalizePhoneCountryCode(formData.phoneCountryCode);
     const phoneNumber = formData.phoneNumber.trim();
 
     // Validate required fields
@@ -146,6 +155,16 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     }
     if (!formData.location || !formData.location.city?.trim()) {
       setError('Please select your city from the search results');
+      setLoading(false);
+      return;
+    }
+    if (!phoneCountryCode) {
+      setError('Phone country code is required');
+      setLoading(false);
+      return;
+    }
+    if (!isValidPhoneCountryCode(phoneCountryCode)) {
+      setError('Enter a valid country code, like +1');
       setLoading(false);
       return;
     }
@@ -175,6 +194,7 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       // Prepare data for submission: send structured location (required by API)
       const submitData: Record<string, unknown> = {
         ...formData,
+        phoneCountryCode,
         phoneNumber,
         location: formData.location || undefined,
         city: formData.location?.city ?? '',
@@ -258,15 +278,34 @@ const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
               </div>
             </div>
 
-            <Input
-              label="Phone Number *"
-              name="phoneNumber"
-              type="tel"
-              value={formData.phoneNumber}
-              onChange={handleChange}
-              placeholder="+1 (555) 123-4567"
-              required
-            />
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4">
+              <Input
+                label="Country Code *"
+                name="phoneCountryCode"
+                type="tel"
+                list="profile-phone-country-codes"
+                value={formData.phoneCountryCode}
+                onChange={handleChange}
+                placeholder="+1"
+                required
+              />
+              <Input
+                label="Phone Number *"
+                name="phoneNumber"
+                type="tel"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                placeholder="555 123 4567"
+                required
+              />
+              <datalist id="profile-phone-country-codes">
+                {PHONE_COUNTRY_CODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </datalist>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

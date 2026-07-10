@@ -10,15 +10,14 @@ const {
   hasInvalidFoodPreference,
   normalizeFoodPreferences
 } = require('../constants/foodPreferences');
+const {
+  isValidPhoneCountryCode,
+  isValidProfilePhoneNumber,
+  normalizePhoneCountryCode
+} = require('../utils/phone');
 const _ = require('lodash'); // For deep merge
 
 const router = express.Router();
-
-const isValidProfilePhoneNumber = (value) => {
-  if (value === '' || value === null || value === undefined) return true;
-  const digitCount = String(value).replace(/\D/g, '').length;
-  return digitCount >= 7 && digitCount <= 20;
-};
 
 const getValidationErrorMessage = (errors) => {
   const firstError = errors[0];
@@ -53,7 +52,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
 router.put('/profile', authenticateToken, [
   body('firstName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
   body('lastName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
-  body('phoneNumber').optional().trim().custom(isValidProfilePhoneNumber).withMessage('Phone number must contain 7 to 20 digits'),
+  body('phoneCountryCode').optional().trim().custom((value) => value === '' || isValidPhoneCountryCode(value)).withMessage('Country code must be 1 to 4 digits'),
+  body('phoneNumber').optional().trim().custom((value) => value === '' || isValidProfilePhoneNumber(value)).withMessage('Phone number must contain 7 to 20 digits'),
   body('city').optional().trim().custom((value) => value === '' || value.length <= 100),
   body('yearsBurned').optional().custom((value) => value === '' || value === null || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50)),
   body('previousCamps').optional().trim().custom((value) => value === '' || value.length <= 1000),
@@ -105,6 +105,9 @@ router.put('/profile', authenticateToken, [
       req.body.location = validation.normalized;
       req.body.city = validation.normalized.city;
     }
+    if (req.body.phoneCountryCode !== undefined) {
+      req.body.phoneCountryCode = normalizePhoneCountryCode(req.body.phoneCountryCode);
+    }
 
     const user = await db.findUser({ _id: req.user._id });
     if (!user) {
@@ -119,14 +122,14 @@ router.put('/profile', authenticateToken, [
     const allowedFields = [];
     
            if (user.accountType === 'personal') {
-             allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+             allowedFields.push('firstName', 'lastName', 'phoneCountryCode', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
     } else if (user.accountType === 'camp') {
       // Camp accounts can update both personal and camp fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+      allowedFields.push('firstName', 'lastName', 'phoneCountryCode', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     } else {
       // Admin or other account types - allow all fields
-      allowedFields.push('firstName', 'lastName', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
+      allowedFields.push('firstName', 'lastName', 'phoneCountryCode', 'phoneNumber', 'city', 'yearsBurned', 'previousCamps', 'bio', 'playaName', 'profilePhoto', 'photos', 'socialMedia', 'skills', 'foodPreferences', 'interests', 'burningManExperience', 'location', 'hasTicket', 'hasVehiclePass', 'arrivalDate', 'departureDate', 'interestedInEAP', 'interestedInStrike', 'burningPlans');
       allowedFields.push('campName', 'campBio', 'campPhotos', 'campSocialMedia', 'campLocation', 'campTheme', 'campSize', 'campYearFounded', 'campWebsite', 'campEmail');
     }
 
@@ -245,6 +248,8 @@ router.put('/profile', authenticateToken, [
                   firstName: updatedUser.firstName,
                   lastName: updatedUser.lastName,
                   email: updatedUser.email,
+                  phoneCountryCode: updatedUser.phoneCountryCode,
+                  phoneNumber: updatedUser.phoneNumber,
                   profilePhoto: updatedUser.profilePhoto,
                   bio: updatedUser.bio,
                   playaName: updatedUser.playaName,
@@ -288,6 +293,8 @@ router.put('/profile', authenticateToken, [
                         firstName: updatedUser.firstName,
                         lastName: updatedUser.lastName,
                         email: updatedUser.email,
+                        phoneCountryCode: updatedUser.phoneCountryCode,
+                        phoneNumber: updatedUser.phoneNumber,
                         profilePhoto: updatedUser.profilePhoto,
                         bio: updatedUser.bio,
                         playaName: updatedUser.playaName,
@@ -569,6 +576,7 @@ router.get('/public/:identifier', async (req, res) => {
     const publicMember = { ...member };
     delete publicMember.password;
     delete publicMember.email;
+    delete publicMember.phoneCountryCode;
     delete publicMember.phoneNumber;
     delete publicMember.googleId;
     delete publicMember.appleId;
@@ -776,7 +784,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
   body('firstName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
   body('lastName').optional().trim().custom((value) => value === '' || (value.length >= 1 && value.length <= 50)),
   body('email').optional().isEmail().withMessage('Valid email is required'),
-  body('phoneNumber').optional().trim().custom((value) => value === '' || (value.length >= 10 && value.length <= 20)),
+  body('phoneCountryCode').optional().trim().custom((value) => value === '' || isValidPhoneCountryCode(value)).withMessage('Country code must be 1 to 4 digits'),
+  body('phoneNumber').optional().trim().custom((value) => value === '' || isValidProfilePhoneNumber(value)).withMessage('Phone number must contain 7 to 20 digits'),
   body('city').optional().trim().custom((value) => value === '' || value.length <= 100),
   body('yearsBurned').optional().custom((value) => value === '' || value === null || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50)),
   body('previousCamps').optional().trim().custom((value) => value === '' || value.length <= 1000),
@@ -825,6 +834,9 @@ router.put('/:id', authenticateToken, requireAdmin, [
       }
       req.body.location = validation.normalized;
       req.body.city = validation.normalized.city;
+    }
+    if (req.body.phoneCountryCode !== undefined) {
+      req.body.phoneCountryCode = normalizePhoneCountryCode(req.body.phoneCountryCode);
     }
 
     const { id } = req.params;
@@ -913,6 +925,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
                 firstName: updatedUser.firstName,
                 lastName: updatedUser.lastName,
                 email: updatedUser.email,
+                phoneCountryCode: updatedUser.phoneCountryCode,
+                phoneNumber: updatedUser.phoneNumber,
                 profilePhoto: updatedUser.profilePhoto,
                 bio: updatedUser.bio,
                 playaName: updatedUser.playaName,
@@ -956,6 +970,8 @@ router.put('/:id', authenticateToken, requireAdmin, [
                       firstName: updatedUser.firstName,
                       lastName: updatedUser.lastName,
                       email: updatedUser.email,
+                      phoneCountryCode: updatedUser.phoneCountryCode,
+                      phoneNumber: updatedUser.phoneNumber,
                       profilePhoto: updatedUser.profilePhoto,
                       bio: updatedUser.bio,
                       playaName: updatedUser.playaName,

@@ -15,6 +15,7 @@ export interface User {
   role?: 'member' | 'camp_lead' | 'unassigned';
   firstName?: string;
   lastName?: string;
+  phoneCountryCode?: string;
   phoneNumber?: string;
   city?: string; // Deprecated legacy city field
   yearsBurned?: number;
@@ -375,6 +376,8 @@ export interface RegisterData {
   accountType: 'personal' | 'camp';
   firstName: string;
   lastName: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
   inviteToken?: string;
   signupIntent?: 'member_application';
   applicationCampIdentifier?: string;

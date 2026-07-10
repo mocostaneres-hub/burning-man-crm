@@ -14,6 +14,11 @@ const { normalizeEmail } = require('../utils/emailUtils');
 const { propagateUserEmailChange } = require('../services/emailPropagationService');
 const { acceptInviteForUser } = require('../services/inviteAcceptance');
 const { resolveMemberApplicationSignup } = require('../utils/memberApplicationSignup');
+const {
+  isValidPhoneCountryCode,
+  isValidProfilePhoneNumber,
+  normalizePhoneCountryCode
+} = require('../utils/phone');
 
 const router = express.Router();
 
@@ -60,6 +65,8 @@ router.post('/register', [
   body('accountType').isIn(['personal', 'camp']),
   body('firstName').optional().trim(),
   body('lastName').optional().trim(),
+  body('phoneCountryCode').optional().trim().custom((value) => value === '' || isValidPhoneCountryCode(value)).withMessage('Country code must be 1 to 4 digits'),
+  body('phoneNumber').optional().trim().custom((value) => value === '' || isValidProfilePhoneNumber(value)).withMessage('Phone number must contain 7 to 20 digits'),
   body('campName').optional().trim(),
   body('inviteToken').optional().isString().trim(),
   body('signupIntent').optional().isIn(['member_application']),
@@ -77,6 +84,8 @@ router.post('/register', [
       accountType,
       firstName,
       lastName,
+      phoneCountryCode,
+      phoneNumber,
       campName,
       inviteToken,
       signupIntent,
@@ -138,8 +147,15 @@ router.post('/register', [
     }
 
     // Validate required fields based on effective account type
+    const normalizedPhoneCountryCode = normalizePhoneCountryCode(phoneCountryCode);
+    const normalizedPhoneNumber = typeof phoneNumber === 'string' ? phoneNumber.trim() : '';
+
     if (effectiveAccountType === 'personal' && (!firstName || !lastName)) {
       return res.status(400).json({ message: 'First name and last name required for personal accounts' });
+    }
+
+    if (effectiveAccountType === 'personal' && (!normalizedPhoneCountryCode || !normalizedPhoneNumber)) {
+      return res.status(400).json({ message: 'Phone country code and phone number are required for personal accounts' });
     }
 
     if (effectiveAccountType === 'camp' && !campName) {
@@ -158,6 +174,8 @@ router.post('/register', [
     if (effectiveAccountType === 'personal') {
       userData.firstName = firstName;
       userData.lastName = lastName;
+      userData.phoneCountryCode = normalizedPhoneCountryCode;
+      userData.phoneNumber = normalizedPhoneNumber;
     } else {
       userData.campName = campName;
     }

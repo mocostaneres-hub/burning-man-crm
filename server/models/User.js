@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  phoneCountryCode: {
+    type: String,
+    trim: true
+  },
   // Deprecated: retained for backward compatibility during location migration.
   city: {
     type: String,

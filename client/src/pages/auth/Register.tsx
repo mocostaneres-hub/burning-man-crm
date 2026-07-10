@@ -11,10 +11,17 @@ import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
 import { getMemberApplicationCampIdentifier, getOnboardingRedirectPath, getSafeRedirectPath } from '../../utils/authRedirects';
+import {
+  PHONE_COUNTRY_CODE_OPTIONS,
+  isValidPhoneCountryCode,
+  normalizePhoneCountryCode
+} from '../../utils/phone';
 
 type FormData = {
   firstName: string;
   lastName: string;
+  phoneCountryCode: string;
+  phoneNumber: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -24,6 +31,17 @@ const schema: yup.ObjectSchema<FormData> = yup
   .object({
     firstName: yup.string().required('First name is required'),
     lastName: yup.string().required('Last name is required'),
+    phoneCountryCode: yup
+      .string()
+      .required('Country code is required')
+      .test('phone-country-code', 'Enter a valid country code, like +1', (value) => isValidPhoneCountryCode(value)),
+    phoneNumber: yup
+      .string()
+      .required('Phone number is required')
+      .test('phone-number-digits', 'Phone number must contain 7 to 20 digits', (value) => {
+        const digitCount = String(value || '').replace(/\D/g, '').length;
+        return digitCount >= 7 && digitCount <= 20;
+      }),
     email: yup.string().email('Invalid email').required('Email is required'),
     password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
     confirmPassword: yup
@@ -60,7 +78,9 @@ const Register: React.FC = () => {
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
-    defaultValues: {},
+    defaultValues: {
+      phoneCountryCode: '+1'
+    },
   });
 
   // Validate and store invitation context when token is present.
@@ -190,6 +210,8 @@ const Register: React.FC = () => {
       // Always create personal account - role will be selected during onboarding
       const userData = {
         ...registerData,
+        phoneCountryCode: normalizePhoneCountryCode(registerData.phoneCountryCode),
+        phoneNumber: registerData.phoneNumber.trim(),
         accountType: 'personal' as const,
         inviteToken: inviteTokenForSignup,
         ...(applicationCampIdentifier && !inviteTokenForSignup
@@ -377,6 +399,33 @@ const Register: React.FC = () => {
                 error={errors.lastName?.message}
                 className="w-full"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-4">
+              <Input
+                {...register('phoneCountryCode')}
+                label="Country Code *"
+                type="tel"
+                list="register-phone-country-codes"
+                error={errors.phoneCountryCode?.message}
+                placeholder="+1"
+                className="w-full"
+              />
+              <Input
+                {...register('phoneNumber')}
+                label="Phone Number *"
+                type="tel"
+                error={errors.phoneNumber?.message}
+                placeholder="555 123 4567"
+                className="w-full"
+              />
+              <datalist id="register-phone-country-codes">
+                {PHONE_COUNTRY_CODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             <Input

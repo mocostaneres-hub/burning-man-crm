@@ -10,6 +10,10 @@ const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService')
 const { getUserCampId, canAccessCamp } = require('../utils/permissionHelpers');
 const { recordActivity, recordFieldChange } = require('../services/activityLogger');
 const { FOOD_PREFERENCE_OPTIONS } = require('../constants/foodPreferences');
+const {
+  formatPhoneForDisplay,
+  normalizePhoneNumberForMessaging
+} = require('../utils/phone');
 
 const normalizeInviteRecipient = (value) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -26,6 +30,7 @@ const isPersonalProfileComplete = (user) => {
     firstName: user.firstName,
     lastName: user.lastName,
     playaName: user.playaName,
+    phoneCountryCode: user.phoneCountryCode,
     phoneNumber: user.phoneNumber,
     city: user.city,
     locationCity: user.location?.city,
@@ -53,7 +58,11 @@ const isPersonalProfileComplete = (user) => {
     missingFields.push('Playa Name');
   }
 
-  // Check phoneNumber (required in ProfileCompletionModal)
+  // Check phone country code and phone number (required in ProfileCompletionModal)
+  if (!user.phoneCountryCode || user.phoneCountryCode.trim() === '') {
+    missingFields.push('Phone Country Code');
+  }
+
   if (!user.phoneNumber || user.phoneNumber.trim() === '') {
     missingFields.push('Phone Number');
   }
@@ -133,7 +142,7 @@ router.post('/apply', authenticateToken, [
       console.error('❌ [Applications] Incomplete profile for user:', freshUser.email);
       console.error('User data:', JSON.stringify(freshUser, null, 2));
       return res.status(400).json({ 
-        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Playa Name, Phone Number, City, Years Burned, Burning Man Plans, and at least one Skill.',
+        message: 'Please complete your profile before applying to camps. Required fields: First Name, Last Name, Playa Name, Phone Country Code, Phone Number, City, Years Burned, Burning Man Plans, and at least one Skill.',
         incompleteProfile: true,
         redirectTo: '/user/profile'
       });
@@ -577,7 +586,10 @@ router.get('/camp/:campId', authenticateToken, async (req, res) => {
           firstName: applicant.firstName,
           lastName: applicant.lastName,
           email: applicant.email,
+          phoneCountryCode: applicant.phoneCountryCode,
           phoneNumber: applicant.phoneNumber,
+          phoneDisplay: formatPhoneForDisplay(applicant.phoneNumber, applicant.phoneCountryCode),
+          phoneMessagingNumber: normalizePhoneNumberForMessaging(applicant.phoneNumber, applicant.phoneCountryCode),
           profilePhoto: applicant.profilePhoto,
           bio: applicant.bio,
           playaName: applicant.playaName,
