@@ -29,7 +29,7 @@ jest.mock('../services/emailTemplateService', () => ({
   }
 }));
 
-const { sendTemplate } = require('../services/emailService');
+const { sendEmail, sendTemplate } = require('../services/emailService');
 
 describe('email template sender names', () => {
   beforeEach(() => {
@@ -84,6 +84,22 @@ describe('email template sender names', () => {
     expect(mockSend.mock.calls[0][0]).toEqual(expect.objectContaining({
       from: 'G8Road Burning Man CRM <noreply@g8road.com>',
       subject: 'Account notice'
+    }));
+  });
+
+  test('passes reply-to through to Resend when provided', async () => {
+    await sendEmail({
+      to: 'member@example.com',
+      subject: 'Payment received',
+      text: 'Thanks for paying.',
+      replyTo: 'kayla.dodd@example.com'
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend.mock.calls[0][0]).toEqual(expect.objectContaining({
+      to: ['member@example.com'],
+      subject: 'Payment received',
+      replyTo: 'kayla.dodd@example.com'
     }));
   });
 });

@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
-const { normalizeEmail } = require('../utils/emailUtils');
+const { normalizeEmail, isValidEmail } = require('../utils/emailUtils');
 const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp, canManageMealPlan } = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
@@ -94,6 +94,22 @@ function concealEventsLeadRosterFields(roster) {
   });
 
   return plainRoster;
+}
+
+async function getSenderReplyToEmail(req) {
+  const jwtEmail = normalizeEmail(req.user?.email);
+
+  if (req.user?._id) {
+    try {
+      const currentUser = await db.findUser({ _id: req.user._id });
+      const currentEmail = normalizeEmail(currentUser?.email);
+      if (isValidEmail(currentEmail)) return currentEmail;
+    } catch (error) {
+      console.warn('Could not resolve sender email for Reply-To:', error.message);
+    }
+  }
+
+  return isValidEmail(jwtEmail) ? jwtEmail : undefined;
 }
 
 async function shouldConcealEventsLeadRosterFields(req, campId) {
@@ -1948,6 +1964,7 @@ router.post('/:rosterId/members/:memberId/dues/send-email', authenticateToken, a
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
     if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+    const senderReplyToEmail = await getSenderReplyToEmail(req);
 
     const preview = await buildDuesEmailPreview({
       camp,
@@ -1962,7 +1979,8 @@ router.post('/:rosterId/members/:memberId/dues/send-email', authenticateToken, a
       to: memberUser.email,
       subject: preview.subject,
       body: preview.body,
-      camp
+      camp,
+      replyTo: senderReplyToEmail
     });
 
     if (saveAsCampDefault === true) {
@@ -2036,6 +2054,7 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
     const emailTriggerType = getEmailTrigger(previousStatus, nextStatus);
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    const senderReplyToEmail = emailTriggerType ? await getSenderReplyToEmail(req) : undefined;
 
     if (emailTriggerType) {
       if (!memberUser?.email) {
@@ -2062,7 +2081,8 @@ router.put('/:rosterId/members/:memberId/dues', authenticateToken, async (req, r
           to: memberUser.email,
           subject: renderedEmail.subject,
           body: renderedEmail.body,
-          camp
+          camp,
+          replyTo: senderReplyToEmail
         });
       } catch (emailError) {
         await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {
@@ -2226,6 +2246,7 @@ router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateTok
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
     if (!memberUser?.email) return res.status(400).json({ message: 'Member does not have an email address' });
+    const senderReplyToEmail = await getSenderReplyToEmail(req);
 
     const preview = await buildMealPlanEmailPreview({
       camp,
@@ -2240,7 +2261,8 @@ router.post('/:rosterId/members/:memberId/meal-plan/send-email', authenticateTok
       to: memberUser.email,
       subject: preview.subject,
       body: preview.body,
-      camp
+      camp,
+      replyTo: senderReplyToEmail
     });
 
     if (saveAsCampDefault === true) {
@@ -2314,6 +2336,7 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
     const emailTriggerType = getEmailTrigger(previousStatus, nextStatus);
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
+    const senderReplyToEmail = emailTriggerType ? await getSenderReplyToEmail(req) : undefined;
 
     if (emailTriggerType) {
       if (!memberUser?.email) {
@@ -2340,7 +2363,8 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
           to: memberUser.email,
           subject: renderedEmail.subject,
           body: renderedEmail.body,
-          camp
+          camp,
+          replyTo: senderReplyToEmail
         });
       } catch (emailError) {
         await recordActivity('CAMP', camp._id, req.user._id, 'DATA_ACTION', {

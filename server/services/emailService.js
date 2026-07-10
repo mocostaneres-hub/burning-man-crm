@@ -59,6 +59,7 @@ const getTemplateSenderName = (data = {}) => (
  * @param {string} options.html - HTML content (optional)
  * @param {string} options.from - Sender email (optional, uses env default)
  * @param {string} options.fromName - Sender name (optional, uses env default)
+ * @param {string|string[]} options.replyTo - Reply-To email address(es) (optional)
  * @returns {Promise<Object>} Resend response
  */
 const sendEmail = async ({
@@ -67,7 +68,8 @@ const sendEmail = async ({
   text = '',
   html = '',
   from = process.env.RESEND_FROM_EMAIL || 'noreply@g8road.com',
-  fromName = process.env.RESEND_FROM_NAME || 'G8Road Camp CRM'
+  fromName = process.env.RESEND_FROM_NAME || 'G8Road Camp CRM',
+  replyTo
 }) => {
   try {
     // This check is now redundant (init throws if missing) but kept for safety
@@ -95,13 +97,19 @@ const sendEmail = async ({
     console.log(`📧 Sending email to: ${to}`);
     console.log(`📧 Subject: ${subject}`);
 
-    const response = await resend.emails.send({
+    const emailPayload = {
       from: fromEmail,
       to: Array.isArray(to) ? to : [to],
       subject,
       text: text || 'This email requires HTML support',
       html: html || text
-    });
+    };
+
+    if (replyTo) {
+      emailPayload.replyTo = replyTo;
+    }
+
+    const response = await resend.emails.send(emailPayload);
 
     console.log('✅ Email sent successfully');
     console.log('📧 Email ID:', response.data?.id);
@@ -666,7 +674,7 @@ Open Events: ${clientUrl}${campId ? `/camp/${campId}/events` : '/dashboard'}
 /**
  * Send dues-related email using pre-rendered content.
  */
-const sendDuesEmail = async ({ to, subject, body, camp }) => {
+const sendDuesEmail = async ({ to, subject, body, camp, replyTo }) => {
   const safeSubject = (subject || '').trim();
   const safeBody = body || '';
 
@@ -687,7 +695,8 @@ const sendDuesEmail = async ({ to, subject, body, camp }) => {
     subject: safeSubject,
     text: safeBody,
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151; font-size: 14px; line-height: 1.4;">${htmlBody}</div>`,
-    fromName: camp ? getCampSenderName(camp) : undefined
+    fromName: camp ? getCampSenderName(camp) : undefined,
+    replyTo
   });
 };
 

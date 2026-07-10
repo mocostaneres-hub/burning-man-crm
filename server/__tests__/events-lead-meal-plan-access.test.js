@@ -5,6 +5,7 @@ jest.mock('../middleware/auth', () => ({
   authenticateToken: (req, res, next) => {
     req.user = {
       _id: 'events-user-1',
+      email: 'kayla.dodd@example.com',
       accountType: 'personal',
       isEventsLead: true,
       eventsLeadCampId: 'camp-1'
@@ -47,6 +48,7 @@ jest.mock('../models/Event', () => ({}));
 
 const db = require('../database/databaseAdapter');
 const permissionHelpers = require('../utils/permissionHelpers');
+const emailService = require('../services/emailService');
 const rosterRoutes = require('../routes/rosters');
 
 const camp = { _id: 'camp-1', name: 'Dust Camp' };
@@ -56,6 +58,12 @@ const memberUser = {
   firstName: 'Meal',
   lastName: 'Member',
   email: 'meal@example.com'
+};
+const senderUser = {
+  _id: 'events-user-1',
+  firstName: 'Kayla',
+  lastName: 'Dodd',
+  email: 'kayla.dodd@example.com'
 };
 
 function makeRoster(memberState = {}) {
@@ -143,7 +151,11 @@ describe('Events Lead meal-plan access', () => {
     app = makeApp();
     db.findCamp.mockResolvedValue(camp);
     db.findMember.mockResolvedValue(member);
-    db.findUser.mockResolvedValue(memberUser);
+    db.findUser.mockImplementation(async (query = {}) => {
+      if (query._id === member.user) return memberUser;
+      if (query._id === senderUser._id) return senderUser;
+      return null;
+    });
   });
 
   afterEach(() => {
@@ -256,6 +268,57 @@ describe('Events Lead meal-plan access', () => {
         mealPlanReceiptBody: 'Meal payment received.'
       })
     );
+  });
+
+  test('uses sender email as reply-to for meal-plan communications', async () => {
+    const roster = makeRoster({ mealPlanStatus: 'UNPAID' });
+    db.findRoster.mockResolvedValue(roster);
+
+    const response = await request(
+      app,
+      'POST',
+      '/api/rosters/roster-1/members/member-1/meal-plan/send-email',
+      {
+        actionType: 'receipt',
+        subject: 'Meal plan receipt',
+        body: 'Meal payment received.'
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(emailService.sendDuesEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: memberUser.email,
+      subject: 'Meal plan receipt',
+      body: 'Meal payment received.',
+      camp,
+      replyTo: senderUser.email
+    }));
+  });
+
+  test('uses sender email as reply-to for dues communications when authorized', async () => {
+    const roster = makeRoster({ duesStatus: 'UNPAID' });
+    db.findRoster.mockResolvedValue(roster);
+    permissionHelpers.canManageCamp.mockResolvedValueOnce(true);
+
+    const response = await request(
+      app,
+      'POST',
+      '/api/rosters/roster-1/members/member-1/dues/send-email',
+      {
+        actionType: 'instructions',
+        subject: 'Dues instructions',
+        body: 'Please pay dues.'
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(emailService.sendDuesEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: memberUser.email,
+      subject: 'Dues instructions',
+      body: 'Please pay dues.',
+      camp,
+      replyTo: senderUser.email
+    }));
   });
 
   test('does not allow Events Lead to update dues communication defaults', async () => {
