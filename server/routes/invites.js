@@ -5,7 +5,7 @@ const Camp = require('../models/Camp');
 const Invite = require('../models/Invite');
 const { authenticateToken, requireCampLead } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
-const { canAccessCamp, isCampLeadForCamp } = require('../utils/permissionHelpers');
+const { canAccessCamp, isCampLeadForCamp, isEventsLeadForCamp } = require('../utils/permissionHelpers');
 const { getCampPublicIdentifier } = require('../utils/campIdentifier');
 const { sendInviteEmail } = require('../services/emailService');
 const { recordActivity } = require('../services/activityLogger');
@@ -100,13 +100,14 @@ router.get('/camps/:campId/invites/template', authenticateToken, async (req, res
     
     // Check if user is Camp Lead for this camp (from roster membership)
     const isCampLead = await isCampLeadForCamp(req, campId);
+    const isEventsLead = await isEventsLeadForCamp(req, campId);
     
     // Check for Camp Admin (camp-lead role in roster) or roster member
     const db = require('../database/databaseAdapter');
     let isCampAdmin = false;
     let isRosterMember = false;
     
-    if (!isSystemAdmin && !isCampOwner && !isCampLead) {
+    if (!isSystemAdmin && !isCampOwner && !isCampLead && !isEventsLead) {
       // Check for Camp Admin (camp-lead role) - can be any status, not just active
       const campLead = await db.findMember({
         user: req.user._id,
@@ -127,15 +128,15 @@ router.get('/camps/:campId/invites/template', authenticateToken, async (req, res
       }
     }
     
-    const hasAccess = isSystemAdmin || isCampOwner || isCampLead || isCampAdmin || isRosterMember;
+    const hasAccess = isSystemAdmin || isCampOwner || isCampLead || isEventsLead || isCampAdmin || isRosterMember;
     
     if (!hasAccess) {
       console.log(`❌ [Templates] Access denied for user ${req.user._id}, not authorized for camp ${campId}`);
-      console.log(`   isSystemAdmin: ${isSystemAdmin}, isCampOwner: ${isCampOwner}, isCampLead: ${isCampLead}, isCampAdmin: ${isCampAdmin}, isRosterMember: ${isRosterMember}`);
-      return res.status(403).json({ message: 'Camp owner, Camp Lead, or camp member access required' });
+      console.log(`   isSystemAdmin: ${isSystemAdmin}, isCampOwner: ${isCampOwner}, isCampLead: ${isCampLead}, isEventsLead: ${isEventsLead}, isCampAdmin: ${isCampAdmin}, isRosterMember: ${isRosterMember}`);
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, Events Lead, or camp member access required' });
     }
     
-    console.log(`✅ [Templates] Access granted for campId: ${campId}, isSystemAdmin: ${isSystemAdmin}, isCampOwner: ${isCampOwner}, isCampLead: ${isCampLead}, isCampAdmin: ${isCampAdmin}, isRosterMember: ${isRosterMember}`);
+    console.log(`✅ [Templates] Access granted for campId: ${campId}, isSystemAdmin: ${isSystemAdmin}, isCampOwner: ${isCampOwner}, isCampLead: ${isCampLead}, isEventsLead: ${isEventsLead}, isCampAdmin: ${isCampAdmin}, isRosterMember: ${isRosterMember}`);
     
     // Get camp with invite templates
     const camp = await db.findCamp({ _id: campId });
@@ -262,6 +263,7 @@ router.post('/invites',
       const isCampOwner = await canAccessCamp(req, campId);
       const isAdmin = req.user.accountType === 'admin';
       const isCampLead = await isCampLeadForCamp(req, campId);
+      const isEventsLead = await isEventsLeadForCamp(req, campId);
       
       // Also check if user is a member or camp lead of this camp (for roster members)
       const campMember = await db.findMember({ 
@@ -270,19 +272,20 @@ router.post('/invites',
       });
       const isCampMember = campMember && ['member', 'camp-lead', 'project-lead'].includes(campMember.role);
       
-      if (!isCampOwner && !isAdmin && !isCampLead && !isCampMember) {
+      if (!isCampOwner && !isAdmin && !isCampLead && !isEventsLead && !isCampMember) {
         console.log('❌ [SEND INVITES] Access denied:', { 
           userId: req.user._id, 
           campId, 
           isCampOwner, 
           isAdmin, 
           isCampLead,
+          isEventsLead,
           isCampMember
         });
-        return res.status(403).json({ message: 'Camp owner, Camp Lead, or camp member access required' });
+        return res.status(403).json({ message: 'Camp owner, Camp Lead, Events Lead, or camp member access required' });
       }
       
-      console.log('✅ [SEND INVITES] Access granted:', { isCampOwner, isAdmin, isCampLead, isCampMember });
+      console.log('✅ [SEND INVITES] Access granted:', { isCampOwner, isAdmin, isCampLead, isEventsLead, isCampMember });
       
       // Get camp data for template
       const camp = await db.findCamp({ _id: campId });
@@ -513,6 +516,7 @@ router.get('/camps/:campId/invites', authenticateToken, async (req, res) => {
     
     // Check if user is a Camp Lead for this camp (from roster membership)
     const isCampLead = await isCampLeadForCamp(req, campId);
+    const isEventsLead = await isEventsLeadForCamp(req, campId);
     
     // Check for Camp Admin (camp-lead role) - can be any status, not just active
     const campLead = await db.findMember({
@@ -522,19 +526,20 @@ router.get('/camps/:campId/invites', authenticateToken, async (req, res) => {
     });
     const isCampAdmin = !!campLead;
     
-    if (!isCampOwner && !isSystemAdmin && !isCampLead && !isCampAdmin) {
+    if (!isCampOwner && !isSystemAdmin && !isCampLead && !isEventsLead && !isCampAdmin) {
       console.log('❌ [GET INVITES] Access denied:', { 
         userId: req.user._id, 
         campId, 
         isCampOwner, 
         isSystemAdmin,
         isCampLead,
+        isEventsLead,
         isCampAdmin
       });
-      return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
     
-    console.log('✅ [GET INVITES] Access granted:', { isCampOwner, isSystemAdmin, isCampLead, isCampAdmin });
+    console.log('✅ [GET INVITES] Access granted:', { isCampOwner, isSystemAdmin, isCampLead, isEventsLead, isCampAdmin });
     
     // Build query
     const query = { campId };

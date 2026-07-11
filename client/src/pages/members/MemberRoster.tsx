@@ -507,7 +507,11 @@ const MemberRoster: React.FC = () => {
     activeRosterType === 'full_membership'
     || rosterModeState.mode === 'full_membership'
   )) || isLikelyFullMembershipByCampSetting;
-  const canManageFullMembershipInvites = canEdit && (campAcceptingApplications || authUser?.isCampLead === true);
+  const canManageFullMembershipInvites = Boolean(
+    (canEdit || isEventsLeadForRoster) &&
+    (campAcceptingApplications || authUser?.isCampLead === true || isEventsLeadForRoster)
+  );
+  const canCopyPaidMemberEmails = Boolean(canViewDuesData || isEventsLeadForRoster);
   const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
   const canViewShiftsOnlyMetrics = canAccessRoster && hasShiftsOnlyRoster;
   const canUseFilters = canAccessRoster && isFullMembershipRoster;
@@ -1063,10 +1067,14 @@ const MemberRoster: React.FC = () => {
           // Defensive UI guard: removed/rejected members should never remain visible in roster grid.
           return !['deleted', 'rejected', 'withdrawn'].includes(normalizedStatus);
         });
-      
-      console.log('✅ [MemberRoster] Enhanced members:', enhancedMembers);
-      
-      setMembers(enhancedMembers);
+
+      const visibleMembers = limitDelegatedRoleVisibilityToSelf
+        ? enhancedMembers.filter((member: any) => normalizeDuesStatus(member.duesStatus) === 'PAID')
+        : enhancedMembers;
+
+      console.log('✅ [MemberRoster] Enhanced members:', visibleMembers);
+
+      setMembers(visibleMembers);
 
       try {
         const rosterGroups = await api.getSurveyRosterGroups(campId);
@@ -1097,7 +1105,7 @@ const MemberRoster: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [campId]);
+  }, [campId, limitDelegatedRoleVisibilityToSelf]);
 
   const fetchCustomFields = useCallback(async () => {
     if (!campId) return;
@@ -1783,7 +1791,7 @@ const MemberRoster: React.FC = () => {
   // handler is gated on `isFullMembershipRoster`, but we re-check here as
   // a defense-in-depth guard.
   const handleCopyPaidMembersEmails = async () => {
-    if (!canViewDuesData) return;
+    if (!canCopyPaidMemberEmails) return;
     if (!isFullMembershipRoster) {
       alert('Copying paid members\u2019 emails is only available for full-membership rosters.');
       return;
@@ -2042,7 +2050,7 @@ const MemberRoster: React.FC = () => {
             </div>
           )}
 
-          {canEdit && hasActiveRoster && isFullMembershipRoster && !hasShiftsOnlyRoster && (
+          {(canEdit || isEventsLeadForRoster) && hasActiveRoster && isFullMembershipRoster && !hasShiftsOnlyRoster && (
             <div className="flex flex-col">
               <Button
                 variant="outline"
@@ -2100,7 +2108,7 @@ const MemberRoster: React.FC = () => {
           {/* Copy Paid Member Emails - FMR only.
               Shifts-only rosters do not track dues, so this action is
               only meaningful on full-membership rosters. */}
-          {canViewDuesData && rosterId && hasActiveRoster && isFullMembershipRoster && (
+          {canCopyPaidMemberEmails && rosterId && hasActiveRoster && isFullMembershipRoster && (
             <Button
               variant="outline"
               size="sm"

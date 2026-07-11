@@ -15,6 +15,7 @@ jest.mock('../middleware/auth', () => ({
 }));
 
 jest.mock('../database/databaseAdapter', () => ({
+  findActiveRoster: jest.fn(),
   findRoster: jest.fn(),
   findMember: jest.fn(),
   findUser: jest.fn(),
@@ -185,6 +186,66 @@ describe('Events Lead meal-plan access', () => {
     expect(roster.members[0].mealPlanPaidAt).toBeNull();
     expect(roster.members[0].mealPlanPaidByUserId).toBeNull();
     expect(roster.save).toHaveBeenCalled();
+  });
+
+  test('returns only dues-paid roster members to Events Lead roster view', async () => {
+    db.findActiveRoster.mockResolvedValue({
+      _id: 'roster-1',
+      camp: camp._id,
+      rosterType: 'full_membership',
+      members: [
+        {
+          member: {
+            _id: 'member-paid',
+            user: {
+              _id: 'user-paid',
+              firstName: 'Paid',
+              lastName: 'Member',
+              email: 'paid@example.com'
+            }
+          },
+          duesStatus: 'PAID',
+          paid: true,
+          duesPaidAt: new Date('2026-07-01T12:00:00.000Z'),
+          applicationData: { notes: 'private application data' },
+          mealPlanStatus: 'UNPAID'
+        },
+        {
+          member: {
+            _id: 'member-unpaid',
+            user: {
+              _id: 'user-unpaid',
+              firstName: 'Unpaid',
+              lastName: 'Member',
+              email: 'unpaid@example.com'
+            }
+          },
+          duesStatus: 'UNPAID',
+          paid: false,
+          mealPlanStatus: 'UNPAID'
+        }
+      ]
+    });
+
+    const response = await request(app, 'GET', '/api/rosters/active?campId=camp-1');
+
+    expect(response.status).toBe(200);
+    expect(response.body.members).toHaveLength(1);
+    expect(response.body.members[0]).toMatchObject({
+      duesStatus: 'PAID',
+      mealPlanStatus: 'UNPAID',
+      member: {
+        _id: 'member-paid',
+        user: expect.objectContaining({
+          email: 'paid@example.com'
+        })
+      }
+    });
+    expect(response.body.members[0]).not.toHaveProperty('paid');
+    expect(response.body.members[0]).not.toHaveProperty('duesPaidAt');
+    expect(response.body.members[0]).not.toHaveProperty('applicationData');
+    expect(response.body.members[0].member.user.email).toBe('paid@example.com');
+    expect(response.body.members.map((entry) => entry.member._id)).not.toContain('member-unpaid');
   });
 
   test('does not allow Events Lead to update dues payment status', async () => {

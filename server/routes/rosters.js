@@ -52,10 +52,9 @@ function sendLeadRoleConflict(res, existingRole, requestedRole) {
   });
 }
 
-const DUES_FIELD_NAMES = [
+const EVENTS_LEAD_SENSITIVE_DUES_FIELD_NAMES = [
   'paid',
   'duesPaid',
-  'duesStatus',
   'duesInstructedAt',
   'duesPaidAt',
   'duesReceiptSentAt',
@@ -70,7 +69,7 @@ const APPLICATION_FIELD_NAMES = [
 
 function removeEventsLeadRosterFields(target) {
   if (!target || typeof target !== 'object') return;
-  DUES_FIELD_NAMES.forEach((field) => {
+  EVENTS_LEAD_SENSITIVE_DUES_FIELD_NAMES.forEach((field) => {
     delete target[field];
   });
   APPLICATION_FIELD_NAMES.forEach((field) => {
@@ -78,20 +77,53 @@ function removeEventsLeadRosterFields(target) {
   });
 }
 
+function toPlainRosterObject(value) {
+  if (!value || typeof value !== 'object') return value;
+  return typeof value.toObject === 'function' ? value.toObject() : { ...value };
+}
+
+function getRosterEntryDuesStatus(entry) {
+  const rawStatus =
+    entry?.duesStatus ||
+    entry?.member?.duesStatus ||
+    entry?.memberDetails?.duesStatus ||
+    entry?.memberDetails?.userDetails?.duesStatus ||
+    entry?.user?.duesStatus;
+
+  if (rawStatus) return normalizeDuesStatus(rawStatus);
+
+  return entry?.paid === true ||
+    entry?.duesPaid === true ||
+    entry?.member?.paid === true ||
+    entry?.member?.duesPaid === true ||
+    entry?.memberDetails?.paid === true ||
+    entry?.memberDetails?.duesPaid === true ||
+    entry?.memberDetails?.userDetails?.paid === true ||
+    entry?.memberDetails?.userDetails?.duesPaid === true
+    ? DUES_STATUS.PAID
+    : DUES_STATUS.UNPAID;
+}
+
+function isDuesPaidRosterEntry(entry) {
+  return getRosterEntryDuesStatus(entry) === DUES_STATUS.PAID;
+}
+
 function concealEventsLeadRosterFields(roster) {
   if (!roster) return roster;
-  const plainRoster = typeof roster.toObject === 'function' ? roster.toObject() : { ...roster };
+  const plainRoster = toPlainRosterObject(roster);
   if (!Array.isArray(plainRoster.members)) return plainRoster;
 
-  plainRoster.members = plainRoster.members.map((entry) => {
-    const plainEntry = typeof entry?.toObject === 'function' ? entry.toObject() : { ...entry };
-    removeEventsLeadRosterFields(plainEntry);
-    removeEventsLeadRosterFields(plainEntry.member);
-    removeEventsLeadRosterFields(plainEntry.memberDetails);
-    removeEventsLeadRosterFields(plainEntry.memberDetails?.userDetails);
-    removeEventsLeadRosterFields(plainEntry.user);
-    return plainEntry;
-  });
+  plainRoster.members = plainRoster.members
+    .map((entry) => toPlainRosterObject(entry))
+    .filter(isDuesPaidRosterEntry)
+    .map((plainEntry) => {
+      removeEventsLeadRosterFields(plainEntry);
+      removeEventsLeadRosterFields(plainEntry.member);
+      removeEventsLeadRosterFields(plainEntry.memberDetails);
+      removeEventsLeadRosterFields(plainEntry.memberDetails?.userDetails);
+      removeEventsLeadRosterFields(plainEntry.user);
+      return plainEntry;
+    });
 
   return plainRoster;
 }
