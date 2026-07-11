@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Edit, Trash2, CheckCircle, Mail, X } from 'lucide-react';
+import { Bell, Edit, Trash2, CheckCircle, Mail, X, MessageCircle, Phone } from 'lucide-react';
 import { Button } from '../ui';
 import apiService from '../../services/api';
+import { buildSmsLink, buildWhatsAppLink, formatPhoneForDisplay } from '../../utils/phone';
 
 /**
  * Shifts-Only Roster (SOR) table.
@@ -51,6 +52,7 @@ interface Props {
   canAssignCampLead: boolean;
   canAssignEventsLead?: boolean;
   canOpenContactDetails?: boolean;
+  showContactSummary?: boolean;
   canSendReminders?: boolean;
   currentUserId?: string;
   limitRoleBadgesToCurrentUser?: boolean;
@@ -85,6 +87,18 @@ function memberDisplayName(member: SorMemberRow): string {
   if (fromUser) return fromUser;
   if (memberDoc.name) return memberDoc.name;
   return 'Unknown';
+}
+
+function memberEmail(member: SorMemberRow): string {
+  return String(member.user?.email || member.member?.email || '').trim();
+}
+
+function memberPhoneNumber(member: SorMemberRow): string {
+  return String(member.user?.phoneNumber || member.member?.phoneNumber || member.member?.phone || '').trim();
+}
+
+function memberPhoneCountryCode(member: SorMemberRow): string {
+  return String(member.user?.phoneCountryCode || member.member?.phoneCountryCode || '').trim();
 }
 
 function memberPlayaName(member: SorMemberRow): string {
@@ -357,6 +371,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   canAssignCampLead,
   canAssignEventsLead = false,
   canOpenContactDetails = true,
+  showContactSummary = false,
   canSendReminders: canSendRemindersProp,
   currentUserId,
   limitRoleBadgesToCurrentUser = false,
@@ -375,6 +390,50 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   const [localReminderOverrides, setLocalReminderOverrides] = useState<Record<string, string>>({});
   const canSendReminders = canSendRemindersProp ?? canEdit;
   const showActionsColumn = canEdit || canSendReminders;
+
+  const renderContactSummary = (member: SorMemberRow) => {
+    if (!showContactSummary) return null;
+
+    const email = memberEmail(member);
+    const phoneNumber = memberPhoneNumber(member);
+    const phoneCountryCode = memberPhoneCountryCode(member);
+    const phoneDisplay = formatPhoneForDisplay(phoneNumber, phoneCountryCode);
+    const smsHref = buildSmsLink(phoneNumber, phoneCountryCode);
+    const whatsAppHref = buildWhatsAppLink(phoneNumber, phoneCountryCode);
+
+    return (
+      <div className="mt-1 space-y-1">
+        <div className="text-xs text-gray-500">{email || 'No email'}</div>
+        <div className="text-xs text-gray-500">{phoneDisplay || 'No phone'}</div>
+        {phoneDisplay && (
+          <div className="flex flex-wrap items-center gap-2">
+            {smsHref && (
+              <a
+                href={smsHref}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                title={`Send SMS to ${phoneDisplay}`}
+              >
+                <Phone className="w-3 h-3" />
+                SMS
+              </a>
+            )}
+            {whatsAppHref && (
+              <a
+                href={whatsAppHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"
+                title={`Send WhatsApp message to ${phoneDisplay}`}
+              >
+                <MessageCircle className="w-3 h-3" />
+                WhatsApp
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const rows = useMemo(() => {
     return members.map((m, index) => {
@@ -622,6 +681,7 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                         +{responseGroupExtraCount}
                       </span>
                     )}
+                    {renderContactSummary(member)}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-700">
                     {playaName || <span className="text-gray-400">—</span>}

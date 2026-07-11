@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Card, Modal, Input } from '../../components/ui';
 import ShiftsOnlyRosterTable from '../../components/roster/ShiftsOnlyRosterTable';
-import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload, ClipboardList, CheckCircle } from 'lucide-react';
+import { User, Loader2, Eye, Edit, Trash2, Save, X, Users, Plus, Mail, MapPin, Linkedin, Instagram, Facebook, Calendar, Clock, Upload, ClipboardList, CheckCircle, MessageCircle, Phone } from 'lucide-react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -20,6 +20,7 @@ import { canAssignCampLeadRole } from '../../utils/permissions';
 import { FoodPreferenceMultiSelect, FoodPreferenceTags } from '../../components/food/FoodPreferenceControls';
 import { normalizeFoodPreferences } from '../../constants/foodPreferences';
 import { renderRichTextToHtml } from '../../utils/richText';
+import { buildSmsLink, buildWhatsAppLink, formatPhoneForDisplay } from '../../utils/phone';
 
 // Extended type for roster members that includes nested member data
 interface RosterMember extends Member {
@@ -479,6 +480,7 @@ const MemberRoster: React.FC = () => {
   const canViewDuesData = canEdit;
   const canViewApplicationData = canEdit;
   const canUseContactDetails = canEdit;
+  const canViewRosterContactSummary = isEventsLeadForRoster;
   const canAssignDelegatedRoles = canEdit && canAssignCampLeadRole(authUser, campId || undefined);
   const canViewRosterActions = canEdit;
   const authUserId = toIdString(authUser?._id);
@@ -1025,6 +1027,8 @@ const MemberRoster: React.FC = () => {
             firstName: fallbackFirstName || memberData.firstName || '',
             lastName: fallbackLastName || memberData.lastName || '',
             email: memberData.email || '',
+            phoneNumber: memberData.phoneNumber || memberData.phone || '',
+            phoneCountryCode: memberData.phoneCountryCode || '',
             playaName: memberData.playaName || '',
             city: memberData.city || '',
             yearsBurned: memberData.yearsBurned || 0,
@@ -1867,6 +1871,54 @@ const MemberRoster: React.FC = () => {
     }
   };
 
+  const renderRosterContactSummary = (memberData: any, userData: any) => {
+    if (!canViewRosterContactSummary) return null;
+
+    const email = String(userData?.email || memberData?.email || '').trim();
+    const phoneNumber = userData?.phoneNumber || memberData?.phoneNumber || memberData?.phone || '';
+    const phoneCountryCode = userData?.phoneCountryCode || memberData?.phoneCountryCode || '';
+    const phoneDisplay = formatPhoneForDisplay(phoneNumber, phoneCountryCode);
+    const smsHref = buildSmsLink(phoneNumber, phoneCountryCode);
+    const whatsAppHref = buildWhatsAppLink(phoneNumber, phoneCountryCode);
+
+    return (
+      <div className="mt-1 space-y-1">
+        <div className="text-xs text-gray-500">
+          {email || 'No email'}
+        </div>
+        <div className="text-xs text-gray-500">
+          {phoneDisplay || 'No phone'}
+        </div>
+        {phoneDisplay && (
+          <div className="flex flex-wrap items-center gap-2">
+            {smsHref && (
+              <a
+                href={smsHref}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                title={`Send SMS to ${phoneDisplay}`}
+              >
+                <Phone className="w-3 h-3" />
+                SMS
+              </a>
+            )}
+            {whatsAppHref && (
+              <a
+                href={whatsAppHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"
+                title={`Send WhatsApp message to ${phoneDisplay}`}
+              >
+                <MessageCircle className="w-3 h-3" />
+                WhatsApp
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Filtering logic for members based on active filters
   const filteredMembers = useMemo(() => {
     const effectiveActiveFilters = canViewDuesData
@@ -2254,6 +2306,7 @@ const MemberRoster: React.FC = () => {
             canAssignCampLead={canAssignDelegatedRoles}
             canAssignEventsLead={canAssignDelegatedRoles}
             canOpenContactDetails={canUseContactDetails}
+            showContactSummary={canViewRosterContactSummary}
             canSendReminders={canEdit}
             currentUserId={authUserId}
             limitRoleBadgesToCurrentUser={limitDelegatedRoleVisibilityToSelf}
@@ -2420,6 +2473,7 @@ const MemberRoster: React.FC = () => {
                               </span>
                             )}
                           </div>
+                          {renderRosterContactSummary(memberData, user)}
                         </div>
                       </div>
                     </td>

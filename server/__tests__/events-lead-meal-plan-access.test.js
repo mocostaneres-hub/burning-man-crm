@@ -201,7 +201,9 @@ describe('Events Lead meal-plan access', () => {
               _id: 'user-paid',
               firstName: 'Paid',
               lastName: 'Member',
-              email: 'paid@example.com'
+              email: 'paid@example.com',
+              phoneCountryCode: '+1',
+              phoneNumber: '555-0101'
             }
           },
           duesStatus: 'PAID',
@@ -217,7 +219,9 @@ describe('Events Lead meal-plan access', () => {
               _id: 'user-unpaid',
               firstName: 'Unpaid',
               lastName: 'Member',
-              email: 'unpaid@example.com'
+              email: 'unpaid@example.com',
+              phoneCountryCode: '+1',
+              phoneNumber: '555-0102'
             }
           },
           duesStatus: 'UNPAID',
@@ -237,7 +241,9 @@ describe('Events Lead meal-plan access', () => {
       member: {
         _id: 'member-paid',
         user: expect.objectContaining({
-          email: 'paid@example.com'
+          email: 'paid@example.com',
+          phoneCountryCode: '+1',
+          phoneNumber: '555-0101'
         })
       }
     });
@@ -245,6 +251,8 @@ describe('Events Lead meal-plan access', () => {
     expect(response.body.members[0]).not.toHaveProperty('duesPaidAt');
     expect(response.body.members[0]).not.toHaveProperty('applicationData');
     expect(response.body.members[0].member.user.email).toBe('paid@example.com');
+    expect(response.body.members[0].member.user.phoneNumber).toBe('555-0101');
+    expect(response.body.members[0].member.user.phoneCountryCode).toBe('+1');
     expect(response.body.members.map((entry) => entry.member._id)).not.toContain('member-unpaid');
   });
 
