@@ -46,6 +46,7 @@ type SurveySection = {
   id: string;
   title: string;
   description: string;
+  defaultNextSectionId: string;
   questions: SurveyQuestion[];
 };
 
@@ -287,6 +288,7 @@ const SurveyRespond: React.FC = () => {
       id: 'intro',
       title: survey?.title || 'Survey',
       description: '',
+      defaultNextSectionId: '',
       questions: []
     };
 
@@ -299,6 +301,7 @@ const SurveyRespond: React.FC = () => {
           id: question.localId || `section_${grouped.length + 1}`,
           title: question.prompt || `Section ${grouped.length + 1}`,
           description: question.helpText || '',
+          defaultNextSectionId: question.navigation?.defaultNextSectionId || '',
           questions: []
         };
       } else {
@@ -497,7 +500,12 @@ const SurveyRespond: React.FC = () => {
   const getResolvedNextSectionId = (section: SurveySection | undefined) => {
     const target = getSectionRouteTarget(section);
     if (target === SUBMIT_TARGET) return null;
-    if (target && sections.some((item) => item.id === target)) return target;
+    if (target && target !== section?.id && sections.some((item) => item.id === target)) return target;
+    const defaultTarget = section?.defaultNextSectionId || '';
+    if (defaultTarget === SUBMIT_TARGET) return null;
+    if (defaultTarget && defaultTarget !== section?.id && sections.some((item) => item.id === defaultTarget)) {
+      return defaultTarget;
+    }
     return getDefaultNextSectionId(section);
   };
 

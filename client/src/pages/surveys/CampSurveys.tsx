@@ -44,6 +44,9 @@ const defaultSection = (): SurveyQuestion => ({
   helpText: '',
   required: false,
   options: [],
+  navigation: {
+    defaultNextSectionId: ''
+  },
   supportLevel: 'supported'
 });
 
@@ -127,7 +130,11 @@ const withQuestionDefaults = (question: SurveyQuestion, index: number): SurveyQu
   localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
   options: Array.isArray(question.options)
     ? question.options.map((option) => ({ ...option, nextSectionId: option.nextSectionId || '' }))
-    : []
+    : [],
+  navigation: {
+    ...(question.navigation || {}),
+    defaultNextSectionId: question.navigation?.defaultNextSectionId || ''
+  }
 });
 
 const buildSurveyDraftPayload = (snapshot: SurveyDraftSnapshot) => {
@@ -145,6 +152,10 @@ const buildSurveyDraftPayload = (snapshot: SurveyDraftSnapshot) => {
       localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
       prompt: String(question.prompt || '').trim(),
       helpText: String(question.helpText || '').trim(),
+      navigation: {
+        ...(question.navigation || {}),
+        defaultNextSectionId: question.navigation?.defaultNextSectionId || ''
+      },
       options: Array.isArray(question.options)
         ? question.options
             .map((option) => {
@@ -495,6 +506,22 @@ const CampSurveys: React.FC = () => {
         };
         return { ...question, options: nextOptions };
       })
+    );
+  };
+
+  const setSectionRouting = (questionIndex: number, defaultNextSectionId: string) => {
+    setQuestions((prev) =>
+      prev.map((question, qIndex) =>
+        qIndex === questionIndex
+          ? {
+              ...question,
+              navigation: {
+                ...(question.navigation || {}),
+                defaultNextSectionId
+              }
+            }
+          : question
+      )
     );
   };
 
@@ -1209,13 +1236,33 @@ const CampSurveys: React.FC = () => {
                 </div>
 
                 {question.blockType === 'section_header' && (
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">Section information</label>
-                    <RichTextEditor
-                      value={question.helpText || ''}
-                      onChange={(nextValue) => setQuestion(index, { helpText: nextValue })}
-                      minHeightClass="min-h-[90px]"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Section information</label>
+                      <RichTextEditor
+                        value={question.helpText || ''}
+                        onChange={(nextValue) => setQuestion(index, { helpText: nextValue })}
+                        minHeightClass="min-h-[90px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Next step after this section</label>
+                      <select
+                        value={question.navigation?.defaultNextSectionId || ''}
+                        onChange={(e) => setSectionRouting(index, e.target.value)}
+                        className="w-full md:max-w-xs border border-gray-300 rounded px-2 py-1 text-sm"
+                      >
+                        <option value="">Next section</option>
+                        <option value="__SUBMIT__">Submit survey</option>
+                        {surveySections
+                          .filter((section) => section.id !== question.localId)
+                          .map((section) => (
+                            <option key={section.id} value={section.id}>
+                              Go to {section.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
                 )}
 
