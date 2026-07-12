@@ -171,15 +171,17 @@ async function resolveSubmitterMember(req, campId) {
 }
 
 async function buildCompletionStats({ survey, memberIds, memberMap }) {
-  const [assignedCount, completedCount] = await Promise.all([
-    SurveyAssignment.countDocuments({ surveyId: survey._id }),
+  const [assignments, completedCount] = await Promise.all([
+    SurveyAssignment.find({ surveyId: survey._id }).select('userId').lean(),
     SurveyResponseMember.countDocuments({ surveyId: survey._id, memberId: { $in: memberIds } })
   ]);
+  const assignedUserIds = dedupeIdList(assignments.map((assignment) => assignment.userId));
 
   const completionRate = memberIds.length > 0 ? Math.round((completedCount / memberIds.length) * 100) : 0;
   return {
     totalRosterMembers: memberIds.length,
-    assignedUsers: assignedCount,
+    assignedUsers: assignedUserIds.length,
+    assignedUserIds,
     completedMembers: completedCount,
     pendingMembers: Math.max(memberIds.length - completedCount, 0),
     completionRate,
@@ -1028,10 +1030,13 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
-    if (survey.status !== 'draft' || survey.isLocked) {
+    if (survey.status === 'closed') {
       return res.status(400).json({
-        message: 'Survey has already been sent or locked and cannot be modified'
+        message: 'Survey is closed and cannot receive additional recipients'
       });
+    }
+    if (survey.status !== 'draft' && survey.status !== 'sent') {
+      return res.status(400).json({ message: 'Survey is not available for sending' });
     }
 
     const questionCount = await SurveyQuestion.countDocuments({ surveyId });
@@ -1062,21 +1067,44 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       });
     }
 
-    survey.status = 'sent';
-    survey.isLocked = true;
-    survey.lockReason = 'sent';
-    survey.sentAt = new Date();
-    survey.sentBy = req.user._id;
+    const existingAssignments = await SurveyAssignment.find({
+      surveyId: survey._id,
+      userId: { $in: candidates }
+    })
+      .select('userId')
+      .lean();
+    const existingUserIds = new Set(dedupeIdList(existingAssignments.map((assignment) => assignment.userId)));
+    const newCandidateIds = candidates.filter((userId) => !existingUserIds.has(toIdString(userId)));
+
+    if (newCandidateIds.length === 0) {
+      return res.status(409).json({
+        message: 'Everyone matched by that targeting choice already has this survey',
+        assignedCount: 0,
+        skippedExistingCount: candidates.length
+      });
+    }
+
+    const wasDraft = survey.status === 'draft';
+    if (wasDraft) {
+      survey.status = 'sent';
+      survey.isLocked = true;
+      survey.lockReason = 'sent';
+      survey.sentAt = new Date();
+      survey.sentBy = req.user._id;
+    }
     survey.targeting = {
       assignmentMode,
       selectedUserIds,
       manualAddIds,
       manualRemoveIds,
-      snapshotAssignmentUserIds: candidates
+      snapshotAssignmentUserIds: dedupeIdList([
+        ...(survey.targeting?.snapshotAssignmentUserIds || []),
+        ...candidates
+      ])
     };
     await survey.save();
 
-    const assignmentDocs = candidates.map((userId) => ({
+    const assignmentDocs = newCandidateIds.map((userId) => ({
       surveyId: survey._id,
       campId: survey.campId,
       userId,
@@ -1095,32 +1123,50 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
 
     const insertedAssignments = await SurveyAssignment.find({
       surveyId: survey._id,
-      userId: { $in: candidates }
+      userId: { $in: newCandidateIds }
     })
       .select('userId')
       .lean();
     const insertedUserIds = dedupeIdList(insertedAssignments.map((item) => item.userId));
 
-    await createBulkNotifications(insertedUserIds, {
-      actor: req.user._id,
-      campId: survey.campId,
-      type: NOTIFICATION_TYPES.SURVEY_ASSIGNED,
-      title: `New survey: ${survey.title}`,
-      message: 'A camp survey is waiting for your response.',
-      link: `/surveys/${survey._id}`,
-      metadata: { surveyId: survey._id }
-    });
+    const allAssignments = await SurveyAssignment.find({ surveyId: survey._id }).select('userId').lean();
+    const allAssignedUserIds = dedupeIdList(allAssignments.map((assignment) => assignment.userId));
+    survey.targeting = {
+      ...(survey.targeting?.toObject ? survey.targeting.toObject() : survey.targeting || {}),
+      assignmentMode,
+      selectedUserIds,
+      manualAddIds,
+      manualRemoveIds,
+      snapshotAssignmentUserIds: allAssignedUserIds
+    };
+    await survey.save();
 
-    await recordActivity('CAMP', survey.campId, req.user._id, 'SURVEY_SENT', {
+    if (insertedUserIds.length > 0) {
+      await createBulkNotifications(insertedUserIds, {
+        actor: req.user._id,
+        campId: survey.campId,
+        type: NOTIFICATION_TYPES.SURVEY_ASSIGNED,
+        title: `New survey: ${survey.title}`,
+        message: 'A camp survey is waiting for your response.',
+        link: `/surveys/${survey._id}`,
+        metadata: { surveyId: survey._id }
+      });
+    }
+
+    await recordActivity('CAMP', survey.campId, req.user._id, wasDraft ? 'SURVEY_SENT' : 'SURVEY_RECIPIENTS_ADDED', {
       surveyId: survey._id,
       assignmentMode,
-      assignedCount: insertedUserIds.length
+      assignedCount: insertedUserIds.length,
+      skippedExistingCount: candidates.length - insertedUserIds.length,
+      totalAssignedCount: allAssignedUserIds.length
     });
 
     res.json({
-      message: 'Survey sent successfully',
+      message: wasDraft ? 'Survey sent successfully' : 'Survey recipients added successfully',
       surveyId: survey._id,
       assignedCount: insertedUserIds.length,
+      skippedExistingCount: candidates.length - insertedUserIds.length,
+      totalAssignedCount: allAssignedUserIds.length,
       assignmentMode
     });
   } catch (error) {

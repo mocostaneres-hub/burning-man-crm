@@ -503,6 +503,7 @@ export interface SurveyQuestion {
 export interface SurveyCompletionStats {
   totalRosterMembers: number;
   assignedUsers: number;
+  assignedUserIds?: string[];
   completedMembers: number;
   pendingMembers: number;
   completionRate: number;
@@ -518,6 +519,13 @@ export interface Survey {
   lockReason?: string | null;
   sentAt?: string | null;
   closedAt?: string | null;
+  targeting?: {
+    assignmentMode?: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+    selectedUserIds?: string[];
+    manualAddIds?: string[];
+    manualRemoveIds?: string[];
+    snapshotAssignmentUserIds?: string[];
+  };
   createdAt: string;
   updatedAt: string;
   completionStats?: SurveyCompletionStats;

@@ -8,6 +8,12 @@ import { Plus, Send, Clock, ClipboardList, Eye, Trash2 } from 'lucide-react';
 
 type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
 
+type RosterUser = {
+  userId: string;
+  name: string;
+  isLead: boolean;
+};
+
 type SurveyDraftSnapshot = {
   campId: string;
   editingSurveyId: string | null;
@@ -192,6 +198,7 @@ const CampSurveys: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
@@ -220,7 +227,7 @@ const CampSurveys: React.FC = () => {
 
   const [assignmentModeBySurvey, setAssignmentModeBySurvey] = useState<Record<string, AssignmentMode>>({});
   const [selectedUsersBySurvey, setSelectedUsersBySurvey] = useState<Record<string, string[]>>({});
-  const [rosterUsers, setRosterUsers] = useState<Array<{ userId: string; name: string; isLead: boolean }>>([]);
+  const [rosterUsers, setRosterUsers] = useState<RosterUser[]>([]);
   const [sendingSurveyId, setSendingSurveyId] = useState<string | null>(null);
   const [closingSurveyId, setClosingSurveyId] = useState<string | null>(null);
   const [deletingSurveyId, setDeletingSurveyId] = useState<string | null>(null);
@@ -275,7 +282,7 @@ const CampSurveys: React.FC = () => {
             };
           })
           .filter(Boolean);
-        setRosterUsers(users as Array<{ userId: string; name: string; isLead: boolean }>);
+        setRosterUsers(users as RosterUser[]);
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Failed to load surveys');
       } finally {
@@ -671,13 +678,20 @@ const CampSurveys: React.FC = () => {
     try {
       setSendingSurveyId(survey._id);
       setError(null);
-      const assignmentMode = assignmentModeBySurvey[survey._id] || 'ALL_ROSTER';
+      setSuccessMessage(null);
+      const assignmentMode = assignmentModeBySurvey[survey._id] || (survey.status === 'sent' ? 'SELECTED_USERS' : 'ALL_ROSTER');
       const selectedUserIds = selectedUsersBySurvey[survey._id] || [];
-      await api.sendSurvey(survey._id, {
+      const response = await api.sendSurvey(survey._id, {
         assignmentMode,
         selectedUserIds
       });
+      setSelectedUsersBySurvey((prev) => ({ ...prev, [survey._id]: [] }));
       await loadSurveys();
+      setSuccessMessage(
+        survey.status === 'draft'
+          ? `Survey sent to ${response.assignedCount} recipient${response.assignedCount === 1 ? '' : 's'}.`
+          : `Added ${response.assignedCount} new recipient${response.assignedCount === 1 ? '' : 's'} to this survey.`
+      );
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to send survey');
     } finally {
@@ -685,10 +699,73 @@ const CampSurveys: React.FC = () => {
     }
   };
 
+  const renderTargetingControls = (
+    survey: Survey,
+    assignmentMode: AssignmentMode,
+    selectedUsers: string[],
+    selectableUsers: RosterUser[],
+    label: string,
+    helperText?: string
+  ) => (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+      <label className="col-span-1 sm:col-span-1">
+        <span className="block text-gray-600 mb-1">{label}</span>
+        <select
+          value={assignmentMode}
+          onChange={(e) =>
+            setAssignmentModeBySurvey((prev) => ({
+              ...prev,
+              [survey._id]: e.target.value as AssignmentMode
+            }))
+          }
+          className="w-full border border-gray-300 rounded px-2 py-1"
+        >
+          <option value="ALL_ROSTER">All roster</option>
+          <option value="LEADS_ONLY">Leads only</option>
+          <option value="SELECTED_USERS">Selected users</option>
+        </select>
+        {helperText && <span className="mt-1 block text-[11px] text-gray-500">{helperText}</span>}
+      </label>
+      {assignmentMode === 'SELECTED_USERS' && (
+        <div className="col-span-1 sm:col-span-2 border border-gray-200 rounded p-2 max-h-32 overflow-y-auto">
+          {selectableUsers.length === 0 ? (
+            <p className="text-xs text-gray-500">No roster users available for this selection.</p>
+          ) : (
+            selectableUsers.map((rosterUser) => (
+              <label key={rosterUser.userId} className="flex items-center gap-2 text-xs py-0.5">
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(rosterUser.userId)}
+                  onChange={() =>
+                    setSelectedUsersBySurvey((prev) => {
+                      const current = prev[survey._id] || [];
+                      const exists = current.includes(rosterUser.userId);
+                      return {
+                        ...prev,
+                        [survey._id]: exists
+                          ? current.filter((id) => id !== rosterUser.userId)
+                          : [...current, rosterUser.userId]
+                      };
+                    })
+                  }
+                />
+                <span>
+                  {rosterUser.name}
+                  {rosterUser.isLead && <span className="ml-1 text-orange-700">(Lead)</span>}
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const handleCloseSurvey = async (survey: Survey) => {
     try {
       setClosingSurveyId(survey._id);
       setError(null);
+      setSuccessMessage(null);
       await api.closeSurvey(survey._id);
       await loadSurveys();
     } catch (err: any) {
@@ -707,6 +784,7 @@ const CampSurveys: React.FC = () => {
     try {
       setDeletingSurveyId(survey._id);
       setError(null);
+      setSuccessMessage(null);
       await api.deleteSurvey(survey._id);
       await loadSurveys();
     } catch (err: any) {
@@ -753,6 +831,12 @@ const CampSurveys: React.FC = () => {
         </div>
       )}
 
+      {successMessage && (
+        <div className="mb-4 rounded border border-green-200 bg-green-50 text-green-800 px-4 py-2 text-sm">
+          {successMessage}
+        </div>
+      )}
+
       {importWarnings.length > 0 && (
         <div className="mb-4 rounded border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
           <p className="font-medium mb-1">Imported survey warnings</p>
@@ -774,8 +858,32 @@ const CampSurveys: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {surveys.map((survey) => {
-            const assignmentMode = assignmentModeBySurvey[survey._id] || 'ALL_ROSTER';
+            const assignmentMode = assignmentModeBySurvey[survey._id] || (survey.status === 'sent' ? 'SELECTED_USERS' : 'ALL_ROSTER');
             const selectedUsers = selectedUsersBySurvey[survey._id] || [];
+            const assignedUserIds = new Set(
+              [
+                ...(survey.completionStats?.assignedUserIds || []),
+                ...(survey.targeting?.snapshotAssignmentUserIds || [])
+              ].map((userId) => String(userId))
+            );
+            const unassignedRosterUsers = rosterUsers.filter((rosterUser) => !assignedUserIds.has(String(rosterUser.userId)));
+            const selectedAvailableUsers = selectedUsers.filter((userId) =>
+              unassignedRosterUsers.some((rosterUser) => String(rosterUser.userId) === String(userId))
+            );
+            const unassignedLeadCount = unassignedRosterUsers.filter((rosterUser) => rosterUser.isLead).length;
+            const draftNeedsSelectedUsers = survey.status === 'draft' && assignmentMode === 'SELECTED_USERS' && selectedUsers.length === 0;
+            const sentHasNoAdditionalRecipients =
+              survey.status === 'sent' &&
+              (assignmentMode === 'ALL_ROSTER'
+                ? unassignedRosterUsers.length === 0
+                : assignmentMode === 'LEADS_ONLY'
+                  ? unassignedLeadCount === 0
+                  : selectedAvailableUsers.length === 0);
+            const sendDisabled =
+              sendingSurveyId === survey._id ||
+              draftNeedsSelectedUsers ||
+              sentHasNoAdditionalRecipients;
+
             return (
               <Card key={survey._id} className="p-4">
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -793,59 +901,24 @@ const CampSurveys: React.FC = () => {
                       </p>
                     )}
                     {survey.completionStats && (
-                      <p className="text-xs text-gray-600">
-                        Completion: {survey.completionStats.completedMembers}/{survey.completionStats.totalRosterMembers} ({survey.completionStats.completionRate}%)
-                      </p>
+                      <div className="space-y-0.5 text-xs text-gray-600">
+                        <p>
+                          Completion: {survey.completionStats.completedMembers}/{survey.completionStats.totalRosterMembers} ({survey.completionStats.completionRate}%)
+                        </p>
+                        <p>
+                          Recipients: {survey.completionStats.assignedUsers}
+                          {survey.status === 'sent' && unassignedRosterUsers.length > 0
+                            ? `, ${unassignedRosterUsers.length} roster user${unassignedRosterUsers.length === 1 ? '' : 's'} not yet assigned`
+                            : ''}
+                        </p>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex flex-col gap-2 lg:w-[360px]">
                     {survey.status === 'draft' && (
                       <>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                          <label className="col-span-1 sm:col-span-1">
-                            <span className="block text-gray-600 mb-1">Targeting</span>
-                            <select
-                              value={assignmentMode}
-                              onChange={(e) =>
-                                setAssignmentModeBySurvey((prev) => ({
-                                  ...prev,
-                                  [survey._id]: e.target.value as AssignmentMode
-                                }))
-                              }
-                              className="w-full border border-gray-300 rounded px-2 py-1"
-                            >
-                              <option value="ALL_ROSTER">All roster</option>
-                              <option value="LEADS_ONLY">Leads only</option>
-                              <option value="SELECTED_USERS">Selected users</option>
-                            </select>
-                          </label>
-                          {assignmentMode === 'SELECTED_USERS' && (
-                            <div className="col-span-1 sm:col-span-2 border border-gray-200 rounded p-2 max-h-28 overflow-y-auto">
-                              {rosterUsers.map((rosterUser) => (
-                                <label key={rosterUser.userId} className="flex items-center gap-2 text-xs py-0.5">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedUsers.includes(rosterUser.userId)}
-                                    onChange={() =>
-                                      setSelectedUsersBySurvey((prev) => {
-                                        const current = prev[survey._id] || [];
-                                        const exists = current.includes(rosterUser.userId);
-                                        return {
-                                          ...prev,
-                                          [survey._id]: exists
-                                            ? current.filter((id) => id !== rosterUser.userId)
-                                            : [...current, rosterUser.userId]
-                                        };
-                                      })
-                                    }
-                                  />
-                                  <span>{rosterUser.name}</span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        {renderTargetingControls(survey, assignmentMode, selectedUsers, rosterUsers, 'Targeting')}
                         <div className="flex flex-wrap gap-2">
                           <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
                             <Eye size={14} />
@@ -859,7 +932,7 @@ const CampSurveys: React.FC = () => {
                             size="sm"
                             className="flex items-center gap-1"
                             onClick={() => handleSendSurvey(survey)}
-                            disabled={sendingSurveyId === survey._id}
+                            disabled={sendDisabled}
                           >
                             <Send size={14} />
                             {sendingSurveyId === survey._id ? 'Sending...' : 'Send Survey'}
@@ -879,38 +952,77 @@ const CampSurveys: React.FC = () => {
                     )}
 
                     {survey.status !== 'draft' && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
-                          <Eye size={14} />
-                          Open View
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${survey._id}/responses`)}>
-                          View Responses
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
-                          Edit Survey
-                        </Button>
+                      <>
                         {survey.status === 'sent' && (
+                          <div className="rounded border border-blue-100 bg-blue-50 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-medium text-blue-950">Add recipients</p>
+                                <p className="text-xs text-blue-800">
+                                  Already sent to {assignedUserIds.size} user{assignedUserIds.size === 1 ? '' : 's'}.
+                                </p>
+                              </div>
+                              <Badge variant={unassignedRosterUsers.length > 0 ? 'info' : 'success'}>
+                                {unassignedRosterUsers.length > 0
+                                  ? `${unassignedRosterUsers.length} available`
+                                  : 'All assigned'}
+                              </Badge>
+                            </div>
+                            {renderTargetingControls(
+                              survey,
+                              assignmentMode,
+                              selectedUsers,
+                              unassignedRosterUsers,
+                              'Add',
+                              'Selected users only shows people who do not already have this survey.'
+                            )}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
+                            <Eye size={14} />
+                            Open View
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${survey._id}/responses`)}>
+                            View Responses
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
+                            Edit Survey
+                          </Button>
+                          {survey.status === 'sent' && (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                className="flex items-center gap-1"
+                                onClick={() => handleSendSurvey(survey)}
+                                disabled={sendDisabled}
+                              >
+                                <Send size={14} />
+                                {sendingSurveyId === survey._id ? 'Adding...' : 'Add Recipients'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCloseSurvey(survey)}
+                                disabled={closingSurveyId === survey._id}
+                              >
+                                {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
+                              </Button>
+                            </>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleCloseSurvey(survey)}
-                            disabled={closingSurveyId === survey._id}
+                            onClick={() => handleDeleteSurvey(survey)}
+                            disabled={deletingSurveyId === survey._id}
+                            className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
                           >
-                            {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
+                            <Trash2 size={14} />
+                            {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteSurvey(survey)}
-                          disabled={deletingSurveyId === survey._id}
-                          className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                          {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
-                        </Button>
-                      </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>

@@ -854,7 +854,14 @@ class ApiService {
       manualAddIds?: string[];
       manualRemoveIds?: string[];
     }
-  ): Promise<{ message: string; surveyId: string; assignedCount: number; assignmentMode: string }> {
+  ): Promise<{
+    message: string;
+    surveyId: string;
+    assignedCount: number;
+    skippedExistingCount?: number;
+    totalAssignedCount?: number;
+    assignmentMode: string;
+  }> {
     const response = await this.api.post(`/surveys/${surveyId}/send`, payload || {});
     return response.data;
   }
