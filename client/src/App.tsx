@@ -90,7 +90,7 @@ const DashboardRedirect: React.FC = () => {
 
   const landingPath = getDefaultLandingPath(user);
   if (landingPath !== '/dashboard') {
-    console.log('🔍 [DashboardRedirect] Redirecting camp/lead user to roster landing page');
+    console.log('🔍 [DashboardRedirect] Redirecting user to default landing page:', landingPath);
     return <Navigate to={landingPath} replace />;
   }
   

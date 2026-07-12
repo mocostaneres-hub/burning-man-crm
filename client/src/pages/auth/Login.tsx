@@ -9,6 +9,7 @@ import GoogleOAuth from '../../components/auth/GoogleOAuth';
 import { Button, Input, Card } from '../../components/ui';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Footer from '../../components/layout/Footer';
+import apiService from '../../services/api';
 import {
   getDefaultLandingPath,
   getMemberApplicationCampIdentifier,
@@ -143,7 +144,7 @@ const Login: React.FC = () => {
     // ============================================================================
     
     // Small delay to ensure localStorage write completes
-    setTimeout(() => {
+    setTimeout(async () => {
       console.log('🔄 [Login] Reloading to update AuthContext...');
       
       // TRUST THE BACKEND: Use isNewUser flag instead of re-checking user fields
@@ -160,8 +161,19 @@ const Login: React.FC = () => {
         return;
       }
       
-      // Existing user - redirect to dashboard like email/password login
-      const defaultLandingPath = getDefaultLandingPath(user);
+      let resolvedUser = user;
+      try {
+        const refreshed = await apiService.getCurrentUser();
+        if (refreshed?.user) {
+          resolvedUser = refreshed.user;
+          localStorage.setItem('user', JSON.stringify(resolvedUser));
+        }
+      } catch (refreshError) {
+        console.warn('⚠️ [Login] Failed to refresh OAuth user before redirect:', refreshError);
+      }
+
+      // Existing user - redirect to the same default landing as email/password login
+      const defaultLandingPath = getDefaultLandingPath(resolvedUser);
       const from = location.state?.from?.pathname || (safeRedirect === '/dashboard' ? defaultLandingPath : safeRedirect);
       console.log('✅ [Login] Existing user, redirecting to:', from);
       window.location.href = from;

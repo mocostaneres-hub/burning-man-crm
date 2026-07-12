@@ -38,6 +38,30 @@ const forgotPasswordLimiter = rateLimit({
 const normalizeInviteRecipient = (value) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
+const ACTIVE_ROSTER_ENTRY_STATUSES = new Set(['approved', 'active']);
+const REMOVED_MEMBER_STATUSES = new Set(['inactive', 'rejected', 'suspended', 'withdrawn']);
+
+const getIdString = (value) => {
+  if (!value) return '';
+  if (value._id) return value._id.toString();
+  return value.toString ? value.toString() : '';
+};
+
+const isLeadRosterEntry = (entry, memberRecord) => {
+  const rosterRole = String(entry?.role || '').toLowerCase();
+  const memberRole = String(memberRecord?.role || '').toLowerCase();
+  return (
+    entry?.isCampLead === true ||
+    entry?.isEventsLead === true ||
+    rosterRole === 'lead' ||
+    rosterRole === 'admin' ||
+    memberRole === 'camp-lead' ||
+    memberRole === 'camp_lead' ||
+    memberRole === 'project-lead' ||
+    memberRole === 'project_lead'
+  );
+};
+
 // Generate JWT token with rich claims
 const generateToken = (user) => {
   // Support both user object and userId for backward compatibility
@@ -380,6 +404,8 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
     
     const delegatedCampAccess = {};
+    let isRosterMember = false;
+    let memberRecords = [];
 
     // Check if user has delegated camp access in any roster.
     // Camp Leads and Events Leads are personal/member accounts with scoped
@@ -388,23 +414,26 @@ router.get('/me', authenticateToken, async (req, res) => {
       const Member = require('../models/Member');
       const Roster = require('../models/Roster');
       
-      // CRITICAL FIX: Roster stores Member IDs, not User IDs
-      // Need to find the Member record first, then query roster
-      const member = await Member.findOne({ user: user._id });
+      // CRITICAL FIX: Roster stores Member IDs, not User IDs.
+      // A user can have more than one member record across camps, so resolve
+      // all linked records before checking active roster entries.
+      memberRecords = await Member.find({ user: user._id }).select('_id role status isShiftsOnly');
       
-      if (member) {
-        console.log('🔍 [Auth /me] Found member record:', member._id);
+      if (memberRecords.length > 0) {
+        console.log('🔍 [Auth /me] Found member records:', memberRecords.map((member) => member._id));
         
-        // Find all active rosters where this MEMBER has delegated camp access.
+        const memberIds = memberRecords.map((member) => member._id);
+        const memberById = new Map(memberRecords.map((member) => [member._id.toString(), member]));
+
+        // Find all active rosters where this user has an approved roster entry.
         const rosters = await Roster.find({
           'members': {
             $elemMatch: {
-              member: member._id, // ← FIXED: Use member._id, not user._id
+              member: { $in: memberIds },
               $or: [
-                { isCampLead: true },
-                { isEventsLead: true }
-              ],
-              status: 'approved'
+                { status: { $in: Array.from(ACTIVE_ROSTER_ENTRY_STATUSES) } },
+                { status: { $exists: false } }
+              ]
             }
           },
           isActive: true
@@ -413,13 +442,17 @@ router.get('/me', authenticateToken, async (req, res) => {
         if (rosters && rosters.length > 0) {
           for (const roster of rosters) {
             const matchingEntry = roster.members?.find((entry) => {
-              const entryMemberId = entry?.member?._id
-                ? entry.member._id.toString()
-                : entry?.member?.toString?.();
-              return entryMemberId === member._id.toString() && entry.status === 'approved';
+              const entryMemberId = getIdString(entry?.member);
+              const rosterStatus = String(entry?.status || 'approved').toLowerCase();
+              return memberById.has(entryMemberId) && ACTIVE_ROSTER_ENTRY_STATUSES.has(rosterStatus);
             });
 
             if (!matchingEntry || !roster.camp) continue;
+
+            const matchingMemberId = getIdString(matchingEntry.member);
+            const matchingMember = memberById.get(matchingMemberId);
+            const memberStatus = String(matchingMember?.status || '').toLowerCase();
+            const hasRemovedMemberStatus = REMOVED_MEMBER_STATUSES.has(memberStatus);
 
             if (matchingEntry.isCampLead === true && !delegatedCampAccess.isCampLead) {
               console.log('✅ [Auth /me] User is Camp Lead for camp:', roster.camp.name);
@@ -440,9 +473,13 @@ router.get('/me', authenticateToken, async (req, res) => {
                 eventsLeadCampName: roster.camp.name
               });
             }
+
+            if (!hasRemovedMemberStatus && !isLeadRosterEntry(matchingEntry, matchingMember)) {
+              isRosterMember = true;
+            }
           }
         } else {
-          console.log('ℹ️ [Auth /me] Member found but no delegated camp access');
+          console.log('ℹ️ [Auth /me] Member found but no active roster access');
         }
       } else {
         console.log('ℹ️ [Auth /me] No member record found for user');
@@ -453,12 +490,20 @@ router.get('/me', authenticateToken, async (req, res) => {
     let isShiftsOnlyMember = false;
     if (user.accountType === 'personal') {
       const Member = require('../models/Member');
-      const shiftsOnlyMember = await Member.findOne({
-        user: user._id,
-        isShiftsOnly: true,
-        status: { $in: ['roster_only', 'invited', 'active'] }
-      }).select('_id status isShiftsOnly');
-      isShiftsOnlyMember = !!shiftsOnlyMember;
+      const shiftsOnlyStatuses = ['roster_only', 'invited', 'active'];
+      isShiftsOnlyMember = memberRecords.some((member) => {
+        const status = String(member.status || '').toLowerCase();
+        return member.isShiftsOnly === true && shiftsOnlyStatuses.includes(status);
+      });
+
+      if (!isShiftsOnlyMember) {
+        const shiftsOnlyMember = await Member.findOne({
+          user: user._id,
+          isShiftsOnly: true,
+          status: { $in: shiftsOnlyStatuses }
+        }).select('_id status isShiftsOnly');
+        isShiftsOnlyMember = !!shiftsOnlyMember;
+      }
     }
 
     const userObj = user.toObject ? user.toObject() : { ...user };
@@ -467,6 +512,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         ...userObj,
         ...delegatedCampAccess,
         isSystemAdmin,
+        isRosterMember,
         isShiftsOnlyMember,
         canApplyToCampsNow: !isShiftsOnlyMember || now >= applyCutoffDateUtc
       }

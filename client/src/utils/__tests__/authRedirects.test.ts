@@ -52,4 +52,22 @@ describe('authRedirects', () => {
     expect(getDefaultLandingPath({ _id: 'member-3', accountType: 'personal' } as any)).toBe('/dashboard');
     expect(getCampRosterPath(null)).toBe('/dashboard');
   });
+
+  it('routes non-lead roster members to their to-dos by default', () => {
+    expect(getDefaultLandingPath({
+      _id: 'member-4',
+      accountType: 'personal',
+      isRosterMember: true
+    } as any)).toBe('/tasks');
+  });
+
+  it('keeps delegated lead routing ahead of roster-member to-dos', () => {
+    expect(getDefaultLandingPath({
+      _id: 'member-5',
+      accountType: 'personal',
+      isRosterMember: true,
+      isEventsLead: true,
+      eventsLeadCampId: 'camp-5'
+    } as any)).toBe('/camp/camp-5/roster');
+  });
 });

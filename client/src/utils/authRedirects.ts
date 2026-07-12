@@ -2,7 +2,14 @@ import type { User } from '../types';
 
 type LandingAccount = Pick<
   User,
-  '_id' | 'accountType' | 'campId' | 'isCampLead' | 'campLeadCampId' | 'isEventsLead' | 'eventsLeadCampId'
+  | '_id'
+  | 'accountType'
+  | 'campId'
+  | 'isCampLead'
+  | 'campLeadCampId'
+  | 'isEventsLead'
+  | 'eventsLeadCampId'
+  | 'isRosterMember'
 >;
 
 const toIdString = (value: unknown): string => {
@@ -37,6 +44,10 @@ export const getDefaultLandingPath = (account?: Partial<LandingAccount> | null):
     account?.eventsLeadCampId
   ) {
     return getCampRosterPath(account);
+  }
+
+  if (account?.accountType === 'personal' && account?.isRosterMember) {
+    return '/tasks';
   }
 
   return '/dashboard';

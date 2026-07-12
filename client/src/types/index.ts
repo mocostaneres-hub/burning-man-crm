@@ -68,6 +68,7 @@ export interface User {
   eventsLeadCampId?: string;
   eventsLeadCampSlug?: string;
   eventsLeadCampName?: string;
+  isRosterMember?: boolean;
   isShiftsOnlyMember?: boolean;
   canApplyToCampsNow?: boolean;
   isActive: boolean;
