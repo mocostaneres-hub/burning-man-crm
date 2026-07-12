@@ -68,6 +68,15 @@ const SUPPORTED_BLOCK_TYPES = new Set([
   'unsupported'
 ]);
 
+const NON_ANSWERABLE_BLOCK_TYPES = new Set([
+  'form_title',
+  'description',
+  'section_header',
+  'image_block',
+  'video_block',
+  'unsupported'
+]);
+
 function normalizeLocalId(value, fallback) {
   const raw = String(value || fallback || '')
     .trim()
@@ -136,6 +145,129 @@ function normalizeQuestionInput(question, fallbackOrder) {
       rawName: question?.sourceMeta?.rawName || null
     },
     isSuggestion: question?.isSuggestion === true
+  };
+}
+
+function normalizeQuestionsForSurvey(rawQuestions = []) {
+  const normalized = rawQuestions.map((question, index) => normalizeQuestionInput(question, index));
+  const usedLocalIds = new Set();
+  for (const question of normalized) {
+    const baseLocalId = question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${question.order + 1}`;
+    let nextLocalId = baseLocalId;
+    let suffix = 2;
+    while (usedLocalIds.has(nextLocalId)) {
+      nextLocalId = normalizeLocalId(`${baseLocalId}_${suffix}`, `${baseLocalId}_${suffix}`);
+      suffix += 1;
+    }
+    question.localId = nextLocalId;
+    usedLocalIds.add(nextLocalId);
+  }
+  return normalized;
+}
+
+function getIncomingQuestionId(question) {
+  return toIdString(question?._id || question?.id);
+}
+
+function planSurveyQuestionPersistence(rawQuestions = [], existingQuestions = []) {
+  const normalizedQuestions = normalizeQuestionsForSurvey(rawQuestions);
+  const existingById = new Map();
+  const existingByLocalId = new Map();
+  for (const existingQuestion of existingQuestions || []) {
+    const existingId = toIdString(existingQuestion?._id);
+    if (existingId) existingById.set(existingId, existingQuestion);
+    if (existingQuestion?.localId && !existingByLocalId.has(existingQuestion.localId)) {
+      existingByLocalId.set(existingQuestion.localId, existingQuestion);
+    }
+  }
+
+  const usedExistingIds = new Set();
+  const operations = normalizedQuestions.map((question, index) => {
+    const rawQuestion = rawQuestions[index] || {};
+    const requestedId = getIncomingQuestionId(rawQuestion);
+    let existingQuestion = requestedId ? existingById.get(requestedId) : null;
+    let existingId = toIdString(existingQuestion?._id);
+
+    if ((!existingQuestion || usedExistingIds.has(existingId)) && question.localId) {
+      const localIdMatch = existingByLocalId.get(question.localId);
+      const localIdMatchId = toIdString(localIdMatch?._id);
+      if (localIdMatch && localIdMatchId && !usedExistingIds.has(localIdMatchId)) {
+        existingQuestion = localIdMatch;
+        existingId = localIdMatchId;
+      }
+    }
+
+    if (existingId && usedExistingIds.has(existingId)) {
+      existingId = null;
+    }
+
+    if (existingId) usedExistingIds.add(existingId);
+    return {
+      question,
+      existingId: existingId || null
+    };
+  });
+
+  const deleteIds = (existingQuestions || [])
+    .map((question) => toIdString(question?._id))
+    .filter((questionId) => questionId && !usedExistingIds.has(questionId));
+
+  return { operations, deleteIds };
+}
+
+function isAnswerableSurveyQuestion(question) {
+  return (
+    question &&
+    SUPPORTED_BLOCK_TYPES.has(question.blockType) &&
+    !NON_ANSWERABLE_BLOCK_TYPES.has(question.blockType)
+  );
+}
+
+function remapSurveyResponseAnswers(answers = [], questions = []) {
+  if (!Array.isArray(answers)) return [];
+
+  const currentQuestions = (questions || []).filter(isAnswerableSurveyQuestion);
+  const currentQuestionIds = new Set(
+    currentQuestions.map((question) => toIdString(question._id)).filter(Boolean)
+  );
+  const usedQuestionIds = new Set();
+
+  return answers.map((answer) => {
+    const answerQuestionId = toIdString(answer?.questionId);
+    if (answerQuestionId && currentQuestionIds.has(answerQuestionId)) {
+      usedQuestionIds.add(answerQuestionId);
+      return answer;
+    }
+
+    const fallbackQuestion =
+      currentQuestions.find((question) => {
+        const questionId = toIdString(question._id);
+        return questionId && !usedQuestionIds.has(questionId) && question.blockType === answer?.blockType;
+      }) ||
+      currentQuestions.find((question) => {
+        const questionId = toIdString(question._id);
+        return questionId && !usedQuestionIds.has(questionId);
+      });
+
+    if (!fallbackQuestion) return answer;
+
+    const fallbackQuestionId = toIdString(fallbackQuestion._id);
+    usedQuestionIds.add(fallbackQuestionId);
+    return {
+      ...answer,
+      legacyQuestionId: answer?.questionId || null,
+      questionId: fallbackQuestion._id,
+      blockType: answer?.blockType || fallbackQuestion.blockType
+    };
+  });
+}
+
+function buildSurveyResponsePayload(response, questions) {
+  if (!response) return response;
+  const responsePayload = response.toObject ? response.toObject() : response;
+  return {
+    ...responsePayload,
+    answers: remapSurveyResponseAnswers(responsePayload.answers || [], questions)
   };
 }
 
@@ -286,14 +418,13 @@ function formatSurveyAnswerValueForEmail(value, question) {
 
 function buildSurveyResponseAnswerRows({ answers, questions }) {
   const answerByQuestionId = new Map();
-  for (const answer of Array.isArray(answers) ? answers : []) {
+  for (const answer of remapSurveyResponseAnswers(answers, questions)) {
     const questionId = toIdString(answer?.questionId);
     if (questionId) answerByQuestionId.set(questionId, answer);
   }
 
   return (questions || [])
-    .filter((question) => SUPPORTED_BLOCK_TYPES.has(question.blockType))
-    .filter((question) => !['form_title', 'description', 'section_header', 'image_block', 'video_block', 'unsupported'].includes(question.blockType))
+    .filter(isAnswerableSurveyQuestion)
     .map((question) => {
       const answer = answerByQuestionId.get(toIdString(question._id));
       return {
@@ -446,27 +577,53 @@ async function sendSurveyResponseCopyEmails(emailContext) {
 }
 
 async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = null } = {}) {
-  const normalized = rawQuestions.map((question, index) => normalizeQuestionInput(question, index));
-  const usedLocalIds = new Set();
-  for (const question of normalized) {
-    const baseLocalId = question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${question.order + 1}`;
-    let nextLocalId = baseLocalId;
-    let suffix = 2;
-    while (usedLocalIds.has(nextLocalId)) {
-      nextLocalId = normalizeLocalId(`${baseLocalId}_${suffix}`, `${baseLocalId}_${suffix}`);
-      suffix += 1;
-    }
-    question.localId = nextLocalId;
-    usedLocalIds.add(nextLocalId);
+  const existingQuestionQuery = SurveyQuestion.find({ surveyId });
+  if (session) existingQuestionQuery.session(session);
+  const existingQuestions = await existingQuestionQuery.lean();
+  const { operations, deleteIds } = planSurveyQuestionPersistence(rawQuestions, existingQuestions);
+
+  if (deleteIds.length > 0) {
+    const deleteQuery = SurveyQuestion.deleteMany({ _id: { $in: deleteIds }, surveyId });
+    if (session) deleteQuery.session(session);
+    await deleteQuery;
   }
-  await SurveyQuestion.deleteMany({ surveyId }).session(session || null);
-  if (!normalized.length) return [];
-  const docs = normalized.map((question) => ({
-    surveyId,
-    ...question
-  }));
-  const created = await SurveyQuestion.insertMany(docs, { session: session || undefined });
-  return created;
+
+  const updates = operations.filter((operation) => operation.existingId);
+  if (updates.length > 0) {
+    await SurveyQuestion.bulkWrite(
+      updates.map((operation, index) => ({
+        updateOne: {
+          filter: { _id: operation.existingId, surveyId },
+          update: { $set: { order: -1 * (index + 1) } }
+        }
+      })),
+      { session: session || undefined }
+    );
+
+    await SurveyQuestion.bulkWrite(
+      updates.map((operation) => ({
+        updateOne: {
+          filter: { _id: operation.existingId, surveyId },
+          update: { $set: operation.question }
+        }
+      })),
+      { session: session || undefined }
+    );
+  }
+
+  const inserts = operations
+    .filter((operation) => !operation.existingId)
+    .map((operation) => ({
+      surveyId,
+      ...operation.question
+    }));
+  if (inserts.length > 0) {
+    await SurveyQuestion.insertMany(inserts, { session: session || undefined });
+  }
+
+  const savedQuestionQuery = SurveyQuestion.find({ surveyId }).sort({ order: 1 });
+  if (session) savedQuestionQuery.session(session);
+  return savedQuestionQuery.lean();
 }
 
 async function deleteSurveyCascade(surveyId, { session = null } = {}) {
@@ -1123,7 +1280,7 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
     };
 
     if (coveredResponse) {
-      responsePayload.viewer.coveredResponse = coveredResponse;
+      responsePayload.viewer.coveredResponse = buildSurveyResponsePayload(coveredResponse, questions);
     }
 
     if (manager) {
@@ -1430,9 +1587,12 @@ router.get('/:surveyId/responses', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
-    const responses = await SurveyResponse.find({ surveyId: survey._id })
-      .sort({ submittedAt: -1, createdAt: -1 })
-      .lean();
+    const [responses, questions] = await Promise.all([
+      SurveyResponse.find({ surveyId: survey._id })
+        .sort({ submittedAt: -1, createdAt: -1 })
+        .lean(),
+      SurveyQuestion.find({ surveyId: survey._id }).sort({ order: 1 }).lean()
+    ]);
 
     const memberIds = dedupeIdList(
       responses.flatMap((response) => [
@@ -1450,8 +1610,9 @@ router.get('/:surveyId/responses', authenticateToken, async (req, res) => {
     const memberById = new Map(memberDocs.map((member) => [toIdString(member._id), member]));
 
     const payload = responses.map((response) => {
-      const submitter = memberById.get(toIdString(response.submittedByMemberId));
-      const coveredMembers = dedupeIdList(response.coveredMemberIds).map((memberId) => {
+      const responsePayload = buildSurveyResponsePayload(response, questions);
+      const submitter = memberById.get(toIdString(responsePayload.submittedByMemberId));
+      const coveredMembers = dedupeIdList(responsePayload.coveredMemberIds).map((memberId) => {
         const memberDoc = memberById.get(memberId);
         return {
           memberId,
@@ -1459,7 +1620,7 @@ router.get('/:surveyId/responses', authenticateToken, async (req, res) => {
         };
       });
       return {
-        ...response,
+        ...responsePayload,
         submitterName: getMemberDisplayName(submitter, userById),
         coveredMembers
       };
@@ -1814,5 +1975,11 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
     res.status(500).json({ message: 'Server error editing survey response' });
   }
 });
+
+router.__test = {
+  normalizeQuestionsForSurvey,
+  planSurveyQuestionPersistence,
+  remapSurveyResponseAnswers
+};
 
 module.exports = router;
