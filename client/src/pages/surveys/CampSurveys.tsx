@@ -225,13 +225,6 @@ const CampSurveys: React.FC = () => {
   const [closingSurveyId, setClosingSurveyId] = useState<string | null>(null);
   const [deletingSurveyId, setDeletingSurveyId] = useState<string | null>(null);
 
-  const [responsesModalOpen, setResponsesModalOpen] = useState(false);
-  const [activeResponsesSurvey, setActiveResponsesSurvey] = useState<Survey | null>(null);
-  const [responses, setResponses] = useState<any[]>([]);
-  const [editingResponseId, setEditingResponseId] = useState<string | null>(null);
-  const [editingAnswersJson, setEditingAnswersJson] = useState<string>('');
-  const [savingResponse, setSavingResponse] = useState(false);
-
   const canImportFromPublicLink = useMemo(
     () => user?.accountType === 'camp' || (user?.accountType === 'admin' && !!user?.campId) || user?.isEventsLead === true,
     [user?.accountType, user?.campId, user?.isEventsLead]
@@ -723,44 +716,6 @@ const CampSurveys: React.FC = () => {
     }
   };
 
-  const openResponsesModal = async (survey: Survey) => {
-    try {
-      setActiveResponsesSurvey(survey);
-      setResponsesModalOpen(true);
-      setEditingResponseId(null);
-      setEditingAnswersJson('');
-      const response = await api.getSurveyResponses(survey._id);
-      setResponses(response.responses || []);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to load survey responses');
-    }
-  };
-
-  const startEditResponse = (response: any) => {
-    setEditingResponseId(response._id);
-    setEditingAnswersJson(JSON.stringify(response.answers || [], null, 2));
-  };
-
-  const saveEditedResponse = async () => {
-    if (!activeResponsesSurvey || !editingResponseId) return;
-    try {
-      setSavingResponse(true);
-      const parsedAnswers = JSON.parse(editingAnswersJson);
-      await api.editSurveyResponse(activeResponsesSurvey._id, editingResponseId, {
-        answers: parsedAnswers,
-        editReason: 'Updated from camp survey manager'
-      });
-      const response = await api.getSurveyResponses(activeResponsesSurvey._id);
-      setResponses(response.responses || []);
-      setEditingResponseId(null);
-      setEditingAnswersJson('');
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to update response');
-    } finally {
-      setSavingResponse(false);
-    }
-  };
-
   if (!canManageCamp) {
     return (
       <div className="max-w-6xl mx-auto py-8 px-4">
@@ -929,8 +884,8 @@ const CampSurveys: React.FC = () => {
                           <Eye size={14} />
                           Open View
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => openResponsesModal(survey)}>
-                          Review Responses
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${survey._id}/responses`)}>
+                          View Responses
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
                           Edit Survey
@@ -1233,62 +1188,6 @@ const CampSurveys: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal
-        isOpen={responsesModalOpen}
-        onClose={() => {
-          setResponsesModalOpen(false);
-          setEditingResponseId(null);
-          setEditingAnswersJson('');
-          setResponses([]);
-          setActiveResponsesSurvey(null);
-        }}
-        title={activeResponsesSurvey ? `Responses · ${activeResponsesSurvey.title}` : 'Responses'}
-        size="xl"
-      >
-        <div className="space-y-3">
-          {responses.length === 0 ? (
-            <p className="text-sm text-gray-500">No responses submitted yet.</p>
-          ) : (
-            responses.map((response) => (
-              <div key={response._id} className="border border-gray-200 rounded p-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div>
-                    <p className="font-medium text-sm">{response.submitterName || 'Responder'}</p>
-                    <p className="text-xs text-gray-500">
-                      Covered: {(response.coveredMembers || []).map((member: any) => member.name).join(', ') || 'None'}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => startEditResponse(response)}>
-                    Edit Response
-                  </Button>
-                </div>
-                <div className="text-xs text-gray-600">
-                  {(response.answers || []).length} answer field(s)
-                </div>
-              </div>
-            ))
-          )}
-
-          {editingResponseId && (
-            <div className="border border-blue-200 bg-blue-50 rounded p-3 space-y-2">
-              <p className="text-sm font-medium text-blue-900">Editing response answers (JSON)</p>
-              <textarea
-                value={editingAnswersJson}
-                onChange={(e) => setEditingAnswersJson(e.target.value)}
-                className="w-full min-h-[180px] border border-blue-200 rounded px-2 py-2 text-xs font-mono"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditingResponseId(null)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" size="sm" onClick={saveEditedResponse} disabled={savingResponse}>
-                  {savingResponse ? 'Saving...' : 'Save Response'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 };

@@ -45,6 +45,7 @@ import TaskDetailsPage from './pages/camps/TaskDetailsPage';
 import MyTasks from './pages/tasks/MyTasks';
 import CampSurveys from './pages/surveys/CampSurveys';
 import SurveyRespond from './pages/surveys/SurveyRespond';
+import SurveyResponses from './pages/surveys/SurveyResponses';
 import SelectRole from './pages/onboarding/SelectRole';
 import ShiftsOnlyOnboarding from './pages/onboarding/ShiftsOnlyOnboarding';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -350,6 +351,11 @@ const AppShell: React.FC = () => {
             <Route path="/tasks" element={
               <ProtectedRoute requirePersonalAccount>
                 <MyTasks />
+              </ProtectedRoute>
+            } />
+            <Route path="/surveys/:surveyId/responses" element={
+              <ProtectedRoute requireCampAccount allowEventsLead>
+                <SurveyResponses />
               </ProtectedRoute>
             } />
             <Route path="/surveys/:surveyId" element={
