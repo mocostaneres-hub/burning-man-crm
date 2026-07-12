@@ -188,6 +188,20 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/burning-m
     console.error('⚠️  [Startup] Shift assignmentMode backfill failed:', modeBackfillError.message);
   }
 
+  // Events Leads should not see application-submitted notifications.
+  // This idempotent cleanup removes stale notifications from accounts that
+  // already had Events Lead access before the permission boundary changed.
+  try {
+    const { clearApplicationSubmittedNotificationsForEventsLeadUsers } = require('./services/notificationService');
+    const result = await clearApplicationSubmittedNotificationsForEventsLeadUsers();
+    const deletedCount = result.deletedCount || result.n || 0;
+    if (deletedCount > 0) {
+      console.log(`🧹 [Startup] Cleared ${deletedCount} application notifications from Events Lead accounts`);
+    }
+  } catch (notificationCleanupError) {
+    console.error('⚠️  [Startup] Events Lead notification cleanup failed:', notificationCleanupError.message);
+  }
+
   // Start reminder worker (hourly cadence).
   try {
     const { startOnboardingReminderWorker } = require('./startup/startOnboardingReminderWorker');

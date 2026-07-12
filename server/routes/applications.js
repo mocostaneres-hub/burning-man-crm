@@ -330,6 +330,7 @@ router.post('/apply', authenticateToken, [
 
       const activeRoster = await db.findActiveRoster({ camp: camp._id });
       for (const memberEntry of activeRoster?.members || []) {
+        if (memberEntry?.isEventsLead === true) continue;
         if (memberEntry?.isCampLead !== true || memberEntry?.status !== 'approved' || !memberEntry?.member?.user) continue;
         recipientIds.add(memberEntry.member.user._id?.toString?.() || memberEntry.member.user.toString());
       }

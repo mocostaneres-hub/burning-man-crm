@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
+const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 
 const useMongo = !!process.env.MONGODB_URI || !!process.env.MONGO_URI;
 
@@ -66,6 +67,101 @@ async function createBulkNotifications(recipients, payload) {
   return Notification.insertMany(docs);
 }
 
+async function isEventsLeadUser(recipientId) {
+  if (!useMongo) return false;
+
+  const recipient = toObjectId(recipientId);
+  if (!recipient) return false;
+
+  const Member = require('../models/Member');
+  const Roster = require('../models/Roster');
+
+  const member = await Member.findOne({ user: recipient }).select('_id').lean();
+  if (!member?._id) return false;
+
+  const roster = await Roster.exists({
+    isActive: true,
+    isArchived: { $ne: true },
+    members: {
+      $elemMatch: {
+        member: member._id,
+        isEventsLead: true,
+        status: 'approved'
+      }
+    }
+  });
+
+  return Boolean(roster);
+}
+
+async function clearApplicationSubmittedNotificationsForEventsLeadUser(recipientId) {
+  if (!useMongo) return { deletedCount: 0 };
+
+  const recipient = toObjectId(recipientId);
+  if (!recipient) return { deletedCount: 0 };
+
+  const hasEventsLeadAccess = await isEventsLeadUser(recipient);
+  if (!hasEventsLeadAccess) return { deletedCount: 0 };
+
+  return Notification.deleteMany({
+    recipient,
+    type: NOTIFICATION_TYPES.APPLICATION_SUBMITTED
+  });
+}
+
+async function resolveEventsLeadUserIds() {
+  if (!useMongo) return [];
+
+  const Roster = require('../models/Roster');
+  const rosters = await Roster.find({
+    isActive: true,
+    isArchived: { $ne: true },
+    members: {
+      $elemMatch: {
+        isEventsLead: true,
+        status: 'approved'
+      }
+    }
+  })
+    .select('members.member members.isEventsLead members.status')
+    .populate({
+      path: 'members.member',
+      select: 'user'
+    })
+    .lean();
+
+  const userIds = new Set();
+  for (const roster of rosters || []) {
+    for (const entry of roster.members || []) {
+      if (entry?.isEventsLead !== true || entry?.status !== 'approved') continue;
+      const userId = entry?.member?.user;
+      if (userId) userIds.add(userId.toString());
+    }
+  }
+
+  return Array.from(userIds);
+}
+
+async function clearApplicationSubmittedNotificationsForEventsLeadUsers() {
+  if (!useMongo) return { deletedCount: 0, eventsLeadUserCount: 0 };
+
+  const userIds = await resolveEventsLeadUserIds();
+  if (userIds.length === 0) {
+    return { deletedCount: 0, eventsLeadUserCount: 0 };
+  }
+
+  const recipients = userIds.map(toObjectId).filter(Boolean);
+  const result = await Notification.deleteMany({
+    recipient: { $in: recipients },
+    type: NOTIFICATION_TYPES.APPLICATION_SUBMITTED
+  });
+
+  return {
+    ...result,
+    eventsLeadUserCount: recipients.length
+  };
+}
+
 async function getUserNotifications(recipientId, opts = {}) {
   if (!useMongo) {
     return { notifications: [], unreadCount: 0, page: 1, limit: 20, total: 0 };
@@ -76,6 +172,8 @@ async function getUserNotifications(recipientId, opts = {}) {
   const skip = (page - 1) * limit;
 
   const recipient = toObjectId(recipientId);
+  await clearApplicationSubmittedNotificationsForEventsLeadUser(recipient);
+
   const query = { recipient };
   if (opts.unreadOnly === true) {
     query.readAt = null;
@@ -130,5 +228,7 @@ module.exports = {
   createBulkNotifications,
   getUserNotifications,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  clearApplicationSubmittedNotificationsForEventsLeadUser,
+  clearApplicationSubmittedNotificationsForEventsLeadUsers
 };

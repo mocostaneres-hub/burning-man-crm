@@ -13,6 +13,7 @@ const { renderTemplate } = require('../utils/renderTemplate');
 const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 const { getCampMealPlanTemplate, SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES } = require('../utils/mealPlanTemplates');
 const { sendDuesEmail } = require('../services/emailService');
+const { clearApplicationSubmittedNotificationsForEventsLeadUser } = require('../services/notificationService');
 const {
   hasInvalidFoodPreference,
   normalizeFoodPreferences
@@ -3489,6 +3490,12 @@ router.post('/member/:memberId/grant-events-lead', authenticateToken, async (req
     activeRoster.markModified('members');
     activeRoster.updatedAt = new Date();
     await activeRoster.save();
+
+    try {
+      await clearApplicationSubmittedNotificationsForEventsLeadUser(user._id);
+    } catch (notificationCleanupError) {
+      console.error('⚠️ [GRANT EVENTS LEAD] Failed to clear application notifications:', notificationCleanupError);
+    }
 
     await recordActivity('MEMBER', user._id, req.user._id, 'EVENTS_LEAD_GRANTED', {
       memberId,
