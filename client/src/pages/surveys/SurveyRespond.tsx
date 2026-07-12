@@ -52,6 +52,24 @@ const sanitizeRichTextHtml = (value: string): string =>
     .replace(/\son\w+='[^']*'/gi, '')
     .replace(/javascript:/gi, '');
 
+const buildSelfPeopleAnswers = (
+  surveyQuestions: SurveyQuestion[],
+  submitterMember: EligibleMember | undefined
+): Record<string, SurveyAnswerValue> => {
+  if (!submitterMember) return {};
+  return surveyQuestions
+    .filter((question) => question.blockType === 'people')
+    .reduce<Record<string, SurveyAnswerValue>>((nextAnswers, question) => {
+      nextAnswers[getQuestionKey(question)] = [
+        {
+          memberId: submitterMember.memberId,
+          name: submitterMember.name
+        }
+      ];
+      return nextAnswers;
+    }, {});
+};
+
 const SurveyRespond: React.FC = () => {
   const navigate = useNavigate();
   const { surveyId } = useParams<{ surveyId: string }>();
@@ -80,15 +98,15 @@ const SurveyRespond: React.FC = () => {
       setLoading(true);
       setError(null);
       const detail = await api.getSurveyDetails(surveyId);
+      const nextQuestions = (detail.questions || []).map((question: SurveyQuestion, index: number) => ({
+        ...question,
+        order: index,
+        localId: question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${index + 1}`
+      }));
       setSurvey(detail.survey);
-      setQuestions(
-        (detail.questions || []).map((question: SurveyQuestion, index: number) => ({
-          ...question,
-          order: index,
-          localId: question.localId || `${question.blockType === 'section_header' ? 'section' : 'question'}_${index + 1}`
-        }))
-      );
+      setQuestions(nextQuestions);
       setViewer(detail.viewer || {});
+      setAnswersByQuestion({});
       setCurrentSectionId('');
       setSectionHistory([]);
 
@@ -98,6 +116,8 @@ const SurveyRespond: React.FC = () => {
           setEligibleMembers(eligible.eligibleMembers || []);
           const selfId = eligible.submitterMemberId;
           setSelectedMemberIds(selfId ? [selfId] : []);
+          const submitterMember = (eligible.eligibleMembers || []).find((member: EligibleMember) => member.memberId === selfId);
+          setAnswersByQuestion(buildSelfPeopleAnswers(nextQuestions, submitterMember));
         } catch (_eligibleError) {
           if (isViewMode && detail.survey?.campId) {
             const membersResponse = await api.getCampMembers(detail.survey.campId);
@@ -118,6 +138,7 @@ const SurveyRespond: React.FC = () => {
               .filter(Boolean) as EligibleMember[];
             setEligibleMembers(previewMembers);
             setSelectedMemberIds([]);
+            setAnswersByQuestion({});
           }
         }
       }
@@ -391,7 +412,14 @@ const SurveyRespond: React.FC = () => {
     const labelClassName = 'block text-sm font-medium text-custom-text mb-1';
     const renderQuestionLabel = () => (
       <>
-        <label className={labelClassName}>{question.prompt}</label>
+        <label className={labelClassName}>
+          {question.prompt}
+          {question.required && (
+            <span className="ml-2 align-middle text-xs font-semibold text-red-600">
+              Required
+            </span>
+          )}
+        </label>
         {question.helpText && (
           <div
             className="text-xs text-custom-text-secondary mb-2"

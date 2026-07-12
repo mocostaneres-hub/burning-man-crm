@@ -201,6 +201,8 @@ const CampSurveys: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [autosavingDraft, setAutosavingDraft] = useState(false);
   const [lastAutosavedAt, setLastAutosavedAt] = useState<Date | null>(null);
+  const [draggingQuestionIndex, setDraggingQuestionIndex] = useState<number | null>(null);
+  const [dragOverQuestionIndex, setDragOverQuestionIndex] = useState<number | null>(null);
   const editorSnapshotRef = useRef<SurveyDraftSnapshot>({
     campId: '',
     editingSurveyId: null,
@@ -355,6 +357,8 @@ const CampSurveys: React.FC = () => {
     setImportWarnings([]);
     setLastAutosavedAt(null);
     setAutosavingDraft(false);
+    setDraggingQuestionIndex(null);
+    setDragOverQuestionIndex(null);
   };
 
   const openCreateModal = () => {
@@ -419,6 +423,37 @@ const CampSurveys: React.FC = () => {
       next.splice(toIndex, 0, moved);
       return next.map((question, index) => ({ ...question, order: index }));
     });
+  };
+
+  const startQuestionDrag = (event: React.DragEvent, questionIndex: number) => {
+    event.dataTransfer.setData('application/x-question-index', String(questionIndex));
+    event.dataTransfer.effectAllowed = 'move';
+    setDraggingQuestionIndex(questionIndex);
+    setDragOverQuestionIndex(questionIndex);
+  };
+
+  const handleQuestionDragOver = (event: React.DragEvent, questionIndex: number) => {
+    if (!Array.from(event.dataTransfer.types).includes('application/x-question-index')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverQuestionIndex(questionIndex);
+  };
+
+  const handleQuestionDrop = (event: React.DragEvent, questionIndex: number) => {
+    const fromIndexRaw = event.dataTransfer.getData('application/x-question-index');
+    if (!fromIndexRaw) return;
+    event.preventDefault();
+    const fromIndex = Number(fromIndexRaw);
+    if (Number.isFinite(fromIndex)) {
+      reorderQuestions(fromIndex, questionIndex);
+    }
+    setDraggingQuestionIndex(null);
+    setDragOverQuestionIndex(null);
+  };
+
+  const endQuestionDrag = () => {
+    setDraggingQuestionIndex(null);
+    setDragOverQuestionIndex(null);
   };
 
   const removeQuestion = (index: number) => {
@@ -963,26 +998,29 @@ const CampSurveys: React.FC = () => {
               </div>
             </div>
             {questions.map((question, index) => (
-              <div key={`question-${index}`} className="border border-gray-200 rounded p-3 space-y-2">
+              <div
+                key={question._id || question.localId || `question-${index}`}
+                className={`border rounded p-3 space-y-2 transition-colors ${
+                  dragOverQuestionIndex === index && draggingQuestionIndex !== index
+                    ? 'border-blue-400 bg-blue-50/40'
+                    : 'border-gray-200'
+                }`}
+                onDragOver={(event) => handleQuestionDragOver(event, index)}
+                onDrop={(event) => handleQuestionDrop(event, index)}
+              >
                 <div
                   className="flex justify-between items-center cursor-grab active:cursor-grabbing"
                   draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('application/x-question-index', String(index));
-                    event.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const fromIndexRaw = event.dataTransfer.getData('application/x-question-index');
-                    const fromIndex = Number(fromIndexRaw);
-                    if (Number.isFinite(fromIndex)) {
-                      reorderQuestions(fromIndex, index);
-                    }
-                  }}
+                  onDragStart={(event) => startQuestionDrag(event, index)}
+                  onDragEnd={endQuestionDrag}
                 >
                   <p className="text-xs font-semibold text-gray-600">
                     {question.blockType === 'section_header' ? 'Section' : 'Question'} #{index + 1}{' '}
+                    {question.required && question.blockType !== 'section_header' && (
+                      <span className="ml-1 rounded-full bg-red-50 px-2 py-0.5 text-red-700 border border-red-200">
+                        Required
+                      </span>
+                    )}{' '}
                     <span className="text-gray-400 ml-1">(drag to reorder)</span>
                   </p>
                   <span className="text-gray-400 text-sm">::</span>
@@ -991,6 +1029,9 @@ const CampSurveys: React.FC = () => {
                   <div className="md:col-span-2">
                     <label className="block text-xs text-gray-600 mb-1">
                       {question.blockType === 'section_header' ? 'Section title' : 'Prompt'}
+                      {question.required && question.blockType !== 'section_header' && (
+                        <span className="ml-2 font-semibold text-red-600">Required</span>
+                      )}
                     </label>
                     <input
                       value={question.prompt}
