@@ -21,6 +21,21 @@ type PeopleAnswerValue = {
 
 type SurveyAnswerValue = string | number | string[] | PeopleAnswerValue[] | null;
 
+type SurveyResponseAnswer = {
+  questionId?: string | { _id?: string };
+  blockType?: SurveyQuestion['blockType'];
+  value?: unknown;
+  valueType?: string;
+};
+
+type CoveredSurveyResponse = {
+  _id?: string;
+  answers?: SurveyResponseAnswer[];
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type SurveySection = {
   id: string;
   title: string;
@@ -51,6 +66,81 @@ const sanitizeRichTextHtml = (value: string): string =>
     .replace(/\son\w+="[^"]*"/gi, '')
     .replace(/\son\w+='[^']*'/gi, '')
     .replace(/javascript:/gi, '');
+
+const stripHtmlToText = (value: string): string =>
+  sanitizeRichTextHtml(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getAnswerQuestionKey = (answer: SurveyResponseAnswer): string => {
+  const questionId = answer.questionId;
+  if (!questionId) return '';
+  if (typeof questionId === 'object') return String(questionId._id || '');
+  return String(questionId);
+};
+
+const formatObjectValue = (value: Record<string, unknown>): string => {
+  const preferred = value.name || value.label || value.title || value.value;
+  if (preferred !== undefined && preferred !== null && typeof preferred !== 'object') {
+    return String(preferred);
+  }
+  return JSON.stringify(value);
+};
+
+const formatPeopleValue = (value: unknown): string => {
+  const formatPerson = (item: unknown): string => {
+    if (!item) return '';
+    if (typeof item === 'string') return item;
+    if (typeof item === 'object') {
+      const person = item as Record<string, unknown>;
+      const name = person.name || person.label || person.title;
+      return name ? String(name) : 'Selected person';
+    }
+    return String(item);
+  };
+
+  if (Array.isArray(value)) {
+    const names = value.map(formatPerson).filter(Boolean);
+    return names.length > 0 ? names.join(', ') : 'No answer';
+  }
+
+  const person = formatPerson(value);
+  return person || 'No answer';
+};
+
+const formatAnswerValue = (value: unknown, blockType?: SurveyQuestion['blockType']): string => {
+  if (blockType === 'people') return formatPeopleValue(value);
+  if (value === null || value === undefined || value === '') return 'No answer';
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'No answer';
+    return value
+      .map((item) => {
+        if (item === null || item === undefined || item === '') return '';
+        if (typeof item === 'object') return formatObjectValue(item as Record<string, unknown>);
+        return String(item);
+      })
+      .filter(Boolean)
+      .join(', ') || 'No answer';
+  }
+
+  if (typeof value === 'object') {
+    return formatObjectValue(value as Record<string, unknown>);
+  }
+
+  return String(value);
+};
+
+const formatDateTime = (value?: string | null): string => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString([], {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+};
 
 const buildSelfPeopleAnswers = (
   surveyQuestions: SurveyQuestion[],
@@ -219,6 +309,22 @@ const SurveyRespond: React.FC = () => {
     () => sections.find((section) => section.id === currentSectionId) || sections[0],
     [currentSectionId, sections]
   );
+
+  const coveredResponse = viewer?.coveredResponse as CoveredSurveyResponse | undefined;
+  const coveredAnswerByQuestionKey = useMemo(() => {
+    const next = new Map<string, SurveyResponseAnswer>();
+    (coveredResponse?.answers || []).forEach((answer) => {
+      const answerKey = getAnswerQuestionKey(answer);
+      if (answerKey) next.set(answerKey, answer);
+    });
+    return next;
+  }, [coveredResponse]);
+
+  const getCoveredAnswerText = (question: SurveyQuestion): string => {
+    const answer = coveredAnswerByQuestionKey.get(getQuestionKey(question));
+    if (!answer) return 'No answer';
+    return formatAnswerValue(answer.value, answer.blockType || question.blockType);
+  };
 
   const setAnswer = (questionKey: string, value: SurveyAnswerValue) => {
     setAnswersByQuestion((prev) => ({ ...prev, [questionKey]: value }));
@@ -731,6 +837,67 @@ const SurveyRespond: React.FC = () => {
             <Button variant="outline" onClick={() => navigate('/tasks')}>
               Back to To-dos
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {isCovered && coveredResponse && (
+        <Card className="p-5 mb-4">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-custom-text">Your response</h2>
+              <p className="text-sm text-custom-text-secondary">
+                Read-only view
+                {viewer?.coveredBySelf
+                  ? ''
+                  : `, submitted by ${viewer?.coveredBySubmitterName || 'a camp member'}`}
+                {formatDateTime(coveredResponse.submittedAt || coveredResponse.createdAt)
+                  ? ` on ${formatDateTime(coveredResponse.submittedAt || coveredResponse.createdAt)}`
+                  : ''}
+              </p>
+            </div>
+            <Badge variant="success">Completed</Badge>
+          </div>
+
+          <div className="space-y-5">
+            {sections
+              .map((section) => ({
+                ...section,
+                questions: section.questions.filter((question) => answerableBlockTypes.has(question.blockType))
+              }))
+              .filter((section) => section.questions.length > 0)
+              .map((section) => (
+                <div key={section.id} className="space-y-3">
+                  {sections.length > 1 && (
+                    <div className="border-b border-gray-200 pb-2">
+                      <h3 className="text-sm font-semibold text-custom-text">{section.title}</h3>
+                      {section.description && (
+                        <p className="mt-1 text-xs text-custom-text-secondary">
+                          {stripHtmlToText(section.description)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {section.questions.map((question) => (
+                    <div key={getQuestionKey(question)} className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-custom-text">{question.prompt}</p>
+                        {question.required && (
+                          <span className="text-xs font-semibold text-red-600">Required</span>
+                        )}
+                      </div>
+                      {question.helpText && (
+                        <p className="mt-1 text-xs text-custom-text-secondary">
+                          {stripHtmlToText(question.helpText)}
+                        </p>
+                      )}
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-custom-text">
+                        {getCoveredAnswerText(question)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ))}
           </div>
         </Card>
       )}

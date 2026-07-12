@@ -53,6 +53,7 @@ interface PendingSurveyItem {
   sentAt?: string | null;
   completedByDelegate?: boolean;
   completedBySelf?: boolean;
+  coveredByResponseId?: string;
   coveredBySubmitterName?: string;
 }
 
@@ -448,9 +449,11 @@ const MyTasks: React.FC = () => {
               <h3 className="text-sm font-semibold text-custom-text mb-2">Completed Surveys</h3>
               <div className="space-y-2">
                 {completedSurveys.slice(0, 6).map((survey) => (
-                  <div
+                  <button
+                    type="button"
                     key={`${survey.surveyId}-completed`}
-                    className={`rounded-lg border p-3 ${
+                    onClick={() => navigate(`/surveys/${survey.surveyId}`)}
+                    className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-opacity-80 ${
                       survey.completedByDelegate
                         ? 'border-blue-200 bg-blue-50'
                         : 'border-green-200 bg-green-50'
@@ -466,11 +469,14 @@ const MyTasks: React.FC = () => {
                             : 'You completed this survey.'}
                         </p>
                       </div>
-                      <Badge variant={survey.completedByDelegate ? 'info' : 'success'}>
-                        {survey.completedByDelegate ? 'Completed by someone else' : 'Completed'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={survey.completedByDelegate ? 'info' : 'success'}>
+                          {survey.completedByDelegate ? 'Completed by someone else' : 'Completed'}
+                        </Badge>
+                        <Eye size={16} className={survey.completedByDelegate ? 'text-blue-700' : 'text-green-700'} />
+                      </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

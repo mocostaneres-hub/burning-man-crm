@@ -60,7 +60,7 @@ type RosterPerson = {
 };
 
 type MetricKey = 'arrival' | 'departure' | 'rv' | 'tent' | 'shade';
-type ResponseFilter = MetricKey | 'edited';
+type ResponseFilter = MetricKey | 'earlyArrival' | 'departureResponse' | 'edited';
 
 type EditingCell = {
   responseId: string;
@@ -288,12 +288,28 @@ const getMetricKeyForQuestion = (column: QuestionColumn): MetricKey | null => {
   const text = normalizeText(`${column.sectionTitle} ${column.prompt} ${column.helpText}`);
 
   if (/\b(arrival|arrive|arriving|early arrival|eap)\b/.test(text)) return 'arrival';
-  if (/\b(departure|depart|departing|leave|leaving|strike|late departure)\b/.test(text)) return 'departure';
+  if (/\b(departure|departures|depart|departing|leave|leaving|exit|exodus|strike|late departure|out date)\b/.test(text)) return 'departure';
   if (/\b(rv|rvs|recreational vehicle|camper|motorhome|trailer)\b/.test(text)) return 'rv';
   if (/\b(tent|tents|yurt|shiftpod)\b/.test(text)) return 'tent';
   if (/\b(shade|shade structure|shade structures|carport|monkey hut)\b/.test(text)) return 'shade';
 
   return null;
+};
+
+const isNegativeAnswerText = (value: string): boolean => {
+  const text = normalizeText(value);
+  return /\b(no|none|na|n a|false|not applicable)\b/.test(text) || text === '0';
+};
+
+const hasAffirmativeLogisticsAnswer = (value: string): boolean => {
+  const text = normalizeText(value);
+  return Boolean(text) && !isNegativeAnswerText(text);
+};
+
+const isEarlyArrivalAnswer = (value: string): boolean => {
+  const text = normalizeText(value);
+  if (!text || isNegativeAnswerText(text)) return false;
+  return /\b(early build crew|early build|early arrival|eap|ea)\b/.test(text);
 };
 
 const getQuantityFromAnswer = (answer: SurveyResponseAnswer | undefined): number => {
@@ -569,6 +585,10 @@ const SurveyResponses: React.FC = () => {
       {
         searchText: string;
         metrics: Record<MetricKey, { hasValue: boolean; quantity: number }>;
+        logistics: {
+          earlyArrival: boolean;
+          departure: boolean;
+        };
       }
     >();
 
@@ -579,18 +599,31 @@ const SurveyResponses: React.FC = () => {
       }, {} as Record<MetricKey, { hasValue: boolean; quantity: number }>);
       const answerMap = answersByResponseId.get(response._id);
       const answerTexts: string[] = [];
+      const logistics = {
+        earlyArrival: false,
+        departure: false
+      };
 
       questionColumns.forEach((column) => {
         const answer = answerMap?.get(column.key);
         const answerText = answer ? formatAnswerValue(answer.value, answer.blockType || column.question.blockType) : '';
         answerTexts.push(answerText);
+        if (isEarlyArrivalAnswer(answerText)) {
+          logistics.earlyArrival = true;
+        }
 
         const metricKey = columnMetricByKey.get(column.key);
         if (metricKey && answer && hasMeaningfulAnswer(answer.value)) {
-          metrics[metricKey].hasValue = true;
-          metrics[metricKey].quantity += metricKey === 'arrival' || metricKey === 'departure'
-            ? 1
+          const quantity = metricKey === 'arrival' || metricKey === 'departure'
+            ? hasAffirmativeLogisticsAnswer(answerText) ? 1 : 0
             : getQuantityFromAnswer(answer);
+          if (quantity > 0) {
+            metrics[metricKey].hasValue = true;
+            metrics[metricKey].quantity += quantity;
+            if (metricKey === 'departure') {
+              logistics.departure = true;
+            }
+          }
         }
       });
 
@@ -602,7 +635,8 @@ const SurveyResponses: React.FC = () => {
             ...answerTexts
           ].join(' ')
         ),
-        metrics
+        metrics,
+        logistics
       });
     });
 
@@ -618,6 +652,8 @@ const SurveyResponses: React.FC = () => {
 
       return activeFilters.every((filter) => {
         if (filter === 'edited') return Boolean(response.lastEditedAt);
+        if (filter === 'earlyArrival') return Boolean(facts?.logistics.earlyArrival);
+        if (filter === 'departureResponse') return Boolean(facts?.logistics.departure);
         return Boolean(facts?.metrics[filter].hasValue);
       });
     });
@@ -652,8 +688,19 @@ const SurveyResponses: React.FC = () => {
 
   const quickFilters = useMemo(() => {
     const filters: Array<{ key: ResponseFilter; label: string; count: number; variant?: FilterButtonProps['variant'] }> = [];
+    const earlyArrivalCount = responses.filter((response) => responseFacts.get(response._id)?.logistics.earlyArrival).length;
+    if (earlyArrivalCount > 0) {
+      filters.push({ key: 'earlyArrival', label: 'EA', count: earlyArrivalCount, variant: 'primary' });
+    }
+
+    const hasDepartureColumn = Array.from(columnMetricByKey.values()).includes('departure');
+    const departureCount = responses.filter((response) => responseFacts.get(response._id)?.logistics.departure).length;
+    if (hasDepartureColumn || departureCount > 0) {
+      filters.push({ key: 'departureResponse', label: 'Departures', count: departureCount, variant: 'primary' });
+    }
 
     metricKeys.forEach((metricKey) => {
+      if (metricKey === 'departure') return;
       const hasMatchingColumn = Array.from(columnMetricByKey.values()).includes(metricKey);
       if (!hasMatchingColumn) return;
       const count = responses.filter((response) => responseFacts.get(response._id)?.metrics[metricKey].hasValue).length;
@@ -661,7 +708,7 @@ const SurveyResponses: React.FC = () => {
         key: metricKey,
         label: metricLabels[metricKey],
         count,
-        variant: metricKey === 'arrival' || metricKey === 'departure' ? 'primary' : metricKey === 'rv' ? 'warning' : 'success'
+        variant: metricKey === 'arrival' ? 'primary' : metricKey === 'rv' ? 'warning' : 'success'
       });
     });
 
