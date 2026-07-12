@@ -561,6 +561,20 @@ const VolunteerShifts: React.FC = () => {
     );
   }, [eventForm.eventName, eventForm.shifts.length, getEffectiveEventFields]);
 
+  const hasEventWizardDraft = useMemo(() => {
+    if (isEditMode) return true;
+
+    return Boolean(
+      wizardStep !== 1 ||
+      eventForm.eventName.trim() ||
+      eventForm.description.trim() ||
+      eventForm.eventDate ||
+      eventForm.startTime ||
+      eventForm.endTime ||
+      eventForm.shifts.length > 0
+    );
+  }, [eventForm, isEditMode, wizardStep]);
+
   const hasAvailableShifts = useMemo(() => {
     return events.some(event =>
       (event.shifts || []).some(shift => {
@@ -752,6 +766,20 @@ const VolunteerShifts: React.FC = () => {
     setWizardStep(1);
     setBulkShiftSelection([]);
     setGlobalInviteMode('ALL_ROSTER');
+  };
+
+  const handleCloseEventWizard = () => {
+    if (hasEventWizardDraft) {
+      const confirmed = window.confirm(
+        isEditMode
+          ? 'Discard your event edits? Unsaved event details and shifts will be lost.'
+          : 'Discard this new event? Unsaved event details and shifts will be lost.'
+      );
+      if (!confirmed) return;
+    }
+
+    setShowCreateModal(false);
+    resetForm();
   };
 
   const handleEditEvent = async (event: Event) => {
@@ -1612,12 +1640,11 @@ const VolunteerShifts: React.FC = () => {
       {/* Create Event Modal */}
       <Modal
         isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-          resetForm();
-        }}
+        onClose={handleCloseEventWizard}
         title={isEditMode ? `Edit Event: ${eventToEdit?.eventName}` : "Create New Event"}
         size="lg"
+        closeOnOverlayClick={false}
+        closeOnEscape={false}
       >
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-2">
@@ -1944,10 +1971,7 @@ const VolunteerShifts: React.FC = () => {
           <div className="flex gap-3 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={() => {
-                setShowCreateModal(false);
-                resetForm();
-              }}
+              onClick={handleCloseEventWizard}
               className="flex-1 min-h-[44px]"
             >
               Cancel
