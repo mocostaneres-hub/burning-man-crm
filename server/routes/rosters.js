@@ -6,9 +6,7 @@ const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp, ca
 const { recordActivity } = require('../services/activityLogger');
 const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
-const ShiftAssignment = require('../models/ShiftAssignment');
-const ShiftSignup = require('../models/ShiftSignup');
-const Event = require('../models/Event');
+const { emptyCampRecordCleanup, removeRosterMembersCampRecords } = require('../services/campRecordCleanupService');
 const { renderTemplate } = require('../utils/renderTemplate');
 const { getCampTemplate, SYSTEM_DEFAULT_TEMPLATES } = require('../utils/duesTemplates');
 const { getCampMealPlanTemplate, SYSTEM_DEFAULT_MEAL_PLAN_TEMPLATES } = require('../utils/mealPlanTemplates');
@@ -1142,16 +1140,16 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
       });
     }
     
-    // Release shift assignments/signups and remove member record.
-    if (member?.user) {
-      const userId = member.user.toString();
-      await ShiftAssignment.deleteMany({ campId: camp._id, userId });
-      await ShiftSignup.deleteMany({ campId: camp._id, userId });
-      await Event.updateMany(
-        { campId: camp._id },
-        { $pull: { 'shifts.$[].memberIds': member.user } }
-      );
+    // Release survey, shift, and application records tied to this camp membership.
+    let campRecordCleanup = emptyCampRecordCleanup();
+    const userId = member?.user ? member.user.toString() : null;
+    campRecordCleanup = await removeRosterMembersCampRecords({
+      campId: camp._id,
+      memberIds: [memberId],
+      userId
+    });
 
+    if (member?.user) {
       const application = await db.findMemberApplication({
         applicant: member.user,
         camp: camp._id
@@ -1171,10 +1169,14 @@ router.delete('/members/:memberId', authenticateToken, async (req, res) => {
       field: 'rosterMember',
       memberId,
       is_shifts_only: member?.isShiftsOnly === true,
-      signup_source: member?.signupSource || null
+      signup_source: member?.signupSource || null,
+      cleanup: campRecordCleanup
     });
 
-    res.json({ message: 'Member removed from roster and shift allocations released' });
+    res.json({
+      message: 'Member removed from roster and camp records cleaned up',
+      cleanup: campRecordCleanup
+    });
   } catch (error) {
     console.error('Remove member from roster error:', error);
     res.status(500).json({ message: 'Server error' });

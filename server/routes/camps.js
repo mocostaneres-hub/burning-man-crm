@@ -8,6 +8,7 @@ const { findCampByIdentifier } = require('../utils/campIdentifier');
 const { getUserCampId, canAccessCamp, canManageCamp, canManageMealPlan, canViewCampRoster } = require('../utils/permissionHelpers');
 const { recordFieldChange, recordActivity } = require('../services/activityLogger');
 const { applyRosterRemovalStatusUpdates, resolveMemberUserId } = require('../services/rosterMemberRemoval');
+const { removeRosterMembersCampRecords } = require('../services/campRecordCleanupService');
 const { createNotification } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { hasStructuredLocationFields, validateStructuredLocation } = require('../utils/structuredLocation');
@@ -1697,6 +1698,11 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
     for (const rosterMemberId of memberIdsToRemove) {
       await db.removeMemberFromRoster(activeRoster._id, rosterMemberId);
     }
+    const campRecordCleanup = await removeRosterMembersCampRecords({
+      campId: camp._id,
+      memberIds: memberIdsToRemove,
+      userId: memberUserId
+    });
 
     // CRITICAL: Clear camp affiliation from user profile
     // Step 1: Find and update the user's profile camp label when needed.
@@ -1760,6 +1766,7 @@ router.delete('/:campId/roster/member/:memberId', authenticateToken, async (req,
         : 'Member removed from roster and application reset successfully',
       queue: removalResult.queue,
       applicationStatus: removalResult.applicationStatus,
+      cleanup: campRecordCleanup,
       canReapply: true,
       resetYear: new Date().getFullYear()
     });

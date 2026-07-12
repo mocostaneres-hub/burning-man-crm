@@ -242,6 +242,209 @@ function buildSurveyEligibleMemberPayload({ member, user, coveredMemberIds, cove
   };
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getQuestionOptionLabel(question, value) {
+  const rawValue = String(value ?? '');
+  const option = (question?.options || []).find((item) => (
+    String(item.value || '') === rawValue || String(item.label || '') === rawValue
+  ));
+  return option?.label || rawValue;
+}
+
+function formatSurveyAnswerValueForEmail(value, question) {
+  if (value === null || value === undefined || value === '') return 'No answer';
+
+  const formatSingleValue = (item) => {
+    if (item === null || item === undefined || item === '') return '';
+    if (question?.blockType === 'people' && item && typeof item === 'object') {
+      return item.name || item.label || item.title || 'Selected person';
+    }
+    if (item && typeof item === 'object') {
+      return item.name || item.label || item.title || item.value || JSON.stringify(item);
+    }
+    if (['multiple_choice', 'checkboxes', 'dropdown'].includes(question?.blockType)) {
+      return getQuestionOptionLabel(question, item);
+    }
+    return String(item);
+  };
+
+  if (Array.isArray(value)) {
+    const formattedValues = value.map(formatSingleValue).filter(Boolean);
+    return formattedValues.length > 0 ? formattedValues.join(', ') : 'No answer';
+  }
+
+  return formatSingleValue(value) || 'No answer';
+}
+
+function buildSurveyResponseAnswerRows({ answers, questions }) {
+  const answerByQuestionId = new Map();
+  for (const answer of Array.isArray(answers) ? answers : []) {
+    const questionId = toIdString(answer?.questionId);
+    if (questionId) answerByQuestionId.set(questionId, answer);
+  }
+
+  return (questions || [])
+    .filter((question) => SUPPORTED_BLOCK_TYPES.has(question.blockType))
+    .filter((question) => !['form_title', 'description', 'section_header', 'image_block', 'video_block', 'unsupported'].includes(question.blockType))
+    .map((question) => {
+      const answer = answerByQuestionId.get(toIdString(question._id));
+      return {
+        prompt: question.prompt || 'Untitled question',
+        answer: formatSurveyAnswerValueForEmail(answer?.value, question)
+      };
+    });
+}
+
+function buildSurveyResponseEmailHtml({ heading, intro, campName, surveyTitle, answerRows }) {
+  const rows = answerRows
+    .map((row) => `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-weight: 600; color: #111827;">${escapeHtml(row.prompt)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #374151; white-space: pre-wrap;">${escapeHtml(row.answer)}</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 720px; margin: 0 auto; color: #111827;">
+      <h2 style="margin-bottom: 8px;">${escapeHtml(heading)}</h2>
+      <p style="font-size: 14px; line-height: 1.5;">${escapeHtml(intro)}</p>
+      <p style="font-size: 14px; color: #4b5563;"><strong>Camp:</strong> ${escapeHtml(campName)}<br /><strong>Survey:</strong> ${escapeHtml(surveyTitle)}</p>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 12px; border-bottom: 2px solid #d1d5db;">Question</th>
+            <th style="text-align: left; padding: 12px; border-bottom: 2px solid #d1d5db;">Response</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="2" style="padding: 12px;">No answerable responses were submitted.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildSurveyResponseEmailText({ heading, intro, campName, surveyTitle, answerRows }) {
+  const answersText = answerRows.length > 0
+    ? answerRows.map((row) => `${row.prompt}\n${row.answer}`).join('\n\n')
+    : 'No answerable responses were submitted.';
+  return `${heading}\n\n${intro}\n\nCamp: ${campName}\nSurvey: ${surveyTitle}\n\n${answersText}`;
+}
+
+async function buildSurveyResponseEmailContext({ survey, response, coveredMemberIds, questions, reqUser }) {
+  const camp = await db.findCamp({ _id: survey.campId });
+  const campName = camp?.name || camp?.campName || 'Your camp';
+  const memberDocs = await Member.find({ _id: { $in: coveredMemberIds } }).lean();
+  const users = await User.find({
+    _id: {
+      $in: dedupeIdList([
+        reqUser?._id,
+        response.submittedByUserId,
+        ...memberDocs.map((member) => member.user)
+      ])
+    }
+  })
+    .select('firstName lastName email')
+    .lean();
+  const userById = new Map(users.map((user) => [toIdString(user._id), user]));
+  const memberById = new Map(memberDocs.map((member) => [toIdString(member._id), member]));
+  const submitterMemberId = toIdString(response.submittedByMemberId);
+  const submitterMember = memberById.get(submitterMemberId);
+  const submitterUser = userById.get(toIdString(submitterMember?.user)) || userById.get(toIdString(response.submittedByUserId));
+  const submitterName = getMemberDisplayName(submitterMember, userById);
+  const answerRows = buildSurveyResponseAnswerRows({
+    answers: response.answers || [],
+    questions
+  });
+
+  const coveredRecipients = dedupeIdList(coveredMemberIds)
+    .map((memberId) => {
+      const member = memberById.get(memberId);
+      const user = userById.get(toIdString(member?.user));
+      const email = user?.email || member?.email || '';
+      return {
+        memberId,
+        name: getMemberDisplayName(member, userById),
+        email: String(email || '').trim()
+      };
+    })
+    .filter((recipient) => recipient.email);
+
+  return {
+    campName,
+    surveyTitle: survey.title || 'Survey',
+    submitterMemberId,
+    submitterName,
+    submitterEmail: submitterUser?.email || reqUser?.email || '',
+    coveredRecipients,
+    answerRows
+  };
+}
+
+async function sendSurveyResponseCopyEmails(emailContext) {
+  let sendEmail;
+  try {
+    ({ sendEmail } = require('../services/emailService'));
+  } catch (error) {
+    console.error('Survey response copy email service unavailable:', error?.message || error);
+    return;
+  }
+
+  const {
+    campName,
+    surveyTitle,
+    submitterMemberId,
+    submitterName,
+    submitterEmail,
+    coveredRecipients,
+    answerRows
+  } = emailContext;
+  const sentEmails = new Set();
+  const emailJobs = [];
+
+  if (submitterEmail) {
+    const heading = `Your ${surveyTitle} response copy`;
+    const intro = `Thanks for submitting ${surveyTitle}. A copy of your responses is below.`;
+    sentEmails.add(submitterEmail.toLowerCase());
+    emailJobs.push(sendEmail({
+      to: submitterEmail,
+      subject: `Copy of your ${surveyTitle} responses`,
+      text: buildSurveyResponseEmailText({ heading, intro, campName, surveyTitle, answerRows }),
+      html: buildSurveyResponseEmailHtml({ heading, intro, campName, surveyTitle, answerRows }),
+      fromName: campName
+    }));
+  }
+
+  for (const recipient of coveredRecipients) {
+    if (recipient.memberId === submitterMemberId) continue;
+    const normalizedEmail = recipient.email.toLowerCase();
+    if (sentEmails.has(normalizedEmail)) continue;
+    sentEmails.add(normalizedEmail);
+    const heading = `${submitterName} responded on your behalf`;
+    const intro = `${submitterName} responded ${surveyTitle} on your behalf - here are the responses. Contact your camp leads if you have any questions.`;
+    emailJobs.push(sendEmail({
+      to: recipient.email,
+      subject: `${submitterName} responded to ${surveyTitle} on your behalf`,
+      text: buildSurveyResponseEmailText({ heading, intro, campName, surveyTitle, answerRows }),
+      html: buildSurveyResponseEmailHtml({ heading, intro, campName, surveyTitle, answerRows }),
+      fromName: campName
+    }));
+  }
+
+  const results = await Promise.allSettled(emailJobs);
+  const failedCount = results.filter((result) => result.status === 'rejected').length;
+  if (failedCount > 0) {
+    console.error(`Survey response copy emails failed for ${failedCount} recipient(s)`);
+  }
+}
+
 async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = null } = {}) {
   const normalized = rawQuestions.map((question, index) => normalizeQuestionInput(question, index));
   const usedLocalIds = new Set();
@@ -895,6 +1098,12 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied for this survey' });
     }
 
+    let submitterEmail = req.user?.email || null;
+    if (!submitterEmail && submitterMember?.user) {
+      const submitterUser = await User.findById(submitterMember.user).select('email').lean();
+      submitterEmail = submitterUser?.email || null;
+    }
+
     const responsePayload = {
       survey,
       questions,
@@ -905,6 +1114,7 @@ router.get('/:surveyId', authenticateToken, async (req, res) => {
         isAssigned: !!assignmentExists,
         canRespond: !!submitterMember && survey.status === 'sent' && !coveredDoc,
         submitterMemberId: submitterMember?._id || null,
+        submitterEmail,
         isCovered: !!coveredDoc,
         coveredByResponseId: coveredDoc?.responseId || null,
         coveredBySubmitterName,
@@ -1360,7 +1570,10 @@ router.post('/:surveyId/responses', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'You are not eligible to submit this survey' });
     }
 
-    const surveyQuestions = await SurveyQuestion.find({ surveyId: survey._id }).select('_id blockType').lean();
+    const surveyQuestions = await SurveyQuestion.find({ surveyId: survey._id })
+      .sort({ order: 1 })
+      .select('_id blockType prompt options order')
+      .lean();
     const questionById = new Map(surveyQuestions.map((question) => [toIdString(question._id), question]));
     const preliminaryAnswers = normalizeSurveyAnswers(req.body?.answers, questionById);
     const peopleMemberIds = extractPeopleMemberIdsFromAnswers(preliminaryAnswers, questionById);
@@ -1397,6 +1610,31 @@ router.post('/:surveyId/responses', authenticateToken, async (req, res) => {
       coveredMemberCount: coveredMemberIds.length
     });
 
+    let emailReceipt = {
+      submitterEmail: req.user?.email || '',
+      delegatedMemberNames: []
+    };
+    try {
+      const emailContext = await buildSurveyResponseEmailContext({
+        survey,
+        response,
+        coveredMemberIds,
+        questions: surveyQuestions,
+        reqUser: req.user
+      });
+      emailReceipt = {
+        submitterEmail: emailContext.submitterEmail,
+        delegatedMemberNames: emailContext.coveredRecipients
+          .filter((recipient) => recipient.memberId !== emailContext.submitterMemberId)
+          .map((recipient) => recipient.name)
+      };
+      void sendSurveyResponseCopyEmails(emailContext).catch((emailError) => {
+        console.error('Survey response copy email send error:', emailError);
+      });
+    } catch (emailError) {
+      console.error('Survey response copy email preparation error:', emailError);
+    }
+
     const managerUsers = await SurveyAssignment.find({ surveyId: survey._id })
       .select('assignedBy')
       .lean();
@@ -1418,7 +1656,8 @@ router.post('/:surveyId/responses', authenticateToken, async (req, res) => {
     return res.status(201).json({
       message: 'Survey response submitted successfully',
       responseId: response._id,
-      coveredMemberIds
+      coveredMemberIds,
+      emailReceipt
     });
   } catch (error) {
     console.error('Submit survey response error:', error);

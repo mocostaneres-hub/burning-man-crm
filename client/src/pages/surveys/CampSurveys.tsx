@@ -57,12 +57,6 @@ const sanitizeRichTextHtml = (value: string): string =>
     .replace(/\son\w+='[^']*'/gi, '')
     .replace(/javascript:/gi, '');
 
-const stripHtmlToText = (value: string): string =>
-  sanitizeRichTextHtml(value)
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
 type RichTextEditorProps = {
   value: string;
   onChange: (value: string) => void;
@@ -944,8 +938,8 @@ const CampSurveys: React.FC = () => {
 
             return (
               <Card key={survey._id} className="p-4">
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                  <div className="min-w-0">
+                <div className="flex flex-col gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h2 className="text-lg font-semibold text-custom-text truncate">{survey.title}</h2>
                       <Badge variant={survey.status === 'draft' ? 'warning' : survey.status === 'sent' ? 'info' : 'neutral'}>
@@ -953,11 +947,6 @@ const CampSurveys: React.FC = () => {
                       </Badge>
                       {survey.isLocked && <Clock size={14} className="text-gray-500" />}
                     </div>
-                    {survey.status !== 'draft' && (
-                      <p className="text-sm text-custom-text-secondary mb-2">
-                        {stripHtmlToText(survey.description || '') || 'No description'}
-                      </p>
-                    )}
                     {survey.completionStats && (
                       <div className="space-y-0.5 text-xs text-gray-600">
                         <p>
@@ -973,85 +962,63 @@ const CampSurveys: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex flex-col gap-2 lg:w-[360px]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
+                      <Eye size={14} />
+                      Open View
+                    </Button>
+                    {survey.status !== 'draft' && (
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${survey._id}/responses`)}>
+                        View Responses
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
+                      Edit Survey
+                    </Button>
                     {survey.status === 'draft' && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
-                          <Eye size={14} />
-                          Open View
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
-                          Edit Survey
-                        </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="flex items-center gap-1"
+                        onClick={() => openRecipientModal(survey)}
+                        disabled={sendingSurveyId === survey._id}
+                      >
+                        <Send size={14} />
+                        Send Survey
+                      </Button>
+                    )}
+                    {survey.status === 'sent' && (
+                      <>
                         <Button
                           variant="primary"
                           size="sm"
                           className="flex items-center gap-1"
                           onClick={() => openRecipientModal(survey)}
-                          disabled={sendingSurveyId === survey._id}
+                          disabled={sendingSurveyId === survey._id || unassignedRosterUsers.length === 0}
                         >
                           <Send size={14} />
-                          Send Survey
+                          {unassignedRosterUsers.length === 0 ? 'All Added' : 'Add Recipients'}
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDeleteSurvey(survey)}
-                          disabled={deletingSurveyId === survey._id}
-                          className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleCloseSurvey(survey)}
+                          disabled={closingSurveyId === survey._id}
                         >
-                          <Trash2 size={14} />
-                          {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
+                          {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
                         </Button>
-                      </div>
+                      </>
                     )}
-
-                    {survey.status !== 'draft' && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openSurveyViewMode(survey._id)} className="flex items-center gap-1">
-                          <Eye size={14} />
-                          Open View
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/surveys/${survey._id}/responses`)}>
-                          View Responses
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(survey)}>
-                          Edit Survey
-                        </Button>
-                        {survey.status === 'sent' && (
-                          <>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="flex items-center gap-1"
-                              onClick={() => openRecipientModal(survey)}
-                              disabled={sendingSurveyId === survey._id || unassignedRosterUsers.length === 0}
-                            >
-                              <Send size={14} />
-                              {unassignedRosterUsers.length === 0 ? 'All Added' : 'Add Recipients'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleCloseSurvey(survey)}
-                              disabled={closingSurveyId === survey._id}
-                            >
-                              {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteSurvey(survey)}
-                          disabled={deletingSurveyId === survey._id}
-                          className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                          {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
-                        </Button>
-                      </div>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteSurvey(survey)}
+                      disabled={deletingSurveyId === survey._id}
+                      className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                    >
+                      <Trash2 size={14} />
+                      {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
+                    </Button>
                   </div>
                 </div>
               </Card>

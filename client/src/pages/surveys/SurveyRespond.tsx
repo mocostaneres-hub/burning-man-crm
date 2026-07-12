@@ -36,6 +36,12 @@ type CoveredSurveyResponse = {
   updatedAt?: string;
 };
 
+type SubmissionConfirmation = {
+  responseId: string;
+  submitterEmail?: string;
+  delegatedMemberNames: string[];
+};
+
 type SurveySection = {
   id: string;
   title: string;
@@ -142,6 +148,14 @@ const formatDateTime = (value?: string | null): string => {
   });
 };
 
+const formatNameList = (names: string[]): string => {
+  const cleanNames = names.map((name) => name.trim()).filter(Boolean);
+  if (cleanNames.length === 0) return '';
+  if (cleanNames.length === 1) return cleanNames[0];
+  if (cleanNames.length === 2) return `${cleanNames[0]} and ${cleanNames[1]}`;
+  return `${cleanNames.slice(0, -1).join(', ')}, and ${cleanNames[cleanNames.length - 1]}`;
+};
+
 const buildSelfPeopleAnswers = (
   surveyQuestions: SurveyQuestion[],
   submitterMember: EligibleMember | undefined
@@ -168,6 +182,7 @@ const SurveyRespond: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submissionConfirmation, setSubmissionConfirmation] = useState<SubmissionConfirmation | null>(null);
 
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
@@ -187,6 +202,7 @@ const SurveyRespond: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      setSubmissionConfirmation(null);
       const detail = await api.getSurveyDetails(surveyId);
       const nextQuestions = (detail.questions || []).map((question: SurveyQuestion, index: number) => ({
         ...question,
@@ -350,6 +366,36 @@ const SurveyRespond: React.FC = () => {
     );
   };
 
+  const responseCopyDelegateNames = useMemo(() => {
+    const memberById = new Map(eligibleMembers.map((member) => [member.memberId, member]));
+    const delegateIds = new Set(
+      selectedMemberIds.filter((memberId) => memberId !== viewer?.submitterMemberId)
+    );
+    const reachedSectionIds = new Set([...sectionHistory, currentSection?.id].filter(Boolean));
+    sections
+      .filter((section) => reachedSectionIds.has(section.id))
+      .flatMap((section) => section.questions)
+      .filter((question) => question.blockType === 'people')
+      .forEach((question) => {
+        const value = answersByQuestion[getQuestionKey(question)];
+        const peopleAnswers = Array.isArray(value)
+          ? (value as unknown[]).filter(
+              (item): item is PeopleAnswerValue =>
+                typeof item === 'object' && item !== null && 'memberId' in item
+            )
+          : [];
+        peopleAnswers.forEach((member) => {
+          if (member.memberId !== viewer?.submitterMemberId) {
+            delegateIds.add(member.memberId);
+          }
+        });
+      });
+
+    return Array.from(delegateIds)
+      .map((memberId) => memberById.get(memberId)?.name)
+      .filter(Boolean) as string[];
+  }, [answersByQuestion, currentSection?.id, eligibleMembers, sectionHistory, sections, selectedMemberIds, viewer?.submitterMemberId]);
+
   const getPeopleSuggestions = (questionKey: string) => {
     const query = String(peopleQueryByQuestion[questionKey] || '').trim().toLowerCase();
     const selectedIds = new Set(getPeopleAnswer(questionKey).map((member) => member.memberId));
@@ -504,12 +550,17 @@ const SurveyRespond: React.FC = () => {
           };
         });
 
-      await api.submitSurveyResponse(surveyId, {
+      const submitResult = await api.submitSurveyResponse(surveyId, {
         coveredMemberIds: Array.from(new Set([...selectedMemberIds, ...peopleCoveredMemberIds])),
         answers
       });
 
-      navigate('/tasks');
+      setSubmissionConfirmation({
+        responseId: submitResult.responseId,
+        submitterEmail: submitResult.emailReceipt?.submitterEmail || viewer?.submitterEmail || '',
+        delegatedMemberNames: submitResult.emailReceipt?.delegatedMemberNames || responseCopyDelegateNames
+      });
+      setError(null);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to submit survey response');
     } finally {
@@ -822,7 +873,31 @@ const SurveyRespond: React.FC = () => {
         </div>
       )}
 
-      {isCovered && (
+      {submissionConfirmation && (
+        <Card className="p-5 mb-4 border border-green-200 bg-green-50">
+          <div className="flex items-center gap-2 text-green-800">
+            <CheckCircle size={18} />
+            <p className="font-medium">Survey submitted.</p>
+          </div>
+          <p className="text-sm text-green-700 mt-1">
+            A copy of your responses will be sent to{' '}
+            {submissionConfirmation.submitterEmail || 'the email address we have on file for you'}.
+            {submissionConfirmation.delegatedMemberNames.length > 0 && (
+              <>
+                {' '}A copy will also be sent to the email address we have on file for{' '}
+                {formatNameList(submissionConfirmation.delegatedMemberNames)}.
+              </>
+            )}
+          </p>
+          <div className="mt-3">
+            <Button variant="outline" onClick={() => navigate('/tasks')}>
+              Back to To-dos
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!submissionConfirmation && isCovered && (
         <Card className="p-5 mb-4 border border-green-200 bg-green-50">
           <div className="flex items-center gap-2 text-green-800">
             <CheckCircle size={18} />
@@ -841,7 +916,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {isCovered && coveredResponse && (
+      {!submissionConfirmation && isCovered && coveredResponse && (
         <Card className="p-5 mb-4">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -902,7 +977,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {!canRespond && !isCovered && !isViewMode && (
+      {!submissionConfirmation && !canRespond && !isCovered && !isViewMode && (
         <Card className="p-5 mb-4">
           <p className="text-sm text-gray-700">
             You do not currently have permission to submit this survey.
@@ -910,7 +985,7 @@ const SurveyRespond: React.FC = () => {
         </Card>
       )}
 
-      {showInteractiveForm && !isCovered && (
+      {showInteractiveForm && !isCovered && !submissionConfirmation && (
         <>
           <Card className="p-5 mb-4">
             <h2 className="text-base font-semibold text-custom-text mb-2">Who are you responding for?</h2>
@@ -918,6 +993,16 @@ const SurveyRespond: React.FC = () => {
               Start typing to select yourself and any additional roster members you are submitting on behalf of.
               Members already covered by another response cannot be selected.
             </p>
+            <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              A copy of your responses will be sent to{' '}
+              <span className="font-semibold">{viewer?.submitterEmail || 'the email address we have on file for you'}</span>.
+              {responseCopyDelegateNames.length > 0 && (
+                <>
+                  {' '}A copy will also be sent to the email address we have on file for{' '}
+                  <span className="font-semibold">{formatNameList(responseCopyDelegateNames)}</span>.
+                </>
+              )}
+            </div>
 
             <div className="flex flex-wrap gap-2 mb-3">
               {selectedMembers.map((member) => (
@@ -941,7 +1026,7 @@ const SurveyRespond: React.FC = () => {
                 value={memberQuery}
                 onChange={(e) => setMemberQuery(e.target.value)}
                 className="w-full border border-gray-300 rounded pl-9 pr-3 py-2 text-sm"
-                placeholder="Search roster members by name or email"
+                placeholder="Search roster members by name"
               />
             </div>
             {memberQuery.trim() && (
@@ -958,7 +1043,6 @@ const SurveyRespond: React.FC = () => {
                     >
                       <div>
                         <p className="text-sm text-custom-text">{member.name}</p>
-                        {member.email && <p className="text-xs text-gray-500">{member.email}</p>}
                       </div>
                       <UserPlus size={14} className="text-gray-400" />
                     </button>

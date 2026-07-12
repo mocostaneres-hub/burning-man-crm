@@ -915,7 +915,15 @@ class ApiService {
   async submitSurveyResponse(
     surveyId: string,
     payload: { coveredMemberIds: string[]; answers: Array<{ questionId: string; blockType: string; value: any; valueType?: string }> }
-  ): Promise<{ message: string; responseId: string; coveredMemberIds: string[] }> {
+  ): Promise<{
+    message: string;
+    responseId: string;
+    coveredMemberIds: string[];
+    emailReceipt?: {
+      submitterEmail?: string;
+      delegatedMemberNames?: string[];
+    };
+  }> {
     const response = await this.api.post(`/surveys/${surveyId}/responses`, payload);
     return response.data;
   }
