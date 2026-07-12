@@ -533,6 +533,8 @@ export interface PendingSurveyItem {
   sentAt?: string | null;
   assignedAt?: string | null;
   completedByCoverage?: boolean;
+  completedByDelegate?: boolean;
+  completedBySelf?: boolean;
   coveredByResponseId?: string;
   coveredBySubmitterName?: string;
 }

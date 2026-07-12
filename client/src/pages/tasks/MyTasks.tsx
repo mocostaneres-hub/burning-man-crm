@@ -51,6 +51,8 @@ interface PendingSurveyItem {
   description?: string;
   campName: string;
   sentAt?: string | null;
+  completedByDelegate?: boolean;
+  completedBySelf?: boolean;
   coveredBySubmitterName?: string;
 }
 
@@ -446,13 +448,28 @@ const MyTasks: React.FC = () => {
               <h3 className="text-sm font-semibold text-custom-text mb-2">Completed Surveys</h3>
               <div className="space-y-2">
                 {completedSurveys.slice(0, 6).map((survey) => (
-                  <div key={`${survey.surveyId}-completed`} className="text-xs text-gray-600">
-                    <span className="font-medium text-custom-text">
-                      {survey.title} ({survey.campName})
-                    </span>
-                    <span className="block">
-                      {survey.coveredBySubmitterName || 'A camp member'} has responded to this survey on your behalf. For any questions, please contact your camp lead.
-                    </span>
+                  <div
+                    key={`${survey.surveyId}-completed`}
+                    className={`rounded-lg border p-3 ${
+                      survey.completedByDelegate
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-green-200 bg-green-50'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-work font-medium text-custom-text">{survey.title}</p>
+                        <p className="text-xs text-gray-500">{survey.campName}</p>
+                        <p className={`mt-1 text-xs ${survey.completedByDelegate ? 'text-blue-800' : 'text-green-800'}`}>
+                          {survey.completedByDelegate
+                            ? `${survey.coveredBySubmitterName || 'A camp member'} filled this out on your behalf.`
+                            : 'You completed this survey.'}
+                        </p>
+                      </div>
+                      <Badge variant={survey.completedByDelegate ? 'info' : 'success'}>
+                        {survey.completedByDelegate ? 'Completed by someone else' : 'Completed'}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>

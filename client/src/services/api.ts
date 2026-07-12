@@ -894,7 +894,11 @@ class ApiService {
   async getSurveyEligibleMembers(
     surveyId: string,
     query?: string
-  ): Promise<{ submitterMemberId: string; eligibleMembers: Array<{ memberId: string; name: string; email?: string; alreadyCovered: boolean; eligible: boolean; coveredByResponseId?: string | null }> }> {
+  ): Promise<{
+    submitterMemberId: string;
+    submitterMember?: { memberId: string; name: string; email?: string; alreadyCovered: boolean; eligible: boolean; coveredByResponseId?: string | null };
+    eligibleMembers: Array<{ memberId: string; name: string; email?: string; alreadyCovered: boolean; eligible: boolean; coveredByResponseId?: string | null }>;
+  }> {
     const response = await this.api.get(`/surveys/${surveyId}/eligible-members`, {
       params: query ? { q: query } : undefined
     });

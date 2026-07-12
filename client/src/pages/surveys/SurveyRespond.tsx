@@ -116,7 +116,9 @@ const SurveyRespond: React.FC = () => {
           setEligibleMembers(eligible.eligibleMembers || []);
           const selfId = eligible.submitterMemberId;
           setSelectedMemberIds(selfId ? [selfId] : []);
-          const submitterMember = (eligible.eligibleMembers || []).find((member: EligibleMember) => member.memberId === selfId);
+          const submitterMember =
+            eligible.submitterMember ||
+            (eligible.eligibleMembers || []).find((member: EligibleMember) => member.memberId === selfId);
           setAnswersByQuestion(buildSelfPeopleAnswers(nextQuestions, submitterMember));
         } catch (_eligibleError) {
           if (isViewMode && detail.survey?.campId) {
@@ -284,10 +286,13 @@ const SurveyRespond: React.FC = () => {
     setSelectedMemberIds((prev) => prev.filter((id) => id !== memberId));
   };
 
+  const getReachedSectionIds = (activeSectionId?: string) =>
+    new Set([...sectionHistory, activeSectionId || currentSection?.id].filter(Boolean));
+
   const getSubmittableQuestions = () => {
-    const activeVisitedIds = new Set([...sectionHistory, currentSection?.id].filter(Boolean));
+    const reachedSectionIds = getReachedSectionIds();
     return sections
-      .filter((section) => activeVisitedIds.has(section.id))
+      .filter((section) => reachedSectionIds.has(section.id))
       .flatMap((section) => section.questions)
       .filter((question) => answerableBlockTypes.has(question.blockType));
   };

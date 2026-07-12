@@ -221,6 +221,25 @@ function getRosterMemberDisplayName(memberDoc) {
   return memberDoc.name || memberDoc.playaName || memberDoc.nickname || memberDoc.email || 'Unknown';
 }
 
+function buildSurveyEligibleMemberPayload({ member, user, coveredMemberIds, coveredResponseByMemberId }) {
+  const memberId = toIdString(member?._id);
+  if (!memberId) return null;
+  const name = user
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || member.name || 'Unknown'
+    : member.name || member.playaName || 'Unknown';
+  const email = user?.email || member.email || '';
+  const alreadyCovered = coveredMemberIds.has(memberId);
+
+  return {
+    memberId,
+    name,
+    email,
+    alreadyCovered,
+    coveredByResponseId: alreadyCovered ? toIdString(coveredResponseByMemberId.get(memberId)?.responseId) : null,
+    eligible: !alreadyCovered
+  };
+}
+
 async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = null } = {}) {
   const normalized = rawQuestions.map((question, index) => normalizeQuestionInput(question, index));
   const usedLocalIds = new Set();
@@ -806,9 +825,14 @@ router.get('/my-pending', authenticateToken, async (req, res) => {
         const submitterName = submitterUser
           ? `${submitterUser.firstName || ''} ${submitterUser.lastName || ''}`.trim() || 'A camp member'
           : submitterMember?.name || 'A camp member';
+        const submitterMemberId = toIdString(covered.submitterMemberId || response?.submittedByMemberId);
+        const coveredMemberId = toIdString(covered.memberId);
+        const completedByDelegate = !!submitterMemberId && !!coveredMemberId && submitterMemberId !== coveredMemberId;
         completedSurveys.push({
           ...payload,
           completedByCoverage: true,
+          completedByDelegate,
+          completedBySelf: !completedByDelegate,
           coveredByResponseId: covered.responseId,
           coveredBySubmitterName: submitterName
         });
@@ -1230,26 +1254,38 @@ router.get('/:surveyId/eligible-members', authenticateToken, async (req, res) =>
       const memberId = toIdString(member?._id);
       if (!memberId) continue;
       const user = userById.get(toIdString(member.user));
-      const name = user
-        ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || member.name || 'Unknown'
-        : member.name || member.playaName || 'Unknown';
-      const email = user?.email || member.email || '';
-      const searchable = `${name} ${email}`.toLowerCase();
+      const memberPayload = buildSurveyEligibleMemberPayload({
+        member,
+        user,
+        coveredMemberIds,
+        coveredResponseByMemberId
+      });
+      if (!memberPayload) continue;
+      const searchable = `${memberPayload.name} ${memberPayload.email || ''}`.toLowerCase();
       if (q && !searchable.includes(q)) continue;
 
-      const alreadyCovered = coveredMemberIds.has(memberId);
-      eligibleMembers.push({
-        memberId,
-        name,
-        email,
-        alreadyCovered,
-        coveredByResponseId: alreadyCovered ? toIdString(coveredResponseByMemberId.get(memberId)?.responseId) : null,
-        eligible: !alreadyCovered
-      });
+      eligibleMembers.push(memberPayload);
+    }
+
+    const submitterMemberUser = submitterMember.user
+      ? await User.findById(submitterMember.user).select('firstName lastName email').lean()
+      : null;
+    const submitterMemberPayload = buildSurveyEligibleMemberPayload({
+      member: submitterMember,
+      user: submitterMemberUser,
+      coveredMemberIds,
+      coveredResponseByMemberId
+    });
+    if (
+      submitterMemberPayload &&
+      !eligibleMembers.some((member) => member.memberId === submitterMemberPayload.memberId)
+    ) {
+      eligibleMembers.unshift(submitterMemberPayload);
     }
 
     res.json({
       submitterMemberId: submitterMember._id,
+      submitterMember: submitterMemberPayload,
       eligibleMembers
     });
   } catch (error) {
