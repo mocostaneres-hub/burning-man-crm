@@ -245,6 +245,48 @@ async function saveQuestionsForSurvey(surveyId, rawQuestions = [], { session = n
   return created;
 }
 
+async function deleteSurveyCascade(surveyId, { session = null } = {}) {
+  const questionResult = await SurveyQuestion.deleteMany({ surveyId }).session(session || null);
+  const assignmentResult = await SurveyAssignment.deleteMany({ surveyId }).session(session || null);
+  const responseMemberResult = await SurveyResponseMember.deleteMany({ surveyId }).session(session || null);
+  const responseResult = await SurveyResponse.deleteMany({ surveyId }).session(session || null);
+  await SurveyImportSuggestion.updateMany({ surveyId }, { $set: { surveyId: null } }).session(session || null);
+  const surveyResult = await Survey.deleteOne({ _id: surveyId }).session(session || null);
+
+  return {
+    surveys: surveyResult.deletedCount || 0,
+    questions: questionResult.deletedCount || 0,
+    assignments: assignmentResult.deletedCount || 0,
+    responseMembers: responseMemberResult.deletedCount || 0,
+    responses: responseResult.deletedCount || 0
+  };
+}
+
+async function deleteSurveyWithOptionalTransaction(surveyId) {
+  try {
+    const session = await mongoose.startSession();
+    let deletedCounts = null;
+    try {
+      await session.withTransaction(async () => {
+        deletedCounts = await deleteSurveyCascade(surveyId, { session });
+      });
+      return deletedCounts;
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (
+      message.includes('Transaction numbers are only allowed') ||
+      message.includes('replica set') ||
+      error?.code === 20
+    ) {
+      return deleteSurveyCascade(surveyId);
+    }
+    throw error;
+  }
+}
+
 function extractPeopleMemberIdsFromAnswerValue(value) {
   if (!Array.isArray(value)) return [];
   return dedupeIdList(
@@ -905,6 +947,45 @@ router.put('/:surveyId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Update survey draft error:', error);
     res.status(500).json({ message: 'Server error updating survey' });
+  }
+});
+
+// @route   DELETE /api/surveys/:surveyId
+// @desc    Delete a survey and related survey data
+// @access  Private (Camp admins/leads)
+router.delete('/:surveyId', authenticateToken, async (req, res) => {
+  try {
+    if (!ensureMongoFeature(res)) return;
+    const { surveyId } = req.params;
+    const survey = await Survey.findById(surveyId).lean();
+    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
+    }
+
+    const deletedCounts = await deleteSurveyWithOptionalTransaction(survey._id);
+
+    try {
+      await recordActivity('CAMP', survey.campId, req.user._id, 'SURVEY_DELETED', {
+        surveyId: survey._id,
+        title: survey.title,
+        status: survey.status,
+        deletedCounts
+      });
+    } catch (activityError) {
+      console.error('Record survey delete activity error:', activityError);
+    }
+
+    res.json({
+      message: 'Survey deleted successfully',
+      surveyId: survey._id,
+      deleted: deletedCounts
+    });
+  } catch (error) {
+    console.error('Delete survey error:', error);
+    res.status(500).json({ message: 'Server error deleting survey' });
   }
 });
 

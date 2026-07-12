@@ -4,9 +4,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Badge, Button, Card, Modal } from '../../components/ui';
 import { Survey, SurveyQuestion } from '../../types';
-import { Plus, Send, Clock, ClipboardList, Eye } from 'lucide-react';
+import { Plus, Send, Clock, ClipboardList, Eye, Trash2 } from 'lucide-react';
 
 type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+
+type SurveyDraftSnapshot = {
+  campId: string;
+  editingSurveyId: string | null;
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+  editorOpen: boolean;
+};
 
 const createLocalId = (prefix: 'question' | 'section' = 'question'): string =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -121,6 +130,58 @@ const withQuestionDefaults = (question: SurveyQuestion, index: number): SurveyQu
     : []
 });
 
+const buildSurveyDraftPayload = (snapshot: SurveyDraftSnapshot) => {
+  if (!snapshot.campId || !snapshot.title.trim()) {
+    return {
+      error: 'Survey title is required',
+      payload: null
+    };
+  }
+
+  const sanitizedQuestions = snapshot.questions
+    .map((question, index) => ({
+      ...question,
+      order: index,
+      localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
+      prompt: String(question.prompt || '').trim(),
+      helpText: String(question.helpText || '').trim(),
+      options: Array.isArray(question.options)
+        ? question.options
+            .map((option) => {
+              const nextLabel = String(option.label || option.value || '').trim();
+              return {
+                ...option,
+                label: nextLabel,
+                value: nextLabel,
+                nextSectionId: option.nextSectionId || ''
+              };
+            })
+            .filter((option) => option.label && option.value)
+        : []
+    }))
+    .filter((question) => {
+      if (question.blockType === 'section_header') return !!question.prompt || !!question.helpText;
+      if (question.blockType === 'description') return !!question.prompt || !!question.helpText;
+      return !!question.prompt;
+    });
+
+  if (sanitizedQuestions.length === 0) {
+    return {
+      error: 'Add at least one question or section before saving',
+      payload: null
+    };
+  }
+
+  return {
+    error: null,
+    payload: {
+      title: snapshot.title.trim(),
+      description: snapshot.description.trim(),
+      questions: sanitizedQuestions
+    }
+  };
+};
+
 const CampSurveys: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -138,6 +199,17 @@ const CampSurveys: React.FC = () => {
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<SurveyQuestion[]>([defaultQuestion()]);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [autosavingDraft, setAutosavingDraft] = useState(false);
+  const [lastAutosavedAt, setLastAutosavedAt] = useState<Date | null>(null);
+  const editorSnapshotRef = useRef<SurveyDraftSnapshot>({
+    campId: '',
+    editingSurveyId: null,
+    title: '',
+    description: '',
+    questions: [defaultQuestion()],
+    editorOpen: false
+  });
+  const savingDraftRef = useRef(false);
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -149,6 +221,7 @@ const CampSurveys: React.FC = () => {
   const [rosterUsers, setRosterUsers] = useState<Array<{ userId: string; name: string; isLead: boolean }>>([]);
   const [sendingSurveyId, setSendingSurveyId] = useState<string | null>(null);
   const [closingSurveyId, setClosingSurveyId] = useState<string | null>(null);
+  const [deletingSurveyId, setDeletingSurveyId] = useState<string | null>(null);
 
   const [responsesModalOpen, setResponsesModalOpen] = useState(false);
   const [activeResponsesSurvey, setActiveResponsesSurvey] = useState<Survey | null>(null);
@@ -252,6 +325,17 @@ const CampSurveys: React.FC = () => {
   }, [campIdentifier, loadCampContext, loadSurveys, navigate, user?.campLeadCampSlug, user?.eventsLeadCampSlug]);
 
   useEffect(() => {
+    editorSnapshotRef.current = {
+      campId,
+      editingSurveyId,
+      title,
+      description,
+      questions,
+      editorOpen
+    };
+  }, [campId, description, editingSurveyId, editorOpen, questions, title]);
+
+  useEffect(() => {
     const editSurveyId = searchParams.get('editSurveyId');
     if (!editSurveyId || editorOpen || surveys.length === 0) return;
     const targetSurvey = surveys.find((survey) => survey._id === editSurveyId);
@@ -269,6 +353,8 @@ const CampSurveys: React.FC = () => {
     setDescription('');
     setQuestions([defaultQuestion()]);
     setImportWarnings([]);
+    setLastAutosavedAt(null);
+    setAutosavingDraft(false);
   };
 
   const openCreateModal = () => {
@@ -284,9 +370,17 @@ const CampSurveys: React.FC = () => {
       setTitle(detail.survey.title || '');
       setDescription(nextDescription);
       setQuestions((detail.questions || []).map((question: any, index: number) => withQuestionDefaults(question, index)));
+      setLastAutosavedAt(null);
       setEditorOpen(true);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load survey details');
+    }
+  };
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+    if (editingSurveyId && lastAutosavedAt) {
+      void loadSurveys();
     }
   };
 
@@ -436,60 +530,68 @@ const CampSurveys: React.FC = () => {
     navigate(`/surveys/${surveyId}?mode=view`);
   };
 
-  const saveDraft = async (options: { preview?: boolean } = {}) => {
-    if (!campId || !title.trim()) {
-      setError('Survey title is required');
-      return null;
-    }
-    const sanitizedQuestions = questions
-      .map((question, index) => ({
-        ...question,
-        order: index,
-        localId: question.localId || createLocalId(question.blockType === 'section_header' ? 'section' : 'question'),
-        prompt: String(question.prompt || '').trim(),
-        helpText: String(question.helpText || '').trim(),
-        options: Array.isArray(question.options)
-          ? question.options
-              .map((option) => {
-                const nextLabel = String(option.label || option.value || '').trim();
-                return {
-                  ...option,
-                  label: nextLabel,
-                  value: nextLabel,
-                  nextSectionId: option.nextSectionId || ''
-                };
-              })
-              .filter((option) => option.label && option.value)
-          : []
-      }))
-      .filter((question) => {
-        if (question.blockType === 'section_header') return !!question.prompt || !!question.helpText;
-        if (question.blockType === 'description') return !!question.prompt || !!question.helpText;
-        return !!question.prompt;
-      });
+  const autosaveDraft = useCallback(async () => {
+    const snapshot = editorSnapshotRef.current;
+    if (!snapshot.editorOpen || !snapshot.editingSurveyId || savingDraftRef.current) return;
 
-    if (sanitizedQuestions.length === 0) {
-      setError('Add at least one question or section before saving');
-      return null;
-    }
+    const { payload } = buildSurveyDraftPayload(snapshot);
+    if (!payload) return;
 
     try {
+      savingDraftRef.current = true;
+      setAutosavingDraft(true);
+      await api.updateSurveyDraft(snapshot.editingSurveyId, payload);
+      setLastAutosavedAt(new Date());
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to auto-save survey');
+    } finally {
+      savingDraftRef.current = false;
+      setAutosavingDraft(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!editorOpen || !editingSurveyId) return undefined;
+    const intervalId = window.setInterval(() => {
+      void autosaveDraft();
+    }, 60000);
+    return () => window.clearInterval(intervalId);
+  }, [autosaveDraft, editingSurveyId, editorOpen]);
+
+  const saveDraft = async (options: { preview?: boolean } = {}) => {
+    const { error: draftError, payload } = buildSurveyDraftPayload({
+      campId,
+      editingSurveyId,
+      title,
+      description,
+      questions,
+      editorOpen
+    });
+
+    if (!payload) {
+      setError(draftError || 'Failed to prepare survey draft');
+      return null;
+    }
+    if (savingDraftRef.current) return null;
+
+    try {
+      savingDraftRef.current = true;
       setSavingDraft(true);
       setError(null);
       let savedSurveyId = editingSurveyId;
       if (editingSurveyId) {
         const response = await api.updateSurveyDraft(editingSurveyId, {
-          title: title.trim(),
-          description: description.trim(),
-          questions: sanitizedQuestions
+          title: payload.title,
+          description: payload.description,
+          questions: payload.questions
         });
         savedSurveyId = response.survey?._id || editingSurveyId;
       } else {
         const response = await api.createSurveyDraft({
           campId,
-          title: title.trim(),
-          description: description.trim(),
-          questions: sanitizedQuestions
+          title: payload.title,
+          description: payload.description,
+          questions: payload.questions
         });
         savedSurveyId = response.survey?._id || null;
       }
@@ -504,6 +606,7 @@ const CampSurveys: React.FC = () => {
       setError(err?.response?.data?.message || 'Failed to save survey draft');
       return null;
     } finally {
+      savingDraftRef.current = false;
       setSavingDraft(false);
     }
   };
@@ -564,6 +667,24 @@ const CampSurveys: React.FC = () => {
       setError(err?.response?.data?.message || 'Failed to close survey');
     } finally {
       setClosingSurveyId(null);
+    }
+  };
+
+  const handleDeleteSurvey = async (survey: Survey) => {
+    const confirmed = window.confirm(
+      `Delete "${survey.title}"? This permanently removes the survey, its questions, assignments, and submitted responses.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingSurveyId(survey._id);
+      setError(null);
+      await api.deleteSurvey(survey._id);
+      await loadSurveys();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to delete survey');
+    } finally {
+      setDeletingSurveyId(null);
     }
   };
 
@@ -753,6 +874,16 @@ const CampSurveys: React.FC = () => {
                             <Send size={14} />
                             {sendingSurveyId === survey._id ? 'Sending...' : 'Send Survey'}
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteSurvey(survey)}
+                            disabled={deletingSurveyId === survey._id}
+                            className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 size={14} />
+                            {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
+                          </Button>
                         </div>
                       </>
                     )}
@@ -779,6 +910,16 @@ const CampSurveys: React.FC = () => {
                             {closingSurveyId === survey._id ? 'Closing...' : 'Close Survey'}
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteSurvey(survey)}
+                          disabled={deletingSurveyId === survey._id}
+                          className="flex items-center gap-1 text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Trash2 size={14} />
+                          {deletingSurveyId === survey._id ? 'Deleting...' : 'Delete'}
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -789,7 +930,7 @@ const CampSurveys: React.FC = () => {
         </div>
       )}
 
-      <Modal isOpen={editorOpen} onClose={() => setEditorOpen(false)} title={editingSurveyId ? 'Edit Survey' : 'Create Survey Draft'} size="xl">
+      <Modal isOpen={editorOpen} onClose={closeEditor} title={editingSurveyId ? 'Edit Survey' : 'Create Survey Draft'} size="xl">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Survey title</label>
@@ -890,6 +1031,18 @@ const CampSurveys: React.FC = () => {
                   </div>
                 )}
 
+                {question.blockType !== 'section_header' && (
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Question explanation</label>
+                    <textarea
+                      value={question.helpText || ''}
+                      onChange={(e) => setQuestion(index, { helpText: e.target.value })}
+                      className="w-full border border-gray-300 rounded px-2 py-1 min-h-[64px]"
+                      placeholder="Optional subline shown under this question"
+                    />
+                  </div>
+                )}
+
                 {optionBlockTypes.has(question.blockType) && (
                   <div>
                     <label className="block text-xs text-gray-600 mb-2">Options</label>
@@ -982,18 +1135,37 @@ const CampSurveys: React.FC = () => {
                 </div>
               </div>
             ))}
+            <div className="flex flex-wrap justify-end gap-2 border border-dashed border-gray-200 rounded p-3">
+              <Button variant="outline" size="sm" onClick={addSection}>
+                Add Section
+              </Button>
+              <Button variant="outline" size="sm" onClick={addQuestion}>
+                Add Question
+              </Button>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => saveDraft({ preview: true })} disabled={savingDraft}>
-              Preview as Recipient
-            </Button>
-            <Button variant="outline" onClick={() => setEditorOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={() => saveDraft()} disabled={savingDraft}>
-              {savingDraft ? 'Saving...' : editingSurveyId ? 'Save Survey' : 'Create Draft'}
-            </Button>
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-h-[18px] text-xs text-gray-500">
+              {autosavingDraft
+                ? 'Auto-saving...'
+                : lastAutosavedAt
+                  ? `Auto-saved at ${lastAutosavedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                  : editingSurveyId
+                    ? 'Auto-saves every 60 seconds while editing.'
+                    : ''}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" onClick={() => saveDraft({ preview: true })} disabled={savingDraft || autosavingDraft}>
+                Preview as Recipient
+              </Button>
+              <Button variant="outline" onClick={closeEditor}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => saveDraft()} disabled={savingDraft || autosavingDraft}>
+                {savingDraft ? 'Saving...' : editingSurveyId ? 'Save Survey' : 'Create Draft'}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

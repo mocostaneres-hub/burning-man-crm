@@ -17,7 +17,6 @@ type EligibleMember = {
 type PeopleAnswerValue = {
   memberId: string;
   name: string;
-  email?: string;
 };
 
 type SurveyAnswerValue = string | number | string[] | PeopleAnswerValue[] | null;
@@ -227,7 +226,7 @@ const SurveyRespond: React.FC = () => {
     const selectedIds = new Set(getPeopleAnswer(questionKey).map((member) => member.memberId));
     if (!query) return [];
     return eligibleMembers.filter((member) => {
-      const searchable = `${member.name} ${member.email || ''}`.toLowerCase();
+      const searchable = member.name.toLowerCase();
       return searchable.includes(query) && !selectedIds.has(member.memberId);
     });
   };
@@ -241,7 +240,7 @@ const SurveyRespond: React.FC = () => {
       if (current.some((item) => item.memberId === member.memberId)) return prev;
       return {
         ...prev,
-        [questionKey]: [...current, { memberId: member.memberId, name: member.name, email: member.email }]
+        [questionKey]: [...current, { memberId: member.memberId, name: member.name }]
       };
     });
     setPeopleQueryByQuestion((prev) => ({ ...prev, [questionKey]: '' }));
@@ -390,6 +389,17 @@ const SurveyRespond: React.FC = () => {
     const key = getQuestionKey(question);
     const value = answersByQuestion[key];
     const labelClassName = 'block text-sm font-medium text-custom-text mb-1';
+    const renderQuestionLabel = () => (
+      <>
+        <label className={labelClassName}>{question.prompt}</label>
+        {question.helpText && (
+          <div
+            className="text-xs text-custom-text-secondary mb-2"
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(question.helpText) }}
+          />
+        )}
+      </>
+    );
 
     if (question.blockType === 'section_header') {
       return (
@@ -428,7 +438,7 @@ const SurveyRespond: React.FC = () => {
       case 'paragraph':
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <textarea
               className="w-full border border-gray-300 rounded px-3 py-2 min-h-[90px]"
               value={String(value || '')}
@@ -439,7 +449,7 @@ const SurveyRespond: React.FC = () => {
       case 'multiple_choice':
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <div className="space-y-1">
               {(question.options || []).map((option) => (
                 <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -458,7 +468,7 @@ const SurveyRespond: React.FC = () => {
       case 'checkboxes':
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <div className="space-y-1">
               {(question.options || []).map((option) => (
                 <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -476,7 +486,7 @@ const SurveyRespond: React.FC = () => {
       case 'dropdown':
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <select
               value={String(value || '')}
               onChange={(e) => setAnswer(key, e.target.value)}
@@ -497,13 +507,7 @@ const SurveyRespond: React.FC = () => {
         const query = peopleQueryByQuestion[key] || '';
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
-            {question.helpText && (
-              <div
-                className="text-xs text-custom-text-secondary mb-2"
-                dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(question.helpText) }}
-              />
-            )}
+            {renderQuestionLabel()}
             <div className="flex flex-wrap gap-2 mb-2">
               {selectedPeople.map((member) => (
                 <span
@@ -546,7 +550,6 @@ const SurveyRespond: React.FC = () => {
                     >
                       <div>
                         <p className="text-sm text-custom-text">{member.name}</p>
-                        {member.email && <p className="text-xs text-gray-500">{member.email}</p>}
                       </div>
                       {member.eligible ? (
                         <UserPlus size={14} className="text-gray-400" />
@@ -567,7 +570,7 @@ const SurveyRespond: React.FC = () => {
         const options = Array.from({ length: max - min + 1 }, (_, index) => min + index);
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <div className="flex flex-wrap gap-2">
               {options.map((num) => (
                 <label key={num} className="inline-flex items-center gap-1 text-sm">
@@ -590,7 +593,7 @@ const SurveyRespond: React.FC = () => {
       default:
         return (
           <div>
-            <label className={labelClassName}>{question.prompt}</label>
+            {renderQuestionLabel()}
             <input
               type={question.blockType === 'date' ? 'date' : question.blockType === 'time' ? 'time' : 'text'}
               className="w-full border border-gray-300 rounded px-3 py-2"

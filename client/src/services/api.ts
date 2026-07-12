@@ -864,6 +864,11 @@ class ApiService {
     return response.data;
   }
 
+  async deleteSurvey(surveyId: string): Promise<{ message: string; surveyId: string; deleted?: Record<string, number> }> {
+    const response = await this.api.delete(`/surveys/${surveyId}`);
+    return response.data;
+  }
+
   async importSurveyFromPublicForm(payload: {
     campId: string;
     url: string;
