@@ -2,8 +2,16 @@ const surveysRouter = require('../routes/surveys');
 
 const {
   planSurveyQuestionPersistence,
-  remapSurveyResponseAnswers
+  remapSurveyResponseAnswers,
+  deleteSurveyResponseCascade
 } = surveysRouter.__test;
+
+const SurveyResponse = require('../models/SurveyResponse');
+const SurveyResponseMember = require('../models/SurveyResponseMember');
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('survey response question identity handling', () => {
   test('preserves an existing question by incoming _id when saving a survey', () => {
@@ -170,5 +178,43 @@ describe('survey response question identity handling', () => {
     );
 
     expect(remapped[0]).toBe(answer);
+  });
+});
+
+describe('survey response deletion reset', () => {
+  test('deletes the submitted response and its covered-member rows', async () => {
+    const session = { id: 'session-1' };
+    const responseMemberSession = jest.fn().mockResolvedValue({ deletedCount: 3 });
+    const responseSession = jest.fn().mockResolvedValue({ deletedCount: 1 });
+
+    jest.spyOn(SurveyResponseMember, 'deleteMany').mockReturnValue({
+      session: responseMemberSession
+    });
+    jest.spyOn(SurveyResponse, 'deleteOne').mockReturnValue({
+      session: responseSession
+    });
+
+    const result = await deleteSurveyResponseCascade(
+      {
+        _id: 'response-1',
+        surveyId: 'survey-1'
+      },
+      { session }
+    );
+
+    expect(SurveyResponseMember.deleteMany).toHaveBeenCalledWith({
+      surveyId: 'survey-1',
+      responseId: 'response-1'
+    });
+    expect(responseMemberSession).toHaveBeenCalledWith(session);
+    expect(SurveyResponse.deleteOne).toHaveBeenCalledWith({
+      _id: 'response-1',
+      surveyId: 'survey-1'
+    });
+    expect(responseSession).toHaveBeenCalledWith(session);
+    expect(result).toEqual({
+      responses: 1,
+      responseMembers: 3
+    });
   });
 });

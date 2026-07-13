@@ -937,6 +937,14 @@ class ApiService {
     return response.data;
   }
 
+  async deleteSurveyResponse(
+    surveyId: string,
+    responseId: string
+  ): Promise<{ message: string; responseId: string; resetMemberIds: string[]; deleted?: Record<string, number> }> {
+    const response = await this.api.delete(`/surveys/${surveyId}/responses/${responseId}`);
+    return response.data;
+  }
+
   async getSurveyResponses(surveyId: string): Promise<{ responses: Array<any> }> {
     const response = await this.api.get(`/surveys/${surveyId}/responses`);
     return response.data;

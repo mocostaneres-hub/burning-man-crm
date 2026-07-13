@@ -16,6 +16,7 @@ import {
   Home,
   Save,
   Search,
+  Trash2,
   Users,
   X
 } from 'lucide-react';
@@ -504,6 +505,7 @@ const SurveyResponses: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [responses, setResponses] = useState<SurveyResponseRecord[]>([]);
@@ -513,6 +515,7 @@ const SurveyResponses: React.FC = () => {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [draftValue, setDraftValue] = useState<unknown>('');
   const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+  const [deletingResponseId, setDeletingResponseId] = useState<string | null>(null);
   const [peopleSearch, setPeopleSearch] = useState('');
 
   const loadResponses = useCallback(async () => {
@@ -849,6 +852,33 @@ const SurveyResponses: React.FC = () => {
     }
   };
 
+  const handleDeleteResponse = async (response: SurveyResponseRecord) => {
+    if (!surveyId) return;
+
+    const submitter = response.submitterName || 'this responder';
+    const coveredText = getCoveredMembersText(response);
+    const confirmed = window.confirm(
+      `Delete the response from ${submitter}? This permanently removes the submitted answers and resets survey completion for ${coveredText === '-' ? 'everyone covered by this response' : coveredText}.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingResponseId(response._id);
+      setError(null);
+      setSuccessMessage(null);
+      if (editingCell?.responseId === response._id) {
+        cancelCellEdit();
+      }
+      await api.deleteSurveyResponse(surveyId, response._id);
+      await loadResponses();
+      setSuccessMessage('Response deleted. Covered members can submit this survey again.');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to delete response');
+    } finally {
+      setDeletingResponseId(null);
+    }
+  };
+
   const updateCheckboxDraft = (optionValue: string) => {
     setDraftValue((current) => {
       const currentValues = Array.isArray(current) ? current.map((item) => String(item)) : [];
@@ -1164,6 +1194,12 @@ const SurveyResponses: React.FC = () => {
         </div>
       )}
 
+      {successMessage && (
+        <div className="mb-6 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800 survey-print-hidden">
+          {successMessage}
+        </div>
+      )}
+
       {loading ? (
         <Card className="p-8 text-center text-sm text-gray-500">Loading survey responses...</Card>
       ) : !survey ? (
@@ -1270,6 +1306,7 @@ const SurveyResponses: React.FC = () => {
                     <th className="min-w-[180px] px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Completed For</th>
                     <th className="min-w-[140px] px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Submitted</th>
                     <th className="min-w-[120px] px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Edited</th>
+                    <th className="w-[96px] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 survey-print-hidden">Actions</th>
                     {questionColumns.map((column) => (
                       <th key={column.key} className="min-w-[220px] px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         <div className="space-y-1 normal-case tracking-normal">
@@ -1299,7 +1336,7 @@ const SurveyResponses: React.FC = () => {
                   {filteredResponses.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={questionColumns.length + 5}
+                        colSpan={questionColumns.length + 6}
                         className="px-6 py-10 text-center text-sm text-gray-500"
                       >
                         No responses match the current filters.
@@ -1318,6 +1355,18 @@ const SurveyResponses: React.FC = () => {
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
                           {formatDateTime(response.lastEditedAt || null)}
+                        </td>
+                        <td className="px-4 py-3 survey-print-hidden">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteResponse(response)}
+                            disabled={deletingResponseId === response._id}
+                            className="flex items-center gap-1 border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 size={14} />
+                            {deletingResponseId === response._id ? 'Deleting...' : 'Delete'}
+                          </Button>
                         </td>
                         {questionColumns.map((column) => (
                           <td key={column.key} className="max-w-[340px] px-4 py-3 text-sm text-gray-700">

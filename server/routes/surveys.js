@@ -668,6 +668,56 @@ async function deleteSurveyWithOptionalTransaction(surveyId) {
   }
 }
 
+async function deleteSurveyResponseCascade(response, { session = null } = {}) {
+  const responseId = toIdString(response?._id);
+  const surveyId = toIdString(response?.surveyId);
+  if (!responseId || !surveyId) {
+    return {
+      responses: 0,
+      responseMembers: 0
+    };
+  }
+
+  const responseMemberResult = await SurveyResponseMember.deleteMany({
+    surveyId,
+    responseId
+  }).session(session || null);
+  const responseResult = await SurveyResponse.deleteOne({
+    _id: responseId,
+    surveyId
+  }).session(session || null);
+
+  return {
+    responses: responseResult.deletedCount || 0,
+    responseMembers: responseMemberResult.deletedCount || 0
+  };
+}
+
+async function deleteSurveyResponseWithOptionalTransaction(response) {
+  try {
+    const session = await mongoose.startSession();
+    let deletedCounts = null;
+    try {
+      await session.withTransaction(async () => {
+        deletedCounts = await deleteSurveyResponseCascade(response, { session });
+      });
+      return deletedCounts;
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (
+      message.includes('Transaction numbers are only allowed') ||
+      message.includes('replica set') ||
+      error?.code === 20
+    ) {
+      return deleteSurveyResponseCascade(response);
+    }
+    throw error;
+  }
+}
+
 function extractPeopleMemberIdsFromAnswerValue(value) {
   if (!Array.isArray(value)) return [];
   return dedupeIdList(
@@ -1976,10 +2026,53 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
   }
 });
 
+// @route   DELETE /api/surveys/:surveyId/responses/:responseId
+// @desc    Delete a submitted response and reset covered members
+// @access  Private (Camp admins/leads/events leads)
+router.delete('/:surveyId/responses/:responseId', authenticateToken, async (req, res) => {
+  try {
+    if (!ensureMongoFeature(res)) return;
+    const { surveyId, responseId } = req.params;
+    const survey = await Survey.findById(surveyId).lean();
+    if (!survey) return res.status(404).json({ message: 'Survey not found' });
+    const hasPermission = await canManageEventPlanning(req, survey.campId);
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
+    }
+
+    const response = await SurveyResponse.findOne({ _id: responseId, surveyId }).lean();
+    if (!response) {
+      return res.status(404).json({ message: 'Response not found for this survey' });
+    }
+
+    const resetMemberIds = dedupeIdList(response.coveredMemberIds || []);
+    const deletedCounts = await deleteSurveyResponseWithOptionalTransaction(response);
+
+    await recordActivity('CAMP', survey.campId, req.user._id, 'SURVEY_RESPONSE_DELETED', {
+      surveyId: survey._id,
+      responseId: response._id,
+      submittedByMemberId: response.submittedByMemberId,
+      resetMemberIds,
+      deleted: deletedCounts
+    });
+
+    res.json({
+      message: 'Survey response deleted successfully',
+      responseId,
+      resetMemberIds,
+      deleted: deletedCounts
+    });
+  } catch (error) {
+    console.error('Delete survey response error:', error);
+    res.status(500).json({ message: 'Server error deleting survey response' });
+  }
+});
+
 router.__test = {
   normalizeQuestionsForSurvey,
   planSurveyQuestionPersistence,
-  remapSurveyResponseAnswers
+  remapSurveyResponseAnswers,
+  deleteSurveyResponseCascade
 };
 
 module.exports = router;
