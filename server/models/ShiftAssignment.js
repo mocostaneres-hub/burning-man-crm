@@ -36,7 +36,7 @@ const shiftAssignmentSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ['CREATE_MODE', 'EDIT_ADD', 'ROSTER_AUTO_ADD'],
+      enum: ['CREATE_MODE', 'EDIT_MODE', 'EDIT_ADD', 'ROSTER_AUTO_ADD'],
       default: 'CREATE_MODE'
     },
     modeSnapshot: {

@@ -245,8 +245,11 @@ const MyTasks: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error signing up for shift:', error);
-      
-      if (error.response?.status === 409) {
+      const serverMessage = error.response?.data?.message;
+
+      if (error.response?.data?.code === 'SHIFT_DIRECT_ASSIGNMENT_LOCKED') {
+        alert(serverMessage || 'This shift is locked because it was directly assigned to someone else.');
+      } else if (error.response?.status === 409) {
         alert('Sorry, this shift is now full. Please try a different shift.');
       } else if (error.response?.status === 403) {
         alert('You are not authorized to sign up for this shift.');
@@ -646,6 +649,7 @@ const MyTasks: React.FC = () => {
                         return upcomingShifts.map((shift: any) => {
                           const signedUp = isUserSignedUp(shift);
                           const isFull = isShiftFull(shift);
+                          const isDirectAssignmentLocked = shift.isDirectAssignmentLocked === true && shift.canSignUp === false;
                           const isTaskCompleted = selectedTask.status === 'closed';
                           const maxSignUps = shift.maxSignUps || 0;
                           const currentSignUps = shift.memberIds?.length || 0;
@@ -698,6 +702,15 @@ const MyTasks: React.FC = () => {
                                   <div className="text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded">
                                     Read Only
                                   </div>
+                                ) : isDirectAssignmentLocked ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled
+                                    className="flex items-center gap-1"
+                                  >
+                                    Directly Assigned
+                                  </Button>
                                 ) : isFull ? (
                                   <Button
                                     variant="secondary"

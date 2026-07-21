@@ -27,7 +27,10 @@
 
 const path = require('path');
 const {
-  decideAssignmentsForJoiner
+  decideAssignmentsForJoiner,
+  getDirectAssignmentUserIds,
+  isShiftDirectAssignmentLockedForUser,
+  buildShiftSignupReservationFilter
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -49,6 +52,58 @@ function makeShift(id, opts = {}) {
     ...opts
   };
 }
+
+describe('direct assignment locks', () => {
+  test('a direct assignment blocks every user who is not explicitly listed', () => {
+    const shift = makeShift('shift-locked', {
+      assignmentMode: 'ALL_ROSTER',
+      directAssignmentUserIds: ['user-assigned']
+    });
+
+    expect(isShiftDirectAssignmentLockedForUser(shift, 'user-other')).toBe(true);
+    expect(isShiftDirectAssignmentLockedForUser(shift, 'user-assigned')).toBe(false);
+  });
+
+  test('removing the final direct assignee unlocks the shift', () => {
+    const shift = makeShift('shift-open', {
+      assignmentMode: 'ALL_ROSTER',
+      directAssignmentUserIds: []
+    });
+
+    expect(getDirectAssignmentUserIds(shift)).toEqual([]);
+    expect(isShiftDirectAssignmentLockedForUser(shift, 'user-other')).toBe(false);
+  });
+
+  test('legacy selected-user rows can supply the lock audience', () => {
+    const shift = makeShift('shift-legacy', { assignmentMode: 'SELECTED_USERS' });
+
+    expect(getDirectAssignmentUserIds(shift, ['user-one', 'user-one', 'user-two']))
+      .toEqual(['user-one', 'user-two']);
+    expect(isShiftDirectAssignmentLockedForUser(shift, 'user-three', ['user-one'])).toBe(true);
+  });
+
+  test('the atomic capacity reservation also requires direct-lock access', () => {
+    expect(buildShiftSignupReservationFilter({
+      eventId: 'event-1',
+      shiftId: 'shift-1',
+      maxSignUps: 3,
+      userId: 'user-1'
+    })).toEqual({
+      _id: 'event-1',
+      shifts: {
+        $elemMatch: {
+          _id: 'shift-1',
+          currentSignups: { $lt: 3 },
+          $or: [
+            { directAssignmentUserIds: { $exists: false } },
+            { directAssignmentUserIds: { $size: 0 } },
+            { directAssignmentUserIds: 'user-1' }
+          ]
+        }
+      }
+    });
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // decideAssignmentsForJoiner
@@ -259,6 +314,29 @@ describe('decideAssignmentsForJoiner — entire-roster includes late-joiners', (
       isLead: false
     });
     expect(out.map((row) => row.shiftId)).toEqual(['shift-open']);
+  });
+
+  test('directly locked shifts are not auto-assigned to late roster joiners', () => {
+    const events = [
+      makeEvent({
+        id: 'evt-locked',
+        shifts: [makeShift('shift-locked', {
+          assignmentMode: 'ALL_ROSTER',
+          directAssignmentUserIds: ['user-selected']
+        })]
+      })
+    ];
+    const out = decideAssignmentsForJoiner({
+      events,
+      alreadyAssignedShiftIds: new Set(),
+      signupCountByShift: new Map(),
+      campId: 'camp-1',
+      userId: 'user-late',
+      assignedBy: 'user-late',
+      isLead: false
+    });
+
+    expect(out).toEqual([]);
   });
 
   test('legacy shifts (no assignmentMode field) honour the inferred mode', () => {

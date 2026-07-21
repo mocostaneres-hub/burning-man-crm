@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal, Input, TimePicker } from '../../components/ui';
-import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X } from 'lucide-react';
+import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X, Search, CheckCircle } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -78,6 +78,31 @@ type DayReportGroup = {
   shifts: ShiftReportRow[];
 };
 
+type ShiftAssigneeOption = {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  playaName?: string;
+  isLead?: boolean;
+  isActiveRosterMember?: boolean;
+};
+
+const getAssigneeDisplayName = (assignee: ShiftAssigneeOption) => (
+  `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim()
+  || assignee.playaName
+  || assignee.email
+  || 'Unknown member'
+);
+
+const getAssigneeInitials = (assignee: ShiftAssigneeOption) => {
+  const name = `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim()
+    || assignee.playaName
+    || assignee.email;
+  const parts = name.split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase() || '?';
+};
+
 type ReportView = 'names' | 'shifts' | 'day';
 
 const VolunteerShifts: React.FC = () => {
@@ -132,10 +157,12 @@ const VolunteerShifts: React.FC = () => {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [assignmentState, setAssignmentState] = useState<{
-    assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
-    unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
-  }>({ assignedUsers: [], unassignedUsers: [] });
+    isDirectAssignmentLocked: boolean;
+    assignedUsers: ShiftAssigneeOption[];
+    unassignedUsers: ShiftAssigneeOption[];
+  }>({ isDirectAssignmentLocked: false, assignedUsers: [], unassignedUsers: [] });
   const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
   const [reportType, setReportType] = useState<ReportView>('names');
   const [selectedDate, setSelectedDate] = useState('');
@@ -172,6 +199,7 @@ const VolunteerShifts: React.FC = () => {
       currentSignups: number;
       assignmentMode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
       selectedUserIds: string[];
+      directAssignmentUserIds: string[];
       requiredSkills: string[];
     }>
   });
@@ -196,6 +224,23 @@ const VolunteerShifts: React.FC = () => {
     || (user?.isEventsLead === true);
   
   const canAccessShifts = isCampContext && isAdminOrLead;
+
+  const filteredUnassignedUsers = useMemo(() => {
+    const query = assigneeSearch.trim().toLowerCase();
+    if (!query) return assignmentState.unassignedUsers;
+
+    return assignmentState.unassignedUsers.filter((assignee) => (
+      [assignee.firstName, assignee.lastName, assignee.playaName, assignee.email]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    ));
+  }, [assigneeSearch, assignmentState.unassignedUsers]);
+
+  const selectedPendingUsers = useMemo(() => (
+    assignmentState.unassignedUsers.filter((assignee) => pendingAddUserIds.includes(assignee.userId))
+  ), [assignmentState.unassignedUsers, pendingAddUserIds]);
 
   const getShiftStats = (shift: any) => {
     const current = shift.memberIds?.length || 0;
@@ -421,12 +466,12 @@ const VolunteerShifts: React.FC = () => {
       shifts: prev.shifts.map((shift, index) => {
         if (index !== shiftIndex) return shift;
         if (mode === 'ALL_ROSTER') {
-          return { ...shift, assignmentMode: mode, selectedUserIds: allRosterIds };
+          return { ...shift, assignmentMode: mode, selectedUserIds: allRosterIds, directAssignmentUserIds: [] };
         }
         if (mode === 'LEADS_ONLY') {
-          return { ...shift, assignmentMode: mode, selectedUserIds: leadRosterIds };
+          return { ...shift, assignmentMode: mode, selectedUserIds: leadRosterIds, directAssignmentUserIds: [] };
         }
-        return { ...shift, assignmentMode: mode, selectedUserIds: [] };
+        return { ...shift, assignmentMode: mode, selectedUserIds: [], directAssignmentUserIds: [] };
       })
     }));
   };
@@ -439,7 +484,13 @@ const VolunteerShifts: React.FC = () => {
         const selected = shift.selectedUserIds.includes(userId)
           ? shift.selectedUserIds.filter((id) => id !== userId)
           : [...shift.selectedUserIds, userId];
-        return { ...shift, selectedUserIds: selected };
+        return {
+          ...shift,
+          selectedUserIds: selected,
+          directAssignmentUserIds: shift.assignmentMode === 'SELECTED_USERS'
+            ? selected
+            : shift.directAssignmentUserIds
+        };
       })
     }));
   };
@@ -578,6 +629,9 @@ const VolunteerShifts: React.FC = () => {
   const hasAvailableShifts = useMemo(() => {
     return events.some(event =>
       (event.shifts || []).some(shift => {
+        if ((shift.directAssignmentUserIds || []).length > 0 || shift.assignmentMode === 'SELECTED_USERS') {
+          return false;
+        }
         const max = shift.maxSignUps || 0;
         if (max <= 0) return false;
         const current = (shift.memberIds || []).length;
@@ -645,6 +699,7 @@ const VolunteerShifts: React.FC = () => {
           requiredSkills: shift.requiredSkills || [],
           assignmentMode: shift.assignmentMode,
           selectedUserIds: shift.selectedUserIds,
+          directAssignmentUserIds: shift.directAssignmentUserIds,
           manualAddIds: shift.selectedUserIds.filter((id) => {
             const baseline = shift.assignmentMode === 'ALL_ROSTER'
               ? allRosterIds
@@ -707,6 +762,7 @@ const VolunteerShifts: React.FC = () => {
         currentSignups: 0,
         assignmentMode: 'ALL_ROSTER',
         selectedUserIds: allRosterIds,
+        directAssignmentUserIds: [],
         requiredSkills: []
       }]
     }));
@@ -730,6 +786,7 @@ const VolunteerShifts: React.FC = () => {
         currentSignups: 0,
         assignmentMode: 'ALL_ROSTER',
         selectedUserIds: allRosterIds,
+        directAssignmentUserIds: [],
         requiredSkills: []
       }]
     }));
@@ -817,21 +874,31 @@ const VolunteerShifts: React.FC = () => {
       eventDate: utcToPdtDateInput(event.eventDate) || fallbackShiftDate,
       startTime: utcToPdtTimeInput(event.startTime) || fallbackShiftStart,
       endTime: utcToPdtTimeInput(event.endTime) || fallbackShiftEnd,
-      shifts: event.shifts.map((shift, index) => ({
-        _id: shift._id?.toString(),
-        title: shift.title,
-        description: shift.description || '',
-        date: utcToPdtDateInput(shift.date),
-        startTime: utcToPdtTimeInput(shift.startTime),
-        endTime: utcToPdtTimeInput(shift.endTime),
-        maxSignUps: shift.maxSignUps,
-        currentSignups: shift.memberIds?.length || 0,
-        assignmentMode: 'SELECTED_USERS',
-        selectedUserIds: (assignmentResponses[index]?.assignedUsers || [])
+      shifts: event.shifts.map((shift, index) => {
+        const assignmentMode = shift.assignmentMode || 'ALL_ROSTER';
+        const directAssignmentUserIds = (assignmentResponses[index]?.assignedUsers || [])
           .map((assignedUser: any) => assignedUser?.userId?.toString())
-          .filter(Boolean),
-        requiredSkills: Array.isArray((shift as any).requiredSkills) ? (shift as any).requiredSkills : []
-      }))
+          .filter(Boolean);
+        const selectedUserIds = assignmentMode === 'ALL_ROSTER'
+          ? allRosterIds
+          : assignmentMode === 'LEADS_ONLY'
+            ? leadRosterIds
+            : directAssignmentUserIds;
+        return {
+          _id: shift._id?.toString(),
+          title: shift.title,
+          description: shift.description || '',
+          date: utcToPdtDateInput(shift.date),
+          startTime: utcToPdtTimeInput(shift.startTime),
+          endTime: utcToPdtTimeInput(shift.endTime),
+          maxSignUps: shift.maxSignUps,
+          currentSignups: shift.memberIds?.length || 0,
+          assignmentMode,
+          selectedUserIds,
+          directAssignmentUserIds,
+          requiredSkills: Array.isArray((shift as any).requiredSkills) ? (shift as any).requiredSkills : []
+        };
+      })
     });
     
     setShowCreateModal(true);
@@ -890,12 +957,12 @@ const VolunteerShifts: React.FC = () => {
       shifts: prev.shifts.map((_, index) => {
         const shift = prev.shifts[index];
         if (globalInviteMode === 'ALL_ROSTER') {
-          return { ...shift, assignmentMode: 'ALL_ROSTER', selectedUserIds: allRosterIds };
+          return { ...shift, assignmentMode: 'ALL_ROSTER', selectedUserIds: allRosterIds, directAssignmentUserIds: [] };
         }
         if (globalInviteMode === 'LEADS_ONLY') {
-          return { ...shift, assignmentMode: 'LEADS_ONLY', selectedUserIds: leadRosterIds };
+          return { ...shift, assignmentMode: 'LEADS_ONLY', selectedUserIds: leadRosterIds, directAssignmentUserIds: [] };
         }
-        return { ...shift, assignmentMode: 'SELECTED_USERS', selectedUserIds: [] };
+        return { ...shift, assignmentMode: 'SELECTED_USERS', selectedUserIds: [], directAssignmentUserIds: [] };
       })
     }));
   };
@@ -947,8 +1014,10 @@ const VolunteerShifts: React.FC = () => {
       setShowAssignmentModal(true);
       setAssignmentLoading(true);
       setPendingAddUserIds([]);
+      setAssigneeSearch('');
       const response = await api.getShiftAssignees(shift._id);
       setAssignmentState({
+        isDirectAssignmentLocked: response.isDirectAssignmentLocked === true,
         assignedUsers: response.assignedUsers || [],
         unassignedUsers: response.unassignedUsers || []
       });
@@ -962,6 +1031,14 @@ const VolunteerShifts: React.FC = () => {
     }
   };
 
+  const togglePendingAssignee = (userId: string) => {
+    setPendingAddUserIds((currentIds) => (
+      currentIds.includes(userId)
+        ? currentIds.filter((id) => id !== userId)
+        : [...currentIds, userId]
+    ));
+  };
+
   const handleAddAssignees = async () => {
     if (!selectedShiftForAssignment || pendingAddUserIds.length === 0) return;
     try {
@@ -969,10 +1046,34 @@ const VolunteerShifts: React.FC = () => {
       await api.addShiftAssignees(selectedShiftForAssignment._id, pendingAddUserIds);
       await openAssignmentModal(selectedShiftForAssignment);
       await loadEvents();
-      alert('Assignees added successfully');
+      alert('Shift locked for the selected direct assignees');
     } catch (error: any) {
       console.error('Error adding assignees:', error);
       alert(error?.response?.data?.message || 'Failed to add assignees');
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
+  const handleRemoveAssignee = async (userId: string) => {
+    if (!selectedShiftForAssignment) return;
+    const assignee = assignmentState.assignedUsers.find((user) => user.userId === userId);
+    const assigneeName = assignee
+      ? (`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'this former roster member')
+      : 'this person';
+    const confirmed = window.confirm(
+      `Unassign ${assigneeName}? The shift will reopen for signups after the final direct assignee is removed. If this person already confirmed the shift, their signup will remain.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setAssignmentSaving(true);
+      await api.removeShiftAssignee(selectedShiftForAssignment._id, userId);
+      await openAssignmentModal(selectedShiftForAssignment);
+      await loadEvents();
+    } catch (error: any) {
+      console.error('Error removing direct assignee:', error);
+      alert(error?.response?.data?.message || 'Failed to remove direct assignee');
     } finally {
       setAssignmentSaving(false);
     }
@@ -1832,7 +1933,7 @@ const VolunteerShifts: React.FC = () => {
                 <p className="font-medium">Choose a default invite strategy</p>
                 <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = place specific members onto a shift now.</p>
                 <p className="text-xs mt-1">
-                  <strong>Heads up:</strong> shifts set to <em>Invite to sign up (all)</em> or <em>(leads)</em> stay open to anyone who joins the roster later — they'll automatically be eligible without you re-inviting. <em>Assign directly</em> stays locked to the people you pick now.
+                  <strong>Heads up:</strong> shifts set to <em>Invite to sign up (all)</em> or <em>(leads)</em> stay open to anyone who joins the roster later — they'll automatically be eligible without you re-inviting. <em>Assign directly</em> locks the shift to the people you pick until you unassign them.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1880,7 +1981,7 @@ const VolunteerShifts: React.FC = () => {
                         <>Future members promoted to Camp Lead will automatically have access. Plain members do not.</>
                       )}
                       {shift.assignmentMode === 'SELECTED_USERS' && (
-                        <>Only the people you pick below can sign up. Members who join the roster later will <strong>not</strong> be added.</>
+                        <>Only the people you pick below can sign up. Everyone else remains blocked until you unassign the final person.</>
                       )}
                     </p>
                     <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
@@ -2108,6 +2209,11 @@ const VolunteerShifts: React.FC = () => {
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-medium">{shift.title}</h5>
                         <div className="flex items-center gap-2">
+                          {((shift.directAssignmentUserIds || []).length > 0 || shift.assignmentMode === 'SELECTED_USERS') && (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                              Signup locked
+                            </span>
+                          )}
                           <span className="text-sm text-gray-500">
                             {shift.memberIds.length}/{shift.maxSignUps} signed up
                           </span>
@@ -2125,7 +2231,7 @@ const VolunteerShifts: React.FC = () => {
                       <div className="text-sm text-gray-500">
                         <div>{formatDate(shift.date)}</div>
                         <div>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</div>
-                        <div className="text-[11px] mt-1">Assign directly places specific people onto this shift now.</div>
+                        <div className="text-[11px] mt-1">Direct assignments lock this shift until the final assignee is removed.</div>
                       </div>
                     </div>
                   ))}
@@ -2153,6 +2259,7 @@ const VolunteerShifts: React.FC = () => {
           setShowAssignmentModal(false);
           setSelectedShiftForAssignment(null);
           setPendingAddUserIds([]);
+          setAssigneeSearch('');
         }}
         title={selectedShiftForAssignment ? `Assign Directly: ${selectedShiftForAssignment.title}` : 'Assign Directly'}
         size="lg"
@@ -2162,16 +2269,35 @@ const VolunteerShifts: React.FC = () => {
             <div className="text-sm text-gray-500">Loading assignees...</div>
           ) : (
             <>
+              <div className={`rounded border p-3 text-sm ${assignmentState.isDirectAssignmentLocked ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+                {assignmentState.isDirectAssignmentLocked
+                  ? 'Locked: only the people listed below can sign up. The shift reopens after you unassign the final person.'
+                  : 'Open: adding a direct assignee will immediately lock this shift for everyone else.'}
+              </div>
               <div>
-                <div className="text-sm font-medium text-gray-700 mb-2">Current Assignees ({assignmentState.assignedUsers.length})</div>
-                <p className="text-xs text-gray-500 mb-2">Assign directly adds people immediately to this specific shift.</p>
+                <div className="text-sm font-medium text-gray-700 mb-2">Direct Assignees ({assignmentState.assignedUsers.length})</div>
+                <p className="text-xs text-gray-500 mb-2">Direct assignees can confirm the shift from My Shifts; all other members are blocked while this list is non-empty.</p>
                 <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
                   {assignmentState.assignedUsers.length === 0 ? (
                     <div className="text-sm text-gray-500">No assignees yet.</div>
                   ) : (
                     assignmentState.assignedUsers.map((user) => (
-                      <div key={user.userId} className="text-sm text-gray-700">
-                        {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email}
+                      <div key={user.userId} className="flex items-center justify-between gap-2 text-sm text-gray-700">
+                        <span>
+                          {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Former roster member'}
+                          {user.isActiveRosterMember === false && (
+                            <span className="ml-1 text-xs text-gray-500">(not on active roster)</span>
+                          )}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={assignmentSaving}
+                          onClick={() => handleRemoveAssignee(user.userId)}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          Unassign
+                        </Button>
                       </div>
                     ))
                   )}
@@ -2179,34 +2305,126 @@ const VolunteerShifts: React.FC = () => {
               </div>
 
               <div>
-                <div className="text-sm font-medium text-gray-700 mb-2">Add More People</div>
-                <p className="text-xs text-gray-500 mb-2">Use "Invite to sign up" in event setup when you want members to choose their own shifts.</p>
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
-                  {assignmentState.unassignedUsers.length === 0 ? (
-                    <div className="text-sm text-gray-500">No unassigned roster users available.</div>
-                  ) : (
-                    assignmentState.unassignedUsers.map((user) => (
-                      <label key={user.userId} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-700">
-                          {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email}
-                          {user.isLead ? <span className="text-xs text-orange-700 ml-1">(Lead)</span> : null}
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={pendingAddUserIds.includes(user.userId)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setPendingAddUserIds((prev) => [...prev, user.userId]);
-                            } else {
-                              setPendingAddUserIds((prev) => prev.filter((id) => id !== user.userId));
-                            }
-                          }}
-                        />
-                      </label>
-                    ))
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-gray-700">Select Members</div>
+                  {assignmentState.unassignedUsers.length > 0 && (
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                      {pendingAddUserIds.length} selected
+                    </span>
                   )}
                 </div>
+                <p className="mb-3 text-xs text-gray-500">Click anywhere on a member card to select them. Use "Invite to sign up" when members should choose their own shifts.</p>
+
+                {assignmentState.unassignedUsers.length === 0 ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+                    No unassigned roster users available.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search
+                        size={16}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <Input
+                        value={assigneeSearch}
+                        onChange={(event) => setAssigneeSearch(event.target.value)}
+                        placeholder="Search by name, playa name, or email"
+                        aria-label="Search roster members"
+                        className="pl-9"
+                      />
+                    </div>
+
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {filteredUnassignedUsers.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-gray-300 p-5 text-center text-sm text-gray-500">
+                          No members match “{assigneeSearch.trim()}”.
+                        </div>
+                      ) : (
+                        filteredUnassignedUsers.map((assignee) => {
+                          const isSelected = pendingAddUserIds.includes(assignee.userId);
+                          return (
+                            <button
+                              key={assignee.userId}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => togglePendingAssignee(assignee.userId)}
+                              className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 ${
+                                isSelected
+                                  ? 'border-orange-400 bg-orange-50 shadow-sm'
+                                  : 'border-gray-200 bg-white hover:border-orange-200 hover:bg-orange-50/40'
+                              }`}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                                  isSelected
+                                    ? 'border-orange-600 bg-orange-600 text-white'
+                                    : 'border-gray-300 bg-white group-hover:border-orange-400'
+                                }`}
+                              >
+                                {isSelected && <CheckCircle size={14} strokeWidth={3} />}
+                              </span>
+                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                                isSelected ? 'bg-orange-200 text-orange-800' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {getAssigneeInitials(assignee)}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm font-semibold text-gray-900">
+                                    {getAssigneeDisplayName(assignee)}
+                                  </span>
+                                  {assignee.isLead && (
+                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-800">
+                                      Lead
+                                    </span>
+                                  )}
+                                </span>
+                                {(assignee.playaName || assignee.email) && (
+                                  <span className="block truncate text-xs text-gray-500">
+                                    {assignee.playaName ? `Playa: ${assignee.playaName}` : assignee.email}
+                                    {assignee.playaName && assignee.email ? ` · ${assignee.email}` : ''}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {selectedPendingUsers.length > 0 && (
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-orange-900">Ready to assign</div>
+                      <div className="text-xs text-orange-800">Review the names before locking this shift.</div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-orange-800 shadow-sm">
+                      {selectedPendingUsers.length} {selectedPendingUsers.length === 1 ? 'person' : 'people'}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedPendingUsers.map((assignee) => (
+                      <button
+                        key={assignee.userId}
+                        type="button"
+                        onClick={() => togglePendingAssignee(assignee.userId)}
+                        aria-label={`Remove ${getAssigneeDisplayName(assignee)} from selection`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-white px-2.5 py-1 text-xs font-medium text-orange-900 shadow-sm hover:border-orange-300 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      >
+                        {getAssigneeDisplayName(assignee)}
+                        <X size={13} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button
@@ -2215,6 +2433,7 @@ const VolunteerShifts: React.FC = () => {
                     setShowAssignmentModal(false);
                     setSelectedShiftForAssignment(null);
                     setPendingAddUserIds([]);
+                    setAssigneeSearch('');
                   }}
                 >
                   Close
@@ -2224,7 +2443,11 @@ const VolunteerShifts: React.FC = () => {
                   disabled={assignmentSaving || pendingAddUserIds.length === 0}
                   onClick={handleAddAssignees}
                 >
-                  {assignmentSaving ? 'Adding...' : `Add ${pendingAddUserIds.length || ''} People`}
+                  {assignmentSaving
+                    ? 'Saving...'
+                    : pendingAddUserIds.length === 0
+                      ? 'Select members to assign'
+                      : `Assign ${pendingAddUserIds.length} ${pendingAddUserIds.length === 1 ? 'person' : 'people'}`}
                 </Button>
               </div>
             </>

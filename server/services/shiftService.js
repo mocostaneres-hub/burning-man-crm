@@ -10,6 +10,53 @@ const normalizeId = (value) => {
   return value.toString();
 };
 
+function getDirectAssignmentUserIds(shift, fallbackUserIds = []) {
+  const embeddedIds = (shift?.directAssignmentUserIds || [])
+    .map((id) => normalizeId(id))
+    .filter(Boolean);
+  const sourceIds = embeddedIds.length > 0 ? embeddedIds : fallbackUserIds;
+  return [...new Set((sourceIds || []).map((id) => normalizeId(id)).filter(Boolean))];
+}
+
+function isShiftDirectAssignmentLockedForUser(shift, userId, fallbackUserIds = []) {
+  const directUserIds = getDirectAssignmentUserIds(shift, fallbackUserIds);
+  if (directUserIds.length === 0) return false;
+  return !directUserIds.includes(normalizeId(userId));
+}
+
+function buildShiftSignupReservationFilter({ eventId, shiftId, maxSignUps, userId }) {
+  return {
+    _id: eventId,
+    shifts: {
+      $elemMatch: {
+        _id: shiftId,
+        currentSignups: { $lt: maxSignUps },
+        $or: [
+          { directAssignmentUserIds: { $exists: false } },
+          { directAssignmentUserIds: { $size: 0 } },
+          { directAssignmentUserIds: userId }
+        ]
+      }
+    }
+  };
+}
+
+async function resolveDirectAssignmentUserIds({ shift, shiftId }) {
+  const embeddedIds = getDirectAssignmentUserIds(shift);
+  if (embeddedIds.length > 0 || shift?.assignmentMode !== 'SELECTED_USERS') {
+    return embeddedIds;
+  }
+
+  // Legacy SELECTED_USERS shifts pre-date the embedded lock field. Their
+  // selected assignment rows are the authoritative fallback and are lazily
+  // materialized onto Event.shifts by the signup route.
+  const rows = await ShiftAssignment.find({
+    shiftId: shiftId || shift?._id,
+    modeSnapshot: 'SELECTED_USERS'
+  }).select('userId').lean();
+  return [...new Set(rows.map((row) => normalizeId(row.userId)).filter(Boolean))];
+}
+
 async function getMemberCampIds(userId) {
   const memberRecords = await db.findMembers({ user: userId, status: 'active' });
   const campIds = [...new Set((memberRecords || []).map((member) => normalizeId(member.camp)).filter(Boolean))];
@@ -129,14 +176,20 @@ async function createShiftAssignments({
   };
 }
 
-async function getShiftAssignmentState({ shiftId, campId }) {
+async function getShiftAssignmentState({ shiftId, campId, assignedUserIds }) {
   const [assignments, rosterUsers] = await Promise.all([
-    ShiftAssignment.find({ shiftId }).select('userId assignedAt').lean(),
+    assignedUserIds === undefined
+      ? ShiftAssignment.find({ shiftId }).select('userId assignedAt').lean()
+      : Promise.resolve((assignedUserIds || []).map((userId) => ({ userId }))),
     getCampRosterUsers(campId)
   ]);
 
   const assignedSet = new Set(assignments.map((item) => normalizeId(item.userId)).filter(Boolean));
-  const assignedUsers = rosterUsers.filter((user) => assignedSet.has(user.userId));
+  const rosterUserMap = new Map(rosterUsers.map((user) => [user.userId, user]));
+  const assignedUsers = Array.from(assignedSet).map((userId) => ({
+    ...(rosterUserMap.get(userId) || { userId, isLead: false }),
+    isActiveRosterMember: rosterUserMap.has(userId)
+  }));
   const unassignedUsers = rosterUsers.filter((user) => !assignedSet.has(user.userId));
 
   return {
@@ -181,6 +234,11 @@ function decideAssignmentsForJoiner({
     for (const shift of event.shifts || []) {
       const shiftId = normalizeId(shift._id);
       if (!shiftId) continue;
+
+      // A direct assignment is an exclusive manager lock. Late roster
+      // joiners should not receive eligibility rows or notifications while
+      // that lock is active.
+      if (getDirectAssignmentUserIds(shift).length > 0) continue;
 
       // Skip shifts the user is already assigned to — re-running this
       // helper must be idempotent.
@@ -409,10 +467,44 @@ async function buildMyShiftsPayload(userId) {
     }
   }
 
-  const [assignments, signups] = await Promise.all([
+  const legacyDirectShiftIds = [];
+  for (const [shiftId, indexed] of shiftIndex.entries()) {
+    if (
+      indexed.shift.assignmentMode === 'SELECTED_USERS' &&
+      getDirectAssignmentUserIds(indexed.shift).length === 0
+    ) {
+      legacyDirectShiftIds.push(shiftId);
+    }
+  }
+
+  const [assignments, signups, legacyDirectAssignments] = await Promise.all([
     ShiftAssignment.find({ userId, shiftId: { $in: allShiftIds } }).select('shiftId').lean(),
-    ShiftSignup.find({ shiftId: { $in: allShiftIds } }).select('shiftId userId').lean()
+    ShiftSignup.find({ shiftId: { $in: allShiftIds } }).select('shiftId userId').lean(),
+    legacyDirectShiftIds.length > 0
+      ? ShiftAssignment.find({
+        shiftId: { $in: legacyDirectShiftIds },
+        modeSnapshot: 'SELECTED_USERS'
+      }).select('shiftId userId').lean()
+      : Promise.resolve([])
   ]);
+
+  const legacyDirectIdsByShift = new Map();
+  for (const row of legacyDirectAssignments) {
+    const shiftId = normalizeId(row.shiftId);
+    if (!legacyDirectIdsByShift.has(shiftId)) legacyDirectIdsByShift.set(shiftId, []);
+    legacyDirectIdsByShift.get(shiftId).push(normalizeId(row.userId));
+  }
+
+  const directlyAssignedShiftIds = new Set();
+  for (const [shiftId, indexed] of shiftIndex.entries()) {
+    const directUserIds = getDirectAssignmentUserIds(
+      indexed.shift,
+      legacyDirectIdsByShift.get(shiftId) || []
+    );
+    if (directUserIds.includes(userIdStr)) {
+      directlyAssignedShiftIds.add(shiftId);
+    }
+  }
 
   const assignedShiftIds = new Set(assignments.map((item) => normalizeId(item.shiftId)).filter(Boolean));
   const signedShiftIds = new Set(
@@ -466,17 +558,34 @@ async function buildMyShiftsPayload(userId) {
   const relevantShiftIds = new Set([
     ...assignedShiftIds,
     ...signedShiftIds,
-    ...liveEligibleShiftIds
+    ...liveEligibleShiftIds,
+    ...directlyAssignedShiftIds
   ]);
   for (const shiftId of relevantShiftIds) {
     const indexed = shiftIndex.get(shiftId);
     if (!indexed) continue;
     const { event, shift, campId, campName } = indexed;
+    const directAssignmentUserIds = getDirectAssignmentUserIds(
+      shift,
+      legacyDirectIdsByShift.get(shiftId) || []
+    );
+    const isDirectlyAssignedToMe = directAssignmentUserIds.includes(userIdStr);
+    const isDirectAssignmentLocked = directAssignmentUserIds.length > 0;
     const legacyMemberIds = (shift.memberIds || []).map((id) => normalizeId(id)).filter(Boolean);
-    const memberIds = [...new Set([...(signupByShift.get(shiftId) || []), ...legacyMemberIds])];
     if (legacyMemberIds.includes(userIdStr)) {
       signedShiftIds.add(shiftId);
     }
+
+    // Existing signups remain visible, but a member who is not one of the
+    // direct assignees must not see this shift as available to claim.
+    if (
+      isDirectAssignmentLocked &&
+      !isDirectlyAssignedToMe &&
+      !signedShiftIds.has(shiftId)
+    ) {
+      continue;
+    }
+    const memberIds = [...new Set([...(signupByShift.get(shiftId) || []), ...legacyMemberIds])];
     memberIds.forEach((memberId) => {
       if (memberId && memberId !== userIdStr) coworkerIds.add(memberId);
     });
@@ -497,6 +606,8 @@ async function buildMyShiftsPayload(userId) {
       signedUpCount: memberIds.length,
       remainingSpots: Math.max((shift.maxSignUps || 0) - memberIds.length, 0),
       isFull: memberIds.length >= (shift.maxSignUps || 0),
+      isDirectAssignmentLocked,
+      isDirectlyAssignedToMe,
       memberIds
     };
 
@@ -545,5 +656,9 @@ module.exports = {
   getShiftAssignmentState,
   autoAssignRosterUserToOpenShifts,
   decideAssignmentsForJoiner,
-  buildMyShiftsPayload
+  buildMyShiftsPayload,
+  getDirectAssignmentUserIds,
+  isShiftDirectAssignmentLockedForUser,
+  buildShiftSignupReservationFilter,
+  resolveDirectAssignmentUserIds
 };

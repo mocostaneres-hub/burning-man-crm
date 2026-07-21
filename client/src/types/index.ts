@@ -587,6 +587,10 @@ export interface Shift {
   endTime: Date;
   maxSignUps: number;
   memberIds: string[]; // Array of user IDs who signed up
+  assignmentMode?: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+  directAssignmentUserIds?: string[];
+  isDirectAssignmentLocked?: boolean;
+  canSignUp?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the shift
@@ -648,6 +652,8 @@ export interface MyShiftItem {
   signedUpCount: number;
   remainingSpots: number;
   isFull: boolean;
+  isDirectAssignmentLocked?: boolean;
+  isDirectlyAssignedToMe?: boolean;
   memberIds: string[];
   coworkers: MyShiftCoworker[];
   recommendationReason?: string;

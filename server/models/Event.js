@@ -66,7 +66,15 @@ const shiftSchema = new mongoose.Schema({
     type: String,
     enum: ['ALL_ROSTER', 'LEADS_ONLY', 'SELECTED_USERS'],
     default: 'ALL_ROSTER'
-  }
+  },
+  // A non-empty list is an explicit manager lock. While present, only these
+  // users may create a ShiftSignup, regardless of the broader invite mode.
+  // Keeping this on the shift lets the capacity reservation enforce the lock
+  // atomically in the same Event update.
+  directAssignmentUserIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, {
   timestamps: true
 });

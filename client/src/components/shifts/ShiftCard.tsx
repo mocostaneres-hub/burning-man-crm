@@ -42,6 +42,9 @@ const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, 
           {shift.recommendationReason && mode === 'available' && (
             <p className="text-xs text-indigo-700 mt-1">Why recommended: {shift.recommendationReason}</p>
           )}
+          {shift.isDirectAssignmentLocked && shift.isDirectlyAssignedToMe && mode === 'available' && (
+            <p className="text-xs text-amber-700 mt-1 font-medium">Reserved for you by a camp lead. Other members cannot claim this shift.</p>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-sm text-gray-700">
             <div className="flex items-center gap-1">

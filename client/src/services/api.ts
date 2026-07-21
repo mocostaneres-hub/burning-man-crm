@@ -791,7 +791,8 @@ class ApiService {
 
   async getShiftAssignees(shiftId: string): Promise<{
     shiftId: string;
-    assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
+    isDirectAssignmentLocked: boolean;
+    assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean; isActiveRosterMember?: boolean }>;
     unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
   }> {
     const response = await this.api.get(`/shifts/shifts/${shiftId}/assignees`);
@@ -800,6 +801,14 @@ class ApiService {
 
   async addShiftAssignees(shiftId: string, userIds: string[]): Promise<{ addedCount: number; addedUserIds: string[] }> {
     const response = await this.api.post(`/shifts/shifts/${shiftId}/assignees/add`, { userIds });
+    return response.data;
+  }
+
+  async removeShiftAssignee(shiftId: string, userId: string): Promise<{
+    removedUserId: string;
+    isDirectAssignmentLocked: boolean;
+  }> {
+    const response = await this.api.delete(`/shifts/shifts/${shiftId}/assignees/${userId}`);
     return response.data;
   }
 
