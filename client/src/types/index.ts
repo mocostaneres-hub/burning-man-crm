@@ -217,7 +217,7 @@ export interface Member {
   duesPaidAt?: string | Date | null;
   duesReceiptSentAt?: string | Date | null;
   duesPaidByUserId?: string | null;
-  mealPlanStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID';
+  mealPlanStatus?: 'UNPAID' | 'INSTRUCTED' | 'PAID' | 'OPTED_OUT';
   mealPlanInstructedAt?: string | Date | null;
   mealPlanPaidAt?: string | Date | null;
   mealPlanReceiptSentAt?: string | Date | null;

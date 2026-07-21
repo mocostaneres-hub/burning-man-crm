@@ -165,6 +165,7 @@ const deriveRosterMode = (roster: any): {
 };
 
 type DuesStatus = 'UNPAID' | 'INSTRUCTED' | 'PAID';
+type MealPlanStatus = DuesStatus | 'OPTED_OUT';
 type PaymentKind = 'dues' | 'mealPlan';
 
 const PAYMENT_LABELS: Record<PaymentKind, { singular: string; actionTitle: string; errorNoun: string }> = {
@@ -189,6 +190,18 @@ const normalizeDuesStatus = (status?: string | null): DuesStatus => {
   }
 
   console.warn('[MemberRoster] Unknown dues status received:', status, '-> defaulting to UNPAID');
+  return 'UNPAID';
+};
+
+const normalizeMealPlanStatus = (status?: string | null): MealPlanStatus => {
+  if (!status) return 'UNPAID';
+
+  const normalized = status.toString().trim().replace(/[\s-]+/g, '_').toUpperCase();
+  if (normalized === 'UNPAID' || normalized === 'INSTRUCTED' || normalized === 'PAID' || normalized === 'OPTED_OUT') {
+    return normalized;
+  }
+
+  console.warn('[MemberRoster] Unknown meal plan status received:', status, '-> defaulting to UNPAID');
   return 'UNPAID';
 };
 
@@ -545,7 +558,7 @@ const MemberRoster: React.FC = () => {
         duesStatus: duesActionModal.member?.duesStatus,
         mealPlanStatus: duesActionModal.member?.mealPlanStatus,
         normalizedDuesStatus: normalizeDuesStatus(duesActionModal.member?.duesStatus),
-        normalizedMealPlanStatus: normalizeDuesStatus(duesActionModal.member?.mealPlanStatus),
+        normalizedMealPlanStatus: normalizeMealPlanStatus(duesActionModal.member?.mealPlanStatus),
         hasMember: Boolean(duesActionModal.member)
       });
     }
@@ -1005,7 +1018,7 @@ const MemberRoster: React.FC = () => {
           const normalizedDuesStatus = normalizeDuesStatus(
             memberEntry.duesStatus || (memberEntry.paid ? 'PAID' : 'UNPAID')
           );
-          const normalizedMealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus);
+          const normalizedMealPlanStatus = normalizeMealPlanStatus(memberEntry.mealPlanStatus);
           const duesPaid = normalizedDuesStatus === 'PAID';
           
           // Extract member ID safely
@@ -1415,7 +1428,7 @@ const MemberRoster: React.FC = () => {
     console.log('[DuesActionsModal] meal plan icon click:', {
       memberId: member?._id,
       mealPlanStatus: member?.mealPlanStatus,
-      normalizedMealPlanStatus: normalizeDuesStatus(member?.mealPlanStatus),
+      normalizedMealPlanStatus: normalizeMealPlanStatus(member?.mealPlanStatus),
       member
     });
 
@@ -1470,7 +1483,7 @@ const MemberRoster: React.FC = () => {
 
   const handleDuesStatusChange = async (
     member: any,
-    nextStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID',
+    nextStatus: MealPlanStatus,
     paymentKind: PaymentKind = duesActionModal.paymentKind
   ) => {
     if (!rosterId) return;
@@ -1481,6 +1494,7 @@ const MemberRoster: React.FC = () => {
     setLoading(member._id.toString());
     try {
       if (paymentKind === 'dues') {
+        if (nextStatus === 'OPTED_OUT') return;
         await api.updateMemberDuesStatus(rosterId, member._id.toString(), { duesStatus: nextStatus });
       } else {
         await api.updateMemberMealPlanStatus(rosterId, member._id.toString(), { mealPlanStatus: nextStatus });
@@ -1936,7 +1950,7 @@ const MemberRoster: React.FC = () => {
     return members.filter(member => {
       const user = typeof member.user === 'object' ? member.user : null;
       const duesStatus = normalizeDuesStatus(member.duesStatus);
-      const mealPlanStatus = normalizeDuesStatus(member.mealPlanStatus);
+      const mealPlanStatus = normalizeMealPlanStatus(member.mealPlanStatus);
       const foodPreferences = normalizeFoodPreferences(
         (member as any).overrides?.foodPreferences !== undefined
           ? (member as any).overrides.foodPreferences
@@ -1969,6 +1983,9 @@ const MemberRoster: React.FC = () => {
             break;
           case 'meal-plan-instructed':
             if (mealPlanStatus !== 'INSTRUCTED') return false;
+            break;
+          case 'meal-plan-opted-out':
+            if (mealPlanStatus !== 'OPTED_OUT') return false;
             break;
           case 'without-tickets':
             if (user?.hasTicket) return false;
@@ -2531,30 +2548,35 @@ const MemberRoster: React.FC = () => {
                     {/* Meal Plan */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {(() => {
-                        const mealPlanStatus = normalizeDuesStatus(member.mealPlanStatus);
+                        const mealPlanStatus = normalizeMealPlanStatus(member.mealPlanStatus);
                         const mealPlanColorClass = mealPlanStatus === 'PAID'
                           ? 'text-green-600 font-bold'
                           : mealPlanStatus === 'INSTRUCTED'
                             ? 'text-orange-500 font-bold'
-                            : 'text-gray-400';
+                            : mealPlanStatus === 'OPTED_OUT'
+                              ? 'text-gray-600 font-medium'
+                              : 'text-gray-400';
                         const tooltipDetails = mealPlanStatus === 'PAID'
                           ? `Paid on: ${member.mealPlanPaidAt ? formatDate(member.mealPlanPaidAt as string) : 'N/A'}\nReceipt sent: ${member.mealPlanReceiptSentAt ? formatDate(member.mealPlanReceiptSentAt as string) : 'N/A'}`
                           : mealPlanStatus === 'INSTRUCTED'
                             ? 'Meal plan payment instructions sent'
-                            : 'Meal plan unpaid';
+                            : mealPlanStatus === 'OPTED_OUT'
+                              ? 'Opted out of the meal plan'
+                              : 'Meal plan unpaid';
                         return (
                       <button
                         onClick={() => handleMealPlanClick(member)}
                         disabled={!canManageMealPlan || mealPlanLoading === member._id.toString()}
-                        className={`text-xl ${canManageMealPlan ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
+                        className={`${mealPlanStatus === 'OPTED_OUT' ? 'rounded-full bg-gray-100 px-2 py-1 text-xs' : 'text-xl'} ${canManageMealPlan ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
                           mealPlanColorClass
                         }`}
                         title={tooltipDetails}
+                        aria-label={`Meal plan status: ${mealPlanStatus === 'OPTED_OUT' ? 'Opted out' : mealPlanStatus.toLowerCase()}`}
                       >
                         {mealPlanLoading === member._id.toString() ? (
                           <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                         ) : (
-                          '$'
+                          mealPlanStatus === 'OPTED_OUT' ? 'Opted out' : '$'
                         )}
                       </button>
                         );
@@ -3763,18 +3785,16 @@ const MemberRoster: React.FC = () => {
             <p className="text-sm text-gray-500">Loading member {PAYMENT_LABELS[duesActionModal.paymentKind].errorNoun} actions...</p>
           )}
           {duesActionModal.member && (() => {
-            const duesStatus = normalizeDuesStatus(
-              duesActionModal.paymentKind === 'dues'
-                ? duesActionModal.member.duesStatus
-                : duesActionModal.member.mealPlanStatus
-            );
+            const paymentStatus = duesActionModal.paymentKind === 'dues'
+              ? normalizeDuesStatus(duesActionModal.member.duesStatus)
+              : normalizeMealPlanStatus(duesActionModal.member.mealPlanStatus);
             const canManageActivePaymentKind = duesActionModal.paymentKind === 'dues'
               ? canEdit
               : canManageMealPlan;
             const canMarkUnpaid = canManageActivePaymentKind;
             return (
               <>
-                {duesStatus === 'UNPAID' && (
+                {paymentStatus === 'UNPAID' && (
                   <>
                     <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'instructions', 'INSTRUCTED')} className="w-full">
                       Send Payment Instructions
@@ -3784,7 +3804,7 @@ const MemberRoster: React.FC = () => {
                     </Button>
                   </>
                 )}
-                {duesStatus === 'INSTRUCTED' && (
+                {paymentStatus === 'INSTRUCTED' && (
                   <>
                     <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'instructions')} className="w-full">
                       Resend Instructions
@@ -3794,7 +3814,7 @@ const MemberRoster: React.FC = () => {
                     </Button>
                   </>
                 )}
-                {duesStatus === 'PAID' && (
+                {paymentStatus === 'PAID' && (
                   <>
                     <Button variant="outline" onClick={() => openEmailPreview(duesActionModal.member, 'receipt')} className="w-full">
                       Resend Receipt
@@ -3805,6 +3825,16 @@ const MemberRoster: React.FC = () => {
                       </Button>
                     )}
                   </>
+                )}
+                {duesActionModal.paymentKind === 'mealPlan' && paymentStatus !== 'OPTED_OUT' && (
+                  <Button variant="outline" onClick={() => handleDuesStatusChange(duesActionModal.member, 'OPTED_OUT', 'mealPlan')} className="w-full">
+                    Mark as Opted Out
+                  </Button>
+                )}
+                {duesActionModal.paymentKind === 'mealPlan' && paymentStatus === 'OPTED_OUT' && (
+                  <Button variant="primary" onClick={() => handleDuesStatusChange(duesActionModal.member, 'UNPAID', 'mealPlan')} className="w-full">
+                    Restore Meal Plan (Unpaid)
+                  </Button>
                 )}
               </>
             );

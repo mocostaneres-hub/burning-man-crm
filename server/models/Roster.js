@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
-const { normalizeDuesStatus, DUES_STATUS } = require('../utils/duesStateMachine');
+const {
+  normalizeDuesStatus,
+  normalizeMealPlanStatus,
+  DUES_STATUS,
+  MEAL_PLAN_STATUS
+} = require('../utils/duesStateMachine');
 
 const rosterSchema = new mongoose.Schema({
   camp: {
@@ -165,8 +170,8 @@ const rosterSchema = new mongoose.Schema({
     },
     mealPlanStatus: {
       type: String,
-      enum: Object.values(DUES_STATUS),
-      default: DUES_STATUS.UNPAID
+      enum: Object.values(MEAL_PLAN_STATUS),
+      default: MEAL_PLAN_STATUS.UNPAID
     },
     mealPlanInstructedAt: {
       type: Date,
@@ -209,7 +214,7 @@ rosterSchema.pre('validate', function(next) {
   if (Array.isArray(this.members)) {
     this.members.forEach((memberEntry) => {
       memberEntry.duesStatus = normalizeDuesStatus(memberEntry.duesStatus);
-      memberEntry.mealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus);
+      memberEntry.mealPlanStatus = normalizeMealPlanStatus(memberEntry.mealPlanStatus);
       if (memberEntry.paid === undefined || memberEntry.paid === null) {
         memberEntry.paid = memberEntry.duesStatus === DUES_STATUS.PAID;
       }

@@ -188,6 +188,70 @@ describe('Events Lead meal-plan access', () => {
     expect(roster.save).toHaveBeenCalled();
   });
 
+  test('allows Events Lead to mark a member as opted out of the meal plan', async () => {
+    const roster = makeRoster();
+    db.findRoster.mockResolvedValue(roster);
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/meal-plan',
+      { mealPlanStatus: 'OPTED_OUT' }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      message: 'Meal plan status updated successfully',
+      mealPlanStatus: 'OPTED_OUT',
+      memberId: 'member-1'
+    });
+    expect(permissionHelpers.canManageMealPlan).toHaveBeenCalledWith(expect.any(Object), camp._id);
+    expect(roster.members[0].mealPlanStatus).toBe('OPTED_OUT');
+    expect(roster.members[0].mealPlanPaidAt).toBeNull();
+    expect(roster.members[0].mealPlanPaidByUserId).toBeNull();
+    expect(emailService.sendDuesEmail).not.toHaveBeenCalled();
+    expect(roster.save).toHaveBeenCalled();
+  });
+
+  test('allows Events Lead to restore an opted-out member as unpaid', async () => {
+    const roster = makeRoster({
+      mealPlanStatus: 'OPTED_OUT',
+      mealPlanPaidAt: null,
+      mealPlanPaidByUserId: null
+    });
+    db.findRoster.mockResolvedValue(roster);
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/meal-plan',
+      { mealPlanStatus: 'UNPAID' }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.mealPlanStatus).toBe('UNPAID');
+    expect(roster.members[0].mealPlanStatus).toBe('UNPAID');
+    expect(emailService.sendDuesEmail).not.toHaveBeenCalled();
+    expect(roster.save).toHaveBeenCalled();
+  });
+
+  test('requires meal-plan write access to mark a member as opted out', async () => {
+    const roster = makeRoster({ mealPlanStatus: 'UNPAID' });
+    db.findRoster.mockResolvedValue(roster);
+    permissionHelpers.canManageMealPlan.mockResolvedValueOnce(false);
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/meal-plan',
+      { mealPlanStatus: 'OPTED_OUT' }
+    );
+
+    expect(response.status).toBe(403);
+    expect(roster.members[0].mealPlanStatus).toBe('UNPAID');
+    expect(roster.save).not.toHaveBeenCalled();
+  });
+
   test('returns only dues-paid roster members to Events Lead roster view', async () => {
     db.findActiveRoster.mockResolvedValue({
       _id: 'roster-1',
@@ -210,7 +274,7 @@ describe('Events Lead meal-plan access', () => {
           paid: true,
           duesPaidAt: new Date('2026-07-01T12:00:00.000Z'),
           applicationData: { notes: 'private application data' },
-          mealPlanStatus: 'UNPAID'
+          mealPlanStatus: 'OPTED_OUT'
         },
         {
           member: {
@@ -237,7 +301,7 @@ describe('Events Lead meal-plan access', () => {
     expect(response.body.members).toHaveLength(1);
     expect(response.body.members[0]).toMatchObject({
       duesStatus: 'PAID',
-      mealPlanStatus: 'UNPAID',
+      mealPlanStatus: 'OPTED_OUT',
       member: {
         _id: 'member-paid',
         user: expect.objectContaining({
@@ -269,6 +333,22 @@ describe('Events Lead meal-plan access', () => {
 
     expect(response.status).toBe(403);
     expect(permissionHelpers.canManageCamp).toHaveBeenCalledWith(expect.any(Object), camp._id);
+    expect(roster.save).not.toHaveBeenCalled();
+  });
+
+  test('does not accept the meal-plan opt-out state for dues', async () => {
+    const roster = makeRoster({ duesStatus: 'UNPAID' });
+    db.findRoster.mockResolvedValue(roster);
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/dues',
+      { duesStatus: 'OPTED_OUT' }
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid dues status');
     expect(roster.save).not.toHaveBeenCalled();
   });
 

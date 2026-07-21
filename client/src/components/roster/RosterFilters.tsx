@@ -3,7 +3,7 @@ import { Button } from '../ui';
 import { Filter, X } from 'lucide-react';
 import { FOOD_PREFERENCE_OPTIONS } from '../../constants/foodPreferences';
 
-export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'meal-plan-paid' | 'meal-plan-unpaid' | 'meal-plan-instructed' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
+export type FilterType = 'all' | 'dues-paid' | 'dues-unpaid' | 'dues-instructed' | 'meal-plan-paid' | 'meal-plan-unpaid' | 'meal-plan-instructed' | 'meal-plan-opted-out' | 'without-tickets' | 'with-tickets' | 'without-vp' | 'with-vp' | 'early-arrival' | 'late-departure' | 'virgin' | 'veteran' | string; // Allow string for skill names
 
 interface RosterFiltersProps {
   activeFilters: FilterType[];
@@ -98,6 +98,7 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       'meal-plan-paid': 'Meal Plan: Paid',
       'meal-plan-unpaid': 'Meal Plan: Unpaid',
       'meal-plan-instructed': 'Meal Plan: Instructed',
+      'meal-plan-opted-out': 'Meal Plan: Opted Out',
       'without-tickets': 'Tickets: No',
       'with-tickets': 'Tickets: Yes',
       'without-vp': 'Vehicle Pass: No',
@@ -224,6 +225,13 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
             isActive={activeFilters.includes('meal-plan-instructed')}
             onClick={() => toggleFilter('meal-plan-instructed')}
             variant="primary"
+          />
+          <FilterButton
+            label="Opted Out"
+            filterType="meal-plan-opted-out"
+            isActive={activeFilters.includes('meal-plan-opted-out')}
+            onClick={() => toggleFilter('meal-plan-opted-out')}
+            variant="secondary"
           />
         </div>
 

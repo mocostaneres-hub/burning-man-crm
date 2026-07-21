@@ -18,9 +18,13 @@ const {
 } = require('../constants/foodPreferences');
 const {
   DUES_STATUS,
+  MEAL_PLAN_STATUS,
   normalizeDuesStatus,
+  normalizeMealPlanStatus,
   isAllowedTransition,
-  getEmailTrigger
+  isAllowedMealPlanTransition,
+  getEmailTrigger,
+  getMealPlanEmailTrigger
 } = require('../utils/duesStateMachine');
 
 const router = express.Router();
@@ -892,7 +896,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
           // Get dues status from roster member entry first (most accurate), 
           // then member record, then application, then default to Unpaid
           const duesStatus = normalizeDuesStatus(memberEntry.duesStatus || member.duesStatus || application?.duesStatus || DUES_STATUS.UNPAID);
-          const mealPlanStatus = normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID);
+          const mealPlanStatus = normalizeMealPlanStatus(memberEntry.mealPlanStatus || MEAL_PLAN_STATUS.UNPAID);
           
           populatedMembers.push({
             ...memberEntry,
@@ -1047,7 +1051,7 @@ router.get('/:id/export', authenticateToken, async (req, res) => {
         `"${(user.bio || '').replace(/"/g, '""')}"`,
         `"${formatSocialMedia(user.socialMedia).replace(/"/g, '""')}"`,
         normalizeDuesStatus(user.duesStatus || DUES_STATUS.UNPAID),
-        normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID),
+        normalizeMealPlanStatus(memberEntry.mealPlanStatus || MEAL_PLAN_STATUS.UNPAID),
         new Date(memberEntry.addedAt).toLocaleDateString()
       ];
     });
@@ -1894,7 +1898,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 interestedInEAP: user.interestedInEAP,
                 interestedInStrike: user.interestedInStrike,
                 duesStatus: normalizeDuesStatus(memberEntry.duesStatus || DUES_STATUS.UNPAID),
-                mealPlanStatus: normalizeDuesStatus(memberEntry.mealPlanStatus || DUES_STATUS.UNPAID)
+                mealPlanStatus: normalizeMealPlanStatus(memberEntry.mealPlanStatus || MEAL_PLAN_STATUS.UNPAID)
               }
             }
           });
@@ -2226,8 +2230,8 @@ router.post('/:rosterId/members/:memberId/meal-plan/preview', authenticateToken,
 
     let previewType = actionType;
     if (!previewType && targetStatus) {
-      const previousStatus = normalizeDuesStatus(roster.members[memberIndex].mealPlanStatus || DUES_STATUS.UNPAID);
-      previewType = getEmailTrigger(previousStatus, targetStatus);
+      const previousStatus = normalizeMealPlanStatus(roster.members[memberIndex].mealPlanStatus || MEAL_PLAN_STATUS.UNPAID);
+      previewType = getMealPlanEmailTrigger(previousStatus, targetStatus);
     }
 
     if (!previewType || !['instructions', 'receipt'].includes(previewType)) {
@@ -2342,8 +2346,8 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
     const { rosterId, memberId } = req.params;
     const { mealPlanStatus, emailPreview, saveAsCampDefault } = req.body;
 
-    const nextStatus = normalizeDuesStatus(mealPlanStatus);
-    if (!Object.values(DUES_STATUS).includes(nextStatus)) {
+    const nextStatus = normalizeMealPlanStatus(mealPlanStatus);
+    if (!Object.values(MEAL_PLAN_STATUS).includes(nextStatus)) {
       return res.status(400).json({ message: 'Invalid meal plan status' });
     }
 
@@ -2359,16 +2363,16 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
     const memberIndex = getMemberEntryIndex(roster, memberId);
     if (memberIndex === -1) return res.status(404).json({ message: 'Member not found in roster' });
 
-    const previousStatus = normalizeDuesStatus(roster.members[memberIndex].mealPlanStatus || DUES_STATUS.UNPAID);
+    const previousStatus = normalizeMealPlanStatus(roster.members[memberIndex].mealPlanStatus || MEAL_PLAN_STATUS.UNPAID);
     if (previousStatus === nextStatus) {
       return res.status(200).json({ message: 'No meal plan status change', mealPlanStatus: previousStatus, memberId });
     }
 
-    if (!isAllowedTransition(previousStatus, nextStatus)) {
+    if (!isAllowedMealPlanTransition(previousStatus, nextStatus)) {
       return res.status(400).json({ message: `Invalid transition from ${previousStatus} to ${nextStatus}` });
     }
 
-    const emailTriggerType = getEmailTrigger(previousStatus, nextStatus);
+    const emailTriggerType = getMealPlanEmailTrigger(previousStatus, nextStatus);
     const member = await db.findMember({ _id: memberId });
     const memberUser = member ? await db.findUser({ _id: member.user }) : null;
     const senderReplyToEmail = emailTriggerType ? await getSenderReplyToEmail(req) : undefined;
@@ -2388,7 +2392,7 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
         camp,
         memberUser,
         type: emailTriggerType,
-        paymentDate: nextStatus === DUES_STATUS.PAID ? new Date() : null,
+        paymentDate: nextStatus === MEAL_PLAN_STATUS.PAID ? new Date() : null,
         overrideSubject: emailPreview.subject,
         overrideBody: emailPreview.body
       });
@@ -2430,15 +2434,15 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
     const now = new Date();
     roster.members[memberIndex].mealPlanStatus = nextStatus;
 
-    if (nextStatus === DUES_STATUS.INSTRUCTED) {
+    if (nextStatus === MEAL_PLAN_STATUS.INSTRUCTED) {
       roster.members[memberIndex].mealPlanInstructedAt = now;
     }
-    if (nextStatus === DUES_STATUS.PAID) {
+    if (nextStatus === MEAL_PLAN_STATUS.PAID) {
       roster.members[memberIndex].mealPlanPaidAt = now;
       roster.members[memberIndex].mealPlanPaidByUserId = req.user._id;
       roster.members[memberIndex].mealPlanReceiptSentAt = now;
     }
-    if (previousStatus === DUES_STATUS.PAID && nextStatus === DUES_STATUS.UNPAID) {
+    if (previousStatus === MEAL_PLAN_STATUS.PAID && nextStatus !== MEAL_PLAN_STATUS.PAID) {
       roster.members[memberIndex].mealPlanPaidAt = null;
       roster.members[memberIndex].mealPlanPaidByUserId = null;
       // Keep mealPlanReceiptSentAt for historical audit.

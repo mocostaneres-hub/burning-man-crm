@@ -1111,7 +1111,7 @@ class ApiService {
   async updateMemberMealPlanStatus(
     rosterId: string,
     memberId: string,
-    payload: { mealPlanStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID'; emailPreview?: { subject: string; body: string }; saveAsCampDefault?: boolean }
+    payload: { mealPlanStatus: 'UNPAID' | 'INSTRUCTED' | 'PAID' | 'OPTED_OUT'; emailPreview?: { subject: string; body: string }; saveAsCampDefault?: boolean }
   ): Promise<any> {
     const response = await this.api.put(`/rosters/${rosterId}/members/${memberId}/meal-plan`, payload);
     return response.data;

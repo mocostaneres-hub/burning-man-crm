@@ -53,6 +53,7 @@ const fieldNameMap = {
   'roster': 'Roster',
   'rosterName': 'Roster Name',
   'duesStatus': 'Dues Status',
+  'mealPlanStatus': 'Meal Plan Status',
   'emails': 'Email Addresses',
   
   // Roster override fields
