@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card } from '../ui';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import api from '../../services/api';
-import { PendingSurveyItem } from '../../types';
-import { formatDate } from '../../utils/dateFormatters';
+import { MyShiftItem, PendingSurveyItem } from '../../types';
+import { formatDate, formatShiftDate, formatShiftTime } from '../../utils/dateFormatters';
 
 type TaskStatusFilter = 'open' | 'closed' | 'all';
 
@@ -25,6 +25,7 @@ interface ProfileTodoItem {
   title: string;
   status: 'open' | 'closed';
   statusLabel: string;
+  badgeVariant: 'success' | 'warning' | 'neutral';
   campName: string;
   detail: string;
   path: string;
@@ -34,6 +35,7 @@ const MyTasksList: React.FC = () => {
   const [tasks, setTasks] = useState<ProfileTask[]>([]);
   const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
   const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
+  const [pendingShifts, setPendingShifts] = useState<MyShiftItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<TaskStatusFilter>('open');
@@ -44,7 +46,7 @@ const MyTasksList: React.FC = () => {
     const loadTasks = async () => {
       try {
         setLoading(true);
-        const [response, surveysResponse] = await Promise.all([
+        const [response, surveysResponse, shiftsResponse] = await Promise.all([
           api.get('/tasks/my-tasks', {
             headers: {
               'Cache-Control': 'no-cache',
@@ -54,12 +56,17 @@ const MyTasksList: React.FC = () => {
           api.getMyPendingSurveys().catch((surveyError) => {
             console.error('Error loading profile surveys:', surveyError);
             return { pendingSurveys: [], completedSurveys: [] };
+          }),
+          api.getMyShifts().catch((shiftError) => {
+            console.error('Error loading profile shift to-dos:', shiftError);
+            return { camps: [], availableShifts: [], signedUpShifts: [] };
           })
         ]);
         if (!isMounted) return;
         setTasks((response || []) as ProfileTask[]);
         setPendingSurveys(surveysResponse.pendingSurveys || []);
         setCompletedSurveys(surveysResponse.completedSurveys || []);
+        setPendingShifts(shiftsResponse.availableShifts || []);
         setError('');
       } catch (err: any) {
         if (!isMounted) return;
@@ -77,7 +84,7 @@ const MyTasksList: React.FC = () => {
   }, []);
 
   const todoItems = useMemo<ProfileTodoItem[]>(() => {
-    const taskItems = tasks.map((task) => {
+    const taskItems: ProfileTodoItem[] = tasks.map((task) => {
       const campName = task.camp?.campName || task.camp?.name || 'Unknown Camp';
       const status: 'open' | 'closed' = String(task.status).toLowerCase() === 'closed' ? 'closed' : 'open';
 
@@ -86,17 +93,19 @@ const MyTasksList: React.FC = () => {
         title: task.title,
         status,
         statusLabel: status,
+        badgeVariant: status === 'open' ? 'success' : 'neutral',
         campName,
         detail: task.dueDate ? `Task • Due ${formatDate(task.dueDate)}` : 'Task • No due date',
         path: task.taskIdCode ? `/tasks/${task.taskIdCode}` : '/tasks'
       };
     });
 
-    const pendingSurveyItems = pendingSurveys.map((survey) => ({
+    const pendingSurveyItems: ProfileTodoItem[] = pendingSurveys.map((survey) => ({
       id: `survey-${survey.surveyId}`,
       title: survey.title,
       status: 'open' as const,
       statusLabel: 'pending',
+      badgeVariant: 'warning',
       campName: survey.campName,
       detail: survey.assignedAt || survey.sentAt
         ? `Survey • Assigned ${formatDate(survey.assignedAt || survey.sentAt || '')}`
@@ -104,18 +113,30 @@ const MyTasksList: React.FC = () => {
       path: `/surveys/${survey.surveyId}`
     }));
 
-    const completedSurveyItems = completedSurveys.map((survey) => ({
+    const pendingShiftItems: ProfileTodoItem[] = pendingShifts.map((shift) => ({
+      id: `shift-${shift.shiftId}`,
+      title: shift.title,
+      status: 'open',
+      statusLabel: shift.isFull ? 'full' : 'needs signup',
+      badgeVariant: shift.isFull ? 'neutral' : 'warning',
+      campName: shift.campName,
+      detail: `Shift • ${shift.eventName} • ${formatShiftDate(shift.startTime || shift.date)} at ${formatShiftTime(shift.startTime)} PDT`,
+      path: '/my-shifts'
+    }));
+
+    const completedSurveyItems: ProfileTodoItem[] = completedSurveys.map((survey) => ({
       id: `survey-${survey.surveyId}`,
       title: survey.title,
       status: 'closed' as const,
       statusLabel: 'completed',
+      badgeVariant: 'neutral',
       campName: survey.campName,
       detail: 'Survey',
       path: `/surveys/${survey.surveyId}`
     }));
 
-    return [...taskItems, ...pendingSurveyItems, ...completedSurveyItems];
-  }, [completedSurveys, pendingSurveys, tasks]);
+    return [...pendingShiftItems, ...pendingSurveyItems, ...taskItems, ...completedSurveyItems];
+  }, [completedSurveys, pendingShifts, pendingSurveys, tasks]);
 
   const filteredItems = useMemo(() => {
     if (filter === 'all') return todoItems;
@@ -165,7 +186,7 @@ const MyTasksList: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={item.status === 'open' ? 'success' : 'neutral'}>{item.statusLabel}</Badge>
+                  <Badge variant={item.badgeVariant}>{item.statusLabel}</Badge>
                   <Button
                     variant="outline"
                     size="sm"

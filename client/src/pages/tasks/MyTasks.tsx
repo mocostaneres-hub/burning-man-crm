@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/api';
 import { Card, Table, TableColumn, Modal, Badge, Button } from '../../components/ui';
 import { formatDate, formatEventDate, formatShiftDate, formatShiftTime } from '../../utils/dateFormatters';
+import { MyShiftItem } from '../../types';
 import {
   ClipboardList as Assignment,
   CheckCircle as CheckCircleIcon,
@@ -70,6 +71,7 @@ const MyTasks: React.FC = () => {
   const [signUpLoading, setSignUpLoading] = useState<string | null>(null);
   const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
   const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
+  const [pendingShifts, setPendingShifts] = useState<MyShiftItem[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -92,14 +94,15 @@ const MyTasks: React.FC = () => {
   const fetchMyTasks = async () => {
     try {
       setLoading(true);
-      const [tasksResponse, surveysResponse] = await Promise.all([
+      const [tasksResponse, surveysResponse, shiftsResponse] = await Promise.all([
         apiService.get('/tasks/my-tasks', {
           headers: {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           }
         }),
-        apiService.getMyPendingSurveys().catch(() => ({ pendingSurveys: [], completedSurveys: [] }))
+        apiService.getMyPendingSurveys().catch(() => ({ pendingSurveys: [], completedSurveys: [] })),
+        apiService.getMyShifts().catch(() => ({ camps: [], availableShifts: [], signedUpShifts: [] }))
       ]);
 
       // Normalize payload in case API returns raw Mongoose docs
@@ -120,6 +123,8 @@ const MyTasks: React.FC = () => {
       setTasks(normalized);
       setPendingSurveys(surveysResponse.pendingSurveys || []);
       setCompletedSurveys(surveysResponse.completedSurveys || []);
+      setPendingShifts(shiftsResponse.availableShifts || []);
+      setError(null);
     } catch (error) {
       console.error('Error fetching my tasks:', error);
       setError('Failed to load your to-dos');
@@ -390,13 +395,13 @@ const MyTasks: React.FC = () => {
         </h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">
-            Tasks and surveys assigned to you by your camp
+            Tasks, surveys, and shift signups assigned to you by your camp
           </span>
           <button
             onClick={fetchMyTasks}
             disabled={loading}
             className="p-2 text-custom-primary hover:bg-gray-100 rounded-lg transition-colors duration-200 disabled:opacity-50"
-            title="Refresh tasks"
+            title="Refresh to-dos"
           >
             <Refresh size={20} />
           </button>
@@ -418,6 +423,39 @@ const MyTasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Card className="mb-6">
+        <div className="p-5">
+          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Shift Signups</h2>
+          {pendingShifts.length === 0 ? (
+            <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
+          ) : (
+            <div className="space-y-2">
+              {pendingShifts.map((shift) => (
+                <button
+                  type="button"
+                  key={shift.shiftId}
+                  onClick={() => navigate('/my-shifts')}
+                  className="w-full rounded-lg border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-work font-medium text-custom-text">{shift.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {shift.campName} • {shift.eventName} • {formatShiftDate(shift.startTime || shift.date)} •{' '}
+                        {formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)} PDT
+                      </p>
+                    </div>
+                    <Badge variant={shift.isFull ? 'neutral' : 'warning'}>
+                      {shift.isFull ? 'Full' : 'Needs signup'}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
 
       <Card className="mb-6">
         <div className="p-5">
