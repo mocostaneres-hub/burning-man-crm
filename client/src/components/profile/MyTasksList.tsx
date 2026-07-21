@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card } from '../ui';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import api from '../../services/api';
+import { PendingSurveyItem } from '../../types';
+import { formatDate } from '../../utils/dateFormatters';
 
 type TaskStatusFilter = 'open' | 'closed' | 'all';
 
@@ -18,8 +20,20 @@ interface ProfileTask {
   } | null;
 }
 
+interface ProfileTodoItem {
+  id: string;
+  title: string;
+  status: 'open' | 'closed';
+  statusLabel: string;
+  campName: string;
+  detail: string;
+  path: string;
+}
+
 const MyTasksList: React.FC = () => {
   const [tasks, setTasks] = useState<ProfileTask[]>([]);
+  const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
+  const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<TaskStatusFilter>('open');
@@ -30,9 +44,22 @@ const MyTasksList: React.FC = () => {
     const loadTasks = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/tasks/my-tasks');
+        const [response, surveysResponse] = await Promise.all([
+          api.get('/tasks/my-tasks', {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          }),
+          api.getMyPendingSurveys().catch((surveyError) => {
+            console.error('Error loading profile surveys:', surveyError);
+            return { pendingSurveys: [], completedSurveys: [] };
+          })
+        ]);
         if (!isMounted) return;
         setTasks((response || []) as ProfileTask[]);
+        setPendingSurveys(surveysResponse.pendingSurveys || []);
+        setCompletedSurveys(surveysResponse.completedSurveys || []);
         setError('');
       } catch (err: any) {
         if (!isMounted) return;
@@ -49,10 +76,51 @@ const MyTasksList: React.FC = () => {
     };
   }, []);
 
-  const filteredTasks = useMemo(() => {
-    if (filter === 'all') return tasks;
-    return tasks.filter((task) => String(task.status).toLowerCase() === filter);
-  }, [filter, tasks]);
+  const todoItems = useMemo<ProfileTodoItem[]>(() => {
+    const taskItems = tasks.map((task) => {
+      const campName = task.camp?.campName || task.camp?.name || 'Unknown Camp';
+      const status: 'open' | 'closed' = String(task.status).toLowerCase() === 'closed' ? 'closed' : 'open';
+
+      return {
+        id: `task-${task._id}`,
+        title: task.title,
+        status,
+        statusLabel: status,
+        campName,
+        detail: task.dueDate ? `Task • Due ${formatDate(task.dueDate)}` : 'Task • No due date',
+        path: task.taskIdCode ? `/tasks/${task.taskIdCode}` : '/tasks'
+      };
+    });
+
+    const pendingSurveyItems = pendingSurveys.map((survey) => ({
+      id: `survey-${survey.surveyId}`,
+      title: survey.title,
+      status: 'open' as const,
+      statusLabel: 'pending',
+      campName: survey.campName,
+      detail: survey.assignedAt || survey.sentAt
+        ? `Survey • Assigned ${formatDate(survey.assignedAt || survey.sentAt || '')}`
+        : 'Survey',
+      path: `/surveys/${survey.surveyId}`
+    }));
+
+    const completedSurveyItems = completedSurveys.map((survey) => ({
+      id: `survey-${survey.surveyId}`,
+      title: survey.title,
+      status: 'closed' as const,
+      statusLabel: 'completed',
+      campName: survey.campName,
+      detail: 'Survey',
+      path: `/surveys/${survey.surveyId}`
+    }));
+
+    return [...taskItems, ...pendingSurveyItems, ...completedSurveyItems];
+  }, [completedSurveys, pendingSurveys, tasks]);
+
+  const filteredItems = useMemo(() => {
+    if (filter === 'all') return todoItems;
+    return todoItems.filter((item) => item.status === filter);
+  }, [filter, todoItems]);
 
   return (
     <Card className="p-6">
@@ -66,7 +134,7 @@ const MyTasksList: React.FC = () => {
           value={filter}
           onChange={(e) => setFilter(e.target.value as TaskStatusFilter)}
           className="w-full sm:w-auto border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          aria-label="Filter my tasks"
+          aria-label="Filter my to-dos"
         >
           <option value="open">Open</option>
           <option value="closed">Closed</option>
@@ -77,43 +145,38 @@ const MyTasksList: React.FC = () => {
       {loading ? (
         <div className="flex items-center gap-2 text-custom-text-secondary">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Loading tasks...
+          Loading to-dos...
         </div>
       ) : error ? (
         <p className="text-sm text-red-600">{error}</p>
-      ) : filteredTasks.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <p className="text-sm text-custom-text-secondary">
-          {filter === 'open' ? 'No open tasks assigned to you.' : 'No tasks found for this filter.'}
+          {filter === 'open' ? 'No open to-dos assigned to you.' : 'No to-dos found for this filter.'}
         </p>
       ) : (
         <div className="space-y-2">
-          {filteredTasks.slice(0, 8).map((task) => {
-            const status = String(task.status || '').toLowerCase();
-            const campName = task.camp?.campName || task.camp?.name || 'Unknown Camp';
-            return (
-              <div key={task._id} className="border border-gray-200 rounded-lg p-3">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-custom-text">{task.title}</p>
-                    <p className="text-xs text-custom-text-secondary mt-1">
-                      Camp: {campName}
-                      {task.dueDate ? ` • Due: ${new Date(task.dueDate).toLocaleDateString()}` : ' • Due: Not set'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={status === 'open' ? 'success' : 'neutral'}>{status || 'unknown'}</Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.location.assign(task.taskIdCode ? `/tasks/${task.taskIdCode}` : '/my-tasks')}
-                    >
-                      View
-                    </Button>
-                  </div>
+          {filteredItems.map((item) => (
+            <div key={item.id} className="border border-gray-200 rounded-lg p-3">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="font-medium text-custom-text">{item.title}</p>
+                  <p className="text-xs text-custom-text-secondary mt-1">
+                    Camp: {item.campName} • {item.detail}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={item.status === 'open' ? 'success' : 'neutral'}>{item.statusLabel}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.assign(item.path)}
+                  >
+                    View
+                  </Button>
                 </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </Card>
