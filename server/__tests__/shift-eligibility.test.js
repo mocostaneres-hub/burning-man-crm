@@ -30,7 +30,8 @@ const {
   decideAssignmentsForJoiner,
   getDirectAssignmentUserIds,
   isShiftDirectAssignmentLockedForUser,
-  buildShiftSignupReservationFilter
+  buildShiftSignupReservationFilter,
+  buildDirectAssignmentReservationPlan
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -102,6 +103,45 @@ describe('direct assignment locks', () => {
         }
       }
     });
+  });
+
+  test('direct assignment immediately consumes one spot per new assignee', () => {
+    const plan = buildDirectAssignmentReservationPlan({
+      requestedUserIds: ['user-1', 'user-2'],
+      signupUserIds: ['existing-user'],
+      currentSignups: 1,
+      maxSignUps: 3
+    });
+
+    expect(plan.userIdsNeedingReservation).toEqual(['user-1', 'user-2']);
+    expect(plan.availableSpots).toBe(2);
+    expect(plan.canReserve).toBe(true);
+  });
+
+  test('an already signed-up assignee does not consume a second spot', () => {
+    const plan = buildDirectAssignmentReservationPlan({
+      requestedUserIds: ['user-1', 'user-2'],
+      signupUserIds: ['user-1'],
+      legacyMemberIds: ['user-1'],
+      currentSignups: 1,
+      maxSignUps: 2
+    });
+
+    expect(plan.userIdsNeedingReservation).toEqual(['user-2']);
+    expect(plan.canReserve).toBe(true);
+  });
+
+  test('direct assignment is rejected when it would exceed capacity', () => {
+    const plan = buildDirectAssignmentReservationPlan({
+      requestedUserIds: ['user-2', 'user-3'],
+      signupUserIds: ['user-1'],
+      currentSignups: 1,
+      maxSignUps: 2
+    });
+
+    expect(plan.availableSpots).toBe(1);
+    expect(plan.userIdsNeedingReservation).toHaveLength(2);
+    expect(plan.canReserve).toBe(false);
   });
 });
 

@@ -737,10 +737,13 @@ const VolunteerShifts: React.FC = () => {
       }
     } catch (error: any) {
       console.error(`Error ${isEditMode ? 'updating' : 'creating'} event:`, error);
+      const serverMessage = error.response?.data?.message;
       if (error.response?.status === 403) {
         alert('Access denied. Only camp admins can manage events.');
       } else if (error.response?.status === 400) {
-        alert('Invalid data. Please check all required fields are filled.');
+        alert(serverMessage || 'Invalid data. Please check all required fields are filled.');
+      } else if (error.response?.status === 409) {
+        alert(serverMessage || 'One or more shifts do not have enough open spots for those assignments.');
       } else if (error.response?.status === 404 && isEditMode) {
         alert('Event not found. It may have been deleted.');
       } else {
@@ -1046,7 +1049,7 @@ const VolunteerShifts: React.FC = () => {
       await api.addShiftAssignees(selectedShiftForAssignment._id, pendingAddUserIds);
       await openAssignmentModal(selectedShiftForAssignment);
       await loadEvents();
-      alert('Shift locked for the selected direct assignees');
+      alert('Shift officially assigned. Their spot is confirmed and no response is required.');
     } catch (error: any) {
       console.error('Error adding assignees:', error);
       alert(error?.response?.data?.message || 'Failed to add assignees');
@@ -1062,7 +1065,7 @@ const VolunteerShifts: React.FC = () => {
       ? (`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'this former roster member')
       : 'this person';
     const confirmed = window.confirm(
-      `Unassign ${assigneeName}? The shift will reopen for signups after the final direct assignee is removed. If this person already confirmed the shift, their signup will remain.`
+      `Unassign ${assigneeName}? Their confirmed signup will be removed and their spot will be released. The shift reopens to others after the final direct assignee is removed.`
     );
     if (!confirmed) return;
 
@@ -1931,7 +1934,7 @@ const VolunteerShifts: React.FC = () => {
             <div className="space-y-4">
               <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                 <p className="font-medium">Choose a default invite strategy</p>
-                <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = place specific members onto a shift now.</p>
+                <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = confirm specific members onto a shift immediately, with no response required.</p>
                 <p className="text-xs mt-1">
                   <strong>Heads up:</strong> shifts set to <em>Invite to sign up (all)</em> or <em>(leads)</em> stay open to anyone who joins the roster later — they'll automatically be eligible without you re-inviting. <em>Assign directly</em> locks the shift to the people you pick until you unassign them.
                 </p>
@@ -1981,7 +1984,7 @@ const VolunteerShifts: React.FC = () => {
                         <>Future members promoted to Camp Lead will automatically have access. Plain members do not.</>
                       )}
                       {shift.assignmentMode === 'SELECTED_USERS' && (
-                        <>Only the people you pick below can sign up. Everyone else remains blocked until you unassign the final person.</>
+                        <>The people you pick below are officially assigned immediately and consume the selected spots. Everyone else remains blocked until you unassign the final person.</>
                       )}
                     </p>
                     <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
@@ -2211,7 +2214,7 @@ const VolunteerShifts: React.FC = () => {
                         <div className="flex items-center gap-2">
                           {((shift.directAssignmentUserIds || []).length > 0 || shift.assignmentMode === 'SELECTED_USERS') && (
                             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
-                              Signup locked
+                              Directly assigned
                             </span>
                           )}
                           <span className="text-sm text-gray-500">
@@ -2231,7 +2234,7 @@ const VolunteerShifts: React.FC = () => {
                       <div className="text-sm text-gray-500">
                         <div>{formatDate(shift.date)}</div>
                         <div>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</div>
-                        <div className="text-[11px] mt-1">Direct assignments lock this shift until the final assignee is removed.</div>
+                        <div className="text-[11px] mt-1">Direct assignments immediately reserve spots and lock this shift until the final assignee is removed.</div>
                       </div>
                     </div>
                   ))}
@@ -2271,12 +2274,12 @@ const VolunteerShifts: React.FC = () => {
             <>
               <div className={`rounded border p-3 text-sm ${assignmentState.isDirectAssignmentLocked ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
                 {assignmentState.isDirectAssignmentLocked
-                  ? 'Locked: only the people listed below can sign up. The shift reopens after you unassign the final person.'
-                  : 'Open: adding a direct assignee will immediately lock this shift for everyone else.'}
+                  ? 'Assigned: the people listed below are confirmed on this shift. Their spots are taken, and everyone else is blocked until you unassign the final person.'
+                  : 'Open: adding a direct assignee will confirm their spot immediately and lock this shift for everyone else.'}
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Direct Assignees ({assignmentState.assignedUsers.length})</div>
-                <p className="text-xs text-gray-500 mb-2">Direct assignees can confirm the shift from My Shifts; all other members are blocked while this list is non-empty.</p>
+                <p className="text-xs text-gray-500 mb-2">Direct assignees do not need to confirm. They can drop the shift later from My Shifts; admins and leads can also unassign them here.</p>
                 <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
                   {assignmentState.assignedUsers.length === 0 ? (
                     <div className="text-sm text-gray-500">No assignees yet.</div>

@@ -52,11 +52,15 @@ const {
   getDirectAssignmentUserIds,
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
+  buildDirectAssignmentReservationPlan,
+  reserveShiftSpotsForUsers,
+  releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds
 } = require('../services/shiftService');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { sendEmail } = require('../services/emailService');
+const { sendDirectAssignmentEmails } = require('../services/shiftAssignmentEmailService');
 const { EMAIL_TEMPLATE_KEYS } = require('../constants/emailTemplateKeys');
 const { recordActivity } = require('../services/activityLogger');
 const {
@@ -102,6 +106,84 @@ const getCampManagerRecipientIds = async (campId) => {
   }
 
   return Array.from(recipientIds);
+};
+
+const removeDirectAssigneeReservation = async ({ event, shift, userId }) => {
+  const directAssignmentUserIds = await resolveDirectAssignmentUserIds({
+    shift,
+    shiftId: shift._id
+  });
+  const normalizedUserId = userId.toString();
+  if (!directAssignmentUserIds.includes(normalizedUserId)) {
+    return null;
+  }
+
+  // Materialize legacy SELECTED_USERS rows before an atomic pull.
+  if (getDirectAssignmentUserIds(shift).length === 0) {
+    await Event.updateOne(
+      { _id: event._id, 'shifts._id': shift._id },
+      { $set: { 'shifts.$.directAssignmentUserIds': directAssignmentUserIds } }
+    );
+  }
+
+  // Release the official signup while the exclusive lock is still present,
+  // so no other member can race for the spot during removal.
+  await releaseShiftSpotsForUsers({
+    eventId: event._id,
+    shiftId: shift._id,
+    userIds: [normalizedUserId]
+  });
+
+  const unlockResult = await Event.updateOne(
+    { _id: event._id, 'shifts._id': shift._id },
+    { $pull: { 'shifts.$.directAssignmentUserIds': normalizedUserId } }
+  );
+  if (!unlockResult?.modifiedCount) {
+    await reserveShiftSpotsForUsers({
+      eventId: event._id,
+      shiftId: shift._id,
+      campId: event.campId?._id || event.campId,
+      userIds: [normalizedUserId]
+    });
+    const error = new Error('Unable to update the direct assignment lock');
+    error.code = 'DIRECT_ASSIGNMENT_UPDATE_FAILED';
+    throw error;
+  }
+
+  const refreshedEvent = await Event.findOne({
+    _id: event._id,
+    'shifts._id': shift._id
+  }).select('shifts').lean();
+  const refreshedShift = (refreshedEvent?.shifts || []).find(
+    (item) => item._id.toString() === shift._id.toString()
+  );
+  const remainingDirectUserIds = getDirectAssignmentUserIds(refreshedShift);
+
+  if (remainingDirectUserIds.length === 0 && refreshedShift?.assignmentMode === 'SELECTED_USERS') {
+    await Event.updateOne(
+      {
+        _id: event._id,
+        shifts: {
+          $elemMatch: {
+            _id: shift._id,
+            assignmentMode: 'SELECTED_USERS',
+            directAssignmentUserIds: { $size: 0 }
+          }
+        }
+      },
+      { $set: { 'shifts.$.assignmentMode': 'ALL_ROSTER' } }
+    );
+  }
+
+  // Remove only a selected-user assignment row. Broader audience eligibility
+  // remains valid once the final direct lock is gone.
+  await ShiftAssignment.deleteOne({
+    shiftId: shift._id,
+    userId: normalizedUserId,
+    modeSnapshot: 'SELECTED_USERS'
+  });
+
+  return { remainingDirectUserIds };
 };
 
 // @route   GET /api/shifts/events
@@ -338,6 +420,12 @@ router.post('/events', authenticateToken, async (req, res) => {
         manualAddIds: shift.manualAddIds || [],
         manualRemoveIds: shift.manualRemoveIds || []
       });
+      const maxSignUps = parseInt(shift.maxSignUps, 10);
+      if (persistedMode === 'SELECTED_USERS' && assignmentCandidates.length > maxSignUps) {
+        return res.status(400).json({
+          message: `Shift "${shift.title}" has ${assignmentCandidates.length} direct assignees but only ${maxSignUps} spot(s).`
+        });
+      }
       preparedShifts.push({
         input: shift,
         assignmentMode: persistedMode,
@@ -371,8 +459,15 @@ router.post('/events', authenticateToken, async (req, res) => {
           requiredSkills: Array.isArray(shift.requiredSkills)
             ? shift.requiredSkills.map((skill) => String(skill || '').trim()).filter(Boolean)
             : [],
-          memberIds: [], // legacy compatibility field (source of truth is ShiftSignup collection)
-          currentSignups: 0,
+          // A manager's direct assignment is immediately official. Persist the
+          // legacy mirror in the same Event write so capacity is reserved even
+          // before canonical ShiftSignup rows are materialized below.
+          memberIds: assignmentMode === 'SELECTED_USERS'
+            ? assignmentCandidates
+            : [],
+          currentSignups: assignmentMode === 'SELECTED_USERS'
+            ? assignmentCandidates.length
+            : 0,
           createdBy: req.user._id,
           // Durable rule used by the eligibility check + the late-joiner
           // auto-assign helper. See Event.js shiftSchema for semantics.
@@ -388,7 +483,15 @@ router.post('/events', authenticateToken, async (req, res) => {
     for (let index = 0; index < (event.shifts || []).length; index += 1) {
       const createdShift = event.shifts[index];
       const preparedShift = preparedShifts[index];
-      await createShiftAssignments({
+      if (preparedShift.assignmentMode === 'SELECTED_USERS') {
+        await reserveShiftSpotsForUsers({
+          eventId: event._id,
+          shiftId: createdShift._id,
+          campId,
+          userIds: preparedShift.assignmentCandidates
+        });
+      }
+      const assignmentResult = await createShiftAssignments({
         shiftId: createdShift._id,
         eventId: event._id,
         campId,
@@ -397,6 +500,14 @@ router.post('/events', authenticateToken, async (req, res) => {
         candidates: preparedShift.assignmentCandidates,
         source: 'CREATE_MODE'
       });
+      if (preparedShift.assignmentMode === 'SELECTED_USERS') {
+        await sendDirectAssignmentEmails({
+          userIds: assignmentResult.insertedUserIds,
+          campId,
+          event,
+          shift: createdShift
+        });
+      }
     }
 
     const broadlyAvailableShiftCount = preparedShifts.filter(
@@ -423,7 +534,10 @@ router.post('/events', authenticateToken, async (req, res) => {
     res.status(201).json({ event });
   } catch (error) {
     console.error('Create event error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(error?.statusCode || 500).json({
+      code: error?.code,
+      message: error?.statusCode ? error.message : 'Server error'
+    });
   }
 });
 
@@ -1071,7 +1185,12 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
 
     const existingSignup = await ShiftSignup.findOne({ shiftId: shift._id, userId: req.user._id }).lean();
     const legacySigned = (shift.memberIds || []).some((id) => id.toString() === memberId);
-    if (!existingSignup && !legacySigned) {
+    const directAssignmentUserIds = await resolveDirectAssignmentUserIds({
+      shift,
+      shiftId: shift._id
+    });
+    const isDirectlyAssigned = directAssignmentUserIds.includes(memberId);
+    if (!existingSignup && !legacySigned && !isDirectlyAssigned) {
       return res.status(400).json({ message: 'Not signed up for this shift' });
     }
 
@@ -1080,17 +1199,19 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
       (shift.memberIds || []).length,
       shift.currentSignups || 0
     );
-    if (existingSignup) {
-      await ShiftSignup.deleteOne({ _id: existingSignup._id });
+    if (isDirectlyAssigned) {
+      await removeDirectAssigneeReservation({
+        event,
+        shift,
+        userId: req.user._id
+      });
+    } else {
+      await releaseShiftSpotsForUsers({
+        eventId: event._id,
+        shiftId: shift._id,
+        userIds: [req.user._id]
+      });
     }
-    await Event.updateOne(
-      { _id: event._id, 'shifts._id': shift._id, 'shifts.currentSignups': { $gt: 0 } },
-      { $inc: { 'shifts.$.currentSignups': -1 } }
-    );
-    await Event.updateOne(
-      { _id: event._id, 'shifts._id': shift._id },
-      { $pull: { 'shifts.$.memberIds': req.user._id } }
-    );
 
     try {
       const managerRecipients = await getCampManagerRecipientIds(event.campId);
@@ -1511,12 +1632,83 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       } else {
         directAssignmentUserIds = getDirectAssignmentUserIds(currentShift);
       }
+      const previousDirectAssignmentIds = new Set(
+        (existingDirectAssignmentMap.get(currentShift._id.toString()) || [])
+          .map((id) => id.toString())
+      );
+      const newlyDirectAssignedIds = directAssignmentUserIds.filter(
+        (id) => !previousDirectAssignmentIds.has(id.toString())
+      );
+      const directUserIdsToRelease =
+        shiftAssignmentMode === 'SELECTED_USERS' && hasExplicitSelectedUsers
+          ? [...previousDirectAssignmentIds].filter(
+            (userId) => !directAssignmentUserIds.some((id) => id.toString() === userId)
+          )
+          : [];
+
+      // Validate replacements before changing the exclusive lock. Assignees
+      // explicitly removed from a selected-user list free their reservations
+      // for newly selected people in the same edit.
+      const currentSignupRows = await ShiftSignup.find({ shiftId: currentShift._id })
+        .select('userId')
+        .lean();
+      const releasedSet = new Set(directUserIdsToRelease);
+      const occupiedBefore = new Set([
+        ...currentSignupRows.map((row) => row.userId.toString()),
+        ...(currentShift.memberIds || []).map((id) => id.toString())
+      ]);
+      const releasedReservedCount = directUserIdsToRelease.filter(
+        (userId) => occupiedBefore.has(userId)
+      ).length;
+      const reservationPlan = buildDirectAssignmentReservationPlan({
+        requestedUserIds: directAssignmentUserIds,
+        signupUserIds: currentSignupRows
+          .map((row) => row.userId.toString())
+          .filter((userId) => !releasedSet.has(userId)),
+        legacyMemberIds: (currentShift.memberIds || [])
+          .map((id) => id.toString())
+          .filter((userId) => !releasedSet.has(userId)),
+        currentSignups: Math.max(
+          (currentShift.currentSignups || 0) - releasedReservedCount,
+          0
+        ),
+        maxSignUps: currentShift.maxSignUps
+      });
+      if (!reservationPlan.canReserve) {
+        return res.status(409).json({
+          code: 'SHIFT_CAPACITY_EXCEEDED',
+          message: `Shift "${currentShift.title}" does not have enough open spots for those direct assignments.`,
+          availableSpots: reservationPlan.availableSpots
+        });
+      }
 
       await Event.updateOne(
         { _id: updatedEvent._id, 'shifts._id': currentShift._id },
         { $set: { 'shifts.$.directAssignmentUserIds': directAssignmentUserIds } }
       );
       currentShift.directAssignmentUserIds = directAssignmentUserIds;
+
+      if (directUserIdsToRelease.length > 0) {
+        await releaseShiftSpotsForUsers({
+          eventId: updatedEvent._id,
+          shiftId: currentShift._id,
+          userIds: directUserIdsToRelease
+        });
+        await ShiftAssignment.deleteMany({
+          shiftId: currentShift._id,
+          userId: { $in: directUserIdsToRelease },
+          modeSnapshot: 'SELECTED_USERS'
+        });
+      }
+
+      if (directAssignmentUserIds.length > 0) {
+        await reserveShiftSpotsForUsers({
+          eventId: updatedEvent._id,
+          shiftId: currentShift._id,
+          campId: eventCampId,
+          userIds: directAssignmentUserIds
+        });
+      }
 
       const existingRows = await ShiftAssignment.find({ shiftId: currentShift._id })
         .select('userId')
@@ -1547,25 +1739,30 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
         .lean();
       const hasSignedUpMembers = signedUpRows.length > 0
         || ((currentShift.memberIds || []).length > 0);
-      if (hasSignedUpMembers) {
-        continue;
+      if (!hasSignedUpMembers) {
+        const desiredAssigneeIds = new Set((assignmentCandidates || []).map((id) => id.toString()));
+        if (!setsAreEqual(existingAssigneeIds, desiredAssigneeIds)) {
+          await ShiftAssignment.deleteMany({ shiftId: currentShift._id });
+          await createShiftAssignments({
+            shiftId: currentShift._id,
+            eventId: updatedEvent._id,
+            campId: eventCampId,
+            assignedBy: req.user._id,
+            mode: shiftAssignmentMode,
+            candidates: assignmentCandidates,
+            source: 'EDIT_MODE'
+          });
+        }
       }
 
-      const desiredAssigneeIds = new Set((assignmentCandidates || []).map((id) => id.toString()));
-      if (setsAreEqual(existingAssigneeIds, desiredAssigneeIds)) {
-        continue;
+      if (newlyDirectAssignedIds.length > 0) {
+        await sendDirectAssignmentEmails({
+          userIds: newlyDirectAssignedIds,
+          campId: eventCampId,
+          event: updatedEvent,
+          shift: currentShift
+        });
       }
-
-      await ShiftAssignment.deleteMany({ shiftId: currentShift._id });
-      await createShiftAssignments({
-        shiftId: currentShift._id,
-        eventId: updatedEvent._id,
-        campId: eventCampId,
-        assignedBy: req.user._id,
-        mode: shiftAssignmentMode,
-        candidates: assignmentCandidates,
-        source: 'EDIT_MODE'
-      });
     }
 
     try {
@@ -1587,7 +1784,10 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
     res.json({ event: updatedEvent });
   } catch (error) {
     console.error('Update event error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(error?.statusCode || 500).json({
+      code: error?.code,
+      message: error?.statusCode ? error.message : 'Server error'
+    });
   }
 });
 
@@ -2133,9 +2333,31 @@ router.post('/shifts/:shiftId/assignees/add', authenticateToken, async (req, res
       return res.status(409).json({ message: 'Unable to lock this shift for direct assignment' });
     }
 
-    let result;
+    let reservationResult;
     try {
-      result = await createShiftAssignments({
+      reservationResult = await reserveShiftSpotsForUsers({
+        eventId: event._id,
+        shiftId: shift._id,
+        campId: eventCampId,
+        userIds: toAdd
+      });
+    } catch (reservationError) {
+      await Event.updateOne(
+        { _id: event._id, 'shifts._id': shift._id },
+        { $pull: { 'shifts.$.directAssignmentUserIds': { $in: toAdd } } }
+      );
+      if (reservationError?.code === 'SHIFT_CAPACITY_EXCEEDED') {
+        return res.status(409).json({
+          code: reservationError.code,
+          message: reservationError.message,
+          availableSpots: reservationError.availableSpots
+        });
+      }
+      throw reservationError;
+    }
+
+    try {
+      await createShiftAssignments({
         shiftId: shift._id,
         eventId: event._id,
         campId: eventCampId,
@@ -2145,6 +2367,11 @@ router.post('/shifts/:shiftId/assignees/add', authenticateToken, async (req, res
         source: 'EDIT_ADD'
       });
     } catch (assignmentError) {
+      await releaseShiftSpotsForUsers({
+        eventId: event._id,
+        shiftId: shift._id,
+        userIds: reservationResult.newlyReservedUserIds
+      });
       await Event.updateOne(
         { _id: event._id, 'shifts._id': shift._id },
         { $pull: { 'shifts.$.directAssignmentUserIds': { $in: toAdd } } }
@@ -2152,10 +2379,18 @@ router.post('/shifts/:shiftId/assignees/add', authenticateToken, async (req, res
       throw assignmentError;
     }
 
+    await sendDirectAssignmentEmails({
+      userIds: toAdd,
+      campId: eventCampId,
+      event,
+      shift
+    });
+
     return res.json({
-      message: 'Shift locked for the direct assignees',
-      addedCount: result.insertedCount,
-      addedUserIds: result.insertedUserIds
+      message: 'Shift officially assigned and the spot(s) reserved',
+      addedCount: toAdd.length,
+      addedUserIds: toAdd,
+      currentSignupsAdded: reservationResult.newlyReservedUserIds.length
     });
   } catch (error) {
     console.error('Add shift assignees error:', error);
@@ -2181,69 +2416,20 @@ router.delete('/shifts/:shiftId/assignees/:userId', authenticateToken, async (re
       return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
     }
 
-    const directAssignmentUserIds = await resolveDirectAssignmentUserIds({ shift, shiftId: shift._id });
-    if (!directAssignmentUserIds.includes(userId.toString())) {
+    const removalResult = await removeDirectAssigneeReservation({
+      event,
+      shift,
+      userId
+    });
+    if (!removalResult) {
       return res.status(404).json({ message: 'This person is not directly assigned to the shift' });
     }
-
-    // Legacy selected shifts have no embedded list yet. Materialize it before
-    // using an atomic $pull so concurrent unassigns cannot overwrite each
-    // other's changes.
-    if (getDirectAssignmentUserIds(shift).length === 0) {
-      await Event.updateOne(
-        { _id: event._id, 'shifts._id': shift._id },
-        { $set: { 'shifts.$.directAssignmentUserIds': directAssignmentUserIds } }
-      );
-    }
-
-    const unlockResult = await Event.updateOne(
-      { _id: event._id, 'shifts._id': shift._id },
-      { $pull: { 'shifts.$.directAssignmentUserIds': userId } }
-    );
-    if (!unlockResult?.modifiedCount) {
-      return res.status(409).json({ message: 'Unable to update the direct assignment lock' });
-    }
-
-    const refreshedEvent = await Event.findOne({
-      _id: event._id,
-      'shifts._id': shift._id
-    }).select('shifts').lean();
-    const refreshedShift = (refreshedEvent?.shifts || []).find(
-      (item) => item._id.toString() === shift._id.toString()
-    );
-    const remainingDirectUserIds = getDirectAssignmentUserIds(refreshedShift);
-
-    if (remainingDirectUserIds.length === 0 && refreshedShift?.assignmentMode === 'SELECTED_USERS') {
-      // A direct-only shift has no prior broad audience to restore. Reopen it
-      // to the roster once its final direct reservation is removed.
-      await Event.updateOne(
-        {
-          _id: event._id,
-          shifts: {
-            $elemMatch: {
-              _id: shift._id,
-              assignmentMode: 'SELECTED_USERS',
-              directAssignmentUserIds: { $size: 0 }
-            }
-          }
-        },
-        { $set: { 'shifts.$.assignmentMode': 'ALL_ROSTER' } }
-      );
-    }
-
-    // Rows created specifically for direct assignment are removed. Broader
-    // ALL_ROSTER/LEADS_ONLY eligibility rows remain intact so the person's
-    // normal access returns when the lock is gone.
-    await ShiftAssignment.deleteOne({
-      shiftId: shift._id,
-      userId,
-      modeSnapshot: 'SELECTED_USERS'
-    });
+    const { remainingDirectUserIds } = removalResult;
 
     return res.json({
       message: remainingDirectUserIds.length > 0
-        ? 'Direct assignee removed; shift remains locked for the remaining assignees'
-        : 'Direct assignee removed; shift is open for signups again',
+        ? 'Assignee removed and their spot released; the shift remains locked for the remaining assignees'
+        : 'Assignee removed and their spot released; the shift is open for signups again',
       removedUserId: userId,
       isDirectAssignmentLocked: remainingDirectUserIds.length > 0,
       remainingDirectUserIds

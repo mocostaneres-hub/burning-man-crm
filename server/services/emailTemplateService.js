@@ -205,6 +205,47 @@ const DEFAULT_TEMPLATE_DATA = {
     textContent:
       '{{camp_name}} has volunteer shifts available that could use your help. View and sign up for shifts: {{invite_link}}',
     variables: DEFAULT_TEMPLATE_VARIABLES
+  },
+  [EMAIL_TEMPLATE_KEYS.SHIFT_DIRECT_ASSIGNMENT]: {
+    key: EMAIL_TEMPLATE_KEYS.SHIFT_DIRECT_ASSIGNMENT,
+    name: 'Direct Shift Assignment',
+    description: 'Sent when a camp lead directly assigns and confirms a roster member on a shift.',
+    subject: '{{camp_name}} assigned you to {{shift_title}}',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 24px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">You Have Been Selected for a Shift</h1>
+        </div>
+        <div style="padding: 24px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
+          <p style="margin-top: 0;">Hi {{user_name}},</p>
+          <p>The camp leads at <strong>{{camp_name}}</strong> think you would be great for this shift, so they directly assigned it to you.</p>
+          <div style="background: white; border: 1px solid #eee; border-left: 4px solid #FF6B35; border-radius: 8px; padding: 18px; margin: 20px 0;">
+            <p style="margin: 0 0 8px;"><strong>Event:</strong> {{event_name}}</p>
+            <p style="margin: 0 0 8px;"><strong>Shift:</strong> {{shift_title}}</p>
+            <p style="margin: 0 0 8px;"><strong>Date:</strong> {{shift_date}}</p>
+            <p style="margin: 0;"><strong>Time:</strong> {{shift_time}}</p>
+          </div>
+          <p><strong>Your spot is confirmed and no response is required.</strong> If you cannot work this shift, you can drop it from your My Shifts page so the spot becomes available again.</p>
+          <div style="margin: 24px 0; text-align: center;">
+            <a href="{{confirmation_link}}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              View My Shift
+            </a>
+          </div>
+          <p style="color: #666; font-size: 14px; margin-bottom: 0;">If you have questions or cannot take this shift, please contact your camp leads.</p>
+        </div>
+      </div>
+    `,
+    textContent:
+      'Hi {{user_name}},\n\nThe camp leads at {{camp_name}} think you would be great for this shift, so they directly assigned it to you.\n\nEvent: {{event_name}}\nShift: {{shift_title}}\nDate: {{shift_date}}\nTime: {{shift_time}}\n\nYour spot is confirmed and no response is required. If you cannot work this shift, drop it from My Shifts so the spot becomes available again: {{confirmation_link}}\n\nIf you have questions, please contact your camp leads.',
+    variables: [
+      'camp_name',
+      'user_name',
+      'event_name',
+      'shift_title',
+      'shift_date',
+      'shift_time',
+      'confirmation_link'
+    ]
   }
 };
 

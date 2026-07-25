@@ -1,4 +1,5 @@
 const db = require('../database/databaseAdapter');
+const Event = require('../models/Event');
 const ShiftAssignment = require('../models/ShiftAssignment');
 const ShiftSignup = require('../models/ShiftSignup');
 const { createBulkNotifications } = require('./notificationService');
@@ -39,6 +40,229 @@ function buildShiftSignupReservationFilter({ eventId, shiftId, maxSignUps, userI
       }
     }
   };
+}
+
+function buildDirectAssignmentReservationPlan({
+  requestedUserIds = [],
+  signupUserIds = [],
+  legacyMemberIds = [],
+  currentSignups = 0,
+  maxSignUps = 0
+}) {
+  const requested = [...new Set(requestedUserIds.map(normalizeId).filter(Boolean))];
+  const signupSet = new Set(signupUserIds.map(normalizeId).filter(Boolean));
+  const reservedSet = new Set([
+    ...signupSet,
+    ...legacyMemberIds.map(normalizeId).filter(Boolean)
+  ]);
+  const occupiedCount = Math.max(
+    reservedSet.size,
+    Number.isFinite(Number(currentSignups)) ? Number(currentSignups) : 0
+  );
+  const availableSpots = Math.max(Number(maxSignUps || 0) - occupiedCount, 0);
+  const userIdsNeedingReservation = requested.filter((userId) => !reservedSet.has(userId));
+
+  return {
+    requestedUserIds: requested,
+    signupUserIds: signupSet,
+    occupiedCount,
+    availableSpots,
+    userIdsNeedingReservation,
+    canReserve: userIdsNeedingReservation.length <= availableSpots
+  };
+}
+
+async function getPersistedShift(eventId, shiftId) {
+  const event = await Event.findOne({
+    _id: eventId,
+    'shifts._id': shiftId
+  }).select('shifts').lean();
+  return (event?.shifts || []).find((shift) => normalizeId(shift._id) === normalizeId(shiftId)) || null;
+}
+
+/**
+ * Converts manager-selected assignees into real signups immediately. The
+ * direct-assignment lock must already contain these users, which prevents a
+ * non-assignee from racing for the same capacity while reservations are made.
+ */
+async function reserveShiftSpotsForUsers({ eventId, shiftId, campId, userIds = [] }) {
+  const requestedUserIds = [...new Set(userIds.map(normalizeId).filter(Boolean))];
+  if (requestedUserIds.length === 0) {
+    return { confirmedUserIds: [], newlyReservedUserIds: [] };
+  }
+
+  const [shift, signupRows] = await Promise.all([
+    getPersistedShift(eventId, shiftId),
+    ShiftSignup.find({ shiftId }).select('userId').lean()
+  ]);
+  if (!shift) {
+    const error = new Error('Shift not found while reserving direct assignments');
+    error.code = 'SHIFT_NOT_FOUND';
+    throw error;
+  }
+
+  const plan = buildDirectAssignmentReservationPlan({
+    requestedUserIds,
+    signupUserIds: signupRows.map((row) => row.userId),
+    legacyMemberIds: shift.memberIds || [],
+    currentSignups: shift.currentSignups,
+    maxSignUps: shift.maxSignUps
+  });
+  if (!plan.canReserve) {
+    const error = new Error(
+      `Only ${plan.availableSpots} shift spot(s) remain, but ${plan.userIdsNeedingReservation.length} new reservation(s) were requested.`
+    );
+    error.code = 'SHIFT_CAPACITY_EXCEEDED';
+    error.statusCode = 409;
+    error.availableSpots = plan.availableSpots;
+    throw error;
+  }
+
+  // Heal a stale embedded counter before taking new capacity. This only raises
+  // the counter, so it cannot overwrite a concurrent reservation.
+  await Event.updateOne(
+    { _id: eventId, 'shifts._id': shiftId },
+    { $max: { 'shifts.$.currentSignups': plan.occupiedCount } }
+  );
+
+  // Legacy memberIds already reserve capacity. Add their canonical signup row
+  // without incrementing the embedded count a second time.
+  const missingCanonicalRows = plan.requestedUserIds.filter(
+    (userId) =>
+      !plan.signupUserIds.has(userId) &&
+      (shift.memberIds || []).some((memberId) => normalizeId(memberId) === userId)
+  );
+  for (const userId of missingCanonicalRows) {
+    await ShiftSignup.updateOne(
+      { shiftId, userId },
+      {
+        $setOnInsert: {
+          shiftId,
+          eventId,
+          campId,
+          userId,
+          createdAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+  }
+
+  const newlyReservedUserIds = [];
+  try {
+    for (const userId of plan.userIdsNeedingReservation) {
+      const reservation = await Event.updateOne(
+        buildShiftSignupReservationFilter({
+          eventId,
+          shiftId,
+          maxSignUps: shift.maxSignUps,
+          userId
+        }),
+        {
+          $inc: { 'shifts.$.currentSignups': 1 },
+          $addToSet: { 'shifts.$.memberIds': userId }
+        }
+      );
+      if (!reservation?.modifiedCount) {
+        const error = new Error('This shift no longer has enough room for the direct assignment.');
+        error.code = 'SHIFT_CAPACITY_EXCEEDED';
+        error.statusCode = 409;
+        throw error;
+      }
+
+      try {
+        await ShiftSignup.create({
+          shiftId,
+          eventId,
+          campId,
+          userId,
+          createdAt: new Date()
+        });
+        newlyReservedUserIds.push(userId);
+      } catch (signupError) {
+        if (signupError?.code === 11000) {
+          // A concurrent signup won the unique row. It already owns the spot,
+          // so undo only this helper's duplicate counter increment.
+          await Event.updateOne(
+            { _id: eventId, 'shifts._id': shiftId, 'shifts.currentSignups': { $gt: 0 } },
+            { $inc: { 'shifts.$.currentSignups': -1 } }
+          );
+          continue;
+        }
+
+        await Event.updateOne(
+          { _id: eventId, 'shifts._id': shiftId, 'shifts.currentSignups': { $gt: 0 } },
+          {
+            $inc: { 'shifts.$.currentSignups': -1 },
+            $pull: { 'shifts.$.memberIds': userId }
+          }
+        );
+        throw signupError;
+      }
+    }
+  } catch (error) {
+    if (newlyReservedUserIds.length > 0) {
+      await ShiftSignup.deleteMany({
+        shiftId,
+        userId: { $in: newlyReservedUserIds }
+      });
+      await Event.updateOne(
+        { _id: eventId, 'shifts._id': shiftId },
+        {
+          $inc: { 'shifts.$.currentSignups': -newlyReservedUserIds.length },
+          $pull: { 'shifts.$.memberIds': { $in: newlyReservedUserIds } }
+        }
+      );
+    }
+    throw error;
+  }
+
+  return {
+    confirmedUserIds: plan.requestedUserIds,
+    newlyReservedUserIds
+  };
+}
+
+async function releaseShiftSpotsForUsers({ eventId, shiftId, userIds = [] }) {
+  const requestedUserIds = [...new Set(userIds.map(normalizeId).filter(Boolean))];
+  if (requestedUserIds.length === 0) {
+    return { releasedUserIds: [] };
+  }
+
+  const [shift, signupRows] = await Promise.all([
+    getPersistedShift(eventId, shiftId),
+    ShiftSignup.find({ shiftId, userId: { $in: requestedUserIds } }).select('userId').lean()
+  ]);
+  if (!shift) return { releasedUserIds: [] };
+
+  const reservedSet = new Set([
+    ...signupRows.map((row) => normalizeId(row.userId)),
+    ...(shift.memberIds || []).map(normalizeId)
+  ]);
+  const releasedUserIds = requestedUserIds.filter((userId) => reservedSet.has(userId));
+
+  await ShiftSignup.deleteMany({ shiftId, userId: { $in: requestedUserIds } });
+  await Event.updateOne(
+    { _id: eventId, 'shifts._id': shiftId },
+    { $pull: { 'shifts.$.memberIds': { $in: requestedUserIds } } }
+  );
+
+  // Recompute from both canonical and legacy stores so a removal repairs any
+  // stale counter rather than blindly decrementing it.
+  const [remainingSignupRows, refreshedShift] = await Promise.all([
+    ShiftSignup.find({ shiftId }).select('userId').lean(),
+    getPersistedShift(eventId, shiftId)
+  ]);
+  const remainingUserIds = new Set([
+    ...remainingSignupRows.map((row) => normalizeId(row.userId)),
+    ...(refreshedShift?.memberIds || []).map(normalizeId)
+  ]);
+  await Event.updateOne(
+    { _id: eventId, 'shifts._id': shiftId },
+    { $set: { 'shifts.$.currentSignups': remainingUserIds.size } }
+  );
+
+  return { releasedUserIds };
 }
 
 async function resolveDirectAssignmentUserIds({ shift, shiftId }) {
@@ -157,12 +381,15 @@ async function createShiftAssignments({
 
   // Notify newly assigned users.
   try {
+    const isDirectAssignment = mode === 'SELECTED_USERS';
     await createBulkNotifications(insertedUserIds, {
       actor: assignedBy,
       campId,
       type: NOTIFICATION_TYPES.SHIFT_ASSIGNED,
-      title: 'Please sign up for shifts',
-      message: `"${campName}" needs your help with "${eventName}"`,
+      title: isDirectAssignment ? 'A shift was assigned to you' : 'Please sign up for shifts',
+      message: isDirectAssignment
+        ? `"${campName}" assigned you to "${eventName}". Your spot is confirmed unless you drop the shift.`
+        : `"${campName}" needs your help with "${eventName}"`,
       link: '/my-shifts',
       metadata: { shiftId, eventId }
     });
@@ -660,5 +887,8 @@ module.exports = {
   getDirectAssignmentUserIds,
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
+  buildDirectAssignmentReservationPlan,
+  reserveShiftSpotsForUsers,
+  releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds
 };

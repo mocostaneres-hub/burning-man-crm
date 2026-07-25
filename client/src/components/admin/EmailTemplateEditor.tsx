@@ -19,7 +19,12 @@ const SAMPLE_DATA: Record<string, string> = {
   camp_name: 'Solar Haven',
   user_name: 'Alex',
   invite_link: 'https://www.g8road.com/apply?invite_token=abc123',
-  time_since_signup: '7 days'
+  time_since_signup: '7 days',
+  event_name: 'Burn Week Operations',
+  shift_title: 'Sunrise Kitchen Support',
+  shift_date: 'Saturday, August 29, 2026',
+  shift_time: '8:00 AM – 12:00 PM PDT',
+  confirmation_link: 'https://www.g8road.com/my-shifts'
 };
 
 const EmailTemplateEditor: React.FC = () => {
@@ -264,4 +269,3 @@ const EmailTemplateEditor: React.FC = () => {
 };
 
 export default EmailTemplateEditor;
-
