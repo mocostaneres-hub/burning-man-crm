@@ -34,9 +34,9 @@ const shift = {
   memberIds: [],
   coworkers: [{
     _id: 'coworker-1',
-    firstName: 'Alex',
-    lastName: 'Rivera',
-    playaName: 'Sparky'
+    firstName: 'Abel',
+    lastName: 'Parada',
+    playaName: 'None yet'
   }]
 };
 
@@ -57,7 +57,8 @@ describe('MyShiftsList', () => {
     expect(await screen.findByText('Kitchen Setup')).toBeTruthy();
     expect(screen.getByText('Needs signup')).toBeTruthy();
     expect(screen.getByText('Working with')).toBeTruthy();
-    expect(screen.getByText('Sparky')).toBeTruthy();
+    expect(screen.getByText('Abel Parada')).toBeTruthy();
+    expect(screen.queryByText('None yet')).toBeNull();
     expect(screen.queryByText('You have no assigned or signed-up shifts.')).toBeNull();
   });
 });

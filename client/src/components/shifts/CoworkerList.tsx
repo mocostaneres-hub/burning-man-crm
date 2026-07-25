@@ -14,7 +14,6 @@ const CoworkerList: React.FC<Props> = ({ coworkers }) => {
     <div className="flex flex-wrap gap-2">
       {coworkers.map((coworker) => {
         const label =
-          coworker.playaName ||
           `${coworker.firstName || ''} ${coworker.lastName || ''}`.trim() ||
           coworker.email ||
           'Member';
