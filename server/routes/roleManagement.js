@@ -141,13 +141,22 @@ router.get('/camp/:campId/members', authenticateToken, async (req, res) => {
     });
 
     // Remove duplicates based on member ID and user ID (keep latest by reviewedAt date)
+    const getDocumentId = (value) => {
+      if (!value) return '';
+      return (value._id || value).toString();
+    };
     const uniqueMembers = members.filter((member, index, self) => {
+      const memberId = getDocumentId(member._id);
+
       // First remove duplicates by member ID
-      const isFirstOccurrenceById = index === self.findIndex(m => m._id === member._id);
+      const isFirstOccurrenceById = index === self.findIndex(m => getDocumentId(m._id) === memberId);
       if (!isFirstOccurrenceById) return false;
       
       // Then remove duplicates by user ID (keep the most recently reviewed one)
-      const duplicatesByUser = self.filter(m => m.user === member.user);
+      const userId = getDocumentId(member.user);
+      if (!userId) return true;
+
+      const duplicatesByUser = self.filter(m => getDocumentId(m.user) === userId);
       if (duplicatesByUser.length === 1) return true;
       
       // Sort by reviewedAt date and keep only the most recent
@@ -155,14 +164,15 @@ router.get('/camp/:campId/members', authenticateToken, async (req, res) => {
         new Date(b.reviewedAt || b.createdAt || 0) - new Date(a.reviewedAt || a.createdAt || 0)
       )[0];
       
-      return member._id === mostRecent._id;
+      return memberId === getDocumentId(mostRecent._id);
     });
 
     // Populate user data for each member
     const populatedMembers = await Promise.all(uniqueMembers.map(async (member) => {
       const userData = await db.findUser({ _id: member.user });
+      const plainMember = member.toObject ? member.toObject() : member;
       return {
-        ...member,
+        ...plainMember,
         user: userData ? {
           _id: userData._id,
           firstName: userData.firstName,

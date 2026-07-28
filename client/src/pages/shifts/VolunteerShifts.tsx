@@ -7,6 +7,8 @@ import api from '../../services/api';
 import { Event } from '../../types';
 import { formatShiftDate, formatShiftTime, formatDate, utcToPdtDateInput, utcToPdtTimeInput, PDT_LABEL } from '../../utils/dateFormatters';
 import { useSkills } from '../../hooks/useSkills';
+import { deduplicateRosterMembers } from './rosterMemberUtils';
+import { applyShiftAssignmentMode } from './shiftAssignmentUtils';
 
 const deriveRosterMeta = (roster: any) => {
   const members = Array.isArray(roster?.members) ? roster.members : [];
@@ -466,13 +468,7 @@ const VolunteerShifts: React.FC = () => {
       ...prev,
       shifts: prev.shifts.map((shift, index) => {
         if (index !== shiftIndex) return shift;
-        if (mode === 'ALL_ROSTER') {
-          return { ...shift, assignmentMode: mode, selectedUserIds: allRosterIds, directAssignmentUserIds: [] };
-        }
-        if (mode === 'LEADS_ONLY') {
-          return { ...shift, assignmentMode: mode, selectedUserIds: leadRosterIds, directAssignmentUserIds: [] };
-        }
-        return { ...shift, assignmentMode: mode, selectedUserIds: [], directAssignmentUserIds: [] };
+        return applyShiftAssignmentMode(shift, mode, allRosterIds, leadRosterIds);
       })
     }));
   };
@@ -541,13 +537,12 @@ const VolunteerShifts: React.FC = () => {
       const activeCampMembers = (response.members || [])
         .map(normalizeRosterMember)
         .filter(Boolean) as RosterMemberLite[];
-      const mergedMembers = new Map<string, RosterMemberLite>();
-      [...activeCampMembers, ...rosterMembersFromActiveRoster].forEach((member) => {
-        [member.memberId, member.userId, member._id].forEach((id) => {
-          if (id && !mergedMembers.has(id)) mergedMembers.set(id, member);
-        });
-      });
-      setRosterMembers(Array.from(new Set(mergedMembers.values())));
+      // Prefer the richer active-roster record, then collapse records from the
+      // two endpoints whenever any stable member/user identity overlaps.
+      setRosterMembers(deduplicateRosterMembers([
+        ...rosterMembersFromActiveRoster,
+        ...activeCampMembers
+      ]));
     } catch (error) {
       console.error('Error loading roster members:', error);
       setCurrentCampId(null);
@@ -630,7 +625,9 @@ const VolunteerShifts: React.FC = () => {
   const hasAvailableShifts = useMemo(() => {
     return events.some(event =>
       (event.shifts || []).some(shift => {
-        if ((shift.directAssignmentUserIds || []).length > 0 || shift.assignmentMode === 'SELECTED_USERS') {
+        const isExclusiveDirectAssignment = shift.assignmentMode === 'SELECTED_USERS'
+          || (!shift.assignmentMode && (shift.directAssignmentUserIds || []).length > 0);
+        if (isExclusiveDirectAssignment) {
           return false;
         }
         const max = shift.maxSignUps || 0;
@@ -889,9 +886,12 @@ const VolunteerShifts: React.FC = () => {
       endTime: utcToPdtTimeInput(event.endTime) || fallbackShiftEnd,
       shifts: event.shifts.map((shift, index) => {
         const assignmentMode = shift.assignmentMode || 'ALL_ROSTER';
-        const directAssignmentUserIds = (assignmentResponses[index]?.assignedUsers || [])
-          .map((assignedUser: any) => assignedUser?.userId?.toString())
-          .filter(Boolean);
+        const directAssignmentUserIds = Array.from(new Set([
+          ...((shift.directAssignmentUserIds || []).map((id) => id?.toString()).filter(Boolean)),
+          ...(assignmentResponses[index]?.assignedUsers || [])
+            .map((assignedUser: any) => assignedUser?.userId?.toString())
+            .filter(Boolean)
+        ])) as string[];
         const selectedUserIds = assignmentMode === 'ALL_ROSTER'
           ? allRosterIds
           : assignmentMode === 'LEADS_ONLY'
@@ -967,16 +967,9 @@ const VolunteerShifts: React.FC = () => {
   const applyGlobalInviteMode = () => {
     setEventForm((prev) => ({
       ...prev,
-      shifts: prev.shifts.map((_, index) => {
-        const shift = prev.shifts[index];
-        if (globalInviteMode === 'ALL_ROSTER') {
-          return { ...shift, assignmentMode: 'ALL_ROSTER', selectedUserIds: allRosterIds, directAssignmentUserIds: [] };
-        }
-        if (globalInviteMode === 'LEADS_ONLY') {
-          return { ...shift, assignmentMode: 'LEADS_ONLY', selectedUserIds: leadRosterIds, directAssignmentUserIds: [] };
-        }
-        return { ...shift, assignmentMode: 'SELECTED_USERS', selectedUserIds: [], directAssignmentUserIds: [] };
-      })
+      shifts: prev.shifts.map((shift) => (
+        applyShiftAssignmentMode(shift, globalInviteMode, allRosterIds, leadRosterIds)
+      ))
     }));
   };
 
@@ -1083,8 +1076,11 @@ const VolunteerShifts: React.FC = () => {
     const assigneeName = assignee
       ? (`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'this former roster member')
       : 'this person';
+    const availabilityAfterRemoval = assignmentState.isDirectAssignmentLocked
+      ? 'The shift will open to others after the final direct assignee is removed.'
+      : 'Any remaining capacity will stay open under the current invitation strategy.';
     const confirmed = window.confirm(
-      `Unassign ${assigneeName}? Their confirmed signup will be removed and their spot will be released. The shift reopens to others after the final direct assignee is removed.`
+      `Unassign ${assigneeName}? Their confirmed signup will be removed and their spot will be released. ${availabilityAfterRemoval}`
     );
     if (!confirmed) return;
 
@@ -1955,7 +1951,7 @@ const VolunteerShifts: React.FC = () => {
                 <p className="font-medium">Choose a default invite strategy</p>
                 <p className="text-xs mt-1">Invite to sign up = notify members. Assign directly = confirm specific members onto a shift immediately, with no response required.</p>
                 <p className="text-xs mt-1">
-                  <strong>Heads up:</strong> shifts set to <em>Invite to sign up (all)</em> or <em>(leads)</em> stay open to anyone who joins the roster later — they'll automatically be eligible without you re-inviting. <em>Assign directly</em> locks the shift to the people you pick until you unassign them.
+                  <strong>Heads up:</strong> confirmed direct assignees keep their spots when you switch invitation strategies. <em>Invite to sign up</em> opens only the remaining capacity; <em>Assign directly</em> keeps the shift exclusive to the people you pick.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1979,6 +1975,9 @@ const VolunteerShifts: React.FC = () => {
                       <p className="text-sm font-medium">{shift.title || `Shift ${index + 1}`}</p>
                       <span className="text-xs text-gray-600">
                         Selected: {shift.selectedUserIds.length}/{rosterMembers.length}
+                        {shift.directAssignmentUserIds.length > 0
+                          ? ` • ${shift.directAssignmentUserIds.length} confirmed`
+                          : ''}
                       </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
@@ -1997,10 +1996,10 @@ const VolunteerShifts: React.FC = () => {
                     </div>
                     <p className="text-[11px] text-gray-600 mb-2">
                       {shift.assignmentMode === 'ALL_ROSTER' && (
-                        <>Future members who join your roster will automatically have access to sign up — no re-invitation required.</>
+                        <>Confirmed direct assignees keep their spots. Everyone on the roster can claim only the remaining spots, including future members.</>
                       )}
                       {shift.assignmentMode === 'LEADS_ONLY' && (
-                        <>Future members promoted to Camp Lead will automatically have access. Plain members do not.</>
+                        <>Confirmed direct assignees keep their spots. Camp Leads can claim only the remaining spots; plain members cannot.</>
                       )}
                       {shift.assignmentMode === 'SELECTED_USERS' && (
                         <>The people you pick below are officially assigned immediately and consume the selected spots. Everyone else remains blocked until you unassign the final person.</>
@@ -2016,25 +2015,36 @@ const VolunteerShifts: React.FC = () => {
                             : 0;
                           const priorShiftCount = events.reduce((acc, evt) => acc + (evt.shifts || []).filter((evtShift) => (evtShift.memberIds || []).includes(member._id)).length, 0);
                           const alreadyInvited = shift.selectedUserIds.includes(member._id);
+                          const directlyAssigned = shift.directAssignmentUserIds.includes(member._id);
                           return {
                             member,
                             skillMatchPercent,
                             priorShiftCount,
-                            alreadyInvited
+                            alreadyInvited,
+                            directlyAssigned
                           };
                         })
                         .sort((a, b) => (b.skillMatchPercent - a.skillMatchPercent) || (a.priorShiftCount - b.priorShiftCount))
-                        .map(({ member, skillMatchPercent, priorShiftCount, alreadyInvited }) => {
+                        .map(({ member, skillMatchPercent, priorShiftCount, alreadyInvited, directlyAssigned }) => {
                           const label = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email;
                           return (
                             <label key={`${index}-${member._id}`} className="flex items-center justify-between gap-2">
                               <span className="text-sm">
                                 {label} {member.isLead ? <span className="text-xs text-orange-700">(Lead)</span> : null}
+                                {directlyAssigned ? <span className="ml-1 text-xs font-medium text-green-700">(Confirmed)</span> : null}
                                 <span className="block text-[11px] text-gray-500">
-                                  Skill match {skillMatchPercent}% • Prior shifts {priorShiftCount} • {alreadyInvited ? 'Already invited' : 'Not invited'}
+                                  Skill match {skillMatchPercent}% • Prior shifts {priorShiftCount} • {directlyAssigned ? 'Spot confirmed' : alreadyInvited ? 'Already invited' : 'Not invited'}
                                 </span>
                               </span>
-                              <input type="checkbox" checked={shift.selectedUserIds.includes(member._id)} onChange={() => toggleSelectedUser(index, member._id)} />
+                              <input
+                                type="checkbox"
+                                checked={shift.selectedUserIds.includes(member._id)}
+                                disabled={directlyAssigned && shift.assignmentMode !== 'SELECTED_USERS'}
+                                title={directlyAssigned && shift.assignmentMode !== 'SELECTED_USERS'
+                                  ? 'Unassign this confirmed spot from the shift assignment panel.'
+                                  : undefined}
+                                onChange={() => toggleSelectedUser(index, member._id)}
+                              />
                             </label>
                           );
                         })}
@@ -2255,7 +2265,7 @@ const VolunteerShifts: React.FC = () => {
                       <div className="text-sm text-gray-500">
                         <div>{formatDate(shift.date)}</div>
                         <div>{formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}</div>
-                        <div className="text-[11px] mt-1">Direct assignments immediately reserve spots and lock this shift until the final assignee is removed.</div>
+                        <div className="text-[11px] mt-1">Direct assignments reserve confirmed spots. The invitation strategy controls who can claim any capacity that remains.</div>
                       </div>
                     </div>
                   ))}
@@ -2359,7 +2369,11 @@ const VolunteerShifts: React.FC = () => {
               <div className={`rounded border p-3 text-sm ${assignmentState.isDirectAssignmentLocked ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
                 {assignmentState.isDirectAssignmentLocked
                   ? 'Assigned: the people listed below are confirmed on this shift. Their spots are taken, and everyone else is blocked until you unassign the final person.'
-                  : 'Open: adding a direct assignee will confirm their spot immediately and lock this shift for everyone else.'}
+                  : assignmentState.assignedUsers.length > 0
+                    ? 'Open with confirmed assignees: their spots are secured, and eligible members can claim the remaining capacity.'
+                    : selectedShiftForAssignment?.assignmentMode === 'SELECTED_USERS'
+                      ? 'Exclusive: adding direct assignees confirms their spots and keeps the shift limited to those people.'
+                      : 'Open: adding a direct assignee confirms their spot; the remaining capacity stays available under the current invitation strategy.'}
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">Direct Assignees ({assignmentState.assignedUsers.length})</div>

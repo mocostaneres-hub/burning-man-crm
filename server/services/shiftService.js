@@ -19,25 +19,49 @@ function getDirectAssignmentUserIds(shift, fallbackUserIds = []) {
   return [...new Set((sourceIds || []).map((id) => normalizeId(id)).filter(Boolean))];
 }
 
-function isShiftDirectAssignmentLockedForUser(shift, userId, fallbackUserIds = []) {
+function hasExclusiveDirectAssignmentLock(shift, fallbackUserIds = []) {
   const directUserIds = getDirectAssignmentUserIds(shift, fallbackUserIds);
   if (directUserIds.length === 0) return false;
+
+  // Broad invite modes apply only to the unfilled capacity. Direct assignees
+  // keep their confirmed spots, but they do not block other eligible members.
+  // A missing mode with direct IDs is treated as a legacy exclusive shift.
+  return !shift?.assignmentMode || shift.assignmentMode === 'SELECTED_USERS';
+}
+
+function isShiftDirectAssignmentLockedForUser(shift, userId, fallbackUserIds = []) {
+  if (!hasExclusiveDirectAssignmentLock(shift, fallbackUserIds)) return false;
+  const directUserIds = getDirectAssignmentUserIds(shift, fallbackUserIds);
   return !directUserIds.includes(normalizeId(userId));
 }
 
-function buildShiftSignupReservationFilter({ eventId, shiftId, maxSignUps, userId }) {
+function buildShiftSignupReservationFilter({
+  eventId,
+  shiftId,
+  maxSignUps,
+  userId,
+  assignmentMode
+}) {
+  const shiftFilter = {
+    _id: shiftId,
+    currentSignups: { $lt: maxSignUps }
+  };
+
+  // Keep the direct-assignment audience check in the same atomic reservation
+  // only for exclusive/legacy shifts. ALL_ROSTER and LEADS_ONLY leave their
+  // remaining capacity open even when some spots were directly assigned.
+  if (!assignmentMode || assignmentMode === 'SELECTED_USERS') {
+    shiftFilter.$or = [
+      { directAssignmentUserIds: { $exists: false } },
+      { directAssignmentUserIds: { $size: 0 } },
+      { directAssignmentUserIds: userId }
+    ];
+  }
+
   return {
     _id: eventId,
     shifts: {
-      $elemMatch: {
-        _id: shiftId,
-        currentSignups: { $lt: maxSignUps },
-        $or: [
-          { directAssignmentUserIds: { $exists: false } },
-          { directAssignmentUserIds: { $size: 0 } },
-          { directAssignmentUserIds: userId }
-        ]
-      }
+      $elemMatch: shiftFilter
     }
   };
 }
@@ -120,6 +144,28 @@ function shouldReconcileShiftAssignments({
   return false;
 }
 
+function mergeDirectAssignmentUserIdsForUpdate({
+  assignmentMode,
+  hasExplicitSelectedUsers = false,
+  assignmentCandidates = [],
+  existingDirectAssignmentUserIds = [],
+  validatedIncomingDirectAssignmentUserIds = []
+}) {
+  if (assignmentMode === 'SELECTED_USERS' && hasExplicitSelectedUsers) {
+    return [...new Set(
+      assignmentCandidates.map(normalizeId).filter(Boolean)
+    )];
+  }
+
+  // In broad modes, changing the invitation audience must never implicitly
+  // unassign a confirmed person. Explicit removals go through the unassign
+  // endpoint so the reserved signup and counter are released together.
+  return [...new Set([
+    ...existingDirectAssignmentUserIds.map(normalizeId).filter(Boolean),
+    ...validatedIncomingDirectAssignmentUserIds.map(normalizeId).filter(Boolean)
+  ])];
+}
+
 async function getPersistedShift(eventId, shiftId) {
   const event = await Event.findOne({
     _id: eventId,
@@ -130,8 +176,9 @@ async function getPersistedShift(eventId, shiftId) {
 
 /**
  * Converts manager-selected assignees into real signups immediately. The
- * direct-assignment lock must already contain these users, which prevents a
- * non-assignee from racing for the same capacity while reservations are made.
+ * direct-assignment marker must already contain these users. SELECTED_USERS
+ * enforces it as an exclusive lock; broad modes compete atomically only for
+ * the capacity that remains.
  */
 async function reserveShiftSpotsForUsers({ eventId, shiftId, campId, userIds = [] }) {
   const requestedUserIds = [...new Set(userIds.map(normalizeId).filter(Boolean))];
@@ -204,7 +251,8 @@ async function reserveShiftSpotsForUsers({ eventId, shiftId, campId, userIds = [
           eventId,
           shiftId,
           maxSignUps: shift.maxSignUps,
-          userId
+          userId,
+          assignmentMode: shift.assignmentMode
         }),
         {
           $inc: { 'shifts.$.currentSignups': 1 },
@@ -510,11 +558,6 @@ function decideAssignmentsForJoiner({
       const shiftId = normalizeId(shift._id);
       if (!shiftId) continue;
 
-      // A direct assignment is an exclusive manager lock. Late roster
-      // joiners should not receive eligibility rows or notifications while
-      // that lock is active.
-      if (getDirectAssignmentUserIds(shift).length > 0) continue;
-
       // Skip shifts the user is already assigned to — re-running this
       // helper must be idempotent.
       if (alreadyAssigned.has(shiftId)) continue;
@@ -532,7 +575,7 @@ function decideAssignmentsForJoiner({
       const mode =
         shift.assignmentMode ||
         inferredModeByShift.get(shiftId) ||
-        'ALL_ROSTER';
+        (getDirectAssignmentUserIds(shift).length > 0 ? 'SELECTED_USERS' : 'ALL_ROSTER');
 
       // Hand-picked audiences are never widened. If a camp lead
       // explicitly chose SELECTED_USERS, late-joiners stay out.
@@ -845,7 +888,10 @@ async function buildMyShiftsPayload(userId) {
       legacyDirectIdsByShift.get(shiftId) || []
     );
     const isDirectlyAssignedToMe = directAssignmentUserIds.includes(userIdStr);
-    const isDirectAssignmentLocked = directAssignmentUserIds.length > 0;
+    const isDirectAssignmentLocked = hasExclusiveDirectAssignmentLock(
+      shift,
+      legacyDirectIdsByShift.get(shiftId) || []
+    );
     const legacyMemberIds = (shift.memberIds || []).map((id) => normalizeId(id)).filter(Boolean);
     if (legacyMemberIds.includes(userIdStr)) {
       signedShiftIds.add(shiftId);
@@ -933,10 +979,12 @@ module.exports = {
   decideAssignmentsForJoiner,
   buildMyShiftsPayload,
   getDirectAssignmentUserIds,
+  hasExclusiveDirectAssignmentLock,
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
   buildDirectAssignmentReservationPlan,
   shouldReconcileShiftAssignments,
+  mergeDirectAssignmentUserIdsForUpdate,
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds

@@ -32,7 +32,8 @@ const {
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
   buildDirectAssignmentReservationPlan,
-  shouldReconcileShiftAssignments
+  shouldReconcileShiftAssignments,
+  mergeDirectAssignmentUserIdsForUpdate
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -56,14 +57,24 @@ function makeShift(id, opts = {}) {
 }
 
 describe('direct assignment locks', () => {
-  test('a direct assignment blocks every user who is not explicitly listed', () => {
+  test('selected-user direct assignments block every user who is not explicitly listed', () => {
     const shift = makeShift('shift-locked', {
-      assignmentMode: 'ALL_ROSTER',
+      assignmentMode: 'SELECTED_USERS',
       directAssignmentUserIds: ['user-assigned']
     });
 
     expect(isShiftDirectAssignmentLockedForUser(shift, 'user-other')).toBe(true);
     expect(isShiftDirectAssignmentLockedForUser(shift, 'user-assigned')).toBe(false);
+  });
+
+  test('all-roster mode keeps direct spots confirmed without blocking remaining capacity', () => {
+    const shift = makeShift('shift-hybrid', {
+      assignmentMode: 'ALL_ROSTER',
+      directAssignmentUserIds: ['user-assigned']
+    });
+
+    expect(getDirectAssignmentUserIds(shift)).toEqual(['user-assigned']);
+    expect(isShiftDirectAssignmentLockedForUser(shift, 'user-other')).toBe(false);
   });
 
   test('removing the final direct assignee unlocks the shift', () => {
@@ -89,7 +100,8 @@ describe('direct assignment locks', () => {
       eventId: 'event-1',
       shiftId: 'shift-1',
       maxSignUps: 3,
-      userId: 'user-1'
+      userId: 'user-1',
+      assignmentMode: 'SELECTED_USERS'
     })).toEqual({
       _id: 'event-1',
       shifts: {
@@ -101,6 +113,24 @@ describe('direct assignment locks', () => {
             { directAssignmentUserIds: { $size: 0 } },
             { directAssignmentUserIds: 'user-1' }
           ]
+        }
+      }
+    });
+  });
+
+  test('the atomic capacity reservation leaves broad-mode capacity open', () => {
+    expect(buildShiftSignupReservationFilter({
+      eventId: 'event-1',
+      shiftId: 'shift-1',
+      maxSignUps: 3,
+      userId: 'user-2',
+      assignmentMode: 'ALL_ROSTER'
+    })).toEqual({
+      _id: 'event-1',
+      shifts: {
+        $elemMatch: {
+          _id: 'shift-1',
+          currentSignups: { $lt: 3 }
         }
       }
     });
@@ -147,6 +177,23 @@ describe('direct assignment locks', () => {
 });
 
 describe('event edit assignment reconciliation', () => {
+  test('switching to all-roster preserves confirmed assignees even with an empty incoming list', () => {
+    expect(mergeDirectAssignmentUserIdsForUpdate({
+      assignmentMode: 'ALL_ROSTER',
+      existingDirectAssignmentUserIds: ['user-1', 'user-2'],
+      validatedIncomingDirectAssignmentUserIds: []
+    })).toEqual(['user-1', 'user-2']);
+  });
+
+  test('selected-user mode still allows an explicit assignee replacement', () => {
+    expect(mergeDirectAssignmentUserIdsForUpdate({
+      assignmentMode: 'SELECTED_USERS',
+      hasExplicitSelectedUsers: true,
+      assignmentCandidates: ['user-2', 'user-3'],
+      existingDirectAssignmentUserIds: ['user-1', 'user-2']
+    })).toEqual(['user-2', 'user-3']);
+  });
+
   test('does not reinterpret an unchanged legacy selected audience during a detail edit', () => {
     expect(shouldReconcileShiftAssignments({
       existingMode: 'SELECTED_USERS',
@@ -409,11 +456,11 @@ describe('decideAssignmentsForJoiner — entire-roster includes late-joiners', (
     expect(out.map((row) => row.shiftId)).toEqual(['shift-open']);
   });
 
-  test('directly locked shifts are not auto-assigned to late roster joiners', () => {
+  test('all-roster shifts with confirmed assignees still include late roster joiners', () => {
     const events = [
       makeEvent({
-        id: 'evt-locked',
-        shifts: [makeShift('shift-locked', {
+        id: 'evt-hybrid',
+        shifts: [makeShift('shift-hybrid', {
           assignmentMode: 'ALL_ROSTER',
           directAssignmentUserIds: ['user-selected']
         })]
@@ -429,7 +476,11 @@ describe('decideAssignmentsForJoiner — entire-roster includes late-joiners', (
       isLead: false
     });
 
-    expect(out).toEqual([]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      shiftId: 'shift-hybrid',
+      modeSnapshot: 'ALL_ROSTER'
+    });
   });
 
   test('legacy shifts (no assignmentMode field) honour the inferred mode', () => {

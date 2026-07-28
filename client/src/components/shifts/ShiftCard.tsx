@@ -42,11 +42,13 @@ const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, 
           {shift.recommendationReason && mode === 'available' && (
             <p className="text-xs text-indigo-700 mt-1">Why recommended: {shift.recommendationReason}</p>
           )}
-          {shift.isDirectAssignmentLocked && shift.isDirectlyAssignedToMe && (
+          {shift.isDirectlyAssignedToMe && (
             <p className="text-xs text-amber-700 mt-1 font-medium">
               {mode === 'signed'
                 ? 'Assigned by a camp lead. Your spot is confirmed; drop the shift if you cannot attend.'
-                : 'Reserved for you by a camp lead. Other members cannot claim this shift.'}
+                : shift.isDirectAssignmentLocked
+                  ? 'Reserved for you by a camp lead. Other members cannot claim this shift.'
+                  : 'Assigned by a camp lead. Your spot is confirmed; eligible members may claim the remaining spots.'}
             </p>
           )}
 

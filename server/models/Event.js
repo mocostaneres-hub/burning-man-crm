@@ -67,10 +67,10 @@ const shiftSchema = new mongoose.Schema({
     enum: ['ALL_ROSTER', 'LEADS_ONLY', 'SELECTED_USERS'],
     default: 'ALL_ROSTER'
   },
-  // A non-empty list is an explicit manager lock. While present, only these
-  // users may create a ShiftSignup, regardless of the broader invite mode.
-  // Keeping this on the shift lets the capacity reservation enforce the lock
-  // atomically in the same Event update.
+  // These users have confirmed, capacity-reserving direct assignments.
+  // SELECTED_USERS makes the list exclusive; ALL_ROSTER and LEADS_ONLY keep
+  // these confirmed spots while allowing eligible members to claim whatever
+  // capacity remains.
   directAssignmentUserIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
