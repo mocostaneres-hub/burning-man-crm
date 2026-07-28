@@ -31,7 +31,8 @@ const {
   getDirectAssignmentUserIds,
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
-  buildDirectAssignmentReservationPlan
+  buildDirectAssignmentReservationPlan,
+  shouldReconcileShiftAssignments
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -142,6 +143,58 @@ describe('direct assignment locks', () => {
     expect(plan.availableSpots).toBe(1);
     expect(plan.userIdsNeedingReservation).toHaveLength(2);
     expect(plan.canReserve).toBe(false);
+  });
+});
+
+describe('event edit assignment reconciliation', () => {
+  test('does not reinterpret an unchanged legacy selected audience during a detail edit', () => {
+    expect(shouldReconcileShiftAssignments({
+      existingMode: 'SELECTED_USERS',
+      incomingMode: 'SELECTED_USERS',
+      existingSelectedUserIds: ['user-1', 'user-2'],
+      incomingSelectedUserIds: ['user-2', 'user-1'],
+      incomingDirectAssignmentUserIds: ['user-2', 'user-1'],
+      manualAddIds: ['user-2', 'user-1']
+    })).toBe(false);
+  });
+
+  test('reconciles when the selected people actually change', () => {
+    expect(shouldReconcileShiftAssignments({
+      existingMode: 'SELECTED_USERS',
+      incomingMode: 'SELECTED_USERS',
+      existingSelectedUserIds: ['user-1', 'user-2'],
+      incomingSelectedUserIds: ['user-1', 'user-3']
+    })).toBe(true);
+  });
+
+  test('reconciles mode changes and manual audience overrides', () => {
+    expect(shouldReconcileShiftAssignments({
+      existingMode: 'ALL_ROSTER',
+      incomingMode: 'LEADS_ONLY'
+    })).toBe(true);
+
+    expect(shouldReconcileShiftAssignments({
+      existingMode: 'ALL_ROSTER',
+      incomingMode: 'ALL_ROSTER',
+      manualRemoveIds: ['user-2']
+    })).toBe(true);
+  });
+
+  test('ignores the derived roster checkbox list when an all-roster mode is unchanged', () => {
+    expect(shouldReconcileShiftAssignments({
+      existingMode: 'ALL_ROSTER',
+      incomingMode: 'ALL_ROSTER',
+      existingSelectedUserIds: [],
+      incomingSelectedUserIds: ['user-1', 'user-2'],
+      incomingDirectAssignmentUserIds: []
+    })).toBe(false);
+  });
+
+  test('always initializes assignments for a newly added shift', () => {
+    expect(shouldReconcileShiftAssignments({
+      isNewShift: true,
+      incomingMode: 'ALL_ROSTER'
+    })).toBe(true);
   });
 });
 

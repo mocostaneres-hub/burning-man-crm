@@ -156,6 +156,7 @@ const VolunteerShifts: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [eventSaving, setEventSaving] = useState(false);
   const [assignmentState, setAssignmentState] = useState<{
     isDirectAssignmentLocked: boolean;
     assignedUsers: ShiftAssigneeOption[];
@@ -641,6 +642,9 @@ const VolunteerShifts: React.FC = () => {
   }, [events]);
 
   const handleCreateEvent = async () => {
+    if (eventSaving) return;
+    setEventSaving(true);
+
     try {
       console.log('🔍 [Event Creation] User object:', user);
       console.log('🔍 [Event Creation] User accountType:', user?.accountType);
@@ -721,8 +725,8 @@ const VolunteerShifts: React.FC = () => {
       };
 
       const response = isEditMode && eventToEdit
-        ? await api.put(`/shifts/events/${eventToEdit._id}`, eventData)
-        : await api.post('/shifts/events', eventData);
+        ? await api.put(`/shifts/events/${eventToEdit._id}`, eventData, { timeout: 60000 })
+        : await api.post('/shifts/events', eventData, { timeout: 60000 });
 
       if (response?.event) {
         alert(isEditMode ? 'Event updated successfully!' : 'Event created successfully!');
@@ -746,9 +750,13 @@ const VolunteerShifts: React.FC = () => {
         alert(serverMessage || 'One or more shifts do not have enough open spots for those assignments.');
       } else if (error.response?.status === 404 && isEditMode) {
         alert('Event not found. It may have been deleted.');
+      } else if (error.code === 'ECONNABORTED') {
+        alert('The event save timed out before confirmation. Refresh the page to verify the event before trying again.');
       } else {
         alert(`Error ${isEditMode ? 'updating' : 'creating'} event. Please try again.`);
       }
+    } finally {
+      setEventSaving(false);
     }
   };
 
@@ -829,6 +837,8 @@ const VolunteerShifts: React.FC = () => {
   };
 
   const handleCloseEventWizard = () => {
+    if (eventSaving) return;
+
     if (hasEventWizardDraft) {
       const confirmed = window.confirm(
         isEditMode
@@ -1011,9 +1021,18 @@ const VolunteerShifts: React.FC = () => {
     setEventToDelete(null);
   };
 
-  const openAssignmentModal = async (shift: any) => {
+  const openAssignmentModal = async (shift: any, parentEvent?: Event) => {
     try {
-      setSelectedShiftForAssignment(shift);
+      const shiftWithEventContext = parentEvent
+        ? {
+          ...shift,
+          eventName: parentEvent.eventName,
+          eventDate: parentEvent.eventDate,
+          eventStartTime: parentEvent.startTime,
+          eventEndTime: parentEvent.endTime
+        }
+        : shift;
+      setSelectedShiftForAssignment(shiftWithEventContext);
       setShowAssignmentModal(true);
       setAssignmentLoading(true);
       setPendingAddUserIds([]);
@@ -2076,6 +2095,7 @@ const VolunteerShifts: React.FC = () => {
             <Button
               variant="outline"
               onClick={handleCloseEventWizard}
+              disabled={eventSaving}
               className="flex-1 min-h-[44px]"
             >
               Cancel
@@ -2084,6 +2104,7 @@ const VolunteerShifts: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => setWizardStep((prev) => (Math.max(prev - 1, 1) as 1 | 2 | 3 | 4))}
+                disabled={eventSaving}
                 className="flex-1 min-h-[44px]"
               >
                 Back
@@ -2094,7 +2115,7 @@ const VolunteerShifts: React.FC = () => {
                 variant="primary"
                 onClick={() => setWizardStep((prev) => (Math.min(prev + 1, 4) as 1 | 2 | 3 | 4))}
                 className="flex-1 min-h-[44px]"
-                disabled={wizardStep === 1 && (!eventForm.eventName || !eventForm.eventDate || !eventForm.startTime || !eventForm.endTime)}
+                disabled={eventSaving || (wizardStep === 1 && (!eventForm.eventName || !eventForm.eventDate || !eventForm.startTime || !eventForm.endTime))}
               >
                 Next
               </Button>
@@ -2103,11 +2124,11 @@ const VolunteerShifts: React.FC = () => {
               <Button
                 variant="primary"
                 onClick={handleCreateEvent}
-                disabled={!canSaveEvent}
+                disabled={!canSaveEvent || eventSaving}
                 className="flex-1 min-h-[44px]"
               >
                 <Save className="w-4 h-4 mr-2" />
-                {isEditMode ? 'Save' : 'Publish Event'}
+                {eventSaving ? 'Saving...' : isEditMode ? 'Save' : 'Publish Event'}
               </Button>
             )}
           </div>
@@ -2223,7 +2244,7 @@ const VolunteerShifts: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openAssignmentModal(shift)}
+                            onClick={() => openAssignmentModal(shift, selectedEvent)}
                             className="min-h-[40px]"
                           >
                             Assign Directly
@@ -2268,6 +2289,69 @@ const VolunteerShifts: React.FC = () => {
         size="lg"
       >
         <div className="space-y-4">
+          {selectedShiftForAssignment && (
+            <section
+              aria-label="Shift details"
+              className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Shift</p>
+                  <h3 className="mt-0.5 text-lg font-semibold text-gray-900">
+                    {selectedShiftForAssignment.title}
+                  </h3>
+                </div>
+                <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-800">
+                  {selectedShiftForAssignment.maxSignUps} {selectedShiftForAssignment.maxSignUps === 1 ? 'spot' : 'spots'}
+                </span>
+              </div>
+
+              <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-orange-100 bg-white/80 px-3 py-2 sm:col-span-2">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Event / Party</dt>
+                  <dd className="mt-0.5 text-sm font-medium text-gray-900">
+                    {selectedShiftForAssignment.eventName || selectedEvent?.eventName || 'Event name unavailable'}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-orange-100 bg-white/80 px-3 py-2">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Starts</dt>
+                  <dd className="mt-0.5 text-sm font-medium text-gray-900">
+                    {formatDate(
+                      selectedShiftForAssignment.startTime
+                      || selectedShiftForAssignment.date
+                      || selectedShiftForAssignment.eventStartTime
+                      || selectedShiftForAssignment.eventDate
+                    )}
+                    {' at '}
+                    {formatShiftTime(selectedShiftForAssignment.startTime || selectedShiftForAssignment.eventStartTime)}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-orange-100 bg-white/80 px-3 py-2">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Ends</dt>
+                  <dd className="mt-0.5 text-sm font-medium text-gray-900">
+                    {formatDate(
+                      selectedShiftForAssignment.endTime
+                      || selectedShiftForAssignment.date
+                      || selectedShiftForAssignment.eventEndTime
+                      || selectedShiftForAssignment.eventDate
+                    )}
+                    {' at '}
+                    {formatShiftTime(selectedShiftForAssignment.endTime || selectedShiftForAssignment.eventEndTime)}
+                  </dd>
+                </div>
+              </dl>
+
+              {selectedShiftForAssignment.description && (
+                <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                  {selectedShiftForAssignment.description}
+                </p>
+              )}
+              <p className="mt-2 text-[11px] font-medium text-orange-700">
+                Times shown in {PDT_LABEL}
+              </p>
+            </section>
+          )}
+
           {assignmentLoading ? (
             <div className="text-sm text-gray-500">Loading assignees...</div>
           ) : (

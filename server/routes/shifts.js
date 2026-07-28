@@ -53,6 +53,7 @@ const {
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
   buildDirectAssignmentReservationPlan,
+  shouldReconcileShiftAssignments,
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds
@@ -1515,7 +1516,10 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       }
     }
 
-    const existingShiftIds = new Set((existingEvent.shifts || []).map((shift) => shift._id.toString()));
+    const existingShiftById = new Map(
+      (existingEvent.shifts || []).map((shift) => [shift._id.toString(), shift])
+    );
+    const existingShiftIds = new Set(existingShiftById.keys());
     const incomingShiftIds = new Set(
       shifts
         .map((shift) => (shift._id ? shift._id.toString() : null))
@@ -1529,6 +1533,12 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       ])
     );
     const existingDirectAssignmentMap = new Map(existingDirectAssignmentEntries);
+    const existingEmbeddedDirectAssignmentMap = new Map(
+      (existingEvent.shifts || []).map((shift) => [
+        shift._id.toString(),
+        getDirectAssignmentUserIds(shift)
+      ])
+    );
 
     // Parse event-level times as PDT
     const updEventStart = parsePdtDateTime(eventDate, startTime);
@@ -1543,7 +1553,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       endTime: updEventEnd,
       shifts: shifts.map((shift) => {
         const existingShift = shift._id
-          ? existingEvent.shifts.find((item) => item._id.toString() === shift._id.toString())
+          ? existingShiftById.get(shift._id.toString())
           : null;
         const shiftId = existingShift ? existingShift._id : new mongoose.Types.ObjectId();
         const shiftStart = parsePdtDateTime(shift.date, shift.startTime);
@@ -1577,7 +1587,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
           currentSignups: existingShift ? (existingShift.currentSignups || 0) : 0,
           assignmentMode: persistedMode,
           directAssignmentUserIds: existingShift
-            ? (existingDirectAssignmentMap.get(existingShift._id.toString()) || [])
+            ? (existingEmbeddedDirectAssignmentMap.get(existingShift._id.toString()) || [])
             : [],
           createdBy: existingShift ? existingShift.createdBy : req.user._id,
           createdAt: existingShift ? existingShift.createdAt : new Date().toISOString(),
@@ -1609,6 +1619,28 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       ) || shifts[shiftIndex];
       const shiftAssignmentMode = sourceShift?.assignmentMode || currentShift.assignmentMode || 'ALL_ROSTER';
       const hasExplicitSelectedUsers = Array.isArray(sourceShift?.selectedUserIds);
+      const currentShiftId = currentShift._id.toString();
+      const existingShift = existingShiftById.get(currentShiftId);
+      const existingSelectedUserIds = existingDirectAssignmentMap.get(currentShiftId) || [];
+      const needsAssignmentReconciliation = shouldReconcileShiftAssignments({
+        isNewShift: !existingShift,
+        existingMode: existingShift?.assignmentMode || currentShift.assignmentMode || 'ALL_ROSTER',
+        incomingMode: shiftAssignmentMode,
+        existingSelectedUserIds,
+        incomingSelectedUserIds: sourceShift?.selectedUserIds,
+        incomingDirectAssignmentUserIds: sourceShift?.directAssignmentUserIds,
+        manualAddIds: sourceShift?.manualAddIds || [],
+        manualRemoveIds: sourceShift?.manualRemoveIds || []
+      });
+
+      // Event detail edits must not re-run assignment reservation. Besides
+      // being unnecessary, legacy SELECTED_USERS events can contain a larger
+      // invite audience than shift capacity; converting that audience into
+      // confirmed signups during an unrelated edit makes the update fail.
+      if (!needsAssignmentReconciliation) {
+        continue;
+      }
+
       let assignmentCandidates = await resolveAssignmentCandidates({
         campId: eventCampId,
         mode: shiftAssignmentMode,
@@ -1617,7 +1649,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
         manualRemoveIds: sourceShift?.manualRemoveIds || []
       });
       if (shiftAssignmentMode === 'SELECTED_USERS' && !hasExplicitSelectedUsers) {
-        assignmentCandidates = getDirectAssignmentUserIds(currentShift);
+        assignmentCandidates = existingSelectedUserIds;
       }
 
       let directAssignmentUserIds;
@@ -1633,7 +1665,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
         directAssignmentUserIds = getDirectAssignmentUserIds(currentShift);
       }
       const previousDirectAssignmentIds = new Set(
-        (existingDirectAssignmentMap.get(currentShift._id.toString()) || [])
+        existingSelectedUserIds
           .map((id) => id.toString())
       );
       const newlyDirectAssignedIds = directAssignmentUserIds.filter(

@@ -72,6 +72,54 @@ function buildDirectAssignmentReservationPlan({
   };
 }
 
+function shouldReconcileShiftAssignments({
+  isNewShift = false,
+  existingMode,
+  incomingMode,
+  existingSelectedUserIds = [],
+  incomingSelectedUserIds,
+  incomingDirectAssignmentUserIds,
+  manualAddIds = [],
+  manualRemoveIds = []
+}) {
+  if (isNewShift) return true;
+
+  const persistedMode = existingMode || 'ALL_ROSTER';
+  const requestedMode = incomingMode || persistedMode;
+  if (requestedMode !== persistedMode) return true;
+
+  if (
+    requestedMode !== 'SELECTED_USERS' &&
+    ((manualAddIds || []).length > 0 || (manualRemoveIds || []).length > 0)
+  ) {
+    return true;
+  }
+
+  const incomingSelection = requestedMode === 'SELECTED_USERS'
+    ? (Array.isArray(incomingSelectedUserIds)
+      ? incomingSelectedUserIds
+      : (Array.isArray(incomingDirectAssignmentUserIds)
+        ? incomingDirectAssignmentUserIds
+        : null))
+    : (Array.isArray(incomingDirectAssignmentUserIds)
+      ? incomingDirectAssignmentUserIds
+      : null);
+  if (incomingSelection === null) {
+    return false;
+  }
+
+  const existingIds = new Set(
+    (existingSelectedUserIds || []).map(normalizeId).filter(Boolean)
+  );
+  const incomingIds = new Set(incomingSelection.map(normalizeId).filter(Boolean));
+  if (existingIds.size !== incomingIds.size) return true;
+
+  for (const userId of existingIds) {
+    if (!incomingIds.has(userId)) return true;
+  }
+  return false;
+}
+
 async function getPersistedShift(eventId, shiftId) {
   const event = await Event.findOne({
     _id: eventId,
@@ -888,6 +936,7 @@ module.exports = {
   isShiftDirectAssignmentLockedForUser,
   buildShiftSignupReservationFilter,
   buildDirectAssignmentReservationPlan,
+  shouldReconcileShiftAssignments,
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds
