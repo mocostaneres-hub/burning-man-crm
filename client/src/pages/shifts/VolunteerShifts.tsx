@@ -1129,7 +1129,7 @@ const VolunteerShifts: React.FC = () => {
             <tr>
               <th>Name</th>
               <th class="count-col">Shifts</th>
-              <th>Days and Times</th>
+              <th>Shift, Event, Date and Time</th>
             </tr>
           </thead>
           <tbody>
@@ -1139,7 +1139,13 @@ const VolunteerShifts: React.FC = () => {
                 <td class="count-col">${group.shifts.length}</td>
                 <td>
                   <div class="shift-lines">
-                    ${group.shifts.map((row) => `<span>${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)}</span>`).join('')}
+                    ${group.shifts.map((row) => `
+                      <div class="shift-line">
+                        <strong>${escapeHtml(row.shiftTitle)}</strong>
+                        <span>${escapeHtml(row.eventName)}</span>
+                        <span>${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)}</span>
+                      </div>
+                    `).join('')}
                   </div>
                 </td>
               </tr>
@@ -1215,8 +1221,10 @@ const VolunteerShifts: React.FC = () => {
             .names-table tr { break-inside: avoid; }
             .name-cell { width: 28%; font-size: 13px; }
             .count-col { width: 56px; text-align: center; white-space: nowrap; }
-            .shift-lines { display: flex; flex-wrap: wrap; gap: 4px 12px; line-height: 1.35; }
-            .shift-lines span { white-space: nowrap; }
+            .shift-lines { display: grid; gap: 6px; line-height: 1.35; }
+            .shift-line { break-inside: avoid; }
+            .shift-line strong, .shift-line span { display: block; }
+            .shift-line span { color: #4b5563; }
             .day-shift { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; break-inside: avoid; }
             .shift-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
             .shift-head span { color: #6b7280; font-size: 12px; white-space: nowrap; }
@@ -1617,7 +1625,7 @@ const VolunteerShifts: React.FC = () => {
                       <div className="hidden grid-cols-[minmax(9rem,1.1fr)_4rem_minmax(12rem,2fr)] border-b border-orange-100 bg-orange-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-orange-800 md:grid">
                         <div>Name</div>
                         <div className="text-center">Shifts</div>
-                        <div>Days and times</div>
+                        <div>Shift, event, date and time</div>
                       </div>
                       <div className="divide-y divide-gray-100">
                         {personReportGroups.map((group) => (
@@ -1643,14 +1651,16 @@ const VolunteerShifts: React.FC = () => {
                             <div className="hidden text-center text-sm font-semibold text-gray-700 md:block">
                               {group.shifts.length}
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="grid gap-1.5 sm:grid-cols-2">
                               {group.shifts.map((shift) => (
-                                <span
+                                <div
                                   key={`${group.member.id}-${shift.dateValue}-${shift.shiftTitle}-${shift.shiftTime}`}
-                                  className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700"
+                                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-700"
                                 >
-                                  {shift.date} · {shift.shiftTime}
-                                </span>
+                                  <div className="font-semibold text-gray-900">{shift.shiftTitle}</div>
+                                  <div className="text-gray-600">{shift.eventName}</div>
+                                  <div className="text-gray-500">{shift.date} · {shift.shiftTime}</div>
+                                </div>
                               ))}
                             </div>
                           </div>

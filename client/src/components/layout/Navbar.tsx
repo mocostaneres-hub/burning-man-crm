@@ -197,7 +197,7 @@ const Navbar: React.FC = () => {
       }
       campLeadItems.push(
         { label: 'To-dos', path: '/tasks', icon: <Task size={18} /> },
-        { label: 'Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
+        { label: 'My Shifts', path: '/my-shifts', icon: <Calendar size={18} /> },
         { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
         { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> },
         { label: 'Help', path: '/member/help', icon: <Help size={18} /> }
@@ -262,9 +262,6 @@ const Navbar: React.FC = () => {
         );
       }
       navItems.push(
-        { label: 'Tasks', path: campIdentifier ? `/camp/${campIdentifier}/tasks` : '/camp/tasks', icon: <Task size={18} /> }
-      );
-      navItems.push(
         { label: 'Surveys', path: campIdentifier ? `/camp/${campIdentifier}/surveys` : '/camp/surveys', icon: <Assignment size={18} /> }
       );
       navItems.push(
@@ -306,7 +303,6 @@ const Navbar: React.FC = () => {
           items.length - 1,
           0,
           { label: 'Roster', path: `/camp/${campIdentifier}/roster`, icon: <People size={18} /> },
-          { label: 'Camp Tasks', path: `/camp/${campIdentifier}/tasks`, icon: <Task size={18} /> },
           { label: 'Surveys', path: `/camp/${campIdentifier}/surveys`, icon: <Assignment size={18} /> },
           { label: 'Events', path: `/camp/${campIdentifier}/events`, icon: <Calendar size={18} /> }
         );
