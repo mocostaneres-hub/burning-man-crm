@@ -433,28 +433,17 @@ const MyTasks: React.FC = () => {
           {pendingShifts.length === 0 ? (
             <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
           ) : (
-            <div className="space-y-2">
-              {pendingShifts.map((shift) => (
-                <button
-                  type="button"
-                  key={shift.shiftId}
-                  onClick={() => navigate('/my-shifts')}
-                  className="w-full rounded-lg border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-work font-medium text-custom-text">{shift.title}</p>
-                      <p className="text-xs text-gray-500">
-                        {shift.campName} • {shift.eventName} • {formatShiftDate(shift.startTime || shift.date)} •{' '}
-                        {formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)} PDT
-                      </p>
-                    </div>
-                    <Badge variant={shift.isFull ? 'neutral' : 'warning'}>
-                      {shift.isFull ? 'Full' : 'Needs signup'}
-                    </Badge>
-                  </div>
-                </button>
-              ))}
+            <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-700">
+                There are shifts available to sign up for.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/my-shifts')}
+                className="inline-flex items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
+              >
+                View Available Shifts
+              </button>
             </div>
           )}
         </div>

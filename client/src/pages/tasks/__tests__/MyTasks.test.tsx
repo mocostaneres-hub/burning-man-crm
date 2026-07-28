@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import api from '../../../services/api';
 import MyTasks from '../MyTasks';
 
+const mockNavigate = jest.fn();
+
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => jest.fn()
+  useNavigate: () => mockNavigate
 }), { virtual: true });
 
 jest.mock('../../../services/api', () => ({
@@ -33,7 +35,7 @@ describe('MyTasks', () => {
     mockedGetMyPendingSurveys.mockResolvedValue({ pendingSurveys: [], completedSurveys: [] });
   });
 
-  test('shows shifts that are waiting for the member to sign up', async () => {
+  test('shows one link to available shifts instead of listing every shift', async () => {
     mockedGetMyShifts.mockResolvedValue({
       camps: [{ _id: 'camp-1', name: 'Mudskippers' }],
       availableShifts: [{
@@ -59,7 +61,10 @@ describe('MyTasks', () => {
     render(<MyTasks />);
 
     expect(await screen.findByText('Pending Shift Signups')).toBeTruthy();
-    expect(screen.getByText('Kitchen Setup')).toBeTruthy();
-    expect(screen.getByText('Needs signup')).toBeTruthy();
+    expect(screen.getByText('There are shifts available to sign up for.')).toBeTruthy();
+    expect(screen.queryByText('Kitchen Setup')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Available Shifts' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/my-shifts');
   });
 });
