@@ -33,7 +33,9 @@ const {
   buildShiftSignupReservationFilter,
   buildDirectAssignmentReservationPlan,
   shouldReconcileShiftAssignments,
-  mergeDirectAssignmentUserIdsForUpdate
+  mergeDirectAssignmentUserIdsForUpdate,
+  shiftTimesOverlap,
+  findShiftTimeConflict
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -55,6 +57,49 @@ function makeShift(id, opts = {}) {
     ...opts
   };
 }
+
+describe('shift signup time conflicts', () => {
+  const firstShift = makeShift('shift-first', {
+    title: 'Kitchen Prep',
+    startTime: '2026-08-25T15:00:00.000Z',
+    endTime: '2026-08-25T17:00:00.000Z'
+  });
+
+  test('allows the first shift when there are no scheduled shifts', () => {
+    expect(findShiftTimeConflict(firstShift, [])).toBeNull();
+  });
+
+  test('finds an existing shift that overlaps the requested second shift', () => {
+    const secondShift = makeShift('shift-second', {
+      title: 'Gate Support',
+      startTime: '2026-08-25T16:30:00.000Z',
+      endTime: '2026-08-25T18:00:00.000Z'
+    });
+
+    expect(findShiftTimeConflict(secondShift, [firstShift])).toBe(firstShift);
+    expect(shiftTimesOverlap(firstShift, secondShift)).toBe(true);
+  });
+
+  test('allows back-to-back shifts whose boundaries only touch', () => {
+    const nextShift = makeShift('shift-next', {
+      startTime: firstShift.endTime,
+      endTime: '2026-08-25T19:00:00.000Z'
+    });
+
+    expect(findShiftTimeConflict(nextShift, [firstShift])).toBeNull();
+  });
+
+  test('ignores the same shift and cancelled scheduled shifts', () => {
+    expect(findShiftTimeConflict(firstShift, [
+      firstShift,
+      makeShift('shift-cancelled', {
+        status: 'cancelled',
+        startTime: '2026-08-25T15:30:00.000Z',
+        endTime: '2026-08-25T16:30:00.000Z'
+      })
+    ])).toBeNull();
+  });
+});
 
 describe('direct assignment locks', () => {
   test('selected-user direct assignments block every user who is not explicitly listed', () => {

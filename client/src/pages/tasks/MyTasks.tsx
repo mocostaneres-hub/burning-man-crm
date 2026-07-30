@@ -249,6 +249,8 @@ const MyTasks: React.FC = () => {
 
       if (error.response?.data?.code === 'SHIFT_DIRECT_ASSIGNMENT_LOCKED') {
         alert(serverMessage || 'This shift is locked because it was directly assigned to someone else.');
+      } else if (error.response?.data?.code === 'SHIFT_TIME_CONFLICT') {
+        alert(serverMessage || "Those shifts conflict, so the second shift won't be saved.");
       } else if (error.response?.status === 409) {
         alert('Sorry, this shift is now full. Please try a different shift.');
       } else if (error.response?.status === 403) {

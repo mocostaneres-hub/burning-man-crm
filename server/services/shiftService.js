@@ -11,6 +11,84 @@ const normalizeId = (value) => {
   return value.toString();
 };
 
+function shiftTimesOverlap(firstShift, secondShift) {
+  const firstStart = new Date(firstShift?.startTime).getTime();
+  const firstEnd = new Date(firstShift?.endTime).getTime();
+  const secondStart = new Date(secondShift?.startTime).getTime();
+  const secondEnd = new Date(secondShift?.endTime).getTime();
+
+  if (![firstStart, firstEnd, secondStart, secondEnd].every(Number.isFinite)) {
+    return false;
+  }
+
+  // A shift ending exactly when another begins is allowed.
+  return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function findShiftTimeConflict(candidateShift, scheduledShifts = []) {
+  const candidateId = normalizeId(candidateShift?._id || candidateShift?.shiftId);
+
+  return scheduledShifts.find((scheduledShift) => {
+    const scheduledId = normalizeId(scheduledShift?._id || scheduledShift?.shiftId);
+    if (candidateId && scheduledId === candidateId) return false;
+    if (scheduledShift?.status === 'cancelled') return false;
+    return shiftTimesOverlap(candidateShift, scheduledShift);
+  }) || null;
+}
+
+async function findShiftTimeConflictForUser({
+  userId,
+  legacyMemberIds = [],
+  candidateShift
+}) {
+  const signupRows = await ShiftSignup.find({ userId })
+    .select('shiftId eventId')
+    .lean();
+  const signedShiftIds = new Set(
+    signupRows.map((row) => normalizeId(row.shiftId)).filter(Boolean)
+  );
+  const eventIds = [
+    ...new Set(signupRows.map((row) => normalizeId(row.eventId)).filter(Boolean))
+  ];
+  const embeddedIdentityIds = [
+    ...new Set([userId, ...legacyMemberIds].map(normalizeId).filter(Boolean))
+  ];
+  const ownershipConditions = [];
+
+  if (eventIds.length > 0) {
+    ownershipConditions.push({ _id: { $in: eventIds } });
+  }
+  if (embeddedIdentityIds.length > 0) {
+    ownershipConditions.push({ 'shifts.memberIds': { $in: embeddedIdentityIds } });
+  }
+  if (ownershipConditions.length === 0) return null;
+
+  const events = await Event.find({
+    status: { $ne: 'cancelled' },
+    $or: ownershipConditions
+  }).select('eventName shifts').lean();
+
+  const scheduledShifts = [];
+  for (const event of events) {
+    for (const shift of event.shifts || []) {
+      const shiftId = normalizeId(shift._id);
+      const isCanonicalSignup = signedShiftIds.has(shiftId);
+      const isLegacySignup = (shift.memberIds || []).some((memberId) =>
+        embeddedIdentityIds.includes(normalizeId(memberId))
+      );
+      if (!isCanonicalSignup && !isLegacySignup) continue;
+
+      scheduledShifts.push({
+        ...shift,
+        eventId: event._id,
+        eventName: event.eventName
+      });
+    }
+  }
+
+  return findShiftTimeConflict(candidateShift, scheduledShifts);
+}
+
 function getDirectAssignmentUserIds(shift, fallbackUserIds = []) {
   const embeddedIds = (shift?.directAssignmentUserIds || [])
     .map((id) => normalizeId(id))
@@ -987,5 +1065,8 @@ module.exports = {
   mergeDirectAssignmentUserIdsForUpdate,
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
-  resolveDirectAssignmentUserIds
+  resolveDirectAssignmentUserIds,
+  shiftTimesOverlap,
+  findShiftTimeConflict,
+  findShiftTimeConflictForUser
 };

@@ -58,7 +58,8 @@ const {
   mergeDirectAssignmentUserIdsForUpdate,
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
-  resolveDirectAssignmentUserIds
+  resolveDirectAssignmentUserIds,
+  findShiftTimeConflictForUser
 } = require('../services/shiftService');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
@@ -2672,6 +2673,26 @@ router.post('/shifts/:shiftId/signup', authenticateToken, async (req, res) => {
     }
     if ((targetShift.memberIds || []).some((id) => id.toString() === userId.toString())) {
       return res.status(400).json({ message: 'You are already signed up for this shift' });
+    }
+
+    const conflictingShift = await findShiftTimeConflictForUser({
+      userId,
+      legacyMemberIds: [userMember._id],
+      candidateShift: targetShift
+    });
+    if (conflictingShift) {
+      return res.status(409).json({
+        code: 'SHIFT_TIME_CONFLICT',
+        message: `Those shifts conflict. "${targetShift.title}" won't be saved because it overlaps with "${conflictingShift.title}".`,
+        conflictingShift: {
+          shiftId: conflictingShift._id,
+          eventId: conflictingShift.eventId,
+          eventName: conflictingShift.eventName,
+          title: conflictingShift.title,
+          startTime: conflictingShift.startTime,
+          endTime: conflictingShift.endTime
+        }
+      });
     }
 
     // Capacity check.
