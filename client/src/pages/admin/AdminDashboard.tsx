@@ -616,6 +616,10 @@ const AdminDashboard: React.FC = () => {
     try {
       const structuredLocation = toStructuredLocationOrNull(updatedUser.location);
       const payload: any = { ...updatedUser };
+      const requestedNewPassword = payload.newPassword;
+      delete payload.newPassword;
+      delete payload.confirmPassword;
+      delete payload.password;
       if (structuredLocation) {
         payload.location = structuredLocation;
         payload.city = structuredLocation.city;
@@ -625,6 +629,21 @@ const AdminDashboard: React.FC = () => {
       }
 
       const response = await apiService.put(`/users/${updatedUser._id}`, payload);
+      if (requestedNewPassword) {
+        try {
+          const passwordResponse = await apiService.put(`/users/${updatedUser._id}/password`, {
+            newPassword: requestedNewPassword
+          });
+          if (passwordResponse?.passwordUpdated !== true) {
+            throw new Error('Server did not verify the password update');
+          }
+        } catch (passwordError) {
+          console.error('Profile saved but password update failed:', passwordError);
+          alert('Profile changes were saved, but the password was not changed. Please try the password reset again.');
+          return;
+        }
+      }
+
       // Update the user in the local state with the response from the server
       const savedUser = response.user || response.data?.user || updatedUser;
       setUsers(users.map(u => u._id === updatedUser._id ? savedUser : u));
@@ -632,7 +651,9 @@ const AdminDashboard: React.FC = () => {
       setSelectedUser(null);
       
       // Show success message
-      alert('User updated successfully! Changes will be reflected across all views.');
+      alert(requestedNewPassword
+        ? 'User updated successfully. The new password is effective immediately.'
+        : 'User updated successfully! Changes will be reflected across all views.');
     } catch (err) {
       console.error('Error updating user:', err);
       alert('Failed to update user. Please try again.');
@@ -2288,8 +2309,13 @@ const UserEditModal: React.FC<{
         return;
       }
 
+      if (newPassword && newPassword.length < 6) {
+        alert('New password must be at least 6 characters');
+        return;
+      }
+
       const saveData: ExtendedUser = { ...formData };
-      if (newPassword && newPassword.length >= 6) {
+      if (newPassword) {
         (saveData as any).newPassword = newPassword;
       }
 

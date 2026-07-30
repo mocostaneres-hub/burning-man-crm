@@ -1221,6 +1221,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
   body('lastName').optional().isLength({ min: 1 }).withMessage('Last name is required'),
   body('email').optional().isEmail().withMessage('Valid email is required'),
   body('accountType').optional().isIn(['personal', 'camp', 'admin']).withMessage('Invalid account type'),
+  body('newPassword').optional().isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
 ], async (req, res) => {
   try {
     console.log('🔍 [PUT /api/admin/users/:id] Update user request');
@@ -1236,6 +1237,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
 
     const { id } = req.params;
     const updateData = req.body;
+    const requestedNewPassword = updateData.newPassword;
 
     // When location is provided as structured object, validate and normalize; otherwise allow legacy string city
     if (updateData.location && hasStructuredLocationFields(updateData.location)) {
@@ -1264,16 +1266,12 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     console.log('🔍 [PUT /api/admin/users/:id] Target user found:', { _id: targetUser._id, email: targetUser.email });
 
     // Handle password reset if provided
-    if (updateData.newPassword) {
+    if (requestedNewPassword) {
       console.log('🔐 [Admin] Resetting password for user:', targetUser.email);
       
       try {
-        // Use the User model directly to trigger password hashing
-        const User = require('../models/User');
-        const userDoc = await User.findById(targetUser._id);
-        if (userDoc) {
-          userDoc.password = updateData.newPassword; // Let the pre-save hook hash it
-          await userDoc.save();
+        const passwordUser = await db.updateUserPasswordById(targetUser._id, requestedNewPassword);
+        if (passwordUser) {
           console.log('✅ [Admin] User password updated successfully');
         } else {
           console.log('❌ [Admin] User document not found');
@@ -1341,10 +1339,10 @@ router.put('/users/:id', authenticateToken, requireAdmin, [
     }
     
     // Log password change if provided (without logging the actual password)
-    if (updateData.newPassword) {
+    if (requestedNewPassword) {
       await recordActivity('MEMBER', id, req.user._id, 'PASSWORD_CHANGED', {
         field: 'password',
-        note: 'Password was changed by system admin'
+        note: 'Password was changed and verified by system admin'
       });
     }
     

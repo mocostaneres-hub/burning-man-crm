@@ -315,6 +315,63 @@ class DatabaseAdapter {
     }
   }
 
+  async updateUserPasswordById(id, newPassword) {
+    if (this.useMongoDB) {
+      const User = require('../models/User');
+      const user = await User.findById(id);
+      if (!user) {
+        return null;
+      }
+
+      // Use document.save() so the User model's password hashing hook runs.
+      user.password = newPassword;
+      const authProviders = Array.isArray(user.authProviders)
+        ? user.authProviders.map((provider) => provider.toString())
+        : [];
+      if (!authProviders.includes('password')) {
+        user.authProviders = [...authProviders, 'password'];
+      }
+      await user.save();
+
+      // Never report success unless the persisted hash accepts the new password.
+      const persistedUser = await User.findById(id);
+      const passwordWasPersisted = persistedUser
+        ? await persistedUser.comparePassword(newPassword)
+        : false;
+      if (!passwordWasPersisted) {
+        const error = new Error('Password update verification failed');
+        error.code = 'PASSWORD_UPDATE_VERIFICATION_FAILED';
+        throw error;
+      }
+
+      return persistedUser;
+    }
+
+    const user = await this.mockDB.findUser({ _id: id });
+    if (!user) {
+      return null;
+    }
+
+    const authProviders = Array.isArray(user.authProviders)
+      ? user.authProviders
+      : [];
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const updatedUser = await this.mockDB.updateUserById(id, {
+      password: hashedPassword,
+      authProviders: authProviders.includes('password')
+        ? authProviders
+        : [...authProviders, 'password']
+    });
+
+    if (!updatedUser || !await bcrypt.compare(newPassword, updatedUser.password)) {
+      const error = new Error('Password update verification failed');
+      error.code = 'PASSWORD_UPDATE_VERIFICATION_FAILED';
+      throw error;
+    }
+
+    return updatedUser;
+  }
+
   // Roster operations
   async findRoster(query) {
     if (this.useMongoDB) {

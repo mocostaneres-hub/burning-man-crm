@@ -777,6 +777,46 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// @route   PUT /api/users/:id/password
+// @desc    Reset a user's password by admin and verify it is immediately effective
+// @access  Private (Admin only)
+router.put('/:id/password', authenticateToken, requireAdmin, [
+  body('newPassword')
+    .isString()
+    .isLength({ min: 6 })
+    .withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: errors.array()[0]?.msg || 'Invalid password',
+        errors: errors.array()
+      });
+    }
+
+    const updatedUser = await db.updateUserPasswordById(req.params.id, req.body.newPassword);
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await recordActivity('MEMBER', req.params.id, req.user._id, 'PASSWORD_CHANGED', {
+      field: 'password',
+      note: 'Password was changed and verified by system admin'
+    });
+
+    res.json({
+      message: 'Password updated successfully and is effective immediately',
+      passwordUpdated: true
+    });
+  } catch (error) {
+    console.error('Admin password update error:', error);
+    res.status(500).json({
+      message: 'Password could not be verified after saving. The password was not reported as updated.'
+    });
+  }
+});
+
 // @route   PUT /api/users/:id
 // @desc    Update user by admin
 // @access  Private (Admin only)
@@ -841,20 +881,17 @@ router.put('/:id', authenticateToken, requireAdmin, [
 
     const { id } = req.params;
     const updateData = req.body;
+    const requestedNewPassword = updateData.newPassword;
+    delete updateData.newPassword;
+    delete updateData.confirmPassword;
     if (updateData.foodPreferences !== undefined) {
       updateData.foodPreferences = normalizeFoodPreferences(updateData.foodPreferences);
     }
 
-    // Handle admin password reset safely: hash before persistence.
-    if (updateData.newPassword) {
-      if (updateData.newPassword.length < 6) {
-        return res.status(400).json({ message: 'New password must be at least 6 characters' });
-      }
-      const bcrypt = require('bcryptjs');
-      const saltRounds = 12;
-      updateData.password = await bcrypt.hash(updateData.newPassword, saltRounds);
-      delete updateData.newPassword;
-      delete updateData.confirmPassword;
+    // Backward compatibility for older clients that still include the password
+    // in the profile update payload. New clients use PUT /:id/password.
+    if (requestedNewPassword && requestedNewPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
     }
 
     // Debug: Log the request body
@@ -1011,12 +1048,26 @@ router.put('/:id', authenticateToken, requireAdmin, [
       // Don't fail the profile update if sync fails - this is non-critical
     }
 
+    let passwordUpdated = false;
+    if (requestedNewPassword) {
+      const passwordUser = await db.updateUserPasswordById(id, requestedNewPassword);
+      if (!passwordUser) {
+        return res.status(404).json({ message: 'User not found while updating password' });
+      }
+      passwordUpdated = true;
+      await recordActivity('MEMBER', id, req.user._id, 'PASSWORD_CHANGED', {
+        field: 'password',
+        note: 'Password was changed and verified by system admin'
+      });
+    }
+
     // Remove password from response
     const { password, ...safeUser } = updatedUser;
 
     res.json({
       message: 'User updated successfully',
-      user: safeUser
+      user: safeUser,
+      passwordUpdated
     });
 
   } catch (error) {
