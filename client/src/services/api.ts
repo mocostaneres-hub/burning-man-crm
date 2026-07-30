@@ -789,6 +789,11 @@ class ApiService {
     return response.data;
   }
 
+  async setEventShiftDropsLocked(eventId: string, shiftDropsLocked: boolean): Promise<{ event: any }> {
+    const response = await this.api.patch(`/shifts/events/${eventId}/shift-drop-lock`, { shiftDropsLocked });
+    return response.data;
+  }
+
   async getShiftAssignees(shiftId: string): Promise<{
     shiftId: string;
     isDirectAssignmentLocked: boolean;

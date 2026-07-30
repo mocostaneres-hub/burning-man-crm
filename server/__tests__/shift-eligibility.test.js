@@ -35,7 +35,8 @@ const {
   shouldReconcileShiftAssignments,
   mergeDirectAssignmentUserIdsForUpdate,
   shiftTimesOverlap,
-  findShiftTimeConflict
+  findShiftTimeConflict,
+  areEventShiftDropsLocked
 } = require(path.resolve(__dirname, '../services/shiftService.js'));
 const {
   runShiftModeBackfill,
@@ -57,6 +58,15 @@ function makeShift(id, opts = {}) {
     ...opts
   };
 }
+
+describe('event shift-drop lock', () => {
+  test('only an explicitly enabled event lock blocks shift drops', () => {
+    expect(areEventShiftDropsLocked({ shiftDropsLocked: true })).toBe(true);
+    expect(areEventShiftDropsLocked({ shiftDropsLocked: false })).toBe(false);
+    expect(areEventShiftDropsLocked({})).toBe(false);
+    expect(areEventShiftDropsLocked(null)).toBe(false);
+  });
+});
 
 describe('shift signup time conflicts', () => {
   const firstShift = makeShift('shift-first', {

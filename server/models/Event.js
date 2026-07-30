@@ -109,6 +109,10 @@ const eventSchema = new mongoose.Schema({
     required: true
   },
   shifts: [shiftSchema],
+  shiftDropsLocked: {
+    type: Boolean,
+    default: false
+  },
   status: {
     type: String,
     enum: ['active', 'cancelled', 'completed'],

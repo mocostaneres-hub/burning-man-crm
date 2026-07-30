@@ -16,7 +16,9 @@ interface Props {
 }
 
 const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, onSignUp, onCancel, onAddCalendar }) => {
-  const actionDisabled = loading || (mode === 'available' && shift.isFull);
+  const actionDisabled = loading
+    || (mode === 'available' && shift.isFull)
+    || (mode === 'signed' && shift.shiftDropsLocked === true);
   const startsAt = new Date(shift.startTime).getTime();
   const startsInMs = startsAt - Date.now();
   const startsInLabel = startsInMs > 0
@@ -45,10 +47,17 @@ const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, 
           {shift.isDirectlyAssignedToMe && (
             <p className="text-xs text-amber-700 mt-1 font-medium">
               {mode === 'signed'
-                ? 'Assigned by a camp lead. Your spot is confirmed; drop the shift if you cannot attend.'
+                ? shift.shiftDropsLocked
+                  ? 'Assigned by a camp lead. Your spot is confirmed and shift drops are locked for this event.'
+                  : 'Assigned by a camp lead. Your spot is confirmed; drop the shift if you cannot attend.'
                 : shift.isDirectAssignmentLocked
                   ? 'Reserved for you by a camp lead. Other members cannot claim this shift.'
                   : 'Assigned by a camp lead. Your spot is confirmed; eligible members may claim the remaining spots.'}
+            </p>
+          )}
+          {mode === 'signed' && shift.shiftDropsLocked && !shift.isDirectlyAssignedToMe && (
+            <p className="text-xs text-amber-700 mt-1 font-medium">
+              Shift drops are locked for this event. Contact a camp lead if you can no longer attend.
             </p>
           )}
 
@@ -88,11 +97,11 @@ const ShiftCard: React.FC<Props> = ({ shift, mode, loading, isConflict = false, 
             <Button
               variant="outline"
               size="sm"
-              disabled={loading}
+              disabled={actionDisabled}
               onClick={() => onCancel?.(shift.shiftId)}
               className="w-full md:w-auto min-h-[44px]"
             >
-              {loading ? 'Dropping...' : 'Drop shift'}
+              {loading ? 'Dropping...' : shift.shiftDropsLocked ? 'Drop locked' : 'Drop shift'}
             </Button>
           )}
           {mode === 'signed' && (

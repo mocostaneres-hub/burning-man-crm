@@ -59,7 +59,8 @@ const {
   reserveShiftSpotsForUsers,
   releaseShiftSpotsForUsers,
   resolveDirectAssignmentUserIds,
-  findShiftTimeConflictForUser
+  findShiftTimeConflictForUser,
+  areEventShiftDropsLocked
 } = require('../services/shiftService');
 const { createBulkNotifications } = require('../services/notificationService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
@@ -371,6 +372,7 @@ router.post('/events', authenticateToken, async (req, res) => {
       eventDate,
       startTime,
       endTime,
+      shiftDropsLocked,
       shifts
     } = req.body;
 
@@ -461,6 +463,7 @@ router.post('/events', authenticateToken, async (req, res) => {
       endTime: eventEndIso,
       campId,
       createdBy: req.user._id,
+      shiftDropsLocked: shiftDropsLocked === true,
       shifts: preparedShifts.map(({
         input: shift,
         assignmentMode,
@@ -1207,6 +1210,13 @@ router.delete('/shifts/:shiftId/signup', authenticateToken, async (req, res) => 
       return res.status(400).json({ message: 'Not signed up for this shift' });
     }
 
+    if (areEventShiftDropsLocked(event)) {
+      return res.status(409).json({
+        code: 'EVENT_SHIFT_DROPS_LOCKED',
+        message: 'Shift drops are locked for this event. Contact a camp lead if you can no longer attend.'
+      });
+    }
+
     const previousCount = Math.max(
       await ShiftSignup.countDocuments({ shiftId: shift._id }),
       (shift.memberIds || []).length,
@@ -1495,6 +1505,7 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       eventDate,
       startTime,
       endTime,
+      shiftDropsLocked,
       shifts
     } = req.body;
 
@@ -1563,6 +1574,9 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       eventDate: parsePdtDate(eventDate),
       startTime: updEventStart,
       endTime: updEventEnd,
+      shiftDropsLocked: typeof shiftDropsLocked === 'boolean'
+        ? shiftDropsLocked
+        : existingEvent.shiftDropsLocked === true,
       shifts: shifts.map((shift) => {
         const existingShift = shift._id
           ? existingShiftById.get(shift._id.toString())
@@ -1834,6 +1848,42 @@ router.put('/events/:eventId', authenticateToken, async (req, res) => {
       code: error?.code,
       message: error?.statusCode ? error.message : 'Server error'
     });
+  }
+});
+
+// @route   PATCH /api/shifts/events/:eventId/shift-drop-lock
+// @desc    Lock or unlock member-initiated shift drops for one event
+// @access  Private (Camp admins, Camp Leads, and Events Leads)
+router.patch('/events/:eventId/shift-drop-lock', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { shiftDropsLocked } = req.body;
+
+    if (typeof shiftDropsLocked !== 'boolean') {
+      return res.status(400).json({ message: 'shiftDropsLocked must be a boolean' });
+    }
+
+    const existingEvent = await db.findEvent({ _id: eventId });
+    if (!existingEvent) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const eventCampId = (
+      existingEvent.campId?._id || existingEvent.campId
+    ).toString();
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
+    if (!hasAccess) {
+      return res.status(403).json({
+        message: 'Access denied - must be camp admin, Camp Lead, or Events Lead'
+      });
+    }
+
+    const updatedEvent = await db.updateEvent(eventId, { shiftDropsLocked });
+    return res.json({ event: updatedEvent });
+  } catch (error) {
+    console.error('Update event shift-drop lock error:', error);
+    return res.status(500).json({ message: 'Server error updating shift-drop lock' });
   }
 });
 

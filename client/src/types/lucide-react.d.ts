@@ -68,6 +68,8 @@ declare module 'lucide-react' {
   export const Inbox: ComponentType<LucideProps>;
   export const Building: ComponentType<LucideProps>;
   export const Ban: ComponentType<LucideProps>;
+  export const Lock: ComponentType<LucideProps>;
+  export const Unlock: ComponentType<LucideProps>;
   export const Filter: ComponentType<LucideProps>;
   export const Utensils: ComponentType<LucideProps>;
 }

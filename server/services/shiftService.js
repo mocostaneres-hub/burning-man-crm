@@ -36,6 +36,10 @@ function findShiftTimeConflict(candidateShift, scheduledShifts = []) {
   }) || null;
 }
 
+function areEventShiftDropsLocked(event) {
+  return event?.shiftDropsLocked === true;
+}
+
 async function findShiftTimeConflictForUser({
   userId,
   legacyMemberIds = [],
@@ -1007,6 +1011,7 @@ async function buildMyShiftsPayload(userId) {
       isFull: memberIds.length >= (shift.maxSignUps || 0),
       isDirectAssignmentLocked,
       isDirectlyAssignedToMe,
+      shiftDropsLocked: areEventShiftDropsLocked(event),
       memberIds
     };
 
@@ -1068,5 +1073,6 @@ module.exports = {
   resolveDirectAssignmentUserIds,
   shiftTimesOverlap,
   findShiftTimeConflict,
-  findShiftTimeConflictForUser
+  findShiftTimeConflictForUser,
+  areEventShiftDropsLocked
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal, Input, TimePicker } from '../../components/ui';
-import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X, Search, CheckCircle } from 'lucide-react';
+import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X, Search, CheckCircle, Lock, Unlock } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -159,6 +159,7 @@ const VolunteerShifts: React.FC = () => {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [eventSaving, setEventSaving] = useState(false);
+  const [lockUpdatingEventId, setLockUpdatingEventId] = useState<string | null>(null);
   const [assignmentState, setAssignmentState] = useState<{
     isDirectAssignmentLocked: boolean;
     assignedUsers: ShiftAssigneeOption[];
@@ -191,6 +192,7 @@ const VolunteerShifts: React.FC = () => {
     eventDate: '',
     startTime: '',
     endTime: '',
+    shiftDropsLocked: false,
     shifts: [] as Array<{
       _id?: string;
       title: string;
@@ -578,6 +580,27 @@ const VolunteerShifts: React.FC = () => {
     }
   }, [user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
 
+  const handleShiftDropLockChange = async (event: Event, shiftDropsLocked: boolean) => {
+    try {
+      setLockUpdatingEventId(event._id);
+      const response = await api.setEventShiftDropsLocked(event._id, shiftDropsLocked);
+      const updatedEvent = response?.event || { ...event, shiftDropsLocked };
+      setEvents((currentEvents) => currentEvents.map((item) => (
+        item._id === event._id ? { ...item, ...updatedEvent, shiftDropsLocked } : item
+      )));
+      setSelectedEvent((currentEvent) => (
+        currentEvent?._id === event._id
+          ? { ...currentEvent, ...updatedEvent, shiftDropsLocked }
+          : currentEvent
+      ));
+    } catch (error: any) {
+      console.error('Error updating shift-drop lock:', error);
+      alert(error?.response?.data?.message || 'Failed to update the shift-drop lock.');
+    } finally {
+      setLockUpdatingEventId(null);
+    }
+  };
+
   useEffect(() => {
     if (canAccessShifts) {
       loadEvents();
@@ -618,6 +641,7 @@ const VolunteerShifts: React.FC = () => {
       eventForm.eventDate ||
       eventForm.startTime ||
       eventForm.endTime ||
+      eventForm.shiftDropsLocked ||
       eventForm.shifts.length > 0
     );
   }, [eventForm, isEditMode, wizardStep]);
@@ -688,6 +712,7 @@ const VolunteerShifts: React.FC = () => {
         eventDate: effective.eventDate,
         startTime: effective.startTime,
         endTime: effective.endTime,
+        shiftDropsLocked: eventForm.shiftDropsLocked,
         ...(campId ? { campId } : {}),
         shifts: eventForm.shifts.map(shift => ({
           ...(shift._id ? { _id: shift._id } : {}),
@@ -823,6 +848,7 @@ const VolunteerShifts: React.FC = () => {
       eventDate: '',
       startTime: '',
       endTime: '',
+      shiftDropsLocked: false,
       shifts: []
     });
     setLoadingExistingAssignments(false);
@@ -884,6 +910,7 @@ const VolunteerShifts: React.FC = () => {
       eventDate: utcToPdtDateInput(event.eventDate) || fallbackShiftDate,
       startTime: utcToPdtTimeInput(event.startTime) || fallbackShiftStart,
       endTime: utcToPdtTimeInput(event.endTime) || fallbackShiftEnd,
+      shiftDropsLocked: event.shiftDropsLocked === true,
       shifts: event.shifts.map((shift, index) => {
         const assignmentMode = shift.assignmentMode || 'ALL_ROSTER';
         const directAssignmentUserIds = Array.from(new Set([
@@ -1464,8 +1491,34 @@ const VolunteerShifts: React.FC = () => {
                         <p className="text-sm text-gray-500 mt-1">
                           {event.shifts.length} shift{event.shifts.length !== 1 ? 's' : ''}
                         </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                            event.shiftDropsLocked
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {event.shiftDropsLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                            {event.shiftDropsLocked ? 'Shift drops locked' : 'Shift drops allowed'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={lockUpdatingEventId === event._id}
+                          onClick={() => handleShiftDropLockChange(event, !event.shiftDropsLocked)}
+                          className={event.shiftDropsLocked ? 'text-green-700 border-green-600' : 'text-amber-700 border-amber-600'}
+                        >
+                          {event.shiftDropsLocked
+                            ? <Unlock className="w-4 h-4 mr-1" />
+                            : <Lock className="w-4 h-4 mr-1" />}
+                          {lockUpdatingEventId === event._id
+                            ? 'Saving...'
+                            : event.shiftDropsLocked
+                              ? 'Allow Drops'
+                              : 'Lock Drops'}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -1831,6 +1884,23 @@ const VolunteerShifts: React.FC = () => {
                   <TimePicker value={eventForm.endTime} onChange={(v) => setEventForm(prev => ({ ...prev, endTime: v }))} />
                 </div>
               </div>
+              <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-4">
+                <input
+                  type="checkbox"
+                  checked={eventForm.shiftDropsLocked}
+                  onChange={(event) => setEventForm((previous) => ({
+                    ...previous,
+                    shiftDropsLocked: event.target.checked
+                  }))}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">Lock shift drops for this event</span>
+                  <span className="block text-xs text-gray-600 mt-1">
+                    Signed-up members cannot drop any shift in this event. Camp admins, Events Leads, and Camp Leads can still manage assignments.
+                  </span>
+                </span>
+              </label>
             </>
           )}
 
@@ -2083,6 +2153,11 @@ const VolunteerShifts: React.FC = () => {
                     : '--'}{' '}PDT
                 </p>
                 <p className="text-sm text-gray-600 mt-1">{eventForm.shifts.length} shift(s) configured</p>
+                <p className={`text-sm mt-1 ${eventForm.shiftDropsLocked ? 'text-amber-700' : 'text-green-700'}`}>
+                  {eventForm.shiftDropsLocked
+                    ? 'Shift drops will be locked for this event.'
+                    : 'Members will be allowed to drop shifts for this event.'}
+                </p>
               </div>
               <div className="space-y-2">
                 {eventForm.shifts.map((shift, index) => (
@@ -2240,6 +2315,29 @@ const VolunteerShifts: React.FC = () => {
                   </p>
                 )}
                 <p className="text-xs text-amber-700 mt-1">🕐 Times shown in {PDT_LABEL}</p>
+                <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                  selectedEvent.shiftDropsLocked
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {selectedEvent.shiftDropsLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                  {selectedEvent.shiftDropsLocked
+                    ? 'Members cannot drop shifts for this event'
+                    : 'Members can drop shifts for this event'}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={lockUpdatingEventId === selectedEvent._id}
+                  onClick={() => handleShiftDropLockChange(selectedEvent, !selectedEvent.shiftDropsLocked)}
+                  className={`ml-2 ${selectedEvent.shiftDropsLocked ? 'text-green-700 border-green-600' : 'text-amber-700 border-amber-600'}`}
+                >
+                  {lockUpdatingEventId === selectedEvent._id
+                    ? 'Saving...'
+                    : selectedEvent.shiftDropsLocked
+                      ? 'Allow Shift Drops'
+                      : 'Lock Shift Drops'}
+                </Button>
                 <p className="text-sm text-gray-500 mt-2">
                   Created: {new Date(selectedEvent.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
                 </p>

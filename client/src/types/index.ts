@@ -570,6 +570,7 @@ export interface Event {
   eventDate?: Date | string;
   startTime?: Date | string;
   endTime?: Date | string;
+  shiftDropsLocked?: boolean;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string; // User ID who created the event
@@ -654,6 +655,7 @@ export interface MyShiftItem {
   isFull: boolean;
   isDirectAssignmentLocked?: boolean;
   isDirectlyAssignedToMe?: boolean;
+  shiftDropsLocked?: boolean;
   memberIds: string[];
   coworkers: MyShiftCoworker[];
   recommendationReason?: string;

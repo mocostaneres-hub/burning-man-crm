@@ -1531,6 +1531,7 @@ class MockDatabase {
       description: eventData.description || '',
       campId: eventData.campId,
       createdBy: eventData.createdBy,
+      shiftDropsLocked: eventData.shiftDropsLocked === true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       shifts: eventData.shifts.map(shiftData => {
