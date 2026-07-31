@@ -224,6 +224,7 @@ const VolunteerShifts: React.FC = () => {
   });
   const [rosterMembers, setRosterMembers] = useState<RosterMemberLite[]>([]);
   const [currentCampId, setCurrentCampId] = useState<string | null>(null);
+  const [currentCampName, setCurrentCampName] = useState<string | null>(null);
   const [rosterMeta, setRosterMeta] = useState({
     hasActiveRoster: false,
     memberCount: 0,
@@ -515,11 +516,24 @@ const VolunteerShifts: React.FC = () => {
       });
   }, [events, sortedShiftReportRows]);
 
-  const reportLabels: Record<ReportView, { title: string; print: string }> = {
-    names: { title: 'Member Shift Signups', print: 'Print Member Signups' },
-    events: { title: 'Event Rosters', print: 'Print Per Event' },
-    day: { title: 'Day Sheet', print: 'Print Per Day' }
+  const reportLabels: Record<ReportView, { print: string }> = {
+    names: { print: 'Print Member Signups' },
+    events: { print: 'Print Per Event' },
+    day: { print: 'Print Per Day' }
   };
+
+  const reportCampName = useMemo(() => {
+    const populatedCamp = events
+      .map((event) => (event as any).campId)
+      .find((camp) => camp && typeof camp === 'object' && camp.name);
+
+    return (populatedCamp && typeof populatedCamp === 'object' ? populatedCamp.name : undefined)
+      || currentCampName
+      || user?.campLeadCampName
+      || user?.eventsLeadCampName
+      || user?.campName
+      || 'Camp';
+  }, [currentCampName, events, user?.campLeadCampName, user?.eventsLeadCampName, user?.campName]);
 
   const allRosterIds = useMemo(() => rosterMembers.map((member) => member._id), [rosterMembers]);
   const leadRosterIds = useMemo(
@@ -576,17 +590,22 @@ const VolunteerShifts: React.FC = () => {
   const loadRosterMembers = useCallback(async () => {
     try {
       let campId;
+      let campName;
       if (user?.accountType === 'camp' || (user?.accountType === 'admin' && user?.campId)) {
         const camp = await api.get('/camps/my-camp');
         campId = camp?._id;
+        campName = camp?.name || camp?.campName || user?.campName;
       } else if (user?.isCampLead && user?.campLeadCampId) {
         campId = user.campLeadCampId;
+        campName = user.campLeadCampName;
       } else if (user?.isEventsLead && user?.eventsLeadCampId) {
         campId = user.eventsLeadCampId;
+        campName = user.eventsLeadCampName;
       }
 
       if (!campId) {
         setCurrentCampId(null);
+        setCurrentCampName(null);
         setRosterMembers([]);
         setRosterMeta({
           hasActiveRoster: false,
@@ -597,6 +616,7 @@ const VolunteerShifts: React.FC = () => {
         return;
       }
       setCurrentCampId(campId.toString());
+      setCurrentCampName(campName || null);
 
       let rosterMembersFromActiveRoster: RosterMemberLite[] = [];
       try {
@@ -629,6 +649,7 @@ const VolunteerShifts: React.FC = () => {
     } catch (error) {
       console.error('Error loading roster members:', error);
       setCurrentCampId(null);
+      setCurrentCampName(null);
       setRosterMembers([]);
       setRosterMeta({
         hasActiveRoster: false,
@@ -637,7 +658,7 @@ const VolunteerShifts: React.FC = () => {
         hasFullMembershipRoster: false
       });
     }
-  }, [normalizeRosterMember, user?.accountType, user?.campId, user?.isCampLead, user?.campLeadCampId, user?.isEventsLead, user?.eventsLeadCampId]);
+  }, [normalizeRosterMember, user?.accountType, user?.campId, user?.campName, user?.isCampLead, user?.campLeadCampId, user?.campLeadCampName, user?.isEventsLead, user?.eventsLeadCampId, user?.eventsLeadCampName]);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -1225,7 +1246,7 @@ const VolunteerShifts: React.FC = () => {
     const printWindow = window.open('', '_blank', 'width=1024,height=768');
     if (!printWindow) return;
 
-    const title = `Volunteer Shift Report - ${reportLabels[reportType].title}`;
+    const title = `Volunteer Shift Report - ${reportCampName}`;
     const escapeHtml = (value: any) => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -1250,7 +1271,6 @@ const VolunteerShifts: React.FC = () => {
               <tr>
                 <td class="name-cell">
                   <strong>${renderPrintMember(group.member)}</strong>
-                  ${group.member.email ? `<br><span class="secondary">${escapeHtml(group.member.email)}</span>` : ''}
                 </td>
                 <td class="count-col">${group.shifts.length}</td>
                 <td>
@@ -1283,20 +1303,20 @@ const VolunteerShifts: React.FC = () => {
       `;
 
     const renderShiftRows = (rows: ShiftReportRow[], { showEvent = false, showDate = false } = {}) => rows.map((row) => {
-      const stats = getShiftStats(row.shift);
-      const members = row.signedUpMembers.length > 0 ? row.signedUpMembers : [null];
-      return members.map((member) => `
+      const people = row.signedUpMembers.length > 0
+        ? row.signedUpMembers
+          .map((member) => renderPrintMember(member))
+          .join(', ')
+        : '<span class="empty">No sign-ups</span>';
+      return `
         <tr>
-          ${showDate ? `<td class="nowrap">${escapeHtml(row.date)}</td>` : ''}
-          <td class="nowrap">${escapeHtml(row.shiftTime)}</td>
+          ${showDate ? `<td class="date-cell">${escapeHtml(row.date)}</td>` : ''}
+          <td class="time-cell">${escapeHtml(row.shiftTime)}</td>
           ${showEvent ? `<td>${escapeHtml(row.eventName)}</td>` : ''}
-          <td><strong>${escapeHtml(row.shift.title)}</strong></td>
-          <td>${member ? renderPrintMember(member) : '<span class="empty">No sign-ups</span>'}</td>
-          <td>${member?.email ? escapeHtml(member.email) : ''}</td>
-          <td>${row.description && row.description !== row.shift.title ? escapeHtml(row.description) : ''}</td>
-          <td class="nowrap center">${stats.current}/${stats.max} signed<br>${stats.remaining} open</td>
+          <td class="shift-cell"><strong>${escapeHtml(row.shift.title)}</strong></td>
+          <td class="people-cell">${people}</td>
         </tr>
-      `).join('');
+      `;
     }).join('');
 
     const eventSections = eventReportGroups.map((group) => `
@@ -1304,14 +1324,19 @@ const VolunteerShifts: React.FC = () => {
         <div class="event-heading">
           <h2>${escapeHtml(group.event.eventName)}</h2>
           <span>${escapeHtml(group.date)}${group.eventTime ? ` · ${escapeHtml(group.eventTime)}` : ''} · ${group.shifts.length} shift${group.shifts.length === 1 ? '' : 's'}</span>
-          ${group.event.description ? `<p>${escapeHtml(group.event.description)}</p>` : ''}
         </div>
         <table class="report-table">
+          <colgroup>
+            <col class="date-col">
+            <col class="time-col">
+            <col class="shift-col">
+            <col class="people-col">
+          </colgroup>
           <thead>
-            <tr><th>Date</th><th>Time</th><th>Shift</th><th>Person</th><th>Email</th><th>Shift information</th><th>Staffing</th></tr>
+            <tr><th>Date</th><th>Time</th><th>Shift</th><th>People</th></tr>
           </thead>
           <tbody>
-            ${group.shifts.length > 0 ? renderShiftRows(group.shifts, { showDate: true }) : '<tr><td colspan="7" class="empty">No shifts scheduled.</td></tr>'}
+            ${group.shifts.length > 0 ? renderShiftRows(group.shifts, { showDate: true }) : '<tr><td colspan="4" class="empty">No shifts scheduled.</td></tr>'}
           </tbody>
         </table>
       </section>
@@ -1323,8 +1348,14 @@ const VolunteerShifts: React.FC = () => {
         <section class="event-section">
           <div class="event-heading"><h2>${escapeHtml(group.date)}</h2></div>
           <table class="report-table">
+            <colgroup>
+              <col class="time-col">
+              <col class="event-col">
+              <col class="shift-col">
+              <col class="people-col">
+            </colgroup>
             <thead>
-              <tr><th>Time</th><th>Event</th><th>Shift</th><th>Person</th><th>Email</th><th>Shift information</th><th>Staffing</th></tr>
+              <tr><th>Time</th><th>Event</th><th>Shift</th><th>People</th></tr>
             </thead>
             <tbody>${renderShiftRows(group.shifts, { showEvent: true })}</tbody>
           </table>
@@ -1356,19 +1387,18 @@ const VolunteerShifts: React.FC = () => {
             .event-heading { border: 1px solid #9ca3af; border-bottom: 0; background: #e5e7eb; padding: 5px 7px; break-after: avoid; }
             .event-heading h2 { display: inline; margin-right: 8px; }
             .event-heading span { color: #374151; font-weight: 600; }
-            .event-heading p { margin: 2px 0 0; color: #4b5563; }
             .report-table, .names-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
             .report-table thead, .names-table thead { display: table-header-group; }
             .report-table th, .names-table th { background: #f3f4f6; text-align: left; border: 1px solid #9ca3af; padding: 3px 4px; font-size: 8px; text-transform: uppercase; letter-spacing: .02em; }
             .report-table td, .names-table td { border: 1px solid #bfc3c9; padding: 3px 4px; vertical-align: top; line-height: 1.25; overflow-wrap: anywhere; }
             .report-table tr, .names-table tr { break-inside: avoid; }
-            .report-table th:nth-child(1) { width: 10%; }
-            .report-table th:nth-child(2) { width: 13%; }
-            .report-table th:nth-child(3) { width: 15%; }
-            .report-table th:nth-child(4) { width: 15%; }
-            .report-table th:nth-child(5) { width: 18%; }
-            .report-table th:nth-child(6) { width: 20%; }
-            .report-table th:nth-child(7) { width: 9%; }
+            .date-col { width: 17%; }
+            .time-col { width: 20%; }
+            .event-col { width: 22%; }
+            .shift-col { width: 25%; }
+            .people-col { width: auto; }
+            .date-cell, .time-cell { white-space: nowrap; }
+            .shift-cell, .people-cell { min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
             .names-section > h2 { margin-bottom: 4px; }
             .name-cell { width: 25%; }
             .count-col, .center { text-align: center; }
@@ -1376,7 +1406,6 @@ const VolunteerShifts: React.FC = () => {
             .shift-lines { display: grid; gap: 3px; }
             .shift-line strong, .shift-line span { display: block; }
             .shift-line span { color: #4b5563; }
-            .secondary { color: #4b5563; font-weight: normal; }
             .nowrap { white-space: nowrap; }
             .empty { color: #6b7280; font-style: italic; }
           </style>
