@@ -61,6 +61,7 @@ type PersonReportRow = {
 };
 
 type ShiftReportRow = {
+  eventId: string;
   eventName: string;
   shift: any;
   date: string;
@@ -78,6 +79,13 @@ type PersonReportGroup = {
 type DayReportGroup = {
   date: string;
   dateValue: string;
+  shifts: ShiftReportRow[];
+};
+
+type EventReportGroup = {
+  event: Event;
+  date: string;
+  eventTime: string;
   shifts: ShiftReportRow[];
 };
 
@@ -111,7 +119,7 @@ const isCurrentRosterEntry = (entry: any) => {
   return !['inactive', 'rejected', 'withdrawn', 'suspended', 'deleted', 'archived'].includes(status);
 };
 
-type ReportView = 'names' | 'shifts' | 'day';
+type ReportView = 'names' | 'events' | 'day';
 
 const VolunteerShifts: React.FC = () => {
   const { user } = useAuth();
@@ -371,6 +379,7 @@ const VolunteerShifts: React.FC = () => {
           (shift.memberDetails || []).map((detail) => [detail.id.toString(), detail])
         );
         return {
+          eventId: event._id,
           eventName: event.eventName,
           shift,
           date: formatShiftDate(shift.date),
@@ -479,9 +488,36 @@ const VolunteerShifts: React.FC = () => {
     return Array.from(groups.values()).sort((a, b) => a.dateValue.localeCompare(b.dateValue));
   }, [selectedDate, sortedShiftReportRows]);
 
+  const eventReportGroups = useMemo<EventReportGroup[]>(() => {
+    const rowsByEvent = new Map<string, ShiftReportRow[]>();
+    sortedShiftReportRows.forEach((row) => {
+      const rows = rowsByEvent.get(row.eventId) || [];
+      rows.push(row);
+      rowsByEvent.set(row.eventId, rows);
+    });
+
+    return events
+      .map((event) => {
+        const shifts = rowsByEvent.get(event._id) || [];
+        return {
+          event,
+          date: event.eventDate ? formatDate(event.eventDate) : (shifts[0]?.date || 'Date TBD'),
+          eventTime: event.startTime && event.endTime
+            ? `${formatShiftTime(event.startTime)} – ${formatShiftTime(event.endTime)}`
+            : '',
+          shifts
+        };
+      })
+      .sort((a, b) => {
+        const aStart = a.shifts[0]?.shift?.startTime ? new Date(a.shifts[0].shift.startTime).getTime() : Number.MAX_SAFE_INTEGER;
+        const bStart = b.shifts[0]?.shift?.startTime ? new Date(b.shifts[0].shift.startTime).getTime() : Number.MAX_SAFE_INTEGER;
+        return aStart - bStart || a.event.eventName.localeCompare(b.event.eventName);
+      });
+  }, [events, sortedShiftReportRows]);
+
   const reportLabels: Record<ReportView, { title: string; print: string }> = {
     names: { title: 'Member Shift Signups', print: 'Print Member Signups' },
-    shifts: { title: 'Shift Rosters', print: 'Print Per Shift' },
+    events: { title: 'Event Rosters', print: 'Print Per Event' },
     day: { title: 'Day Sheet', print: 'Print Per Day' }
   };
 
@@ -1189,7 +1225,6 @@ const VolunteerShifts: React.FC = () => {
     const printWindow = window.open('', '_blank', 'width=1024,height=768');
     if (!printWindow) return;
 
-    const generatedAt = new Date().toLocaleString();
     const title = `Volunteer Shift Report - ${reportLabels[reportType].title}`;
     const escapeHtml = (value: any) => String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -1197,15 +1232,7 @@ const VolunteerShifts: React.FC = () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-    const renderPrintMember = (member: ReportMember) => {
-      const label = member.email ? `${member.personName} (${member.email})` : member.personName;
-      if (!member.link) return escapeHtml(label);
-      const href = `${window.location.origin}${member.link}`;
-      return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
-    };
-    const renderPrintMemberChip = (member: ReportMember) => (
-      `<span class="name-chip">${renderPrintMember(member)}</span>`
-    );
+    const renderPrintMember = (member: ReportMember) => escapeHtml(member.personName);
 
     const renderNamesTable = (groups: PersonReportGroup[], emptyMessage: string) => groups.length === 0
       ? `<p class="empty">${escapeHtml(emptyMessage)}</p>`
@@ -1221,7 +1248,10 @@ const VolunteerShifts: React.FC = () => {
           <tbody>
             ${groups.map((group) => `
               <tr>
-                <td class="name-cell">${renderPrintMember(group.member)}</td>
+                <td class="name-cell">
+                  <strong>${renderPrintMember(group.member)}</strong>
+                  ${group.member.email ? `<br><span class="secondary">${escapeHtml(group.member.email)}</span>` : ''}
+                </td>
                 <td class="count-col">${group.shifts.length}</td>
                 <td>
                   <div class="shift-lines">
@@ -1252,49 +1282,59 @@ const VolunteerShifts: React.FC = () => {
         </section>
       `;
 
-    const shiftSections = sortedShiftReportRows.map((row) => {
+    const renderShiftRows = (rows: ShiftReportRow[], { showEvent = false, showDate = false } = {}) => rows.map((row) => {
       const stats = getShiftStats(row.shift);
-      return `
-        <section class="shift-block">
-          <div class="shift-head">
-            <h2>${escapeHtml(row.shift.title)}</h2>
-            <span>${stats.current}/${stats.max} signed · ${stats.remaining} open</span>
-          </div>
-          <p class="shift-meta">${escapeHtml(row.date)} · ${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</p>
-          <div class="name-grid">
-            ${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMemberChip).join('') : '<span class="empty-chip">No sign-ups yet</span>'}
-          </div>
-        </section>
-      `;
+      const members = row.signedUpMembers.length > 0 ? row.signedUpMembers : [null];
+      return members.map((member) => `
+        <tr>
+          ${showDate ? `<td class="nowrap">${escapeHtml(row.date)}</td>` : ''}
+          <td class="nowrap">${escapeHtml(row.shiftTime)}</td>
+          ${showEvent ? `<td>${escapeHtml(row.eventName)}</td>` : ''}
+          <td><strong>${escapeHtml(row.shift.title)}</strong></td>
+          <td>${member ? renderPrintMember(member) : '<span class="empty">No sign-ups</span>'}</td>
+          <td>${member?.email ? escapeHtml(member.email) : ''}</td>
+          <td>${row.description && row.description !== row.shift.title ? escapeHtml(row.description) : ''}</td>
+          <td class="nowrap center">${stats.current}/${stats.max} signed<br>${stats.remaining} open</td>
+        </tr>
+      `).join('');
     }).join('');
+
+    const eventSections = eventReportGroups.map((group) => `
+      <section class="event-section">
+        <div class="event-heading">
+          <h2>${escapeHtml(group.event.eventName)}</h2>
+          <span>${escapeHtml(group.date)}${group.eventTime ? ` · ${escapeHtml(group.eventTime)}` : ''} · ${group.shifts.length} shift${group.shifts.length === 1 ? '' : 's'}</span>
+          ${group.event.description ? `<p>${escapeHtml(group.event.description)}</p>` : ''}
+        </div>
+        <table class="report-table">
+          <thead>
+            <tr><th>Date</th><th>Time</th><th>Shift</th><th>Person</th><th>Email</th><th>Shift information</th><th>Staffing</th></tr>
+          </thead>
+          <tbody>
+            ${group.shifts.length > 0 ? renderShiftRows(group.shifts, { showDate: true }) : '<tr><td colspan="7" class="empty">No shifts scheduled.</td></tr>'}
+          </tbody>
+        </table>
+      </section>
+    `).join('');
 
     const daySections = dayReportGroups.length === 0
       ? '<p class="empty">No shifts scheduled for selected day.</p>'
       : dayReportGroups.map((group) => `
-        <section class="day-block">
-          <h2>${escapeHtml(group.date)}</h2>
-          ${group.shifts.map((row) => {
-            const stats = getShiftStats(row.shift);
-            return `
-              <div class="day-shift">
-                <div class="shift-head">
-                  <h3>${escapeHtml(row.shift.title)}</h3>
-                  <span>${stats.current}/${stats.max} signed · ${stats.remaining} open</span>
-                </div>
-                <p class="shift-meta">${escapeHtml(row.shiftTime)} · ${escapeHtml(row.eventName)}</p>
-                <div class="name-grid">
-                  ${row.signedUpMembers.length > 0 ? row.signedUpMembers.map(renderPrintMemberChip).join('') : '<span class="empty-chip">No sign-ups yet</span>'}
-                </div>
-              </div>
-            `;
-          }).join('')}
+        <section class="event-section">
+          <div class="event-heading"><h2>${escapeHtml(group.date)}</h2></div>
+          <table class="report-table">
+            <thead>
+              <tr><th>Time</th><th>Event</th><th>Shift</th><th>Person</th><th>Email</th><th>Shift information</th><th>Staffing</th></tr>
+            </thead>
+            <tbody>${renderShiftRows(group.shifts, { showEvent: true })}</tbody>
+          </table>
         </section>
       `).join('');
 
     const reportBody = reportType === 'names'
       ? namesSections
-      : reportType === 'shifts'
-        ? shiftSections || '<p class="empty">No shifts scheduled yet.</p>'
+      : reportType === 'events'
+        ? eventSections || '<p class="empty">No events scheduled yet.</p>'
         : daySections;
 
     const scopedMeta = reportType === 'day' && selectedDate
@@ -1306,39 +1346,44 @@ const VolunteerShifts: React.FC = () => {
         <head>
           <title>${escapeHtml(title)}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 28px; color: #111827; }
-            h1 { margin: 0 0 8px 0; font-size: 26px; }
-            h2 { margin: 0; font-size: 18px; }
-            h3 { margin: 0; font-size: 15px; }
-            a { color: #c2410c; text-decoration: none; font-weight: 700; }
-            .meta { color: #6b7280; margin-bottom: 22px; font-size: 12px; }
-            .person-block, .shift-block, .day-block { break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
-            .names-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            .names-section { margin-bottom: 24px; }
-            .names-section > h2 { margin-bottom: 10px; }
-            .names-table th { background: #fff7ed; color: #9a3412; text-align: left; border: 1px solid #fed7aa; padding: 7px 8px; }
-            .names-table td { border: 1px solid #e5e7eb; padding: 7px 8px; vertical-align: top; }
-            .names-table tr { break-inside: avoid; }
-            .name-cell { width: 28%; font-size: 13px; }
-            .count-col { width: 56px; text-align: center; white-space: nowrap; }
-            .shift-lines { display: grid; gap: 6px; line-height: 1.35; }
-            .shift-line { break-inside: avoid; }
+            @page { size: landscape; margin: 0.35in; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #111827; font-size: 9px; }
+            h1 { margin: 0 0 3px; font-size: 18px; }
+            h2 { margin: 0; font-size: 13px; }
+            .meta { color: #4b5563; margin-bottom: 10px; font-size: 9px; }
+            .event-section, .names-section { margin-bottom: 12px; }
+            .event-heading { border: 1px solid #9ca3af; border-bottom: 0; background: #e5e7eb; padding: 5px 7px; break-after: avoid; }
+            .event-heading h2 { display: inline; margin-right: 8px; }
+            .event-heading span { color: #374151; font-weight: 600; }
+            .event-heading p { margin: 2px 0 0; color: #4b5563; }
+            .report-table, .names-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .report-table thead, .names-table thead { display: table-header-group; }
+            .report-table th, .names-table th { background: #f3f4f6; text-align: left; border: 1px solid #9ca3af; padding: 3px 4px; font-size: 8px; text-transform: uppercase; letter-spacing: .02em; }
+            .report-table td, .names-table td { border: 1px solid #bfc3c9; padding: 3px 4px; vertical-align: top; line-height: 1.25; overflow-wrap: anywhere; }
+            .report-table tr, .names-table tr { break-inside: avoid; }
+            .report-table th:nth-child(1) { width: 10%; }
+            .report-table th:nth-child(2) { width: 13%; }
+            .report-table th:nth-child(3) { width: 15%; }
+            .report-table th:nth-child(4) { width: 15%; }
+            .report-table th:nth-child(5) { width: 18%; }
+            .report-table th:nth-child(6) { width: 20%; }
+            .report-table th:nth-child(7) { width: 9%; }
+            .names-section > h2 { margin-bottom: 4px; }
+            .name-cell { width: 25%; }
+            .count-col, .center { text-align: center; }
+            .count-col { width: 48px; }
+            .shift-lines { display: grid; gap: 3px; }
             .shift-line strong, .shift-line span { display: block; }
             .shift-line span { color: #4b5563; }
-            .day-shift { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; break-inside: avoid; }
-            .shift-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
-            .shift-head span { color: #6b7280; font-size: 12px; white-space: nowrap; }
-            .shift-meta { color: #4b5563; margin: 6px 0 10px; font-size: 13px; }
-            .name-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-            .name-chip { display: inline-block; border: 1px solid #fed7aa; background: #fff7ed; color: #c2410c; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
-            .empty, .empty-chip { color: #6b7280; }
-            .empty-chip { display: inline-block; border: 1px dashed #d1d5db; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
-            @media print { body { padding: 10px; } }
+            .secondary { color: #4b5563; font-weight: normal; }
+            .nowrap { white-space: nowrap; }
+            .empty { color: #6b7280; font-style: italic; }
           </style>
         </head>
         <body>
           <h1>${escapeHtml(title)}</h1>
-          <div class="meta">Generated: ${escapeHtml(generatedAt)}${escapeHtml(scopedMeta)}</div>
+          <div class="meta">All dates and times: ${escapeHtml(PDT_LABEL)}${escapeHtml(scopedMeta)}</div>
           ${reportBody}
         </body>
       </html>
@@ -1689,11 +1734,11 @@ const VolunteerShifts: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setReportType('shifts')}
-                className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'shifts' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
+                onClick={() => setReportType('events')}
+                className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'events' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
               >
-                <span className="block text-sm font-semibold">Per Shift</span>
-                <span className="block text-xs text-gray-500">{sortedShiftReportRows.length} shift rosters</span>
+                <span className="block text-sm font-semibold">Per Event</span>
+                <span className="block text-xs text-gray-500">{eventReportGroups.length} events · {sortedShiftReportRows.length} shifts</span>
               </button>
               <button
                 type="button"
@@ -1836,42 +1881,65 @@ const VolunteerShifts: React.FC = () => {
                   )
                 )}
 
-                {reportType === 'shifts' && (
-                  <div className="space-y-4">
-                    {sortedShiftReportRows.map((row) => {
-                      const stats = getShiftStats(row.shift);
-                      return (
-                        <div key={row.shift._id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{row.shift.title}</h3>
-                              <p className="text-sm text-gray-600">{row.date} · {row.shiftTime} · {row.eventName}</p>
-                              {row.description && row.description !== row.shift.title && (
-                                <p className="mt-1 text-sm text-gray-500">{row.description}</p>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                              <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">{stats.current} signed</span>
-                              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">{stats.max} capacity</span>
-                              <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">{stats.remaining} open</span>
-                            </div>
+                {reportType === 'events' && (
+                  <div className="space-y-5">
+                    {eventReportGroups.map((group) => (
+                      <section key={group.event._id} className="overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm">
+                        <div className="border-b border-gray-300 bg-gray-100 px-4 py-3">
+                          <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
+                            <h3 className="font-semibold text-gray-900">{group.event.eventName}</h3>
+                            <span className="text-xs font-medium text-gray-600">
+                              {group.date}{group.eventTime ? ` · ${group.eventTime}` : ''} · {group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}
+                            </span>
                           </div>
-                          {row.signedUpMembers.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {row.signedUpMembers.map((member) => (
-                                <React.Fragment key={`${row.shift._id}-${member.id}`}>
-                                  {renderReportMember(member)}
-                                </React.Fragment>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-500">
-                              No one has signed up for this shift yet.
-                            </div>
+                          {group.event.description && (
+                            <p className="mt-1 text-xs text-gray-600">{group.event.description}</p>
                           )}
                         </div>
-                      );
-                    })}
+                        <div className="overflow-x-auto">
+                          <table className="min-w-[980px] w-full border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-gray-50 text-left uppercase tracking-wide text-gray-600">
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Date</th>
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Time</th>
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Shift</th>
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Person</th>
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Email</th>
+                                <th className="border-b border-r border-gray-300 px-2 py-2">Shift information</th>
+                                <th className="border-b border-gray-300 px-2 py-2 text-center">Staffing</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.shifts.length === 0 ? (
+                                <tr><td colSpan={7} className="px-3 py-4 text-gray-500">No shifts scheduled.</td></tr>
+                              ) : group.shifts.flatMap((row) => {
+                                const stats = getShiftStats(row.shift);
+                                const members: Array<ReportMember | null> = row.signedUpMembers.length > 0 ? row.signedUpMembers : [null];
+                                return members.map((member, memberIndex) => (
+                                  <tr key={`${row.shift._id}-${member?.id || 'empty'}-${memberIndex}`} className="border-b border-gray-200 last:border-b-0 align-top">
+                                    <td className="whitespace-nowrap border-r border-gray-200 px-2 py-2">{row.date}</td>
+                                    <td className="whitespace-nowrap border-r border-gray-200 px-2 py-2">{row.shiftTime}</td>
+                                    <td className="border-r border-gray-200 px-2 py-2 font-semibold text-gray-900">{row.shift.title}</td>
+                                    <td className="border-r border-gray-200 px-2 py-2">
+                                      {member ? (
+                                        member.link ? <Link to={member.link} className="font-medium text-orange-700 hover:underline">{member.personName}</Link> : member.personName
+                                      ) : <span className="italic text-gray-500">No sign-ups</span>}
+                                    </td>
+                                    <td className="border-r border-gray-200 px-2 py-2 text-gray-600">{member?.email || ''}</td>
+                                    <td className="border-r border-gray-200 px-2 py-2 text-gray-600">
+                                      {row.description !== row.shift.title ? row.description : ''}
+                                    </td>
+                                    <td className="whitespace-nowrap px-2 py-2 text-center text-gray-600">
+                                      <span className="font-semibold text-gray-900">{stats.current}/{stats.max}</span> signed<br />{stats.remaining} open
+                                    </td>
+                                  </tr>
+                                ));
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    ))}
                   </div>
                 )}
 
