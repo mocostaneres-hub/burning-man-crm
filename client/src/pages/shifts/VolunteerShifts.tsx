@@ -1941,20 +1941,32 @@ const VolunteerShifts: React.FC = () => {
                             <tbody>
                               {group.shifts.length === 0 ? (
                                 <tr><td colSpan={7} className="px-3 py-4 text-gray-500">No shifts scheduled.</td></tr>
-                              ) : group.shifts.flatMap((row) => {
+                              ) : group.shifts.map((row) => {
                                 const stats = getShiftStats(row.shift);
-                                const members: Array<ReportMember | null> = row.signedUpMembers.length > 0 ? row.signedUpMembers : [null];
-                                return members.map((member, memberIndex) => (
-                                  <tr key={`${row.shift._id}-${member?.id || 'empty'}-${memberIndex}`} className="border-b border-gray-200 last:border-b-0 align-top">
+                                const emails = row.signedUpMembers
+                                  .map((member) => member.email)
+                                  .filter(Boolean)
+                                  .join(', ');
+                                return (
+                                  <tr key={row.shift._id} className="border-b border-gray-200 last:border-b-0 align-top">
                                     <td className="whitespace-nowrap border-r border-gray-200 px-2 py-2">{row.date}</td>
                                     <td className="whitespace-nowrap border-r border-gray-200 px-2 py-2">{row.shiftTime}</td>
                                     <td className="border-r border-gray-200 px-2 py-2 font-semibold text-gray-900">{row.shift.title}</td>
                                     <td className="border-r border-gray-200 px-2 py-2">
-                                      {member ? (
-                                        member.link ? <Link to={member.link} className="font-medium text-orange-700 hover:underline">{member.personName}</Link> : member.personName
+                                      {row.signedUpMembers.length > 0 ? (
+                                        <div className="leading-5">
+                                          {row.signedUpMembers.map((member, memberIndex) => (
+                                            <span key={`${row.shift._id}-${member.id}-${memberIndex}`} className="mr-1.5 inline">
+                                              {member.link ? (
+                                                <Link to={member.link} className="font-medium text-orange-700 hover:underline">{member.personName}</Link>
+                                              ) : member.personName}
+                                              {memberIndex < row.signedUpMembers.length - 1 ? ',' : ''}
+                                            </span>
+                                          ))}
+                                        </div>
                                       ) : <span className="italic text-gray-500">No sign-ups</span>}
                                     </td>
-                                    <td className="border-r border-gray-200 px-2 py-2 text-gray-600">{member?.email || ''}</td>
+                                    <td className="border-r border-gray-200 px-2 py-2 text-gray-600">{emails}</td>
                                     <td className="border-r border-gray-200 px-2 py-2 text-gray-600">
                                       {row.description !== row.shift.title ? row.description : ''}
                                     </td>
@@ -1962,7 +1974,7 @@ const VolunteerShifts: React.FC = () => {
                                       <span className="font-semibold text-gray-900">{stats.current}/{stats.max}</span> signed<br />{stats.remaining} open
                                     </td>
                                   </tr>
-                                ));
+                                );
                               })}
                             </tbody>
                           </table>
