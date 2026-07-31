@@ -275,13 +275,21 @@ const VolunteerShifts: React.FC = () => {
       : `/camp/${currentCampId}/contacts/member/${member.memberId}`;
   }, [currentCampId]);
 
-  const resolveReportMember = useCallback((memberId: any): ReportMember => {
+  const resolveReportMember = useCallback((memberId: any, fallback?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  }): ReportMember => {
     const id = memberId?.toString?.() || String(memberId || '');
     const member = rosterMemberById.get(id);
+    const fallbackName = `${fallback?.firstName || ''} ${fallback?.lastName || ''}`.trim()
+      || fallback?.email
+      || 'Unknown Member';
     return {
       id,
-      personName: getMemberDisplayName(member),
-      email: member?.email || undefined,
+      personName: member ? getMemberDisplayName(member) : fallbackName,
+      email: member?.email || fallback?.email || undefined,
       link: getMember360Link(member)
     };
   }, [getMember360Link, getMemberDisplayName, rosterMemberById]);
@@ -350,15 +358,23 @@ const VolunteerShifts: React.FC = () => {
 
   const shiftReportRows = useMemo<ShiftReportRow[]>(() => {
     return events.flatMap((event) => (
-      event.shifts.map((shift) => ({
-        eventName: event.eventName,
-        shift,
-        date: formatShiftDate(shift.date),
-        dateValue: utcToPdtDateInput(shift.date),
-        shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
-        description: shift.description || shift.title,
-        signedUpMembers: (shift.memberIds || []).map(resolveReportMember)
-      }))
+      event.shifts.map((shift) => {
+        const detailById = new Map(
+          (shift.memberDetails || []).map((detail) => [detail.id.toString(), detail])
+        );
+        return {
+          eventName: event.eventName,
+          shift,
+          date: formatShiftDate(shift.date),
+          dateValue: utcToPdtDateInput(shift.date),
+          shiftTime: `${formatShiftTime(shift.startTime)} – ${formatShiftTime(shift.endTime)}`,
+          description: shift.description || shift.title,
+          signedUpMembers: (shift.memberIds || []).map((memberId) => {
+            const id = memberId?.toString?.() || String(memberId || '');
+            return resolveReportMember(memberId, detailById.get(id));
+          })
+        };
+      })
     ));
   }, [events, resolveReportMember]);
 

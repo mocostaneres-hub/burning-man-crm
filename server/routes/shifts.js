@@ -68,6 +68,10 @@ const { sendDirectAssignmentEmails } = require('../services/shiftAssignmentEmail
 const { EMAIL_TEMPLATE_KEYS } = require('../constants/emailTemplateKeys');
 const { recordActivity } = require('../services/activityLogger');
 const {
+  buildShiftMemberDetailMap,
+  getShiftMemberDetails
+} = require('../services/shiftReportMembers');
+const {
   getTemplateByKey,
   renderTemplateString
 } = require('../services/emailTemplateService');
@@ -233,6 +237,15 @@ router.get('/events', authenticateToken, async (req, res) => {
       signupMap.get(shiftId).push(signup.userId.toString());
     }
 
+    // Reports are allowed to include historical signups whose users are no
+    // longer in the camp's active roster. Include a minimal user snapshot so
+    // the client can still display their names instead of "Unknown Member".
+    const signedUpUserIds = [...new Set(signups.map((signup) => signup.userId.toString()))];
+    const signedUpUsers = signedUpUserIds.length > 0
+      ? await db.findUsers({ _id: { $in: signedUpUserIds } })
+      : [];
+    const signedUpUserMap = buildShiftMemberDetailMap(signedUpUsers);
+
     const hydratedEvents = events.map((event) => {
       const plainEvent = typeof event.toObject === 'function' ? event.toObject() : event;
       plainEvent.shifts = (plainEvent.shifts || []).map((shift) => {
@@ -243,6 +256,7 @@ router.get('/events', authenticateToken, async (req, res) => {
         return {
           ...shift,
           memberIds,
+          memberDetails: getShiftMemberDetails(memberIds, signedUpUserMap),
           currentSignups: memberIds.length
         };
       });

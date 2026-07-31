@@ -587,6 +587,12 @@ export interface Shift {
   endTime: Date;
   maxSignUps: number;
   memberIds: string[]; // Array of user IDs who signed up
+  memberDetails?: Array<{
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  }>;
   assignmentMode?: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
   directAssignmentUserIds?: string[];
   isDirectAssignmentLocked?: boolean;
