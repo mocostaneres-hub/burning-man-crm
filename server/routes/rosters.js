@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { normalizeEmail, isValidEmail } = require('../utils/emailUtils');
@@ -606,18 +607,17 @@ router.get('/active', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Camp account, admin, or Camp Lead required' });
     }
 
-    const roster = await db.findActiveRoster({ camp: campId });
+    const rosterDocument = await db.findActiveRoster({ camp: campId });
+    const roster = toPlainRosterObject(rosterDocument);
 
-    // For SOR rosters, enrich each member with two extra signals used by the
-    // Shifts-Only Roster table: (1) how many shifts they've signed up for
-    // and (2) when they were last reminded. Both are safe to compute for any
-    // roster type — we only attach them when rosterType === 'shifts_only' to
-    // avoid changing the shape of the response for FMR consumers.
-    if (roster && roster.rosterType === 'shifts_only' && Array.isArray(roster.members)) {
+    // Enrich every active roster with current, canonical shift-signup counts.
+    // This keeps the Events report and roster filters accurate after signup,
+    // reassignment, or drop changes without requiring a separate comparison.
+    if (roster && Array.isArray(roster.members)) {
       try {
         const ShiftSignup = require('../models/ShiftSignup');
 
-        // Collect the user IDs of every SOR member that has linked an account.
+        // Collect the user IDs of every member that has linked an account.
         const userIds = [];
         for (const entry of roster.members) {
           const userRef = entry?.member?.user;
@@ -628,17 +628,19 @@ router.get('/active', authenticateToken, async (req, res) => {
         }
 
         // Aggregate signup counts by userId for this camp — one query, not N.
+        const signupCampId = mongoose.Types.ObjectId.isValid(campId)
+          ? new mongoose.Types.ObjectId(campId)
+          : campId;
         const counts = userIds.length
           ? await ShiftSignup.aggregate([
-              { $match: { userId: { $in: userIds }, campId } },
+              { $match: { userId: { $in: userIds }, campId: signupCampId } },
               { $group: { _id: '$userId', count: { $sum: 1 } } }
             ])
           : [];
         const countByUserId = new Map(counts.map((c) => [c._id.toString(), c.count]));
 
-        // Attach per-member enrichment. We set fields on the populated member
-        // subdoc so the frontend's existing `memberEntry.member.*` accessors
-        // continue to work without modification.
+        // Attach the count to the populated member subdocument for both roster
+        // types. Invite-only members without accounts correctly receive zero.
         for (const entry of roster.members) {
           if (!entry?.member || typeof entry.member !== 'object') continue;
           const userRef = entry.member.user;
@@ -647,16 +649,13 @@ router.get('/active', authenticateToken, async (req, res) => {
               ? userRef._id?.toString()
               : userRef?.toString();
           entry.member.shiftSignupCount = userIdStr ? countByUserId.get(userIdStr) || 0 : 0;
-          // lastReminderAt already lives on the Member document, but ensure
-          // it's serialized (populate on findActiveRoster returns full docs
-          // so this is usually a no-op — included here for safety).
-          if (entry.member.lastReminderAt === undefined) {
+          if (roster.rosterType === 'shifts_only' && entry.member.lastReminderAt === undefined) {
             entry.member.lastReminderAt = null;
           }
         }
       } catch (enrichErr) {
         // Non-fatal: roster data is still returned even if enrichment fails.
-        console.error('⚠️  [GET /api/rosters/active] SOR enrichment failed:', enrichErr?.message);
+        console.error('⚠️  [GET /api/rosters/active] shift count enrichment failed:', enrichErr?.message);
       }
     }
 

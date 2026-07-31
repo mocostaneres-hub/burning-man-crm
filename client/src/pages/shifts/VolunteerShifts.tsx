@@ -49,6 +49,7 @@ type ReportMember = {
 };
 
 type PersonReportRow = {
+  shiftId: string;
   personName: string;
   member: ReportMember;
   date: string;
@@ -103,6 +104,11 @@ const getAssigneeInitials = (assignee: ShiftAssigneeOption) => {
     || assignee.email;
   const parts = name.split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase() || '?';
+};
+
+const isCurrentRosterEntry = (entry: any) => {
+  const status = String(entry?.status || entry?.member?.status || '').toLowerCase();
+  return !['inactive', 'rejected', 'withdrawn', 'suspended', 'deleted', 'archived'].includes(status);
 };
 
 type ReportView = 'names' | 'shifts' | 'day';
@@ -367,6 +373,7 @@ const VolunteerShifts: React.FC = () => {
   const personReportRows = useMemo<PersonReportRow[]>(() => {
     return shiftReportRows.flatMap((row) => (
       row.signedUpMembers.map((member) => ({
+        shiftId: row.shift._id?.toString?.() || String(row.shift._id || ''),
         personName: member.personName,
         member,
         date: row.date,
@@ -388,28 +395,48 @@ const VolunteerShifts: React.FC = () => {
   }, [shiftReportRows]);
 
   const personReportGroups = useMemo<PersonReportGroup[]>(() => {
-    const groups = new Map<string, PersonReportGroup>();
+    const shiftsByMemberId = new Map<string, PersonReportRow[]>();
     personReportRows.forEach((row) => {
-      const key = row.member.id || row.personName;
-      const existing = groups.get(key);
-      if (existing) {
-        existing.shifts.push(row);
-      } else {
-        groups.set(key, { member: row.member, shifts: [row] });
-      }
+      const memberId = row.member.id;
+      if (!memberId) return;
+      if (!shiftsByMemberId.has(memberId)) shiftsByMemberId.set(memberId, []);
+      shiftsByMemberId.get(memberId)?.push(row);
     });
 
-    return Array.from(groups.values())
-      .map((group) => ({
-        ...group,
-        shifts: [...group.shifts].sort((a, b) => (
+    return rosterMembers
+      .map((rosterMember) => {
+        const identityIds = [...new Set([
+          rosterMember._id,
+          rosterMember.memberId,
+          rosterMember.userId
+        ].filter(Boolean))];
+        const shifts = identityIds.flatMap((identityId) => shiftsByMemberId.get(identityId) || []);
+        const uniqueShifts = Array.from(
+          new Map(shifts.map((shift) => [shift.shiftId, shift])).values()
+        ).sort((a, b) => (
           a.dateValue.localeCompare(b.dateValue)
           || a.shiftTime.localeCompare(b.shiftTime)
           || a.shiftTitle.localeCompare(b.shiftTitle)
-        ))
-      }))
-      .sort((a, b) => a.member.personName.localeCompare(b.member.personName));
-  }, [personReportRows]);
+        ));
+        return {
+          member: resolveReportMember(rosterMember.userId || rosterMember.memberId || rosterMember._id),
+          shifts: uniqueShifts
+        };
+      })
+      .sort((a, b) => (
+        Number(a.shifts.length > 0) - Number(b.shifts.length > 0)
+        || a.member.personName.localeCompare(b.member.personName)
+      ));
+  }, [personReportRows, resolveReportMember, rosterMembers]);
+
+  const membersWithoutShiftGroups = useMemo(
+    () => personReportGroups.filter((group) => group.shifts.length === 0),
+    [personReportGroups]
+  );
+  const membersWithShiftGroups = useMemo(
+    () => personReportGroups.filter((group) => group.shifts.length > 0),
+    [personReportGroups]
+  );
 
   const shiftDateOptions = useMemo(() => {
     const options = new Map<string, string>();
@@ -437,7 +464,7 @@ const VolunteerShifts: React.FC = () => {
   }, [selectedDate, sortedShiftReportRows]);
 
   const reportLabels: Record<ReportView, { title: string; print: string }> = {
-    names: { title: 'Names List', print: 'Print Names List' },
+    names: { title: 'Member Shift Signups', print: 'Print Member Signups' },
     shifts: { title: 'Shift Rosters', print: 'Print Per Shift' },
     day: { title: 'Day Sheet', print: 'Print Per Day' }
   };
@@ -524,6 +551,7 @@ const VolunteerShifts: React.FC = () => {
         const roster = await api.get(`/rosters/active?campId=${campId}`);
         setRosterMeta(deriveRosterMeta(roster));
         rosterMembersFromActiveRoster = (roster?.members || [])
+          .filter(isCurrentRosterEntry)
           .map(normalizeRosterMember)
           .filter(Boolean) as RosterMemberLite[];
       } catch (_rosterError) {
@@ -539,12 +567,13 @@ const VolunteerShifts: React.FC = () => {
       const activeCampMembers = (response.members || [])
         .map(normalizeRosterMember)
         .filter(Boolean) as RosterMemberLite[];
-      // Prefer the richer active-roster record, then collapse records from the
-      // two endpoints whenever any stable member/user identity overlaps.
-      setRosterMembers(deduplicateRosterMembers([
-        ...rosterMembersFromActiveRoster,
-        ...activeCampMembers
-      ]));
+      // The active roster is the reporting source of truth. Fall back to
+      // active camp members only for legacy camps without roster rows.
+      setRosterMembers(deduplicateRosterMembers(
+        rosterMembersFromActiveRoster.length > 0
+          ? rosterMembersFromActiveRoster
+          : activeCampMembers
+      ));
     } catch (error) {
       console.error('Error loading roster members:', error);
       setCurrentCampId(null);
@@ -607,6 +636,20 @@ const VolunteerShifts: React.FC = () => {
       loadRosterMembers();
     }
   }, [canAccessShifts, loadEvents, loadRosterMembers]);
+
+  useEffect(() => {
+    if (!canAccessShifts || activeTab !== 'reports') return;
+    const refreshReport = () => {
+      loadEvents();
+      loadRosterMembers();
+    };
+    const refreshTimer = window.setInterval(refreshReport, 30000);
+    window.addEventListener('focus', refreshReport);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refreshReport);
+    };
+  }, [activeTab, canAccessShifts, loadEvents, loadRosterMembers]);
 
   const hasRoster = rosterMeta.memberCount > 0;
   const getEffectiveEventFields = useCallback(() => {
@@ -1148,8 +1191,8 @@ const VolunteerShifts: React.FC = () => {
       `<span class="name-chip">${renderPrintMember(member)}</span>`
     );
 
-    const namesSections = personReportGroups.length === 0
-      ? '<p class="empty">No one has signed up yet.</p>'
+    const renderNamesTable = (groups: PersonReportGroup[], emptyMessage: string) => groups.length === 0
+      ? `<p class="empty">${escapeHtml(emptyMessage)}</p>`
       : `
         <table class="names-table">
           <thead>
@@ -1160,7 +1203,7 @@ const VolunteerShifts: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            ${personReportGroups.map((group) => `
+            ${groups.map((group) => `
               <tr>
                 <td class="name-cell">${renderPrintMember(group.member)}</td>
                 <td class="count-col">${group.shifts.length}</td>
@@ -1179,6 +1222,18 @@ const VolunteerShifts: React.FC = () => {
             `).join('')}
           </tbody>
         </table>
+      `;
+    const namesSections = personReportGroups.length === 0
+      ? '<p class="empty">No active roster members found.</p>'
+      : `
+        <section class="names-section">
+          <h2>Members With No Shifts (${membersWithoutShiftGroups.length})</h2>
+          ${renderNamesTable(membersWithoutShiftGroups, 'Every active member has at least one shift.')}
+        </section>
+        <section class="names-section">
+          <h2>Members With Shifts (${membersWithShiftGroups.length})</h2>
+          ${renderNamesTable(membersWithShiftGroups, 'No active members have signed up for a shift yet.')}
+        </section>
       `;
 
     const shiftSections = sortedShiftReportRows.map((row) => {
@@ -1243,6 +1298,8 @@ const VolunteerShifts: React.FC = () => {
             .meta { color: #6b7280; margin-bottom: 22px; font-size: 12px; }
             .person-block, .shift-block, .day-block { break-inside: avoid; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
             .names-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .names-section { margin-bottom: 24px; }
+            .names-section > h2 { margin-bottom: 10px; }
             .names-table th { background: #fff7ed; color: #9a3412; text-align: left; border: 1px solid #fed7aa; padding: 7px 8px; }
             .names-table td { border: 1px solid #e5e7eb; padding: 7px 8px; vertical-align: top; }
             .names-table tr { break-inside: avoid; }
@@ -1609,8 +1666,10 @@ const VolunteerShifts: React.FC = () => {
                 onClick={() => setReportType('names')}
                 className={`rounded-lg border px-4 py-3 text-left transition ${reportType === 'names' ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-orange-200'}`}
               >
-                <span className="block text-sm font-semibold">Names List</span>
-                <span className="block text-xs text-gray-500">{personReportGroups.length} people signed up</span>
+                <span className="block text-sm font-semibold">Member Shift Signups</span>
+                <span className="block text-xs text-gray-500">
+                  {membersWithoutShiftGroups.length} without shifts · {membersWithShiftGroups.length} with shifts
+                </span>
               </button>
               <button
                 type="button"
@@ -1659,7 +1718,7 @@ const VolunteerShifts: React.FC = () => {
               </Button>
             </div>
 
-            {events.length === 0 ? (
+            {events.length === 0 && reportType !== 'names' ? (
               <div className="text-center py-12">
                 <Calendar size={64} className="text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Events to Report</h3>
@@ -1671,54 +1730,92 @@ const VolunteerShifts: React.FC = () => {
                   personReportGroups.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-gray-300 px-6 py-10 text-center text-gray-500">
                       <Users size={32} className="mx-auto mb-2 opacity-50" />
-                      <p>No one has signed up yet.</p>
+                      <p>No active roster members found.</p>
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                      <div className="hidden grid-cols-[minmax(9rem,1.1fr)_4rem_minmax(12rem,2fr)] border-b border-orange-100 bg-orange-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-orange-800 md:grid">
-                        <div>Name</div>
-                        <div className="text-center">Shifts</div>
-                        <div>Shift, event, date and time</div>
-                      </div>
-                      <div className="divide-y divide-gray-100">
-                        {personReportGroups.map((group) => (
-                          <div
-                            key={group.member.id || group.member.personName}
-                            className="grid grid-cols-1 gap-2 px-4 py-3 md:grid-cols-[minmax(9rem,1.1fr)_4rem_minmax(12rem,2fr)] md:items-start"
-                          >
-                            <div className="min-w-0">
-                              {group.member.link ? (
-                                <Link
-                                  to={group.member.link}
-                                  className="font-semibold text-orange-700 hover:text-orange-800 hover:underline"
-                                >
-                                  {group.member.personName}
-                                </Link>
-                              ) : (
-                                <span className="font-semibold text-gray-900">{group.member.personName}</span>
-                              )}
-                              {group.member.email && (
-                                <div className="truncate text-xs text-gray-500">{group.member.email}</div>
-                              )}
+                    <div className="space-y-5">
+                      {[
+                        {
+                          title: 'Members With No Shifts',
+                          description: 'Active roster members who still need a shift signup.',
+                          groups: membersWithoutShiftGroups,
+                          emptyMessage: 'Every active member has at least one shift.',
+                          tone: 'rose'
+                        },
+                        {
+                          title: 'Members With Shifts',
+                          description: 'Active roster members with one or more confirmed shift signups.',
+                          groups: membersWithShiftGroups,
+                          emptyMessage: 'No active members have signed up for a shift yet.',
+                          tone: 'green'
+                        }
+                      ].map((section) => (
+                        <section
+                          key={section.title}
+                          className={`overflow-visible rounded-lg border bg-white shadow-sm ${section.tone === 'rose' ? 'border-rose-200' : 'border-green-200'}`}
+                        >
+                          <div className={`flex items-start justify-between gap-4 border-b px-4 py-3 ${section.tone === 'rose' ? 'border-rose-100 bg-rose-50' : 'border-green-100 bg-green-50'}`}>
+                            <div>
+                              <h3 className="font-semibold text-gray-900">{section.title}</h3>
+                              <p className="text-xs text-gray-600">{section.description}</p>
                             </div>
-                            <div className="hidden text-center text-sm font-semibold text-gray-700 md:block">
-                              {group.shifts.length}
-                            </div>
-                            <div className="grid gap-1.5 sm:grid-cols-2">
-                              {group.shifts.map((shift) => (
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${section.tone === 'rose' ? 'bg-rose-100 text-rose-800' : 'bg-green-100 text-green-800'}`}>
+                              {section.groups.length}
+                            </span>
+                          </div>
+                          {section.groups.length === 0 ? (
+                            <div className="px-4 py-6 text-sm text-gray-500">{section.emptyMessage}</div>
+                          ) : (
+                            <div className="divide-y divide-gray-100">
+                              {section.groups.map((group) => (
                                 <div
-                                  key={`${group.member.id}-${shift.dateValue}-${shift.shiftTitle}-${shift.shiftTime}`}
-                                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-700"
+                                  key={group.member.id || group.member.personName}
+                                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                                 >
-                                  <div className="font-semibold text-gray-900">{shift.shiftTitle}</div>
-                                  <div className="text-gray-600">{shift.eventName}</div>
-                                  <div className="text-gray-500">{shift.date} · {shift.shiftTime}</div>
+                                  <div className="min-w-0">
+                                    {group.member.link ? (
+                                      <Link
+                                        to={group.member.link}
+                                        className="font-semibold text-orange-700 hover:text-orange-800 hover:underline"
+                                      >
+                                        {group.member.personName}
+                                      </Link>
+                                    ) : (
+                                      <span className="font-semibold text-gray-900">{group.member.personName}</span>
+                                    )}
+                                    {group.member.email && (
+                                      <div className="truncate text-xs text-gray-500">{group.member.email}</div>
+                                    )}
+                                  </div>
+                                  <div className="relative self-start sm:self-auto group">
+                                    <span
+                                      tabIndex={group.shifts.length > 0 ? 0 : undefined}
+                                      className={`inline-flex min-w-[6.5rem] items-center justify-center rounded-full px-3 py-1.5 text-sm font-semibold ${group.shifts.length > 0 ? 'cursor-help bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}
+                                      aria-label={`${group.shifts.length} shift${group.shifts.length === 1 ? '' : 's'}`}
+                                    >
+                                      {group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}
+                                    </span>
+                                    {group.shifts.length > 0 && (
+                                      <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 hidden w-80 max-w-[calc(100vw-3rem)] rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl group-hover:block group-focus-within:block">
+                                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Confirmed shifts</div>
+                                        <div className="space-y-2">
+                                          {group.shifts.map((shift) => (
+                                            <div key={`${group.member.id}-${shift.shiftId}`} className="border-b border-gray-100 pb-2 text-xs last:border-0 last:pb-0">
+                                              <div className="font-semibold text-gray-900">{shift.shiftTitle}</div>
+                                              <div className="text-gray-600">{shift.eventName}</div>
+                                              <div className="text-gray-500">{shift.date} · {shift.shiftTime}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          )}
+                        </section>
+                      ))}
                     </div>
                   )
                 )}

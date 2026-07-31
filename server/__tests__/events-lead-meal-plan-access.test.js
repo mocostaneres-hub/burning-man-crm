@@ -44,12 +44,15 @@ jest.mock('../services/shiftService', () => ({
 }));
 
 jest.mock('../models/ShiftAssignment', () => ({}));
-jest.mock('../models/ShiftSignup', () => ({}));
+jest.mock('../models/ShiftSignup', () => ({
+  aggregate: jest.fn(async () => [])
+}));
 jest.mock('../models/Event', () => ({}));
 
 const db = require('../database/databaseAdapter');
 const permissionHelpers = require('../utils/permissionHelpers');
 const emailService = require('../services/emailService');
+const ShiftSignup = require('../models/ShiftSignup');
 const rosterRoutes = require('../routes/rosters');
 
 const camp = { _id: 'camp-1', name: 'Dust Camp' };
@@ -253,6 +256,7 @@ describe('Events Lead meal-plan access', () => {
   });
 
   test('returns only dues-paid roster members to Events Lead roster view', async () => {
+    ShiftSignup.aggregate.mockResolvedValue([{ _id: 'user-paid', count: 2 }]);
     db.findActiveRoster.mockResolvedValue({
       _id: 'roster-1',
       camp: camp._id,
@@ -317,6 +321,7 @@ describe('Events Lead meal-plan access', () => {
     expect(response.body.members[0].member.user.email).toBe('paid@example.com');
     expect(response.body.members[0].member.user.phoneNumber).toBe('555-0101');
     expect(response.body.members[0].member.user.phoneCountryCode).toBe('+1');
+    expect(response.body.members[0].member.shiftSignupCount).toBe(2);
     expect(response.body.members.map((entry) => entry.member._id)).not.toContain('member-unpaid');
   });
 

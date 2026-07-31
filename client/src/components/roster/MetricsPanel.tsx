@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from '../ui';
-import { Ticket, Car, Calendar, Clock, Users, User, CheckCircle, Utensils } from 'lucide-react';
+import { Ticket, Car, Calendar, Clock, Users, User, CheckCircle, Utensils, Bell } from 'lucide-react';
 import { Member } from '../../types';
 
 interface MetricsPanelProps {
@@ -109,6 +109,10 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
     return normalizePaymentStatus(member.mealPlanStatus) === 'PAID';
   }).length;
 
+  const noShiftsCount = members.filter((member: any) => (
+    Number(member?.member?.shiftSignupCount ?? member?.shiftSignupCount ?? 0) === 0
+  )).length;
+
   // Calculate percentages (rounded to nearest whole number)
   const totalMembers = members.length;
   const calculatePercentage = (count: number) => {
@@ -118,7 +122,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   return (
     <div className="mb-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 gap-4">
         <MetricCard
           title="Total Members"
           count={members.length}
@@ -140,6 +144,13 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
           icon={<Utensils className="w-6 h-6 text-emerald-600" />}
           colorClass="text-emerald-600"
           percentage={calculatePercentage(mealPlanPaidCount)}
+        />
+        <MetricCard
+          title="No Shifts Yet"
+          count={noShiftsCount}
+          icon={<Bell className="w-6 h-6 text-red-600" />}
+          colorClass="text-red-600"
+          percentage={calculatePercentage(noShiftsCount)}
         />
         <MetricCard
           title="First-Year Burners"

@@ -12,6 +12,7 @@ interface RosterFiltersProps {
   availableTags?: string[];
   customFieldOptions?: Array<{ key: string; label: string; values: string[] }>;
   showDuesFilters?: boolean;
+  showMemberDetailFilters?: boolean;
 }
 
 interface FilterButtonProps {
@@ -63,7 +64,8 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
   availableSkills,
   availableTags = [],
   customFieldOptions = [],
-  showDuesFilters = true
+  showDuesFilters = true,
+  showMemberDetailFilters = true
 }) => {
   const [foodFilterOpen, setFoodFilterOpen] = useState(false);
   const foodFilterRef = useRef<HTMLDivElement | null>(null);
@@ -105,6 +107,8 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       'with-vp': 'Vehicle Pass: Yes',
       'early-arrival': 'Logistics: EA',
       'late-departure': 'Logistics: LD',
+      'no-shifts': 'Shifts: No Shifts',
+      'has-shifts': 'Shifts: Has Shifts',
       virgin: 'Experience: Virgin',
       veteran: 'Experience: Veteran'
     };
@@ -133,9 +137,17 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       return;
     }
 
+    const oppositeShiftFilter = filterType === 'no-shifts'
+      ? 'has-shifts'
+      : filterType === 'has-shifts'
+        ? 'no-shifts'
+        : null;
+    const filtersWithoutOpposite = oppositeShiftFilter
+      ? activeFilters.filter((filter) => filter !== oppositeShiftFilter)
+      : activeFilters;
     const newFilters = activeFilters.includes(filterType)
       ? activeFilters.filter(f => f !== filterType)
-      : [...activeFilters, filterType];
+      : [...filtersWithoutOpposite, filterType];
     
     onFilterChange(newFilters);
   };
@@ -175,6 +187,26 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
       </div>
       
       <div className="flex flex-wrap gap-1 items-center">
+        <div className="flex gap-1 mr-2">
+          <span className="text-sm font-medium text-gray-600 self-center">Shifts:</span>
+          <FilterButton
+            label="No Shifts"
+            filterType="no-shifts"
+            isActive={activeFilters.includes('no-shifts')}
+            onClick={() => toggleFilter('no-shifts')}
+            variant="warning"
+          />
+          <FilterButton
+            label="Has Shifts"
+            filterType="has-shifts"
+            isActive={activeFilters.includes('has-shifts')}
+            onClick={() => toggleFilter('has-shifts')}
+            variant="success"
+          />
+        </div>
+
+        {showMemberDetailFilters && (
+          <>
         {showDuesFilters && (
           <div className="flex gap-1 mr-2">
             <span className="text-sm font-medium text-gray-600 self-center">Dues:</span>
@@ -408,6 +440,8 @@ const RosterFilters: React.FC<RosterFiltersProps> = ({
             </select>
           </div>
         ))}
+          </>
+        )}
       </div>
 
       {hasActiveFilters && (

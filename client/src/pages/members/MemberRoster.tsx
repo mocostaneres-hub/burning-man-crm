@@ -41,6 +41,13 @@ type DelegatedCampRole = 'campLead' | 'eventsLead';
 const SOR_IMPLEMENTATION_CUTOFF_ISO = '2026-04-01T00:00:00.000Z';
 const SOR_IMPLEMENTATION_CUTOFF_MS = Date.parse(SOR_IMPLEMENTATION_CUTOFF_ISO);
 const DUES_FILTER_TYPES = new Set<FilterType>(['dues-paid', 'dues-unpaid', 'dues-instructed']);
+const getMemberShiftSignupCount = (member: any): number => (
+  Number(member?.member?.shiftSignupCount ?? member?.shiftSignupCount ?? 0)
+);
+const isCurrentShiftRosterMember = (member: any): boolean => {
+  const status = String(member?.rosterStatus || member?.status || '').toLowerCase();
+  return !['inactive', 'rejected', 'withdrawn', 'suspended', 'deleted', 'archived'].includes(status);
+};
 const getObjectIdTimestampMs = (value?: string | null): number | null => {
   if (!value || typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -527,9 +534,9 @@ const MemberRoster: React.FC = () => {
     (campAcceptingApplications || authUser?.isCampLead === true || isEventsLeadForRoster)
   );
   const canCopyPaidMemberEmails = Boolean(canViewDuesData || isEventsLeadForRoster);
-  const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster && isLegacyPreSorCamp;
+  const canViewFullMembershipMetrics = canAccessRoster && isFullMembershipRoster;
   const canViewShiftsOnlyMetrics = canAccessRoster && hasShiftsOnlyRoster;
-  const canUseFilters = canAccessRoster && isFullMembershipRoster;
+  const canUseFilters = canAccessRoster && hasActiveRoster;
   const campInvitationUrl = useMemo(() => {
     if (!campPublicIdentifier) return '';
     const params = new URLSearchParams({ camp: campPublicIdentifier });
@@ -1124,6 +1131,47 @@ const MemberRoster: React.FC = () => {
     }
   }, [campId, limitDelegatedRoleVisibilityToSelf]);
 
+  const refreshShiftSignupCounts = useCallback(async () => {
+    if (!campId || !hasActiveRoster) return;
+    try {
+      const roster = await api.get(`/rosters/active?campId=${campId}`);
+      const countByIdentity = new Map<string, number>();
+      (roster?.members || []).forEach((entry: any) => {
+        const memberDoc = entry?.member && typeof entry.member === 'object' ? entry.member : null;
+        const userRef = memberDoc?.user;
+        const count = Number(memberDoc?.shiftSignupCount || 0);
+        [
+          memberDoc?._id,
+          typeof userRef === 'object' ? userRef?._id : userRef
+        ].forEach((identity) => {
+          const id = toIdString(identity);
+          if (id) countByIdentity.set(id, count);
+        });
+      });
+
+      setMembers((currentMembers) => currentMembers.map((member: any) => {
+        const memberDoc = member?.member && typeof member.member === 'object' ? member.member : null;
+        const userDoc = member?.user && typeof member.user === 'object' ? member.user : null;
+        const identityIds = [
+          member?._id,
+          memberDoc?._id,
+          typeof memberDoc?.user === 'object' ? memberDoc.user?._id : memberDoc?.user,
+          userDoc?._id
+        ].map(toIdString).filter(Boolean);
+        const matchedId = identityIds.find((id) => countByIdentity.has(id));
+        if (!matchedId) return member;
+        const shiftSignupCount = countByIdentity.get(matchedId) || 0;
+        return {
+          ...member,
+          shiftSignupCount,
+          member: memberDoc ? { ...memberDoc, shiftSignupCount } : member.member
+        };
+      }));
+    } catch (refreshError) {
+      console.error('Failed to refresh shift signup counts:', refreshError);
+    }
+  }, [campId, hasActiveRoster]);
+
   const fetchCustomFields = useCallback(async () => {
     if (!campId) return;
     try {
@@ -1151,6 +1199,19 @@ const MemberRoster: React.FC = () => {
       fetchMembers();
     }
   }, [campId, fetchMembers]);
+
+  useEffect(() => {
+    if (!campId || !hasActiveRoster) return;
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshShiftSignupCounts();
+    };
+    const refreshTimer = window.setInterval(refreshWhenVisible, 30000);
+    window.addEventListener('focus', refreshWhenVisible);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refreshWhenVisible);
+    };
+  }, [campId, hasActiveRoster, refreshShiftSignupCounts]);
 
   useEffect(() => {
     if (campId) {
@@ -2011,6 +2072,12 @@ const MemberRoster: React.FC = () => {
           case 'veteran':
             if (!user?.yearsBurned || user.yearsBurned === 0) return false;
             break;
+          case 'no-shifts':
+            if (!isCurrentShiftRosterMember(member) || getMemberShiftSignupCount(member) !== 0) return false;
+            break;
+          case 'has-shifts':
+            if (!isCurrentShiftRosterMember(member) || getMemberShiftSignupCount(member) === 0) return false;
+            break;
           default:
             if (filter.startsWith('status:')) {
               const targetStatus = filter.replace('status:', '');
@@ -2044,6 +2111,11 @@ const MemberRoster: React.FC = () => {
       return true;
     });
   }, [members, activeFilters, canViewDuesData]);
+
+  const summaryMembers = useMemo(
+    () => filteredMembers.filter(isCurrentShiftRosterMember),
+    [filteredMembers]
+  );
 
   // Early return for unauthorized access - STRICT enforcement
   if (!canAccessRoster) {
@@ -2258,17 +2330,17 @@ const MemberRoster: React.FC = () => {
         </div>
       )}
 
-      {/* Metrics Panel - Legacy pre-SOR full-membership camps */}
+      {/* Metrics panels */}
       {canViewFullMembershipMetrics && (
         <MetricsPanel
-          members={filteredMembers}
+          members={summaryMembers}
           showDuesPaid={canViewDuesData}
         />
       )}
 
       {canViewShiftsOnlyMetrics && (
         <ShiftsOnlyMetricsPanel
-          members={filteredMembers}
+          members={summaryMembers}
           showRoleMetrics={!limitDelegatedRoleVisibilityToSelf}
         />
       )}
@@ -2282,6 +2354,7 @@ const MemberRoster: React.FC = () => {
           availableTags={availableTags}
           customFieldOptions={customFieldFilterOptions}
           showDuesFilters={canViewDuesData}
+          showMemberDetailFilters={isFullMembershipRoster}
         />
       )}
 
