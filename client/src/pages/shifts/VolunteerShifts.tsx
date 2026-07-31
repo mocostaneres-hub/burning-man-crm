@@ -349,30 +349,6 @@ const VolunteerShifts: React.FC = () => {
     };
   }, []);
 
-  const renderReportMember = (member: ReportMember, compact = false) => {
-    const content = (
-      <>
-        <span className="font-medium">{member.personName}</span>
-        {!compact && member.email && (
-          <span className="text-xs text-gray-500">{member.email}</span>
-        )}
-      </>
-    );
-    const className = compact
-      ? 'inline-flex items-center rounded-full bg-orange-50 text-orange-700 border border-orange-100 text-xs px-2.5 py-1 font-semibold hover:bg-orange-100'
-      : 'inline-flex min-w-[12rem] flex-col rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-orange-700 hover:bg-orange-100';
-
-    return member.link ? (
-      <Link to={member.link} className={className}>
-        {content}
-      </Link>
-    ) : (
-      <span className={compact ? 'inline-flex items-center rounded-full bg-gray-100 text-gray-700 text-xs px-2 py-1 font-medium' : 'inline-flex flex-col text-gray-700'}>
-        {content}
-      </span>
-    );
-  };
-
   const shiftReportRows = useMemo<ShiftReportRow[]>(() => {
     return events.flatMap((event) => (
       event.shifts.map((shift) => {
@@ -1247,6 +1223,17 @@ const VolunteerShifts: React.FC = () => {
     if (!printWindow) return;
 
     const title = `Volunteer Shift Report - ${reportCampName}`;
+    const viewFileLabel = reportType === 'names'
+      ? 'member-shift-signups'
+      : reportType === 'events'
+        ? 'events'
+        : selectedDate
+          ? `day-${selectedDate}`
+          : 'all-days';
+    const printFileName = `${reportCampName}-volunteer-shifts-${viewFileLabel}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
     const escapeHtml = (value: any) => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -1375,7 +1362,7 @@ const VolunteerShifts: React.FC = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>${escapeHtml(title)}</title>
+          <title>${escapeHtml(printFileName)}</title>
           <style>
             @page { size: landscape; margin: 0.35in; }
             * { box-sizing: border-box; }
@@ -1993,44 +1980,68 @@ const VolunteerShifts: React.FC = () => {
                   ) : (
                     <div className="space-y-5">
                       {dayReportGroups.map((group) => (
-                        <div key={group.dateValue || group.date} className="rounded-lg border border-gray-200 bg-white shadow-sm">
-                          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                            <h3 className="text-lg font-semibold text-gray-900">{group.date}</h3>
-                            <p className="text-sm text-gray-500">{group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}</p>
+                        <section key={group.dateValue || group.date} className="overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm">
+                          <div className="border-b border-gray-300 bg-gray-100 px-4 py-3">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <h3 className="font-semibold text-gray-900">{group.date}</h3>
+                              <span className="text-xs font-medium text-gray-600">
+                                {new Set(group.shifts.map((row) => row.eventId)).size} event{new Set(group.shifts.map((row) => row.eventId)).size === 1 ? '' : 's'} · {group.shifts.length} shift{group.shifts.length === 1 ? '' : 's'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="divide-y divide-gray-100">
-                            {group.shifts.map((row) => {
-                              const stats = getShiftStats(row.shift);
-                              return (
-                                <div key={row.shift._id} className="p-4">
-                                  <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                    <div>
-                                      <h4 className="font-semibold text-gray-900">{row.shift.title}</h4>
-                                      <p className="text-sm text-gray-600">{row.shiftTime} · {row.eventName}</p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                      <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">{stats.current}/{stats.max} signed</span>
-                                      <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">{stats.remaining} open</span>
-                                    </div>
-                                  </div>
-                                  {row.signedUpMembers.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {row.signedUpMembers.map((member) => (
-                                        <React.Fragment key={`${row.shift._id}-${member.id}`}>
-                                          {renderReportMember(member)}
-                                        </React.Fragment>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="rounded-md border border-dashed border-gray-300 px-4 py-4 text-sm text-gray-500">
-                                      No sign-ups yet.
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                          <div className="overflow-x-auto">
+                            <table className="min-w-[980px] w-full border-collapse text-xs">
+                              <thead>
+                                <tr className="bg-gray-50 text-left uppercase tracking-wide text-gray-600">
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Time</th>
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Event</th>
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Shift</th>
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Person</th>
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Email</th>
+                                  <th className="border-b border-r border-gray-300 px-2 py-2">Shift information</th>
+                                  <th className="border-b border-gray-300 px-2 py-2 text-center">Staffing</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.shifts.map((row) => {
+                                  const stats = getShiftStats(row.shift);
+                                  const emails = row.signedUpMembers
+                                    .map((member) => member.email)
+                                    .filter(Boolean)
+                                    .join(', ');
+                                  return (
+                                    <tr key={row.shift._id} className="border-b border-gray-200 last:border-b-0 align-top">
+                                      <td className="whitespace-nowrap border-r border-gray-200 px-2 py-2">{row.shiftTime}</td>
+                                      <td className="border-r border-gray-200 px-2 py-2 font-medium text-gray-900">{row.eventName}</td>
+                                      <td className="border-r border-gray-200 px-2 py-2 font-semibold text-gray-900">{row.shift.title}</td>
+                                      <td className="border-r border-gray-200 px-2 py-2">
+                                        {row.signedUpMembers.length > 0 ? (
+                                          <div className="leading-5">
+                                            {row.signedUpMembers.map((member, memberIndex) => (
+                                              <span key={`${row.shift._id}-${member.id}-${memberIndex}`} className="mr-1.5 inline">
+                                                {member.link ? (
+                                                  <Link to={member.link} className="font-medium text-orange-700 hover:underline">{member.personName}</Link>
+                                                ) : member.personName}
+                                                {memberIndex < row.signedUpMembers.length - 1 ? ',' : ''}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : <span className="italic text-gray-500">No sign-ups</span>}
+                                      </td>
+                                      <td className="border-r border-gray-200 px-2 py-2 text-gray-600">{emails}</td>
+                                      <td className="border-r border-gray-200 px-2 py-2 text-gray-600">
+                                        {row.description !== row.shift.title ? row.description : ''}
+                                      </td>
+                                      <td className="whitespace-nowrap px-2 py-2 text-center text-gray-600">
+                                        <span className="font-semibold text-gray-900">{stats.current}/{stats.max}</span> signed<br />{stats.remaining} open
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
+                        </section>
                       ))}
                     </div>
                   )
