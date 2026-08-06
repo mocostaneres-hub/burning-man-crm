@@ -4,6 +4,7 @@ import { Bell, Edit, Trash2, CheckCircle, Mail, X, MessageCircle, Phone } from '
 import { Button } from '../ui';
 import apiService from '../../services/api';
 import { buildSmsLink, buildWhatsAppLink, formatPhoneForDisplay } from '../../utils/phone';
+import RosterCustomFieldCell, { RosterCustomFieldDefinition } from './RosterCustomFieldCell';
 
 /**
  * Shifts-Only Roster (SOR) table.
@@ -39,6 +40,7 @@ export interface SorMemberRow {
   user: any;
   isCampLead?: boolean;
   isEventsLead?: boolean;
+  customFieldValues?: Record<string, any>;
   rosterStatus?: string;
   responseGroupExtraCount?: number;
   responseGroupOtherNames?: string[];
@@ -54,6 +56,9 @@ interface Props {
   canOpenContactDetails?: boolean;
   showContactSummary?: boolean;
   canSendReminders?: boolean;
+  customFields?: RosterCustomFieldDefinition[];
+  canEditCustomFields?: boolean;
+  onCustomFieldSave?: (member: SorMemberRow, fieldKey: string, value: any) => Promise<void>;
   currentUserId?: string;
   limitRoleBadgesToCurrentUser?: boolean;
   onDelete: (member: SorMemberRow) => void;
@@ -373,6 +378,9 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
   canOpenContactDetails = true,
   showContactSummary = false,
   canSendReminders: canSendRemindersProp,
+  customFields = [],
+  canEditCustomFields = false,
+  onCustomFieldSave,
   currentUserId,
   limitRoleBadgesToCurrentUser = false,
   onDelete,
@@ -618,6 +626,14 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shifts</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
+              {customFields.map((field) => (
+                <th
+                  key={field.key}
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[10rem]"
+                >
+                  {field.label}
+                </th>
+              ))}
               {showActionsColumn && (
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Actions</th>
               )}
@@ -736,6 +752,18 @@ export const ShiftsOnlyRosterTable: React.FC<Props> = ({
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
+                  {customFields.map((field) => (
+                    <td key={field.key} className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
+                      <RosterCustomFieldCell
+                        field={field}
+                        value={(member.customFieldValues || member.member?.customFieldValues || {})[field.key]}
+                        canEdit={canEditCustomFields && Boolean(onCustomFieldSave)}
+                        onSave={(value) => onCustomFieldSave
+                          ? onCustomFieldSave(member, field.key, value)
+                          : Promise.resolve()}
+                      />
+                    </td>
+                  ))}
                   {showActionsColumn && (
                     <td className="px-4 py-4 text-sm whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2 flex-nowrap">

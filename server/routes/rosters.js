@@ -3,7 +3,14 @@ const mongoose = require('mongoose');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../database/databaseAdapter');
 const { normalizeEmail, isValidEmail } = require('../utils/emailUtils');
-const { getUserCampId, canManageCamp, canViewCampRoster, isEventsLeadForCamp, canManageMealPlan } = require('../utils/permissionHelpers');
+const {
+  getUserCampId,
+  canManageCamp,
+  canManageEventPlanning,
+  canViewCampRoster,
+  isEventsLeadForCamp,
+  canManageMealPlan
+} = require('../utils/permissionHelpers');
 const { recordActivity } = require('../services/activityLogger');
 const { getSorManualReminderSkipReason } = require('../utils/sorRosterReminderPolicy');
 const { autoAssignRosterUserToOpenShifts } = require('../services/shiftService');
@@ -29,6 +36,89 @@ const {
 } = require('../utils/duesStateMachine');
 
 const router = express.Router();
+
+const ROSTER_CUSTOM_FIELD_TYPES = new Set(['text', 'number', 'dropdown', 'checkbox']);
+const ROSTER_CUSTOM_FIELD_KEY_PATTERN = /^[A-Za-z0-9_]+$/;
+
+function sanitizeRosterCustomFields(fields) {
+  if (!Array.isArray(fields)) {
+    return { error: 'customFields must be an array' };
+  }
+  if (fields.length > 5) {
+    return { error: 'A maximum of 5 custom fields is allowed' };
+  }
+
+  const seenKeys = new Set();
+  const sanitized = [];
+
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index] || {};
+    const key = String(field.key || '').trim();
+    const label = String(field.label || '').trim();
+    const type = String(field.type || '').trim();
+
+    if (!key) return { error: `Field ${index + 1} requires a key` };
+    if (!ROSTER_CUSTOM_FIELD_KEY_PATTERN.test(key)) {
+      return { error: `Field key "${key}" may only contain letters, numbers, and underscores` };
+    }
+    if (seenKeys.has(key)) return { error: `Field key "${key}" must be unique` };
+    if (!label) return { error: `Field ${index + 1} requires a label` };
+    if (!ROSTER_CUSTOM_FIELD_TYPES.has(type)) {
+      return { error: `Field "${label}" has an invalid type` };
+    }
+
+    seenKeys.add(key);
+    sanitized.push({
+      key,
+      label,
+      type,
+      options: type === 'dropdown'
+        ? [...new Set((Array.isArray(field.options) ? field.options : [])
+            .map((option) => String(option).trim())
+            .filter(Boolean))]
+        : []
+    });
+  }
+
+  return { sanitized };
+}
+
+function sanitizeRosterCustomFieldValues(values, fieldSchema) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) {
+    return { error: 'customFieldValues must be an object' };
+  }
+
+  const sanitized = {};
+  for (const field of fieldSchema || []) {
+    if (!Object.prototype.hasOwnProperty.call(values, field.key)) continue;
+    const value = values[field.key];
+
+    if (value === undefined || value === null || value === '') {
+      sanitized[field.key] = field.type === 'checkbox' ? false : null;
+      continue;
+    }
+
+    if (field.type === 'number') {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) {
+        return { error: `Custom field "${field.label}" must be a number` };
+      }
+      sanitized[field.key] = numericValue;
+    } else if (field.type === 'checkbox') {
+      sanitized[field.key] = value === true || value === 'true' || value === 1 || value === '1';
+    } else if (field.type === 'dropdown') {
+      const stringValue = String(value);
+      if (!(field.options || []).includes(stringValue)) {
+        return { error: `Custom field "${field.label}" must use one of its configured options` };
+      }
+      sanitized[field.key] = stringValue;
+    } else {
+      sanitized[field.key] = String(value);
+    }
+  }
+
+  return { sanitized };
+}
 
 function getMemberEntryIndex(roster, memberId) {
   return roster.members.findIndex((entry) => {
@@ -671,6 +761,55 @@ router.get('/active', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get active roster error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// These static routes must stay above /:id routes so Express does not treat
+// "custom-fields" as a roster ID.
+// @route   GET /api/rosters/custom-fields
+// @desc    Get camp roster custom field schema
+// @access  Private (Camp admins, Camp Leads, and Events Leads)
+router.get('/custom-fields', authenticateToken, async (req, res) => {
+  try {
+    const campId = req.query.campId || await getUserCampId(req);
+    if (!campId) return res.status(400).json({ message: 'campId is required' });
+    const hasAccess = await canViewCampRoster(req, campId);
+    if (!hasAccess) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
+    const camp = await db.findCamp({ _id: campId });
+    if (!camp) return res.status(404).json({ message: 'Camp not found' });
+    return res.json({ customFields: camp.rosterCustomFields || [] });
+  } catch (error) {
+    console.error('Get roster custom fields error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/rosters/custom-fields
+// @desc    Update camp roster custom field schema (max 5)
+// @access  Private (Camp admins, Camp Leads, and Events Leads)
+router.put('/custom-fields', authenticateToken, async (req, res) => {
+  try {
+    const campId = req.body?.campId || req.query?.campId || await getUserCampId(req);
+    if (!campId) return res.status(400).json({ message: 'campId is required' });
+
+    const { sanitized, error } = sanitizeRosterCustomFields(req.body?.customFields);
+    if (error) return res.status(400).json({ message: error });
+
+    const hasAccess = await canManageEventPlanning(req, campId);
+    if (!hasAccess) return res.status(403).json({ message: 'Camp admin, Camp Lead, or Events Lead access required' });
+
+    const existingCamp = await db.findCamp({ _id: campId });
+    if (!existingCamp) return res.status(404).json({ message: 'Camp not found' });
+
+    const camp = await db.updateCampById(campId, { rosterCustomFields: sanitized });
+    await recordActivity('CAMP', campId, req.user._id, 'PROFILE_UPDATE', {
+      field: 'rosterCustomFields',
+      count: sanitized.length
+    });
+    return res.json({ message: 'Custom fields updated', customFields: camp?.rosterCustomFields || sanitized });
+  } catch (error) {
+    console.error('Update roster custom fields error:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -1796,8 +1935,8 @@ router.post('/:rosterId/members/bulk-remind', authenticateToken, async (req, res
 });
 
 // @route   PUT /api/rosters/:rosterId/members/:memberId
-// @desc    Edit a roster member (shifts-only fields)
-// @access  Private (Camp admins/leads only)
+// @desc    Edit a roster member (shifts-only fields or roster custom fields)
+// @access  Private (Camp admins/leads; Events Leads for custom fields only)
 router.put('/:rosterId/members/:memberId', authenticateToken, async (req, res) => {
   try {
     const { rosterId, memberId } = req.params;
@@ -1807,8 +1946,18 @@ router.put('/:rosterId/members/:memberId', authenticateToken, async (req, res) =
     const camp = await db.findCamp({ _id: roster.camp });
     if (!camp) return res.status(404).json({ message: 'Camp not found' });
 
-    const hasPermission = await canManageCamp(req, camp._id);
-    if (!hasPermission) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
+    const requestedFields = Object.keys(req.body || {});
+    const isCustomFieldsOnlyUpdate = requestedFields.length === 1 && requestedFields[0] === 'customFieldValues';
+    const hasPermission = isCustomFieldsOnlyUpdate
+      ? await canManageEventPlanning(req, camp._id)
+      : await canManageCamp(req, camp._id);
+    if (!hasPermission) {
+      return res.status(403).json({
+        message: isCustomFieldsOnlyUpdate
+          ? 'Camp admin, Camp Lead, or Events Lead access required'
+          : 'Camp admin or Camp Lead access required'
+      });
+    }
 
     const member = await db.findMember({ _id: memberId, camp: camp._id });
     if (!member) return res.status(404).json({ message: 'Member not found' });
@@ -1821,8 +1970,13 @@ router.put('/:rosterId/members/:memberId', authenticateToken, async (req, res) =
     if (req.body.tags !== undefined) updates.tags = Array.isArray(req.body.tags) ? req.body.tags : [];
     if (req.body.skills !== undefined) updates.skills = Array.isArray(req.body.skills) ? req.body.skills : [];
     if (req.body.status !== undefined) updates.status = req.body.status;
-    if (req.body.customFieldValues !== undefined && typeof req.body.customFieldValues === 'object') {
-      updates.customFieldValues = req.body.customFieldValues;
+    if (req.body.customFieldValues !== undefined) {
+      const { sanitized, error } = sanitizeRosterCustomFieldValues(
+        req.body.customFieldValues,
+        camp.rosterCustomFields || []
+      );
+      if (error) return res.status(400).json({ message: error });
+      updates.customFieldValues = sanitized;
     }
 
     const updated = await db.updateMember(memberId, updates);
@@ -3631,56 +3785,6 @@ router.post('/member/:memberId/revoke-events-lead', authenticateToken, async (re
       message: 'Server error revoking Events Lead role',
       error: error.message
     });
-  }
-});
-
-// @route   GET /api/rosters/custom-fields
-// @desc    Get camp roster custom field schema
-// @access  Private (Camp admins/leads)
-router.get('/custom-fields', authenticateToken, async (req, res) => {
-  try {
-    const campId = req.query.campId || await getUserCampId(req);
-    if (!campId) return res.status(400).json({ message: 'campId is required' });
-    const hasAccess = await canViewCampRoster(req, campId);
-    if (!hasAccess) return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
-    const camp = await db.findCamp({ _id: campId });
-    if (!camp) return res.status(404).json({ message: 'Camp not found' });
-    res.json({ customFields: camp.rosterCustomFields || [] });
-  } catch (error) {
-    console.error('Get roster custom fields error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   PUT /api/rosters/custom-fields
-// @desc    Update camp roster custom field schema (max 5)
-// @access  Private (Camp admins/leads)
-router.put('/custom-fields', authenticateToken, async (req, res) => {
-  try {
-    const campId = req.body?.campId || req.query?.campId || await getUserCampId(req);
-    const customFields = Array.isArray(req.body?.customFields) ? req.body.customFields : [];
-    if (!campId) return res.status(400).json({ message: 'campId is required' });
-    if (customFields.length > 5) return res.status(400).json({ message: 'A maximum of 5 custom fields is allowed' });
-    const hasAccess = await canManageCamp(req, campId);
-    if (!hasAccess) return res.status(403).json({ message: 'Camp owner or Camp Lead access required' });
-
-    const sanitized = customFields.map((field, index) => ({
-      key: String(field.key || `field_${index + 1}`).trim(),
-      label: String(field.label || '').trim(),
-      type: field.type,
-      options: Array.isArray(field.options) ? field.options.map((o) => String(o).trim()).filter(Boolean) : []
-    }));
-
-    const camp = await db.updateCampById(campId, { rosterCustomFields: sanitized });
-    await recordActivity('CAMP', campId, req.user._id, 'PROFILE_UPDATE', {
-      field: 'rosterCustomFields',
-      count: sanitized.length,
-      is_shifts_only: true
-    });
-    res.json({ message: 'Custom fields updated', customFields: camp?.rosterCustomFields || sanitized });
-  } catch (error) {
-    console.error('Update roster custom fields error:', error);
-    res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -1,15 +1,17 @@
 const express = require('express');
 const http = require('http');
 
+let mockRosterAuthenticatedUser = {
+  _id: 'events-user-1',
+  email: 'kayla.dodd@example.com',
+  accountType: 'personal',
+  isEventsLead: true,
+  eventsLeadCampId: 'camp-1'
+};
+
 jest.mock('../middleware/auth', () => ({
   authenticateToken: (req, res, next) => {
-    req.user = {
-      _id: 'events-user-1',
-      email: 'kayla.dodd@example.com',
-      accountType: 'personal',
-      isEventsLead: true,
-      eventsLeadCampId: 'camp-1'
-    };
+    req.user = { ...mockRosterAuthenticatedUser };
     next();
   }
 }));
@@ -20,12 +22,15 @@ jest.mock('../database/databaseAdapter', () => ({
   findMember: jest.fn(),
   findUser: jest.fn(),
   findCamp: jest.fn(),
+  updateCampById: jest.fn(),
+  updateMember: jest.fn(),
   updateCamp: jest.fn()
 }));
 
 jest.mock('../utils/permissionHelpers', () => ({
   getUserCampId: jest.fn(async () => null),
   canManageCamp: jest.fn(async () => false),
+  canManageEventPlanning: jest.fn(async () => true),
   canManageMealPlan: jest.fn(async () => true),
   canViewCampRoster: jest.fn(async () => true),
   isEventsLeadForCamp: jest.fn(async () => true)
@@ -55,7 +60,13 @@ const emailService = require('../services/emailService');
 const ShiftSignup = require('../models/ShiftSignup');
 const rosterRoutes = require('../routes/rosters');
 
-const camp = { _id: 'camp-1', name: 'Dust Camp' };
+const camp = {
+  _id: 'camp-1',
+  name: 'Dust Camp',
+  rosterCustomFields: [
+    { key: 'eap_number', label: 'EAP #', type: 'text', options: [] }
+  ]
+};
 const member = { _id: 'member-1', user: 'member-user-1', camp: camp._id };
 const memberUser = {
   _id: 'member-user-1',
@@ -149,11 +160,21 @@ describe('Events Lead meal-plan access', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    permissionHelpers.canManageEventPlanning.mockResolvedValue(true);
+    mockRosterAuthenticatedUser = {
+      _id: 'events-user-1',
+      email: 'kayla.dodd@example.com',
+      accountType: 'personal',
+      isEventsLead: true,
+      eventsLeadCampId: 'camp-1'
+    };
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     app = makeApp();
     db.findCamp.mockResolvedValue(camp);
+    db.updateCampById.mockImplementation(async (_campId, updates) => ({ ...camp, ...updates }));
+    db.updateMember.mockImplementation(async (_memberId, updates) => ({ ...member, ...updates }));
     db.findMember.mockResolvedValue(member);
     db.findUser.mockImplementation(async (query = {}) => {
       if (query._id === member.user) return memberUser;
@@ -165,6 +186,100 @@ describe('Events Lead meal-plan access', () => {
   afterEach(() => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  test('loads custom fields from the static route instead of treating custom-fields as a roster ID', async () => {
+    const response = await request(
+      app,
+      'GET',
+      '/api/rosters/custom-fields?campId=camp-1'
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.customFields).toEqual(camp.rosterCustomFields);
+    expect(db.findRoster).not.toHaveBeenCalled();
+  });
+
+  test('allows an Events Lead to configure up to five camp roster custom fields', async () => {
+    const customFields = [
+      { key: 'eap_number', label: 'EAP #', type: 'text', options: [] },
+      { key: 'crew', label: 'Crew', type: 'dropdown', options: ['Build', 'Strike'] }
+    ];
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/custom-fields',
+      { campId: camp._id, customFields }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.customFields).toEqual(customFields);
+    expect(permissionHelpers.canManageEventPlanning).toHaveBeenCalledWith(expect.anything(), camp._id);
+    expect(db.updateCampById).toHaveBeenCalledWith(camp._id, { rosterCustomFields: customFields });
+  });
+
+  test('allows a camp account to add a custom roster column', async () => {
+    mockRosterAuthenticatedUser = {
+      _id: 'camp-user-1',
+      email: 'camp@example.com',
+      accountType: 'camp',
+      campId: camp._id
+    };
+    permissionHelpers.canManageEventPlanning.mockImplementation(async (req, targetCampId) => (
+      req.user.accountType === 'camp' && req.user.campId === targetCampId
+    ));
+    const customFields = [
+      { key: 'qa_column', label: 'QA Column', type: 'text', options: [] }
+    ];
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/custom-fields',
+      { campId: camp._id, customFields }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Custom fields updated');
+    expect(response.body.customFields).toEqual(customFields);
+    expect(db.updateCampById).toHaveBeenCalledWith(camp._id, { rosterCustomFields: customFields });
+  });
+
+  test('rejects duplicate or malformed custom field schemas as a 400', async () => {
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/custom-fields',
+      {
+        campId: camp._id,
+        customFields: [
+          { key: 'duplicate', label: 'First', type: 'text' },
+          { key: 'duplicate', label: 'Second', type: 'text' }
+        ]
+      }
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/must be unique/i);
+    expect(db.updateCampById).not.toHaveBeenCalled();
+  });
+
+  test('allows an Events Lead to update only the configured custom values for a roster member', async () => {
+    db.findRoster.mockResolvedValue(makeRoster());
+
+    const response = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1',
+      { customFieldValues: { eap_number: 'EAP-42', ignored_key: 'not stored' } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(permissionHelpers.canManageEventPlanning).toHaveBeenCalledWith(expect.anything(), camp._id);
+    expect(db.updateMember).toHaveBeenCalledWith(member._id, {
+      customFieldValues: { eap_number: 'EAP-42' }
+    });
   });
 
   test('allows Events Lead to update meal-plan payment status', async () => {

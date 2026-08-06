@@ -12,6 +12,7 @@ import ShiftsOnlyMetricsPanel from '../../components/roster/ShiftsOnlyMetricsPan
 import RosterFilters, { FilterType } from '../../components/roster/RosterFilters';
 import { ImportRosterModal, InviteMembersModal } from '../../components/invites';
 import AddMemberModal from '../../components/roster/AddMemberModal';
+import RosterCustomFieldCell, { RosterCustomFieldDefinition } from '../../components/roster/RosterCustomFieldCell';
 import CityAutocomplete from '../../components/location/CityAutocomplete';
 import { useSkills } from '../../hooks/useSkills';
 import CampLeadBadge from '../../components/badges/CampLeadBadge';
@@ -87,6 +88,13 @@ const copyTextToClipboard = async (value: string) => {
   textarea.select();
   document.execCommand('copy');
   document.body.removeChild(textarea);
+};
+
+const getNextCustomFieldKey = (fields: RosterCustomFieldDefinition[]): string => {
+  const keys = new Set(fields.map((field) => field.key));
+  let index = 1;
+  while (keys.has(`field_${index}`)) index += 1;
+  return `field_${index}`;
 };
 
 /**
@@ -454,7 +462,7 @@ const MemberRoster: React.FC = () => {
     replaceExistingRole: false
   });
   const [campLeadLoading, setCampLeadLoading] = useState<string | null>(null);
-  const [customFields, setCustomFields] = useState<Array<{ key: string; label: string; type: 'text' | 'number' | 'dropdown' | 'checkbox'; options?: string[] }>>([]);
+  const [customFields, setCustomFields] = useState<RosterCustomFieldDefinition[]>([]);
   const [customFieldsModalOpen, setCustomFieldsModalOpen] = useState(false);
   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
   const [campAcceptingApplications, setCampAcceptingApplications] = useState(false);
@@ -495,6 +503,7 @@ const MemberRoster: React.FC = () => {
   
   const canAccessRoster = Boolean(isCampContext && (isFullRosterManager || isEventsLeadForRoster));
   const canEdit = Boolean(canAccessRoster && isFullRosterManager);
+  const canManageCustomFields = canAccessRoster;
   const canManageMealPlan = Boolean(canAccessRoster && (canEdit || isEventsLeadForRoster));
   const canEditFoodPreferences = canManageMealPlan;
   const canViewDuesData = canEdit;
@@ -1182,6 +1191,38 @@ const MemberRoster: React.FC = () => {
       setCustomFields([]);
     }
   }, [campId]);
+
+  const handleSaveCustomFieldValue = useCallback(async (
+    member: RosterMember,
+    fieldKey: string,
+    value: any
+  ) => {
+    if (!rosterId || !canManageCustomFields) {
+      throw new Error('You do not have permission to edit roster custom fields');
+    }
+
+    const memberId = toIdString(member._id);
+    const nextValues = {
+      ...(member.customFieldValues || {}),
+      [fieldKey]: value
+    };
+
+    const response = await api.updateRosterMember(rosterId, memberId, {
+      customFieldValues: nextValues
+    });
+    const savedValues = response?.member?.customFieldValues || nextValues;
+
+    setMembers((currentMembers) => currentMembers.map((currentMember) => {
+      if (toIdString(currentMember._id) !== memberId) return currentMember;
+      return {
+        ...currentMember,
+        customFieldValues: savedValues,
+        member: currentMember.member && typeof currentMember.member === 'object'
+          ? { ...currentMember.member, customFieldValues: savedValues }
+          : currentMember.member
+      };
+    }));
+  }, [canManageCustomFields, rosterId]);
 
   useEffect(() => {
     // Fetch camp data for:
@@ -2276,7 +2317,7 @@ const MemberRoster: React.FC = () => {
             </Button>
           )}
 
-          {canEdit && hasActiveRoster && activeRosterType !== 'none' && (
+          {canManageCustomFields && hasActiveRoster && activeRosterType !== 'none' && (
             <Button
               variant="outline"
               className="flex items-center gap-2"
@@ -2398,6 +2439,11 @@ const MemberRoster: React.FC = () => {
             canOpenContactDetails={canUseContactDetails}
             showContactSummary={canViewRosterContactSummary}
             canSendReminders={canEdit}
+            customFields={customFields}
+            canEditCustomFields={canManageCustomFields}
+            onCustomFieldSave={async (member, fieldKey, value) => {
+              await handleSaveCustomFieldValue(member as any, fieldKey, value);
+            }}
             currentUserId={authUserId}
             limitRoleBadgesToCurrentUser={limitDelegatedRoleVisibilityToSelf}
             onDelete={(m) => handleDeleteMember(m as any)}
@@ -2447,14 +2493,18 @@ const MemberRoster: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   🛠️ Skills
                 </th>
-                {canAssignDelegatedRoles && (
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Camp Lead
+                {customFields.map((field) => (
+                  <th
+                    key={field.key}
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[10rem]"
+                  >
+                    {field.label}
                   </th>
-                )}
+                ))}
                 {canAssignDelegatedRoles && (
                   <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Events Lead
+                    Special Role
                   </th>
                 )}
                 {canViewRosterActions && (
@@ -2881,75 +2931,53 @@ const MemberRoster: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    {/* Camp Lead Role */}
+                    {customFields.map((field) => (
+                      <td key={field.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <RosterCustomFieldCell
+                          field={field}
+                          value={(member.customFieldValues || {})[field.key]}
+                          canEdit={canManageCustomFields}
+                          onSave={(value) => handleSaveCustomFieldValue(member, field.key, value)}
+                        />
+                      </td>
+                    ))}
+                    {/* A member can hold at most one delegated camp role. */}
                     {canAssignDelegatedRoles && (
                       <td className="px-6 py-4 whitespace-nowrap">
                         {canEditMemberDetails ? (
                           <div className="flex items-center justify-center">
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={member.isCampLead || false}
-                                onChange={(e) => {
-                                  e.preventDefault();
-                                  handleCampLeadToggle(member, member.isCampLead || false);
-                                }}
-                                disabled={
-                                  campLeadLoading === member._id.toString() ||
-                                  member.rosterStatus !== 'approved'
+                            <select
+                              value={member.isCampLead ? 'campLead' : member.isEventsLead ? 'eventsLead' : 'none'}
+                              onChange={(event) => {
+                                const nextRole = event.target.value;
+                                if (nextRole === 'campLead' && !member.isCampLead) {
+                                  handleCampLeadToggle(member, false, 'campLead');
+                                } else if (nextRole === 'eventsLead' && !member.isEventsLead) {
+                                  handleEventsLeadToggle(member, false);
+                                } else if (nextRole === 'none' && member.isCampLead) {
+                                  handleCampLeadToggle(member, true, 'campLead');
+                                } else if (nextRole === 'none' && member.isEventsLead) {
+                                  handleEventsLeadToggle(member, true);
                                 }
-                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded disabled:opacity-50"
-                                title={
-                                  member.rosterStatus !== 'approved'
-                                    ? 'Member must be approved to become Camp Lead'
-                                    : 'Grant or revoke Camp Lead role'
-                                }
-                              />
-                              <span className="ml-2 text-xs text-gray-600">Camp Lead</span>
-                            </label>
+                              }}
+                              disabled={
+                                campLeadLoading === member._id.toString() ||
+                                member.rosterStatus !== 'approved'
+                              }
+                              className="min-w-[9rem] rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                              title={member.rosterStatus !== 'approved' ? 'Member must be approved to receive a special role' : 'Assign a special role'}
+                            >
+                              <option value="none">None</option>
+                              <option value="campLead">Camp Lead</option>
+                              <option value="eventsLead">Events Lead</option>
+                            </select>
                           </div>
                         ) : (
                           <div className="text-center">
                             {member.isCampLead ? (
-                              <span className="text-xs text-orange-600 font-medium">✓ Lead</span>
-                            ) : (
-                              <span className="text-xs text-gray-400">—</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    )}
-                    {/* Events Lead Role */}
-                    {canAssignDelegatedRoles && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {canEditMemberDetails ? (
-                          <div className="flex items-center justify-center">
-                            <label className="flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={member.isEventsLead || false}
-                                onChange={(e) => {
-                                  e.preventDefault();
-                                  handleEventsLeadToggle(member, member.isEventsLead || false);
-                                }}
-                                disabled={
-                                  campLeadLoading === member._id.toString() ||
-                                  member.rosterStatus !== 'approved'
-                                }
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
-                                title={
-                                  member.rosterStatus !== 'approved'
-                                    ? 'Member must be approved to become Events Lead'
-                                    : 'Grant or revoke Events Lead role'
-                                }
-                              />
-                              <span className="ml-2 text-xs text-gray-600">Events Lead</span>
-                            </label>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            {member.isEventsLead ? (
-                              <span className="text-xs text-blue-600 font-medium">✓ Events</span>
+                              <span className="text-xs text-orange-600 font-medium">✓ Camp Lead</span>
+                            ) : member.isEventsLead ? (
+                              <span className="text-xs text-blue-600 font-medium">✓ Events Lead</span>
                             ) : (
                               <span className="text-xs text-gray-400">—</span>
                             )}
@@ -4199,7 +4227,7 @@ const MemberRoster: React.FC = () => {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Define up to 5 custom fields for this roster. Field keys should be unique and use letters, numbers, or underscores.
+            Define up to 5 custom columns for this camp's roster. Field keys must be unique and use letters, numbers, or underscores.
           </p>
           {customFields.length > 0 && (
             <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-gray-500">
@@ -4274,20 +4302,22 @@ const MemberRoster: React.FC = () => {
             <Button
               variant="outline"
               disabled={customFields.length >= 5}
-              onClick={() =>
-                setCustomFields((prev) => [
+              onClick={() => setCustomFields((prev) => {
+                const key = getNextCustomFieldKey(prev);
+                const fieldNumber = Number(key.replace('field_', '')) || prev.length + 1;
+                return [
                   ...prev,
-                  { key: `field_${prev.length + 1}`, label: `Field ${prev.length + 1}`, type: 'text', options: [] }
-                ] as any)
-              }
+                  { key, label: `Field ${fieldNumber}`, type: 'text', options: [] }
+                ];
+              })}
             >
               Add Field
             </Button>
             <Button
               variant="primary"
-              disabled={customFieldsSaving}
+              disabled={customFieldsSaving || !canManageCustomFields}
               onClick={async () => {
-                if (!campId) return;
+                if (!campId || !canManageCustomFields) return;
                 try {
                   setCustomFieldsSaving(true);
                   await api.updateRosterCustomFields(campId, customFields as any);
