@@ -108,6 +108,27 @@ describe('permissionHelpers camp-lead role fallback', () => {
     expect(result).toBe(true);
   });
 
+  test('camp lead can read and write event-planning roster fields', async () => {
+    Member.find.mockResolvedValue([
+      {
+        _id: 'member-1',
+        camp: 'camp-1',
+        role: 'camp-lead',
+        status: 'approved'
+      }
+    ]);
+
+    const req = {
+      user: {
+        _id: 'user-1',
+        accountType: 'personal'
+      }
+    };
+
+    await expect(canManageEventPlanning(req, 'camp-1')).resolves.toBe(true);
+    await expect(canViewCampRoster(req, 'camp-1')).resolves.toBe(true);
+  });
+
   test('camp account can manage event-planning resources for its own camp', async () => {
     const req = {
       user: {

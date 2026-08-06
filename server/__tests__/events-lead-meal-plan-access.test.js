@@ -161,6 +161,7 @@ describe('Events Lead meal-plan access', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     permissionHelpers.canManageEventPlanning.mockResolvedValue(true);
+    permissionHelpers.canViewCampRoster.mockResolvedValue(true);
     mockRosterAuthenticatedUser = {
       _id: 'events-user-1',
       email: 'kayla.dodd@example.com',
@@ -279,6 +280,42 @@ describe('Events Lead meal-plan access', () => {
     expect(permissionHelpers.canManageEventPlanning).toHaveBeenCalledWith(expect.anything(), camp._id);
     expect(db.updateMember).toHaveBeenCalledWith(member._id, {
       customFieldValues: { eap_number: 'EAP-42' }
+    });
+  });
+
+  test('allows a Camp Lead to read the schema and update custom values', async () => {
+    mockRosterAuthenticatedUser = {
+      _id: 'camp-lead-user-1',
+      email: 'camp-lead@example.com',
+      accountType: 'personal',
+      isCampLead: true,
+      campLeadCampId: camp._id
+    };
+    permissionHelpers.canViewCampRoster.mockImplementation(async (req, targetCampId) => (
+      req.user.isCampLead === true && req.user.campLeadCampId === targetCampId
+    ));
+    permissionHelpers.canManageEventPlanning.mockImplementation(async (req, targetCampId) => (
+      req.user.isCampLead === true && req.user.campLeadCampId === targetCampId
+    ));
+    db.findRoster.mockResolvedValue(makeRoster());
+
+    const readResponse = await request(
+      app,
+      'GET',
+      `/api/rosters/custom-fields?campId=${camp._id}`
+    );
+    const writeResponse = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1',
+      { customFieldValues: { eap_number: 'EAP-84' } }
+    );
+
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.customFields).toEqual(camp.rosterCustomFields);
+    expect(writeResponse.status).toBe(200);
+    expect(db.updateMember).toHaveBeenCalledWith(member._id, {
+      customFieldValues: { eap_number: 'EAP-84' }
     });
   });
 
