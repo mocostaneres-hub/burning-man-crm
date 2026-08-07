@@ -269,22 +269,26 @@ const CampSurveys: React.FC = () => {
         const cid = resolvedCampId || campId;
         if (!cid) return;
         setLoading(true);
-        const [surveyRes, memberRes] = await Promise.all([
+        const [surveyRes, rosterRes] = await Promise.all([
           api.getCampSurveys(cid),
-          api.getCampMembers(cid)
+          api.getActiveRoster(cid)
         ]);
         setSurveys(surveyRes.surveys || []);
-        const users = (memberRes.members || [])
-          .map((member: any) => {
-            const userDoc = member.user;
+        const users = (rosterRes?.members || [])
+          .filter((entry: any) => String(entry?.status || '').toLowerCase() === 'approved')
+          .map((entry: any) => {
+            const member = entry?.member;
+            const userDoc = member?.user;
             if (!userDoc || !userDoc._id) return null;
             const name = `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || userDoc.email || 'Member';
             return {
               userId: userDoc._id,
               name,
               isLead:
-                member.isCampLead === true ||
-                ['camp-lead', 'project-lead', 'lead', 'admin'].includes(String(member.role || '').toLowerCase())
+                entry.isCampLead === true ||
+                ['camp-lead', 'project-lead', 'lead', 'admin'].includes(
+                  String(entry.role || member?.role || '').toLowerCase()
+                )
             };
           })
           .filter(Boolean);
@@ -793,10 +797,7 @@ const CampSurveys: React.FC = () => {
 
   const getAssignedUserIdsForSurvey = (survey: Survey) =>
     new Set(
-      [
-        ...(survey.completionStats?.assignedUserIds || []),
-        ...(survey.targeting?.snapshotAssignmentUserIds || [])
-      ].map((userId) => String(userId))
+      (survey.completionStats?.assignedUserIds || []).map((userId) => String(userId))
     );
 
   const getSelectableUsersForSurvey = (survey: Survey): RosterUser[] => {

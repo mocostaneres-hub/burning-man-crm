@@ -391,6 +391,13 @@ class ApiService {
     return response.data;
   }
 
+  async getActiveRoster(campId: string): Promise<any> {
+    const response: AxiosResponse<any> = await this.api.get('/rosters/active', {
+      params: { campId }
+    });
+    return response.data;
+  }
+
   async getCampSignupForm(campId: string): Promise<{ campName: string; signupForm: any }> {
     const response: AxiosResponse<{ campName: string; signupForm: any }> = await this.api.get(`/camps/${campId}/signup-form`);
     return response.data;
@@ -874,6 +881,13 @@ class ApiService {
     assignedCount: number;
     skippedExistingCount?: number;
     totalAssignedCount?: number;
+    notificationCreatedCount?: number;
+    emailDelivery?: {
+      attemptedCount: number;
+      sentCount: number;
+      failedCount: number;
+      skippedCount: number;
+    };
     assignmentMode: string;
   }> {
     const response = await this.api.post(`/surveys/${surveyId}/send`, payload || {});

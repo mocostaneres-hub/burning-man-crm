@@ -246,6 +246,35 @@ const DEFAULT_TEMPLATE_DATA = {
       'shift_time',
       'confirmation_link'
     ]
+  },
+  [EMAIL_TEMPLATE_KEYS.SURVEY_ASSIGNMENT]: {
+    key: EMAIL_TEMPLATE_KEYS.SURVEY_ASSIGNMENT,
+    name: 'Survey Assignment',
+    description: 'Sent when a camp survey is assigned to a roster member.',
+    subject: '{{camp_name}} sent you a survey: {{survey_title}}',
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <div style="background: linear-gradient(135deg, #FF6B35, #F7931E); padding: 24px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">A Camp Survey Is Waiting</h1>
+        </div>
+        <div style="padding: 24px; background: #f9f9f9; border-radius: 0 0 10px 10px;">
+          <p style="margin-top: 0;">Hi {{user_name}},</p>
+          <p><strong>{{camp_name}}</strong> sent you a survey to complete.</p>
+          <div style="background: white; border: 1px solid #eee; border-left: 4px solid #FF6B35; border-radius: 8px; padding: 18px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Survey:</strong> {{survey_title}}</p>
+          </div>
+          <div style="margin: 24px 0; text-align: center;">
+            <a href="{{survey_link}}" style="background-color: #FF6B35; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+              Respond to Survey
+            </a>
+          </div>
+          <p style="color: #666; font-size: 14px; margin-bottom: 0;">You can also find this survey in My Tasks after signing in.</p>
+        </div>
+      </div>
+    `,
+    textContent:
+      'Hi {{user_name}},\n\n{{camp_name}} sent you a survey to complete.\n\nSurvey: {{survey_title}}\n\nRespond here: {{survey_link}}\n\nYou can also find this survey in My Tasks after signing in.',
+    variables: ['camp_name', 'user_name', 'survey_title', 'survey_link']
   }
 };
 

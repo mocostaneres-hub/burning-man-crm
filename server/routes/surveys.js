@@ -7,6 +7,7 @@ const {
   canManageEventPlanning
 } = require('../utils/permissionHelpers');
 const { createBulkNotifications } = require('../services/notificationService');
+const { sendSurveyAssignmentEmails } = require('../services/surveyAssignmentEmailService');
 const { NOTIFICATION_TYPES } = require('../constants/notificationTypes');
 const { recordActivity } = require('../services/activityLogger');
 const { resolveAssignmentCandidates } = require('../services/shiftService');
@@ -1514,10 +1515,11 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       selectedUserIds,
       manualAddIds,
       manualRemoveIds,
-      snapshotAssignmentUserIds: dedupeIdList([
-        ...(survey.targeting?.snapshotAssignmentUserIds || []),
-        ...candidates
-      ])
+      // This field mirrors real SurveyAssignment rows. Do not add candidates
+      // before those rows exist or the manager UI can show phantom recipients.
+      snapshotAssignmentUserIds: dedupeIdList(
+        survey.targeting?.snapshotAssignmentUserIds || []
+      )
     };
     await survey.save();
 
@@ -1558,16 +1560,35 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
     };
     await survey.save();
 
+    let notificationCreatedCount = 0;
+    let emailDelivery = {
+      attemptedCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+      skippedCount: 0
+    };
     if (insertedUserIds.length > 0) {
-      await createBulkNotifications(insertedUserIds, {
-        actor: req.user._id,
-        campId: survey.campId,
-        type: NOTIFICATION_TYPES.SURVEY_ASSIGNED,
-        title: `New survey: ${survey.title}`,
-        message: 'A camp survey is waiting for your response.',
-        link: `/surveys/${survey._id}`,
-        metadata: { surveyId: survey._id }
-      });
+      const [notificationResult, assignmentEmailDelivery] = await Promise.all([
+        createBulkNotifications(insertedUserIds, {
+          actor: req.user._id,
+          campId: survey.campId,
+          type: NOTIFICATION_TYPES.SURVEY_ASSIGNED,
+          title: `New survey: ${survey.title}`,
+          message: 'A camp survey is waiting for your response.',
+          link: `/surveys/${survey._id}`,
+          metadata: { surveyId: survey._id }
+        }).catch((notificationError) => {
+          console.error('Survey assignment notification error:', notificationError);
+          return [];
+        }),
+        sendSurveyAssignmentEmails({
+          userIds: insertedUserIds,
+          campId: survey.campId,
+          survey
+        })
+      ]);
+      notificationCreatedCount = notificationResult.length;
+      emailDelivery = assignmentEmailDelivery;
     }
 
     await recordActivity('CAMP', survey.campId, req.user._id, wasDraft ? 'SURVEY_SENT' : 'SURVEY_RECIPIENTS_ADDED', {
@@ -1575,7 +1596,9 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       assignmentMode,
       assignedCount: insertedUserIds.length,
       skippedExistingCount: candidates.length - insertedUserIds.length,
-      totalAssignedCount: allAssignedUserIds.length
+      totalAssignedCount: allAssignedUserIds.length,
+      notificationCreatedCount,
+      emailDelivery
     });
 
     res.json({
@@ -1584,6 +1607,8 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       assignedCount: insertedUserIds.length,
       skippedExistingCount: candidates.length - insertedUserIds.length,
       totalAssignedCount: allAssignedUserIds.length,
+      notificationCreatedCount,
+      emailDelivery,
       assignmentMode
     });
   } catch (error) {
