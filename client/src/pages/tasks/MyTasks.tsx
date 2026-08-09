@@ -316,12 +316,6 @@ const MyTasks: React.FC = () => {
     return shift.memberIds && shift.memberIds.length >= shift.maxSignUps;
   };
 
-  const getRemainingSpots = (shift: any) => {
-    const signedUp = shift.memberIds?.length || 0;
-    const max = shift.maxSignUps || 0;
-    return Math.max(max - signedUp, 0);
-  };
-
   const columns: TableColumn<Task>[] = [
     {
       key: 'title',
@@ -705,15 +699,17 @@ const MyTasks: React.FC = () => {
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <Users size={14} className="text-gray-500" />
-                                    <span>{currentSignUps}/{maxSignUps} signed up</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-gray-600">
-                                    <span>
-                                      {remainingSpots === 0
-                                        ? 'Full'
-                                        : `${remainingSpots} spot${remainingSpots === 1 ? '' : 's'} remaining`}
+                                    <span className={isFull ? 'font-medium text-green-600' : undefined}>
+                                      {isFull ? 'Full' : `${currentSignUps}/${maxSignUps} signed up`}
                                     </span>
                                   </div>
+                                  {!isFull && (
+                                    <div className="flex items-center gap-1 text-gray-600">
+                                      <span>
+                                        {remainingSpots} spot{remainingSpots === 1 ? '' : 's'} remaining
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               
