@@ -577,9 +577,20 @@ router.post('/events', authenticateToken, async (req, res) => {
 router.post('/events/invite-entire-roster', authenticateToken, async (req, res) => {
   try {
     const previewOnly = req.body?.previewOnly === true;
+    const requestedMemberIds = Array.isArray(req.body?.memberIds)
+      ? [...new Set(req.body.memberIds.map((id) => id?.toString()).filter(Boolean))]
+      : null;
+    const requestedMemberIdSet = requestedMemberIds ? new Set(requestedMemberIds) : null;
+    const onlyWithoutShifts = req.body?.onlyWithoutShifts === true;
     const skipRecentDays = Math.max(parseInt(req.body?.skipRecentDays, 10) || 0, 0);
     const scheduleAtRaw = req.body?.scheduleAt;
     const scheduleAt = scheduleAtRaw ? new Date(scheduleAtRaw) : null;
+    if (requestedMemberIds && requestedMemberIds.length === 0) {
+      return res.status(400).json({ message: 'Select at least one roster member to remind' });
+    }
+    if (requestedMemberIds && requestedMemberIds.length > 500) {
+      return res.status(400).json({ message: 'Cannot remind more than 500 roster members at once' });
+    }
     // Resolve camp context (camp accounts/admins vs Camp Leads)
     let campId;
     if (req.user.accountType === 'camp' || (req.user.accountType === 'admin' && req.user.campId)) {
@@ -608,8 +619,13 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
     // Find all events and shifts for this camp
     const events = await db.findEvents({ campId });
     const availableShifts = [];
+    const signedUpIdentityIds = new Set();
     for (const event of events || []) {
       for (const shift of event.shifts || []) {
+        for (const memberId of shift.memberIds || []) {
+          const normalizedId = memberId?._id?.toString?.() || memberId?.toString?.();
+          if (normalizedId) signedUpIdentityIds.add(normalizedId);
+        }
         if (
           shift.assignmentMode === 'SELECTED_USERS' ||
           hasExclusiveDirectAssignmentLock(shift)
@@ -634,18 +650,20 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
 
     // Idempotency safeguard: avoid spamming if a bulk invite was recently sent
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const recentBulk = await NotificationModel.exists({
-      campId,
-      type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
-      'metadata.scope': 'all_shifts',
-      createdAt: { $gte: tenMinutesAgo }
-    });
-    if (recentBulk) {
-      return res.status(200).json({
-        message: 'A bulk invite was already sent recently. Skipping duplicate sends.',
-        invitedCount: 0,
-        availableShiftCount: availableShifts.length
+    if (!requestedMemberIds) {
+      const recentBulk = await NotificationModel.exists({
+        campId,
+        type: NOTIFICATION_TYPES.SHIFT_BULK_INVITE_ALL,
+        'metadata.scope': 'all_shifts',
+        createdAt: { $gte: tenMinutesAgo }
       });
+      if (recentBulk) {
+        return res.status(200).json({
+          message: 'A bulk invite was already sent recently. Skipping duplicate sends.',
+          invitedCount: 0,
+          availableShiftCount: availableShifts.length
+        });
+      }
     }
 
     // Collect recipients from active roster (supports shifts-only members without accounts).
@@ -659,12 +677,25 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
         : await db.findMember({ _id: memberEntry.member });
       if (!member) continue;
 
+      const rosterMemberId = member._id?.toString?.();
+      if (requestedMemberIdSet && (!rosterMemberId || !requestedMemberIdSet.has(rosterMemberId))) {
+        continue;
+      }
+
       const memberStatus = (member.status || memberEntry.status || '').toLowerCase();
       if (!['approved', 'active', 'roster_only', 'invited'].includes(memberStatus)) continue;
 
       const userId = typeof member.user === 'object' ? member.user?._id : member.user;
+      const normalizedUserId = userId?.toString?.();
+      if (
+        onlyWithoutShifts &&
+        ((rosterMemberId && signedUpIdentityIds.has(rosterMemberId)) ||
+          (normalizedUserId && signedUpIdentityIds.has(normalizedUserId)))
+      ) {
+        continue;
+      }
       if (userId) {
-        rosterUserIds.add(userId.toString());
+        rosterUserIds.add(normalizedUserId);
       } else if (member.email) {
         rosterOnlyRecipients.push({
           memberId: member._id?.toString(),
@@ -819,7 +850,9 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
         message: 'Your camp has volunteer shifts available. Visit My Shifts to browse and sign up.',
         link: '/my-shifts',
         metadata: {
-          scope: 'all_shifts',
+          scope: requestedMemberIds
+            ? (onlyWithoutShifts ? 'selected_without_shifts' : 'selected_members')
+            : 'all_shifts',
           campId,
           availableShiftCount: availableShifts.length
         }
@@ -843,7 +876,9 @@ router.post('/events/invite-entire-roster', authenticateToken, async (req, res) 
     await executeBulkInvite();
 
     return res.json({
-      message: 'Bulk invite sent to roster members.',
+      message: requestedMemberIds
+        ? 'Shift reminder sent to selected roster members.'
+        : 'Bulk invite sent to roster members.',
       invitedCount: rosterUserIds.size + rosterOnlyRecipients.length,
       availableShiftCount: availableShifts.length
     });

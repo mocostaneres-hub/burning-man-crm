@@ -186,6 +186,10 @@ const VolunteerShifts: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [showAllCoverageGaps, setShowAllCoverageGaps] = useState(false);
   const [showCoveredShifts, setShowCoveredShifts] = useState(false);
+  const [showNoShiftMembersModal, setShowNoShiftMembersModal] = useState(false);
+  const [noShiftMemberSearch, setNoShiftMemberSearch] = useState('');
+  const [selectedNoShiftMemberIds, setSelectedNoShiftMemberIds] = useState<string[]>([]);
+  const [noShiftReminderLoading, setNoShiftReminderLoading] = useState(false);
   const [bulkInviteLoading, setBulkInviteLoading] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [bulkShiftSelection, setBulkShiftSelection] = useState<number[]>([]);
@@ -790,9 +794,40 @@ const VolunteerShifts: React.FC = () => {
       understaffed,
       covered,
       openSpots,
+      totalCapacity,
       coveragePercent: totalCapacity > 0 ? Math.round((filledSpots / totalCapacity) * 100) : 0
     };
   }, [events]);
+
+  const membersWithoutShifts = useMemo(() => {
+    const signedUpIdentityIds = new Set(
+      events.flatMap((event) => (
+        (event.shifts || []).flatMap((shift) => (
+          (shift.memberIds || []).map((memberId) => memberId?.toString?.() || String(memberId || ''))
+        ))
+      )).filter(Boolean)
+    );
+
+    return rosterMembers
+      .filter((member) => (
+        ![member._id, member.memberId, member.userId]
+          .filter(Boolean)
+          .some((identityId) => signedUpIdentityIds.has(identityId!.toString()))
+      ))
+      .sort((a, b) => getMemberDisplayName(a).localeCompare(getMemberDisplayName(b)));
+  }, [events, getMemberDisplayName, rosterMembers]);
+
+  const filteredMembersWithoutShifts = useMemo(() => {
+    const query = noShiftMemberSearch.trim().toLowerCase();
+    if (!query) return membersWithoutShifts;
+    return membersWithoutShifts.filter((member) => (
+      [member.firstName, member.lastName, member.email]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    ));
+  }, [membersWithoutShifts, noShiftMemberSearch]);
 
   const handleCreateEvent = async () => {
     if (eventSaving) return;
@@ -1503,6 +1538,53 @@ const VolunteerShifts: React.FC = () => {
     }
   }, [showBulkInviteModal, loadBulkInvitePreview]);
 
+  const openNoShiftMembersModal = () => {
+    setNoShiftMemberSearch('');
+    setSelectedNoShiftMemberIds([]);
+    setShowNoShiftMembersModal(true);
+  };
+
+  const toggleNoShiftMemberSelection = (memberId: string) => {
+    setSelectedNoShiftMemberIds((currentIds) => (
+      currentIds.includes(memberId)
+        ? currentIds.filter((id) => id !== memberId)
+        : [...currentIds, memberId]
+    ));
+  };
+
+  const toggleAllNoShiftMembers = () => {
+    const visibleMemberIds = filteredMembersWithoutShifts
+      .filter((member) => Boolean(member.email))
+      .map((member) => member.memberId);
+    const allVisibleSelected = visibleMemberIds.length > 0
+      && visibleMemberIds.every((memberId) => selectedNoShiftMemberIds.includes(memberId));
+    setSelectedNoShiftMemberIds((currentIds) => (
+      allVisibleSelected
+        ? currentIds.filter((id) => !visibleMemberIds.includes(id))
+        : [...new Set([...currentIds, ...visibleMemberIds])]
+    ));
+  };
+
+  const sendNoShiftReminders = async () => {
+    if (selectedNoShiftMemberIds.length === 0) return;
+    try {
+      setNoShiftReminderLoading(true);
+      const response = await api.inviteEntireRosterToAllShifts(currentCampId || undefined, {
+        memberIds: selectedNoShiftMemberIds,
+        onlyWithoutShifts: true,
+        skipRecentDays: 1
+      });
+      alert(`${response.message} ${response.invitedCount} reminder${response.invitedCount === 1 ? '' : 's'} sent.`);
+      setShowNoShiftMembersModal(false);
+      setSelectedNoShiftMemberIds([]);
+    } catch (error: any) {
+      console.error('No-shift reminder error:', error);
+      alert(error?.response?.data?.message || 'Failed to send shift reminders.');
+    } finally {
+      setNoShiftReminderLoading(false);
+    }
+  };
+
 
   if (!canAccessShifts) {
     return (
@@ -1641,7 +1723,11 @@ const VolunteerShifts: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <p className="text-xs font-medium text-gray-600">Total spots</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">{coverageSnapshot.totalCapacity}</p>
+                      </div>
                       <div className={`rounded-lg border p-3 ${
                         coverageSnapshot.openSpots > 0
                           ? 'border-red-200 bg-red-50'
@@ -1664,6 +1750,26 @@ const VolunteerShifts: React.FC = () => {
                         <p className="text-xs font-medium text-gray-600">Overall coverage</p>
                         <p className="mt-1 text-2xl font-bold text-gray-900">{coverageSnapshot.coveragePercent}%</p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={openNoShiftMembersModal}
+                        disabled={membersWithoutShifts.length === 0}
+                        className={`rounded-lg border p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-custom-primary disabled:cursor-default ${
+                          membersWithoutShifts.length > 0
+                            ? 'border-blue-200 bg-blue-50 hover:border-blue-300 hover:bg-blue-100'
+                            : 'border-green-200 bg-green-50'
+                        }`}
+                      >
+                        <p className="text-xs font-medium text-gray-600">People without shifts</p>
+                        <div className="mt-1 flex items-end justify-between gap-2">
+                          <p className={`text-2xl font-bold ${membersWithoutShifts.length > 0 ? 'text-blue-800' : 'text-green-700'}`}>
+                            {membersWithoutShifts.length}
+                          </p>
+                          {membersWithoutShifts.length > 0 && (
+                            <span className="text-[11px] font-semibold text-blue-700">View &amp; remind</span>
+                          )}
+                        </div>
+                      </button>
                     </div>
                   </div>
 
@@ -2636,6 +2742,115 @@ const VolunteerShifts: React.FC = () => {
                 {eventSaving ? 'Saving...' : isEditMode ? 'Save' : 'Publish Event'}
               </Button>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Roster members without shifts reminder modal */}
+      <Modal
+        isOpen={showNoShiftMembersModal}
+        onClose={() => {
+          if (noShiftReminderLoading) return;
+          setShowNoShiftMembersModal(false);
+        }}
+        title="People without shifts"
+        size="lg"
+        closeOnOverlayClick={!noShiftReminderLoading}
+        closeOnEscape={!noShiftReminderLoading}
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-sm font-semibold text-blue-900">
+              {membersWithoutShifts.length} roster member{membersWithoutShifts.length === 1 ? '' : 's'} haven’t signed up for any shift
+            </p>
+            <p className="mt-1 text-xs text-blue-800">
+              Select specific people or everyone below. Members with accounts receive an email and in-app notification; roster-only members receive their signup link.
+            </p>
+          </div>
+
+          {!hasAvailableShifts && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              There are no open shifts available to include in a reminder right now.
+            </div>
+          )}
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={noShiftMemberSearch}
+              onChange={(event) => setNoShiftMemberSearch(event.target.value)}
+              placeholder="Search by name or email"
+              className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-custom-primary focus:outline-none focus:ring-2 focus:ring-custom-primary/20"
+            />
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-gray-200">
+            <label className="flex cursor-pointer items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="flex items-center gap-3 text-sm font-semibold text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={filteredMembersWithoutShifts.some((member) => Boolean(member.email)) && filteredMembersWithoutShifts.filter((member) => Boolean(member.email)).every((member) => selectedNoShiftMemberIds.includes(member.memberId))}
+                  onChange={toggleAllNoShiftMembers}
+                  className="h-4 w-4 rounded border-gray-300 text-custom-primary focus:ring-custom-primary"
+                />
+                Select all {noShiftMemberSearch ? 'shown' : ''}
+              </span>
+              <span className="text-xs font-normal text-gray-500">{filteredMembersWithoutShifts.length} people</span>
+            </label>
+
+            <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
+              {filteredMembersWithoutShifts.length > 0 ? (
+                filteredMembersWithoutShifts.map((member) => (
+                  <label key={member.memberId} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedNoShiftMemberIds.includes(member.memberId)}
+                      disabled={!member.email}
+                      onChange={() => toggleNoShiftMemberSelection(member.memberId)}
+                      className="h-4 w-4 rounded border-gray-300 text-custom-primary focus:ring-custom-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600">
+                      {`${member.firstName?.charAt(0) || ''}${member.lastName?.charAt(0) || ''}`.toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900">{getMemberDisplayName(member)}</p>
+                      <p className="truncate text-xs text-gray-500">{member.email || 'No email address'}</p>
+                    </div>
+                  </label>
+                ))
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-gray-500">
+                  No roster members match your search.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-600">
+              <strong>{selectedNoShiftMemberIds.length}</strong> selected
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowNoShiftMembersModal(false)}
+                disabled={noShiftReminderLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={sendNoShiftReminders}
+                disabled={noShiftReminderLoading || selectedNoShiftMemberIds.length === 0 || !hasAvailableShifts}
+                className="inline-flex items-center justify-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                {noShiftReminderLoading
+                  ? 'Sending...'
+                  : `Remind ${selectedNoShiftMemberIds.length || ''}`.trim()}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
