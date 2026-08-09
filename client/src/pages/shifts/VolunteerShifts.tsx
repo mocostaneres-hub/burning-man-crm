@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, Modal, Input, TimePicker } from '../../components/ui';
-import { Calendar, Users, Plus, Eye, Edit, Trash2, Save, X, Search, CheckCircle, Lock, Unlock } from 'lucide-react';
+import { AlertTriangle, Calendar, ChevronDown, Users, UserPlus, Plus, Eye, Edit, Trash2, Save, X, Search, CheckCircle, Lock, Unlock } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -184,6 +184,8 @@ const VolunteerShifts: React.FC = () => {
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
   const [reportType, setReportType] = useState<ReportView>('names');
   const [selectedDate, setSelectedDate] = useState('');
+  const [showAllCoverageGaps, setShowAllCoverageGaps] = useState(false);
+  const [showCoveredShifts, setShowCoveredShifts] = useState(false);
   const [bulkInviteLoading, setBulkInviteLoading] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [bulkShiftSelection, setBulkShiftSelection] = useState<number[]>([]);
@@ -752,6 +754,44 @@ const VolunteerShifts: React.FC = () => {
         return current < max;
       })
     );
+  }, [events]);
+
+  const coverageSnapshot = useMemo(() => {
+    const rows = events.flatMap((event) => (
+      (event.shifts || []).map((shift) => {
+        const current = (shift.memberIds || []).length;
+        const max = Math.max(Number(shift.maxSignUps) || 0, 0);
+        const remaining = Math.max(max - current, 0);
+        const sortTime = new Date(shift.startTime || shift.date || event.eventDate || 0).getTime();
+        return {
+          event,
+          shift,
+          current,
+          max,
+          remaining,
+          isFull: max > 0 && remaining === 0,
+          filledPercent: max > 0 ? Math.min(Math.round((current / max) * 100), 100) : 0,
+          sortTime: Number.isNaN(sortTime) ? Number.MAX_SAFE_INTEGER : sortTime
+        };
+      })
+    ));
+
+    const understaffed = rows
+      .filter((row) => row.max > 0 && !row.isFull)
+      .sort((a, b) => a.sortTime - b.sortTime || b.remaining - a.remaining);
+    const covered = rows
+      .filter((row) => row.isFull)
+      .sort((a, b) => a.sortTime - b.sortTime);
+    const openSpots = understaffed.reduce((total, row) => total + row.remaining, 0);
+    const totalCapacity = rows.reduce((total, row) => total + row.max, 0);
+    const filledSpots = rows.reduce((total, row) => total + Math.min(row.current, row.max), 0);
+
+    return {
+      understaffed,
+      covered,
+      openSpots,
+      coveragePercent: totalCapacity > 0 ? Math.round((filledSpots / totalCapacity) * 100) : 0
+    };
   }, [events]);
 
   const handleCreateEvent = async () => {
@@ -1569,44 +1609,179 @@ const VolunteerShifts: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-lg border border-gray-200 p-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Coverage Timeline</h4>
-                  <p className="text-xs text-gray-600 mb-3">
-                    Red blocks indicate coverage gaps. Green blocks indicate fully staffed shifts.
-                  </p>
-                  <div className="space-y-3">
-                    {events.slice(0, 6).map((event) => (
-                      <div key={`timeline-${event._id}`}>
-                        <div className="text-xs font-medium text-gray-700 mb-1">{event.eventName}</div>
-                        <div className="relative h-8 rounded bg-gray-100 overflow-hidden">
-                          {(event.shifts || []).map((shift) => {
-                            const toPdtMinutes = (ts: any) => {
-                              const d = new Date(ts);
-                              const [h, m] = d.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false }).split(':').map(Number);
-                              return h * 60 + m;
-                            };
-                            const start = toPdtMinutes(shift.startTime);
-                            const end = toPdtMinutes(shift.endTime);
-                            const left = `${(start / (24 * 60)) * 100}%`;
-                            const width = `${(Math.max(end - start, 30) / (24 * 60)) * 100}%`;
-                            const current = (shift.memberIds || []).length;
-                            const full = current >= (shift.maxSignUps || 0);
-                            const coverageLabel = `${current}/${shift.maxSignUps || 0}`;
-                            return (
-                              <div
-                                key={shift._id}
-                                className={`absolute top-0 h-full border-r border-white text-[10px] px-1 truncate ${full ? 'bg-green-500 text-white' : 'bg-red-400 text-white'}`}
-                                style={{ left, width }}
-                                title={`${shift.title} (${coverageLabel})`}
-                              >
-                                {shift.title} {coverageLabel}
-                              </div>
-                            );
-                          })}
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-200 px-4 py-5 sm:px-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-base font-semibold text-gray-900">Coverage snapshot</h4>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            coverageSnapshot.understaffed.length === 0
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {coverageSnapshot.understaffed.length === 0 ? 'All covered' : 'Action needed'}
+                          </span>
                         </div>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Staffing across all events, with the shifts that need help shown first.
+                        </p>
                       </div>
-                    ))}
+                      {hasRoster && hasAvailableShifts && coverageSnapshot.understaffed.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowBulkInviteModal(true)}
+                          disabled={bulkInviteLoading}
+                          className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-2"
+                        >
+                          <Users className="h-4 w-4" />
+                          Notify roster
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <div className={`rounded-lg border p-3 ${
+                        coverageSnapshot.openSpots > 0
+                          ? 'border-red-200 bg-red-50'
+                          : 'border-green-200 bg-green-50'
+                      }`}>
+                        <p className="text-xs font-medium text-gray-600">Open spots</p>
+                        <p className={`mt-1 text-2xl font-bold ${coverageSnapshot.openSpots > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                          {coverageSnapshot.openSpots}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-xs font-medium text-gray-600">Shifts needing help</p>
+                        <p className="mt-1 text-2xl font-bold text-amber-800">{coverageSnapshot.understaffed.length}</p>
+                      </div>
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                        <p className="text-xs font-medium text-gray-600">Fully staffed</p>
+                        <p className="mt-1 text-2xl font-bold text-green-700">{coverageSnapshot.covered.length}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <p className="text-xs font-medium text-gray-600">Overall coverage</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">{coverageSnapshot.coveragePercent}%</p>
+                      </div>
+                    </div>
                   </div>
+
+                  {coverageSnapshot.understaffed.length > 0 ? (
+                    <div>
+                      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3 sm:px-6">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <h5 className="text-sm font-semibold text-gray-900">Needs attention</h5>
+                        </div>
+                        <span className="text-xs text-gray-500">Soonest shifts first</span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {(showAllCoverageGaps
+                          ? coverageSnapshot.understaffed
+                          : coverageSnapshot.understaffed.slice(0, 5)
+                        ).map((row) => (
+                          <div key={`coverage-${row.shift._id}`} className="px-4 py-4 sm:px-6">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="truncate text-sm font-semibold text-gray-900">{row.shift.title}</p>
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    row.current === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {row.current === 0
+                                      ? `Empty · needs ${row.remaining}`
+                                      : `Needs ${row.remaining} more`}
+                                  </span>
+                                </div>
+                                <p className="mt-1 truncate text-sm text-gray-600">{row.event.eventName}</p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {formatShiftDate(row.shift.date || row.event.eventDate || row.shift.startTime)}
+                                  {' · '}{formatShiftTime(row.shift.startTime)}–{formatShiftTime(row.shift.endTime)}
+                                </p>
+                              </div>
+
+                              <div className="w-full lg:w-56">
+                                <div className="mb-1.5 flex items-center justify-between text-xs">
+                                  <span className="font-medium text-gray-700">{row.current} of {row.max} filled</span>
+                                  <span className="text-gray-500">{row.filledPercent}%</span>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
+                                  <div
+                                    className={`h-full rounded-full ${row.current === 0 ? 'bg-red-500' : 'bg-amber-500'}`}
+                                    style={{ width: `${row.filledPercent}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openAssignmentModal(row.shift, row.event)}
+                                className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-2 lg:min-w-[132px]"
+                              >
+                                <UserPlus className="h-4 w-4" />
+                                Assign people
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {coverageSnapshot.understaffed.length > 5 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllCoverageGaps((current) => !current)}
+                          className="flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-sm font-medium text-custom-primary hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-custom-primary"
+                          aria-expanded={showAllCoverageGaps}
+                        >
+                          <ChevronDown className={`h-4 w-4 transition-transform ${showAllCoverageGaps ? 'rotate-180' : ''}`} />
+                          {showAllCoverageGaps
+                            ? 'Show fewer shifts'
+                            : `Show all ${coverageSnapshot.understaffed.length} understaffed shifts`}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3 px-4 py-5 sm:px-6">
+                      <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Every shift is fully staffed</p>
+                        <p className="mt-1 text-sm text-gray-600">No staffing follow-up is needed right now.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {coverageSnapshot.covered.length > 0 && (
+                    <div className="border-t border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setShowCoveredShifts((current) => !current)}
+                        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-custom-primary sm:px-6"
+                        aria-expanded={showCoveredShifts}
+                      >
+                        <span className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          Fully staffed shifts ({coverageSnapshot.covered.length})
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${showCoveredShifts ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showCoveredShifts && (
+                        <div className="divide-y divide-gray-100 border-t border-gray-100 bg-gray-50">
+                          {coverageSnapshot.covered.map((row) => (
+                            <div key={`covered-${row.shift._id}`} className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                              <div className="min-w-0">
+                                <span className="font-medium text-gray-900">{row.shift.title}</span>
+                                <span className="text-gray-500"> · {row.event.eventName}</span>
+                              </div>
+                              <div className="shrink-0 text-xs text-gray-500">
+                                {formatShiftDate(row.shift.date || row.event.eventDate || row.shift.startTime)} · {row.current}/{row.max} filled
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {events.map((event) => (
                   <div key={event._id} className="border rounded-lg p-4">
