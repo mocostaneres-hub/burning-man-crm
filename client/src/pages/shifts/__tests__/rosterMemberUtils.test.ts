@@ -1,4 +1,16 @@
-import { deduplicateRosterMembers } from '../rosterMemberUtils';
+import { deduplicateRosterMembers, hasUsableRosterContactIdentity } from '../rosterMemberUtils';
+
+describe('hasUsableRosterContactIdentity', () => {
+  it('rejects orphan placeholders with no name or email', () => {
+    expect(hasUsableRosterContactIdentity({})).toBe(false);
+    expect(hasUsableRosterContactIdentity({ firstName: ' ', email: '' })).toBe(false);
+  });
+
+  it('accepts a name or email as a usable roster identity', () => {
+    expect(hasUsableRosterContactIdentity({ firstName: 'Sam' })).toBe(true);
+    expect(hasUsableRosterContactIdentity({ email: 'sam@example.com' })).toBe(true);
+  });
+});
 
 describe('deduplicateRosterMembers', () => {
   it('collapses the same user returned with different member ID detail', () => {

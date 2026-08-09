@@ -7,7 +7,7 @@ import api from '../../services/api';
 import { Event } from '../../types';
 import { formatShiftDate, formatShiftTime, formatDate, utcToPdtDateInput, utcToPdtTimeInput, PDT_LABEL } from '../../utils/dateFormatters';
 import { useSkills } from '../../hooks/useSkills';
-import { deduplicateRosterMembers } from './rosterMemberUtils';
+import { deduplicateRosterMembers, hasUsableRosterContactIdentity } from './rosterMemberUtils';
 import { applyShiftAssignmentMode } from './shiftAssignmentUtils';
 
 const deriveRosterMeta = (roster: any) => {
@@ -319,6 +319,7 @@ const VolunteerShifts: React.FC = () => {
 
   const normalizeRosterMember = useCallback((member: any): RosterMemberLite | null => {
     if (!member) return null;
+    if (Object.prototype.hasOwnProperty.call(member, 'member') && !member.member) return null;
 
     const memberDoc = member.member && typeof member.member === 'object'
       ? member.member
@@ -334,16 +335,20 @@ const VolunteerShifts: React.FC = () => {
       || (typeof member.user === 'string' ? member.user : undefined);
     const fallbackName = memberDoc?.name || '';
     const [fallbackFirstName, ...fallbackLastNameParts] = fallbackName.split(' ').filter(Boolean);
+    const firstName = nestedUser?.firstName || memberDoc?.firstName || fallbackFirstName || '';
+    const lastName = nestedUser?.lastName || memberDoc?.lastName || fallbackLastNameParts.join(' ') || '';
+    const email = nestedUser?.email || memberDoc?.email || '';
 
     if (!memberId && !userId) return null;
+    if (!hasUsableRosterContactIdentity({ firstName, lastName, email })) return null;
 
     return {
       _id: userId || memberId,
       memberId,
       userId,
-      firstName: nestedUser?.firstName || memberDoc?.firstName || fallbackFirstName || '',
-      lastName: nestedUser?.lastName || memberDoc?.lastName || fallbackLastNameParts.join(' ') || '',
-      email: nestedUser?.email || memberDoc?.email || '',
+      firstName,
+      lastName,
+      email,
       isLead: member?.isCampLead === true
         || memberDoc?.isCampLead === true
         || ['camp-lead', 'project-lead', 'lead', 'admin'].includes((memberDoc?.role || member?.role || '').toLowerCase()),
@@ -605,7 +610,7 @@ const VolunteerShifts: React.FC = () => {
         const roster = await api.get(`/rosters/active?campId=${campId}`);
         setRosterMeta(deriveRosterMeta(roster));
         rosterMembersFromActiveRoster = (roster?.members || [])
-          .filter(isCurrentRosterEntry)
+          .filter((entry: any) => Boolean(entry?.member) && isCurrentRosterEntry(entry))
           .map(normalizeRosterMember)
           .filter(Boolean) as RosterMemberLite[];
       } catch (_rosterError) {
