@@ -819,7 +819,13 @@ class ApiService {
 
   async inviteEntireRosterToAllShifts(
     campId?: string,
-    options?: { previewOnly?: boolean; skipRecentDays?: number; scheduleAt?: string }
+    options?: {
+      previewOnly?: boolean;
+      skipRecentDays?: number;
+      scheduleAt?: string;
+      memberIds?: string[];
+      onlyWithoutShifts?: boolean;
+    }
   ): Promise<{ message: string; invitedCount: number; availableShiftCount: number; recipientPreview?: { existingUsers: number; rosterOnly: number; total: number } }> {
     const url = campId ? `/shifts/events/invite-entire-roster?campId=${campId}` : '/shifts/events/invite-entire-roster';
     const response: AxiosResponse<{ message: string; invitedCount: number; availableShiftCount: number; recipientPreview?: { existingUsers: number; rosterOnly: number; total: number } }> = await this.api.post(url, options || {});
