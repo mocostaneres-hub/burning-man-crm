@@ -1871,13 +1871,15 @@ const VolunteerShifts: React.FC = () => {
                             {formatShiftTime(shift.startTime)} - {formatShiftTime(shift.endTime)}
                           </div>
                           <div className="text-gray-500">
-                            {shift.memberIds.length}/{shift.maxSignUps} signed up
                             {shift.memberIds.length >= shift.maxSignUps ? (
-                              <span className="ml-2 text-red-600 font-medium">Full</span>
+                              <span className="text-green-600 font-medium">Full</span>
                             ) : (
-                              <span className="ml-2 text-green-700">
-                                {Math.max(shift.maxSignUps - shift.memberIds.length, 0)} spots remaining
-                              </span>
+                              <>
+                                {shift.memberIds.length}/{shift.maxSignUps} signed up
+                                <span className="ml-2 text-green-700">
+                                  {Math.max(shift.maxSignUps - shift.memberIds.length, 0)} spots remaining
+                                </span>
+                              </>
                             )}
                           </div>
                         </div>
@@ -2764,8 +2766,14 @@ const VolunteerShifts: React.FC = () => {
                               Directly assigned
                             </span>
                           )}
-                          <span className="text-sm text-gray-500">
-                            {shift.memberIds.length}/{shift.maxSignUps} signed up
+                          <span className={`text-sm ${
+                            shift.memberIds.length >= shift.maxSignUps
+                              ? 'font-medium text-green-600'
+                              : 'text-gray-500'
+                          }`}>
+                            {shift.memberIds.length >= shift.maxSignUps
+                              ? 'Full'
+                              : `${shift.memberIds.length}/${shift.maxSignUps} signed up`}
                           </span>
                           <Button
                             variant="outline"
