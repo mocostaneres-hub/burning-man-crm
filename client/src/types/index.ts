@@ -665,6 +665,7 @@ export interface MyShiftItem {
   memberIds: string[];
   coworkers: MyShiftCoworker[];
   recommendationReason?: string;
+  assignedAt?: string | null;
 }
 
 export interface MyShiftsResponse {

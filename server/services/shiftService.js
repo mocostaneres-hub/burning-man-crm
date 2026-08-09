@@ -878,7 +878,9 @@ async function buildMyShiftsPayload(userId) {
   }
 
   const [assignments, signups, legacyDirectAssignments] = await Promise.all([
-    ShiftAssignment.find({ userId, shiftId: { $in: allShiftIds } }).select('shiftId').lean(),
+    ShiftAssignment.find({ userId, shiftId: { $in: allShiftIds } })
+      .select('shiftId assignedAt createdAt')
+      .lean(),
     ShiftSignup.find({ shiftId: { $in: allShiftIds } }).select('shiftId userId').lean(),
     legacyDirectShiftIds.length > 0
       ? ShiftAssignment.find({
@@ -907,6 +909,9 @@ async function buildMyShiftsPayload(userId) {
   }
 
   const assignedShiftIds = new Set(assignments.map((item) => normalizeId(item.shiftId)).filter(Boolean));
+  const assignmentByShiftId = new Map(
+    assignments.map((item) => [normalizeId(item.shiftId), item])
+  );
   const signedShiftIds = new Set(
     signups
       .filter((signup) => normalizeId(signup.userId) === normalizeId(userId))
@@ -1012,6 +1017,11 @@ async function buildMyShiftsPayload(userId) {
       isDirectAssignmentLocked,
       isDirectlyAssignedToMe,
       shiftDropsLocked: areEventShiftDropsLocked(event),
+      assignedAt: assignmentByShiftId.get(shiftId)?.assignedAt
+        || assignmentByShiftId.get(shiftId)?.createdAt
+        || shift.createdAt
+        || event.createdAt
+        || null,
       memberIds
     };
 

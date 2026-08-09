@@ -52,11 +52,22 @@ interface PendingSurveyItem {
   description?: string;
   campName: string;
   sentAt?: string | null;
+  assignedAt?: string | null;
   completedByDelegate?: boolean;
   completedBySelf?: boolean;
   coveredByResponseId?: string;
   coveredBySubmitterName?: string;
 }
+
+type PendingSection = 'shifts' | 'surveys';
+
+const oldestDate = (dates: Array<string | null | undefined>): number => {
+  const timestamps = dates
+    .map((date) => date ? new Date(date).getTime() : Number.NaN)
+    .filter(Number.isFinite);
+
+  return timestamps.length > 0 ? Math.min(...timestamps) : Number.POSITIVE_INFINITY;
+};
 
 const MyTasks: React.FC = () => {
   const { user } = useAuth();
@@ -392,6 +403,32 @@ const MyTasks: React.FC = () => {
     );
   }
 
+  const pendingSectionOrder: PendingSection[] = [
+    {
+      section: 'shifts' as const,
+      count: pendingShifts.length,
+      oldestAssignedAt: oldestDate(pendingShifts.map((shift) => shift.assignedAt))
+    },
+    {
+      section: 'surveys' as const,
+      count: pendingSurveys.length,
+      oldestAssignedAt: oldestDate(pendingSurveys.map((survey) => survey.assignedAt || survey.sentAt))
+    }
+  ]
+    .sort((first, second) => {
+      if (first.count === 0 && second.count > 0) return 1;
+      if (second.count === 0 && first.count > 0) return -1;
+      if (first.count > 0 && second.count > 0) {
+        return first.oldestAssignedAt - second.oldestAssignedAt;
+      }
+      return 0;
+    })
+    .map(({ section }) => section);
+
+  const orderedPendingSurveys = [...pendingSurveys].sort((first, second) =>
+    oldestDate([first.assignedAt || first.sentAt]) - oldestDate([second.assignedAt || second.sentAt])
+  );
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center mb-6">
@@ -429,92 +466,94 @@ const MyTasks: React.FC = () => {
         </div>
       )}
 
-      <Card className="mb-6">
-        <div className="p-5">
-          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Shift Signups</h2>
-          {pendingShifts.length === 0 ? (
-            <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
-          ) : (
-            <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-700">
-                There are shifts available to sign up for.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/my-shifts')}
-                className="inline-flex items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
-              >
-                View Available Shifts
-              </button>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      <Card className="mb-6">
-        <div className="p-5">
-          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Surveys</h2>
-          {pendingSurveys.length === 0 ? (
-            <p className="text-sm text-gray-600">No pending surveys right now.</p>
-          ) : (
-            <div className="space-y-2">
-              {pendingSurveys.map((survey) => (
+      {pendingSectionOrder.map((section) => section === 'shifts' ? (
+        <Card className="mb-6" key="pending-shifts">
+          <div className="p-5">
+            <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Shift Signups</h2>
+            {pendingShifts.length === 0 ? (
+              <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-700">
+                  There are shifts available to sign up for.
+                </p>
                 <button
-                  key={survey.surveyId}
-                  onClick={() => navigate(`/surveys/${survey.surveyId}`)}
-                  className="w-full text-left border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                  type="button"
+                  onClick={() => navigate('/my-shifts')}
+                  className="inline-flex items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <p className="font-work font-medium text-custom-text">{survey.title}</p>
-                      <p className="text-xs text-gray-500">{survey.campName}</p>
-                    </div>
-                    <Badge variant="warning">Pending</Badge>
-                  </div>
+                  View Available Shifts
                 </button>
-              ))}
-            </div>
-          )}
-
-          {completedSurveys.length > 0 && (
-            <div className="mt-4 border-t border-gray-200 pt-3">
-              <h3 className="text-sm font-semibold text-custom-text mb-2">Completed Surveys</h3>
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <Card className="mb-6" key="pending-surveys">
+          <div className="p-5">
+            <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Surveys</h2>
+            {pendingSurveys.length === 0 ? (
+              <p className="text-sm text-gray-600">No pending surveys right now.</p>
+            ) : (
               <div className="space-y-2">
-                {completedSurveys.slice(0, 6).map((survey) => (
+                {orderedPendingSurveys.map((survey) => (
                   <button
-                    type="button"
-                    key={`${survey.surveyId}-completed`}
+                    key={survey.surveyId}
                     onClick={() => navigate(`/surveys/${survey.surveyId}`)}
-                    className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-opacity-80 ${
-                      survey.completedByDelegate
-                        ? 'border-blue-200 bg-blue-50'
-                        : 'border-green-200 bg-green-50'
-                    }`}
+                    className="w-full text-left border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                      <div className="min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
                         <p className="font-work font-medium text-custom-text">{survey.title}</p>
                         <p className="text-xs text-gray-500">{survey.campName}</p>
-                        <p className={`mt-1 text-xs ${survey.completedByDelegate ? 'text-blue-800' : 'text-green-800'}`}>
-                          {survey.completedByDelegate
-                            ? `${survey.coveredBySubmitterName || 'A camp member'} filled this out on your behalf.`
-                            : 'You completed this survey.'}
-                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={survey.completedByDelegate ? 'info' : 'success'}>
-                          {survey.completedByDelegate ? 'Completed by someone else' : 'Completed'}
-                        </Badge>
-                        <Eye size={16} className={survey.completedByDelegate ? 'text-blue-700' : 'text-green-700'} />
-                      </div>
+                      <Badge variant="warning">Pending</Badge>
                     </div>
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      </Card>
+            )}
+
+            {completedSurveys.length > 0 && (
+              <div className="mt-4 border-t border-gray-200 pt-3">
+                <h3 className="text-sm font-semibold text-custom-text mb-2">Completed Surveys</h3>
+                <div className="space-y-2">
+                  {completedSurveys.slice(0, 6).map((survey) => (
+                    <button
+                      type="button"
+                      key={`${survey.surveyId}-completed`}
+                      onClick={() => navigate(`/surveys/${survey.surveyId}`)}
+                      className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-opacity-80 ${
+                        survey.completedByDelegate
+                          ? 'border-blue-200 bg-blue-50'
+                          : 'border-green-200 bg-green-50'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-work font-medium text-custom-text">{survey.title}</p>
+                          <p className="text-xs text-gray-500">{survey.campName}</p>
+                          <p className={`mt-1 text-xs ${survey.completedByDelegate ? 'text-blue-800' : 'text-green-800'}`}>
+                            {survey.completedByDelegate
+                              ? `${survey.coveredBySubmitterName || 'A camp member'} filled this out on your behalf.`
+                              : 'You completed this survey.'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={survey.completedByDelegate ? 'info' : 'success'}>
+                            {survey.completedByDelegate ? 'Completed by someone else' : 'Completed'}
+                          </Badge>
+                          <Eye size={16} className={survey.completedByDelegate ? 'text-blue-700' : 'text-green-700'} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      ))}
 
       {tasks.length === 0 ? (
         <Card className="text-center">
