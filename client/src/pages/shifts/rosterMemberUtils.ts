@@ -4,6 +4,17 @@ export type RosterMemberIdentity = {
   userId?: string;
 };
 
+export type RosterMemberContactIdentity = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+};
+
+export const hasUsableRosterContactIdentity = (member: RosterMemberContactIdentity) => (
+  [member.firstName, member.lastName, member.email]
+    .some((value) => Boolean(String(value || '').trim()))
+);
+
 const getIdentityIds = (member: RosterMemberIdentity) => (
   Array.from(new Set(
     [member.userId, member.memberId, member._id]
