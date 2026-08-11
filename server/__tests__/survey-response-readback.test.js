@@ -3,7 +3,8 @@ const surveysRouter = require('../routes/surveys');
 const {
   planSurveyQuestionPersistence,
   remapSurveyResponseAnswers,
-  deleteSurveyResponseCascade
+  deleteSurveyResponseCascade,
+  reconcileCoveredMemberIdsForAnswerEdit
 } = surveysRouter.__test;
 
 const SurveyResponse = require('../models/SurveyResponse');
@@ -216,5 +217,54 @@ describe('survey response deletion reset', () => {
       responses: 1,
       responseMembers: 3
     });
+  });
+});
+
+describe('survey people-answer coverage edits', () => {
+  const peopleQuestionId = '65f000000000000000000010';
+  const questionById = new Map([
+    [peopleQuestionId, { _id: peopleQuestionId, blockType: 'people' }]
+  ]);
+
+  const peopleAnswer = (memberIds) => ({
+    questionId: peopleQuestionId,
+    blockType: 'people',
+    value: memberIds.map((memberId) => ({ memberId }))
+  });
+
+  test('adds newly selected people to the response coverage', () => {
+    const coveredMemberIds = reconcileCoveredMemberIdsForAnswerEdit({
+      submittedByMemberId: 'member-submit',
+      currentCoveredMemberIds: ['member-submit', 'member-one'],
+      currentAnswers: [peopleAnswer(['member-one'])],
+      nextAnswers: [peopleAnswer(['member-one', 'member-two'])],
+      questionById
+    });
+
+    expect(coveredMemberIds).toEqual(['member-submit', 'member-one', 'member-two']);
+  });
+
+  test('removes people deleted from the answer so they can respond again', () => {
+    const coveredMemberIds = reconcileCoveredMemberIdsForAnswerEdit({
+      submittedByMemberId: 'member-submit',
+      currentCoveredMemberIds: ['member-submit', 'member-one', 'member-two'],
+      currentAnswers: [peopleAnswer(['member-one', 'member-two'])],
+      nextAnswers: [peopleAnswer(['member-one'])],
+      questionById
+    });
+
+    expect(coveredMemberIds).toEqual(['member-submit', 'member-one']);
+  });
+
+  test('preserves members covered independently of the people answer', () => {
+    const coveredMemberIds = reconcileCoveredMemberIdsForAnswerEdit({
+      submittedByMemberId: 'member-submit',
+      currentCoveredMemberIds: ['member-submit', 'member-delegate', 'member-one'],
+      currentAnswers: [peopleAnswer(['member-one'])],
+      nextAnswers: [peopleAnswer([])],
+      questionById
+    });
+
+    expect(coveredMemberIds).toEqual(['member-submit', 'member-delegate']);
   });
 });
