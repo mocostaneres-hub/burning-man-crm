@@ -839,12 +839,14 @@ const SurveyResponses: React.FC = () => {
     try {
       setSavingCellKey(`${response._id}:${column.key}`);
       setError(null);
+      setSuccessMessage(null);
       await api.editSurveyResponse(surveyId, response._id, {
         answers: nextAnswers,
         editReason: `Updated ${column.prompt}`
       });
       cancelCellEdit();
       await loadResponses();
+      setSuccessMessage(`${column.prompt} saved.`);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to update response field');
     } finally {
@@ -911,11 +913,30 @@ const SurveyResponses: React.FC = () => {
       <div className="min-w-[220px] space-y-2">
         {children}
         <div className="flex justify-end gap-1">
-          <Button variant="outline" size="sm" onClick={cancelCellEdit} disabled={saving} className="px-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={cancelCellEdit}
+            disabled={saving}
+            aria-label={`Cancel editing ${column.prompt}`}
+            className="flex items-center gap-1 px-2"
+          >
             <X size={14} />
+            Cancel
           </Button>
-          <Button variant="primary" size="sm" onClick={() => saveCellEdit(response, column)} disabled={saving} className="px-2">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => saveCellEdit(response, column)}
+            disabled={saving}
+            loading={saving}
+            aria-label={`Save ${column.prompt}`}
+            className="flex items-center gap-1 px-2"
+          >
             <Save size={14} />
+            {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>

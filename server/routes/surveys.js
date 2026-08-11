@@ -748,6 +748,44 @@ function extractPeopleMemberIdsFromAnswers(answers, questionById) {
   return dedupeIdList(selectedIds);
 }
 
+function reconcileCoveredMemberIdsForAnswerEdit({
+  submittedByMemberId,
+  currentCoveredMemberIds,
+  currentAnswers,
+  nextAnswers,
+  questionById,
+  requestedCoveredMemberIds = null
+}) {
+  const nextPeopleMemberIds = extractPeopleMemberIdsFromAnswers(nextAnswers, questionById);
+
+  if (Array.isArray(requestedCoveredMemberIds)) {
+    return dedupeIdList([
+      submittedByMemberId,
+      ...requestedCoveredMemberIds,
+      ...nextPeopleMemberIds
+    ]);
+  }
+
+  const currentPeopleMemberIds = new Set(
+    extractPeopleMemberIdsFromAnswers(currentAnswers, questionById)
+  );
+  const retainedCoveredMemberIds = dedupeIdList(currentCoveredMemberIds || []).filter(
+    (memberId) => !currentPeopleMemberIds.has(memberId)
+  );
+
+  return dedupeIdList([
+    submittedByMemberId,
+    ...retainedCoveredMemberIds,
+    ...nextPeopleMemberIds
+  ]);
+}
+
+function haveSameMemberIds(left, right) {
+  const leftIds = dedupeIdList(left || []).sort();
+  const rightIds = dedupeIdList(right || []).sort();
+  return leftIds.length === rightIds.length && leftIds.every((memberId, index) => memberId === rightIds[index]);
+}
+
 function normalizeSurveyAnswers(rawAnswers, questionById, memberMap = null) {
   if (!Array.isArray(rawAnswers)) return [];
   return rawAnswers
@@ -1941,20 +1979,29 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
     const nextAnswers = Array.isArray(req.body?.answers)
       ? normalizeSurveyAnswers(req.body.answers, questionById, rosterDataForAnswerEdit?.memberMap || null)
       : null;
+    const currentPeopleMemberIds = extractPeopleMemberIdsFromAnswers(response.answers, questionById);
     const peopleMemberIdsFromNextAnswers = nextAnswers
       ? extractPeopleMemberIdsFromAnswers(nextAnswers, questionById)
-      : [];
+      : currentPeopleMemberIds;
 
     const requestedCoveredMembers = Array.isArray(req.body?.coveredMemberIds)
       ? dedupeIdList(req.body.coveredMemberIds)
       : null;
 
-    if (requestedCoveredMembers || peopleMemberIdsFromNextAnswers.length > 0) {
-      const safeCoverage = dedupeIdList([
-        response.submittedByMemberId,
-        ...(requestedCoveredMembers || response.coveredMemberIds || []),
-        ...peopleMemberIdsFromNextAnswers
-      ]);
+    const peopleCoverageChanged = nextAnswers
+      ? !haveSameMemberIds(currentPeopleMemberIds, peopleMemberIdsFromNextAnswers)
+      : false;
+    const shouldUpdateCoverage = requestedCoveredMembers !== null || peopleCoverageChanged;
+
+    if (shouldUpdateCoverage) {
+      const safeCoverage = reconcileCoveredMemberIdsForAnswerEdit({
+        submittedByMemberId: response.submittedByMemberId,
+        currentCoveredMemberIds: response.coveredMemberIds,
+        currentAnswers: response.answers,
+        nextAnswers: nextAnswers || response.answers,
+        questionById,
+        requestedCoveredMemberIds
+      });
       const { memberMap } = rosterDataForAnswerEdit || (await getActiveRosterMemberMap(survey.campId));
       const invalidIds = safeCoverage.filter((memberId) => !memberMap.has(memberId));
       if (invalidIds.length > 0) {
@@ -1964,52 +2011,69 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
         });
       }
 
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const conflictingRows = await SurveyResponseMember.find({
-            surveyId,
-            memberId: { $in: safeCoverage },
-            responseId: { $ne: response._id }
-          })
-            .session(session)
-            .lean();
-
-          if (conflictingRows.length > 0) {
-            const err = new Error('One or more selected members are already covered by another response');
-            err.code = 'MEMBER_ALREADY_COVERED';
-            err.conflicts = conflictingRows.map((row) => toIdString(row.memberId));
-            throw err;
-          }
-
-          await SurveyResponseMember.deleteMany({ responseId: response._id }).session(session);
-          await SurveyResponseMember.insertMany(
-            safeCoverage.map((memberId) => ({
-              surveyId,
-              campId: survey.campId,
-              responseId: response._id,
-              memberId,
-              submitterMemberId: response.submittedByMemberId,
-              submittedByUserId: response.submittedByUserId
-            })),
-            { session, ordered: true }
-          );
-
-          response.coveredMemberIds = safeCoverage;
-          if (nextAnswers) response.answers = nextAnswers;
-          response.lastEditedAt = new Date();
-          response.editHistory = [
-            ...(response.editHistory || []),
-            {
-              editedBy: req.user._id,
-              editedAt: new Date(),
-              reason: String(req.body?.editReason || 'Manager edit')
-            }
-          ];
-          await response.save({ session });
+      const applyCoverageEdit = async (session = null) => {
+        let conflictingRowsQuery = SurveyResponseMember.find({
+          surveyId,
+          memberId: { $in: safeCoverage },
+          responseId: { $ne: response._id }
         });
-      } finally {
-        await session.endSession();
+        if (session) conflictingRowsQuery = conflictingRowsQuery.session(session);
+        const conflictingRows = await conflictingRowsQuery.lean();
+
+        if (conflictingRows.length > 0) {
+          const err = new Error('One or more selected members are already covered by another response');
+          err.code = 'MEMBER_ALREADY_COVERED';
+          err.conflicts = conflictingRows.map((row) => toIdString(row.memberId));
+          throw err;
+        }
+
+        let deleteCoverageQuery = SurveyResponseMember.deleteMany({ responseId: response._id });
+        if (session) deleteCoverageQuery = deleteCoverageQuery.session(session);
+        await deleteCoverageQuery;
+        await SurveyResponseMember.insertMany(
+          safeCoverage.map((memberId) => ({
+            surveyId,
+            campId: survey.campId,
+            responseId: response._id,
+            memberId,
+            submitterMemberId: response.submittedByMemberId,
+            submittedByUserId: response.submittedByUserId
+          })),
+          session ? { session, ordered: true } : { ordered: true }
+        );
+
+        response.coveredMemberIds = safeCoverage;
+        if (nextAnswers) response.answers = nextAnswers;
+        response.lastEditedAt = new Date();
+        response.editHistory = [
+          ...(response.editHistory || []),
+          {
+            editedBy: req.user._id,
+            editedAt: new Date(),
+            reason: String(req.body?.editReason || 'Manager edit')
+          }
+        ];
+        await response.save(session ? { session } : undefined);
+      };
+
+      try {
+        const session = await mongoose.startSession();
+        try {
+          await session.withTransaction(async () => applyCoverageEdit(session));
+        } finally {
+          await session.endSession();
+        }
+      } catch (error) {
+        const message = String(error?.message || '');
+        if (
+          message.includes('Transaction numbers are only allowed') ||
+          message.includes('replica set') ||
+          error?.code === 20
+        ) {
+          await applyCoverageEdit();
+        } else {
+          throw error;
+        }
       }
     } else if (nextAnswers) {
       response.answers = nextAnswers;
@@ -2097,7 +2161,8 @@ router.__test = {
   normalizeQuestionsForSurvey,
   planSurveyQuestionPersistence,
   remapSurveyResponseAnswers,
-  deleteSurveyResponseCascade
+  deleteSurveyResponseCascade,
+  reconcileCoveredMemberIdsForAnswerEdit
 };
 
 module.exports = router;
