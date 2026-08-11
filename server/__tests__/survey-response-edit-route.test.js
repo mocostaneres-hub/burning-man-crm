@@ -50,22 +50,33 @@ describe('PUT survey response people answer', () => {
     jest.restoreAllMocks();
   });
 
-  const runChrisAddCase = async ({ transactionUnsupported = false } = {}) => {
+  const runChrisCoverageCase = async ({ transactionUnsupported = false, removeChris = false } = {}) => {
+    const currentPeople = removeChris
+      ? [
+          { memberId: samId, name: 'Sam Ali' },
+          { memberId: garryId, name: 'Garry Fitzpatrick' },
+          { memberId: chrisId, name: 'Chris Brady (Phantom)' }
+        ]
+      : [
+          { memberId: samId, name: 'Sam Ali' },
+          { memberId: garryId, name: 'Garry Fitzpatrick' }
+        ];
+    const nextPeople = removeChris
+      ? currentPeople.filter((person) => person.memberId !== chrisId)
+      : [...currentPeople, { memberId: chrisId, name: 'Chris Brady (Phantom)' }];
+    const expectedCoveredMemberIds = nextPeople.map((person) => person.memberId);
     const survey = { _id: surveyId, campId, title: '2026 Mudskippers Survey' };
     const response = {
       _id: responseId,
       surveyId,
       submittedByMemberId: samId,
       submittedByUserId: '6a7617eb6aaf19387f9b9900',
-      coveredMemberIds: [samId, garryId],
+      coveredMemberIds: currentPeople.map((person) => person.memberId),
       answers: [
         {
           questionId,
           blockType: 'people',
-          value: [
-            { memberId: samId, name: 'Sam Ali' },
-            { memberId: garryId, name: 'Garry Fitzpatrick' }
-          ],
+          value: currentPeople,
           valueType: 'array'
         }
       ],
@@ -110,11 +121,7 @@ describe('PUT survey response people answer', () => {
           {
             questionId,
             blockType: 'people',
-            value: [
-              { memberId: samId, name: 'Sam Ali' },
-              { memberId: garryId, name: 'Garry Fitzpatrick' },
-              { memberId: chrisId, name: 'Chris Brady (Phantom)' }
-            ],
+            value: nextPeople,
             valueType: 'array'
           }
         ],
@@ -134,26 +141,34 @@ describe('PUT survey response people answer', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Survey response updated successfully' })
     );
-    expect(response.coveredMemberIds).toEqual([samId, garryId, chrisId]);
-    expect(response.answers[0].value.map((person) => person.memberId)).toEqual([
-      samId,
-      garryId,
-      chrisId
-    ]);
+    expect(response.coveredMemberIds).toEqual(expectedCoveredMemberIds);
+    expect(response.answers[0].value.map((person) => person.memberId)).toEqual(expectedCoveredMemberIds);
     expect(response.save).toHaveBeenCalled();
-    expect(insertMany).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ responseId, memberId: chrisId, submitterMemberId: samId })
-      ]),
-      expect.objectContaining({ ordered: true })
-    );
+    const insertedCoverage = insertMany.mock.calls[0][0];
+    expect(insertedCoverage.map((row) => row.memberId)).toEqual(expectedCoveredMemberIds);
+    if (removeChris) {
+      expect(insertedCoverage).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ memberId: chrisId })])
+      );
+    } else {
+      expect(insertedCoverage).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ responseId, memberId: chrisId, submitterMemberId: samId })
+        ])
+      );
+    }
+    expect(insertMany.mock.calls[0][1]).toEqual(expect.objectContaining({ ordered: true }));
   };
 
   test('adds Chris Brady to Sam Ali response and rebuilds completion coverage', async () => {
-    await runChrisAddCase();
+    await runChrisCoverageCase();
   });
 
   test('adds Chris when MongoDB transactions are unavailable', async () => {
-    await runChrisAddCase({ transactionUnsupported: true });
+    await runChrisCoverageCase({ transactionUnsupported: true });
+  });
+
+  test('removes Chris from Sam response and releases his completion coverage', async () => {
+    await runChrisCoverageCase({ removeChris: true });
   });
 });
