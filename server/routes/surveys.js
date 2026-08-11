@@ -1975,7 +1975,7 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
         currentAnswers: response.answers,
         nextAnswers: nextAnswers || response.answers,
         questionById,
-        requestedCoveredMemberIds
+        requestedCoveredMemberIds: requestedCoveredMembers
       });
       const { memberMap } = rosterDataForAnswerEdit || (await getActiveRosterMemberMap(survey.campId));
       const invalidIds = safeCoverage.filter((memberId) => !memberMap.has(memberId));
