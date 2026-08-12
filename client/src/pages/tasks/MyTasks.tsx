@@ -72,6 +72,7 @@ const MyTasks: React.FC = () => {
   const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
   const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
   const [pendingShifts, setPendingShifts] = useState<MyShiftItem[]>([]);
+  const [committedShiftCount, setCommittedShiftCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -123,7 +124,22 @@ const MyTasks: React.FC = () => {
       setTasks(normalized);
       setPendingSurveys(surveysResponse.pendingSurveys || []);
       setCompletedSurveys(surveysResponse.completedSurveys || []);
-      setPendingShifts(shiftsResponse.availableShifts || []);
+      const availableShifts = shiftsResponse.availableShifts || [];
+      const signedUpShifts = shiftsResponse.signedUpShifts || [];
+      const currentYear = new Date().getFullYear();
+      const isCurrentYearShift = (shift: MyShiftItem) =>
+        new Date(shift.startTime || shift.date).getFullYear() === currentYear;
+      const directlyAssignedShifts = availableShifts.filter((shift) =>
+        shift.isDirectlyAssignedToMe && isCurrentYearShift(shift)
+      );
+      const commitmentIds = new Set(
+        [...signedUpShifts.filter(isCurrentYearShift), ...directlyAssignedShifts].map((shift) => shift.shiftId)
+      );
+
+      setPendingShifts(availableShifts.filter((shift) =>
+        !shift.isFull && shift.remainingSpots > 0 && !shift.isDirectlyAssignedToMe
+      ));
+      setCommittedShiftCount(commitmentIds.size);
       setError(null);
     } catch (error) {
       console.error('Error fetching my tasks:', error);
@@ -423,27 +439,53 @@ const MyTasks: React.FC = () => {
         </div>
       )}
 
-      <Card className="mb-6">
-        <div className="p-5">
-          <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Shift Signups</h2>
-          {pendingShifts.length === 0 ? (
-            <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
-          ) : (
+      {(pendingShifts.length > 0 || committedShiftCount > 0) && (
+        <Card className="mb-6">
+          <div className="p-5">
+            <h2 className="text-lg font-lato font-bold text-custom-text mb-3">
+              {committedShiftCount > 0 ? 'Your Shifts' : 'Shift Signup'}
+            </h2>
+            {committedShiftCount > 0 ? (
+              <div className="flex flex-col gap-4 rounded-xl border border-green-200 bg-green-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-full bg-green-100 p-2 text-green-700">
+                    <CheckCircleIcon size={20} />
+                  </div>
+                  <div>
+                    <p className="font-work font-semibold text-green-900">You’re all set for this year</p>
+                    <p className="mt-1 text-sm leading-6 text-green-800">
+                      We see you already have {committedShiftCount} {committedShiftCount === 1 ? 'shift' : 'shifts'} for this year—thank you for helping!
+                      {pendingShifts.length > 0 && ' If you’d like to do more, you can browse the remaining shifts.'}
+                    </p>
+                  </div>
+                </div>
+                {pendingShifts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/my-shifts')}
+                    className="inline-flex shrink-0 items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
+                  >
+                    Browse More Shifts
+                  </button>
+                )}
+              </div>
+            ) : (
             <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-gray-700">
-                There are shifts available to sign up for.
+                You still need to choose a shift. Pick one that works for you.
               </p>
               <button
                 type="button"
                 onClick={() => navigate('/my-shifts')}
                 className="inline-flex items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
               >
-                View Available Shifts
+                Choose a Shift
               </button>
             </div>
-          )}
-        </div>
-      </Card>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <div className="p-5">

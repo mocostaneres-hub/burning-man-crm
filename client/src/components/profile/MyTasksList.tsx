@@ -3,7 +3,7 @@ import { Badge, Button, Card } from '../ui';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import { MyShiftItem, PendingSurveyItem } from '../../types';
-import { formatDate, formatShiftDate, formatShiftTime } from '../../utils/dateFormatters';
+import { formatDate } from '../../utils/dateFormatters';
 
 type TaskStatusFilter = 'open' | 'closed' | 'all';
 
@@ -25,10 +25,11 @@ interface ProfileTodoItem {
   title: string;
   status: 'open' | 'closed';
   statusLabel: string;
-  badgeVariant: 'success' | 'warning' | 'neutral';
+  badgeVariant: 'success' | 'warning' | 'info' | 'neutral';
   campName: string;
   detail: string;
-  path: string;
+  path?: string;
+  actionLabel?: string;
 }
 
 const MyTasksList: React.FC = () => {
@@ -36,6 +37,7 @@ const MyTasksList: React.FC = () => {
   const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
   const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
   const [pendingShifts, setPendingShifts] = useState<MyShiftItem[]>([]);
+  const [signedUpShifts, setSignedUpShifts] = useState<MyShiftItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<TaskStatusFilter>('open');
@@ -66,7 +68,22 @@ const MyTasksList: React.FC = () => {
         setTasks((response || []) as ProfileTask[]);
         setPendingSurveys(surveysResponse.pendingSurveys || []);
         setCompletedSurveys(surveysResponse.completedSurveys || []);
-        setPendingShifts(shiftsResponse.availableShifts || []);
+        const availableShifts = shiftsResponse.availableShifts || [];
+        const currentYear = new Date().getFullYear();
+        const isCurrentYearShift = (shift: MyShiftItem) =>
+          new Date(shift.startTime || shift.date).getFullYear() === currentYear;
+        const directlyAssignedShifts = availableShifts.filter((shift) =>
+          shift.isDirectlyAssignedToMe && isCurrentYearShift(shift)
+        );
+        setPendingShifts(availableShifts.filter((shift) =>
+          !shift.isFull && shift.remainingSpots > 0 && !shift.isDirectlyAssignedToMe
+        ));
+        setSignedUpShifts([
+          ...(shiftsResponse.signedUpShifts || []).filter(isCurrentYearShift),
+          ...directlyAssignedShifts
+        ].filter((shift, index, shifts) =>
+          shifts.findIndex((candidate) => candidate.shiftId === shift.shiftId) === index
+        ));
         setError('');
       } catch (err: any) {
         if (!isMounted) return;
@@ -113,16 +130,27 @@ const MyTasksList: React.FC = () => {
       path: `/surveys/${survey.surveyId}`
     }));
 
-    const pendingShiftItems: ProfileTodoItem[] = pendingShifts.map((shift) => ({
-      id: `shift-${shift.shiftId}`,
-      title: shift.title,
+    const shiftSignupItems: ProfileTodoItem[] = signedUpShifts.length > 0 ? [{
+      id: 'shift-signup',
+      title: 'You’re all set for this year',
       status: 'open',
-      statusLabel: shift.isFull ? 'full' : 'needs signup',
-      badgeVariant: shift.isFull ? 'neutral' : 'warning',
-      campName: shift.campName,
-      detail: `Shift • ${shift.eventName} • ${formatShiftDate(shift.startTime || shift.date)} at ${formatShiftTime(shift.startTime)} PDT`,
-      path: '/my-shifts'
-    }));
+      statusLabel: 'all set',
+      badgeVariant: 'success',
+      campName: pendingShifts[0]?.campName || signedUpShifts[0]?.campName || 'Your camp',
+      detail: `You already have ${signedUpShifts.length} ${signedUpShifts.length === 1 ? 'shift' : 'shifts'} for this year—thank you!${pendingShifts.length > 0 ? ' You can browse more if you’d like.' : ''}`,
+      path: pendingShifts.length > 0 ? '/my-shifts' : undefined,
+      actionLabel: pendingShifts.length > 0 ? 'Browse More' : undefined
+    }] : pendingShifts.length > 0 ? [{
+      id: 'shift-signup',
+      title: 'Sign up for a shift',
+      status: 'open',
+      statusLabel: 'pending',
+      badgeVariant: 'warning',
+      campName: pendingShifts[0]?.campName || 'Your camp',
+      detail: `${pendingShifts.length} ${pendingShifts.length === 1 ? 'shift is' : 'shifts are'} available. Choose one that works for you.`,
+      path: '/my-shifts',
+      actionLabel: 'Choose a Shift'
+    }] : [];
 
     const completedSurveyItems: ProfileTodoItem[] = completedSurveys.map((survey) => ({
       id: `survey-${survey.surveyId}`,
@@ -135,8 +163,8 @@ const MyTasksList: React.FC = () => {
       path: `/surveys/${survey.surveyId}`
     }));
 
-    return [...pendingShiftItems, ...pendingSurveyItems, ...taskItems, ...completedSurveyItems];
-  }, [completedSurveys, pendingShifts, pendingSurveys, tasks]);
+    return [...shiftSignupItems, ...pendingSurveyItems, ...taskItems, ...completedSurveyItems];
+  }, [completedSurveys, pendingShifts, pendingSurveys, signedUpShifts, tasks]);
 
   const filteredItems = useMemo(() => {
     if (filter === 'all') return todoItems;
@@ -187,13 +215,15 @@ const MyTasksList: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={item.badgeVariant}>{item.statusLabel}</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.assign(item.path)}
-                  >
-                    View
-                  </Button>
+                  {item.path && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.assign(item.path!)}
+                    >
+                      {item.actionLabel || 'View'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
