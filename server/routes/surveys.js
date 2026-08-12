@@ -303,11 +303,18 @@ async function resolveSubmitterMember(req, campId) {
 }
 
 async function buildCompletionStats({ survey, memberIds, memberMap }) {
-  const [assignments, completedCount] = await Promise.all([
+  const [assignments, coveredMembers] = await Promise.all([
     SurveyAssignment.find({ surveyId: survey._id }).select('userId').lean(),
-    SurveyResponseMember.countDocuments({ surveyId: survey._id, memberId: { $in: memberIds } })
+    SurveyResponseMember.find({ surveyId: survey._id, memberId: { $in: memberIds } })
+      .select('memberId')
+      .lean()
   ]);
   const assignedUserIds = dedupeIdList(assignments.map((assignment) => assignment.userId));
+  const completedMemberIds = dedupeIdList(coveredMembers.map((coveredMember) => coveredMember.memberId));
+  const completedUserIds = dedupeIdList(
+    completedMemberIds.map((memberId) => memberMap.get(memberId)?.user)
+  );
+  const completedCount = completedMemberIds.length;
 
   const completionRate = memberIds.length > 0 ? Math.round((completedCount / memberIds.length) * 100) : 0;
   return {
@@ -315,6 +322,8 @@ async function buildCompletionStats({ survey, memberIds, memberMap }) {
     assignedUsers: assignedUserIds.length,
     assignedUserIds,
     completedMembers: completedCount,
+    completedMemberIds,
+    completedUserIds,
     pendingMembers: Math.max(memberIds.length - completedCount, 0),
     completionRate,
     hasRoster: memberMap.size > 0
@@ -1522,18 +1531,49 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       });
     }
 
-    const existingAssignments = await SurveyAssignment.find({
-      surveyId: survey._id,
-      userId: { $in: candidates }
-    })
-      .select('userId')
-      .lean();
+    const [existingAssignments, candidateMembers] = await Promise.all([
+      SurveyAssignment.find({
+        surveyId: survey._id,
+        userId: { $in: candidates }
+      })
+        .select('userId')
+        .lean(),
+      Member.find({
+        camp: survey.campId,
+        user: { $in: candidates },
+        status: { $in: ['active', 'approved'] }
+      })
+        .select('_id user')
+        .lean()
+    ]);
     const existingUserIds = new Set(dedupeIdList(existingAssignments.map((assignment) => assignment.userId)));
     const newCandidateIds = candidates.filter((userId) => !existingUserIds.has(toIdString(userId)));
+    const candidateUserByMemberId = new Map(
+      candidateMembers.map((member) => [toIdString(member._id), toIdString(member.user)])
+    );
+    const coveredCandidateMembers = candidateMembers.length > 0
+      ? await SurveyResponseMember.find({
+          surveyId: survey._id,
+          memberId: { $in: candidateMembers.map((member) => member._id) }
+        })
+          .select('memberId')
+          .lean()
+      : [];
+    const completedUserIds = new Set(
+      dedupeIdList(
+        coveredCandidateMembers.map((coveredMember) =>
+          candidateUserByMemberId.get(toIdString(coveredMember.memberId))
+        )
+      )
+    );
+    const reactivatedCandidateIds = candidates.filter((userId) => {
+      const normalizedUserId = toIdString(userId);
+      return existingUserIds.has(normalizedUserId) && !completedUserIds.has(normalizedUserId);
+    });
 
-    if (newCandidateIds.length === 0) {
+    if (newCandidateIds.length === 0 && reactivatedCandidateIds.length === 0) {
       return res.status(409).json({
-        message: 'Everyone matched by that targeting choice already has this survey',
+        message: 'Everyone matched by that targeting choice has already completed this survey',
         assignedCount: 0,
         skippedExistingCount: candidates.length
       });
@@ -1583,6 +1623,7 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
       .select('userId')
       .lean();
     const insertedUserIds = dedupeIdList(insertedAssignments.map((item) => item.userId));
+    const recipientUserIds = dedupeIdList([...insertedUserIds, ...reactivatedCandidateIds]);
 
     const allAssignments = await SurveyAssignment.find({ surveyId: survey._id }).select('userId').lean();
     const allAssignedUserIds = dedupeIdList(allAssignments.map((assignment) => assignment.userId));
@@ -1596,8 +1637,8 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
     };
     await survey.save();
 
-    if (insertedUserIds.length > 0) {
-      await createBulkNotifications(insertedUserIds, {
+    if (recipientUserIds.length > 0) {
+      await createBulkNotifications(recipientUserIds, {
         actor: req.user._id,
         campId: survey.campId,
         type: NOTIFICATION_TYPES.SURVEY_ASSIGNED,
@@ -1611,16 +1652,20 @@ router.post('/:surveyId/send', authenticateToken, async (req, res) => {
     await recordActivity('CAMP', survey.campId, req.user._id, wasDraft ? 'SURVEY_SENT' : 'SURVEY_RECIPIENTS_ADDED', {
       surveyId: survey._id,
       assignmentMode,
-      assignedCount: insertedUserIds.length,
-      skippedExistingCount: candidates.length - insertedUserIds.length,
+      assignedCount: recipientUserIds.length,
+      newAssignmentCount: insertedUserIds.length,
+      reactivatedCount: reactivatedCandidateIds.length,
+      skippedExistingCount: candidates.length - recipientUserIds.length,
       totalAssignedCount: allAssignedUserIds.length
     });
 
     res.json({
       message: wasDraft ? 'Survey sent successfully' : 'Survey recipients added successfully',
       surveyId: survey._id,
-      assignedCount: insertedUserIds.length,
-      skippedExistingCount: candidates.length - insertedUserIds.length,
+      assignedCount: recipientUserIds.length,
+      newAssignmentCount: insertedUserIds.length,
+      reactivatedCount: reactivatedCandidateIds.length,
+      skippedExistingCount: candidates.length - recipientUserIds.length,
       totalAssignedCount: allAssignedUserIds.length,
       assignmentMode
     });
@@ -2136,6 +2181,7 @@ router.__test = {
   normalizeQuestionsForSurvey,
   planSurveyQuestionPersistence,
   remapSurveyResponseAnswers,
+  buildCompletionStats,
   deleteSurveyResponseCascade,
   reconcileCoveredMemberIdsForAnswerEdit
 };

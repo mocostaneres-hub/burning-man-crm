@@ -506,6 +506,8 @@ export interface SurveyCompletionStats {
   assignedUsers: number;
   assignedUserIds?: string[];
   completedMembers: number;
+  completedMemberIds?: string[];
+  completedUserIds?: string[];
   pendingMembers: number;
   completionRate: number;
 }

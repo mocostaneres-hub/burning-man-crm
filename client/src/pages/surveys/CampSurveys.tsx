@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { Badge, Button, Card, Modal } from '../../components/ui';
 import { Survey, SurveyQuestion } from '../../types';
 import { Plus, Send, Clock, ClipboardList, Eye, Trash2 } from 'lucide-react';
+import { getSelectableSurveyRecipients } from './surveyRecipientUtils';
 
 type AssignmentMode = 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
 
@@ -792,17 +793,17 @@ const CampSurveys: React.FC = () => {
   const getSelectedUsersForSurvey = (survey: Survey): string[] => selectedUsersBySurvey[survey._id] || [];
 
   const getAssignedUserIdsForSurvey = (survey: Survey) =>
-    new Set(
-      [
-        ...(survey.completionStats?.assignedUserIds || []),
-        ...(survey.targeting?.snapshotAssignmentUserIds || [])
-      ].map((userId) => String(userId))
-    );
+    new Set((survey.completionStats?.assignedUserIds || []).map((userId) => String(userId)));
+
+  const getCompletedUserIdsForSurvey = (survey: Survey) =>
+    new Set((survey.completionStats?.completedUserIds || []).map((userId) => String(userId)));
 
   const getSelectableUsersForSurvey = (survey: Survey): RosterUser[] => {
-    if (survey.status !== 'sent') return rosterUsers;
-    const assignedUserIds = getAssignedUserIdsForSurvey(survey);
-    return rosterUsers.filter((rosterUser) => !assignedUserIds.has(String(rosterUser.userId)));
+    return getSelectableSurveyRecipients(
+      survey.status,
+      rosterUsers,
+      Array.from(getCompletedUserIdsForSurvey(survey))
+    );
   };
 
   const getSelectedAvailableUsersForSurvey = (survey: Survey): string[] => {
@@ -1072,14 +1073,14 @@ const CampSurveys: React.FC = () => {
               <p className="text-sm text-custom-text-secondary">
                 {recipientModalSurvey.status === 'draft'
                   ? 'Choose who should receive this survey when it is sent.'
-                  : 'Add more recipients without re-sending to people who already have this survey.'}
+                  : 'Send or re-send this survey to roster members who have not completed it.'}
               </p>
             </div>
 
             {recipientModalSurvey.status === 'sent' && (
               <div className="grid grid-cols-1 gap-3 rounded border border-blue-100 bg-blue-50 p-3 text-sm sm:grid-cols-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-blue-800">Already sent</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-blue-800">Assigned</p>
                   <p className="text-lg font-semibold text-blue-950">{recipientAssignedUserIds.size}</p>
                 </div>
                 <div>
@@ -1100,7 +1101,7 @@ const CampSurveys: React.FC = () => {
               recipientSelectableUsers,
               recipientModalSurvey.status === 'draft' ? 'Targeting' : 'Add',
               recipientModalSurvey.status === 'sent'
-                ? 'Selected users only shows people who do not already have this survey.'
+                ? 'Selected users shows people who have not completed this survey, including anyone removed from a previous response.'
                 : 'Selected users receive this survey when you send it.'
             )}
 
