@@ -362,7 +362,7 @@ router.post('/google', [
 // @desc    Handle Apple OAuth authentication (account-type agnostic)
 // @access  Public
 router.post('/apple', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').customSanitizer(normalizeEmail).isEmail(),
   body('name').optional().trim(),
   body('appleId').notEmpty(),
   body('profilePicture').optional().isURL(),
