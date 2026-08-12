@@ -92,7 +92,7 @@ describe('MyTasksList', () => {
     expect(screen.queryByText('Already Full Shift')).toBeNull();
   });
 
-  test('acknowledges existing signups and offers one optional browse-more action', async () => {
+  test('thanks users with existing shifts and offers one optional browse-more action', async () => {
     mockedGet.mockResolvedValue([]);
     mockedGetMyPendingSurveys.mockResolvedValue({ pendingSurveys: [], completedSurveys: [] });
     mockedGetMyShifts.mockResolvedValue({
@@ -135,9 +135,9 @@ describe('MyTasksList', () => {
 
     render(<MyTasksList />);
 
-    expect(await screen.findByText('Want to sign up for more shifts?')).toBeTruthy();
-    expect(screen.getByText(/You’re already signed up for 1 shift\./)).toBeTruthy();
-    expect(screen.getByText('optional')).toBeTruthy();
+    expect(await screen.findByText('You’re all set for this year')).toBeTruthy();
+    expect(screen.getByText(/You already have 1 shift for this year—thank you!/)).toBeTruthy();
+    expect(screen.getByText('all set')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Browse More' })).toBeTruthy();
     expect(screen.queryByText('Kitchen Setup')).toBeNull();
     expect(screen.queryByText('Gate Greeter')).toBeNull();

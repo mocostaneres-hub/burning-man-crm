@@ -28,7 +28,7 @@ interface ProfileTodoItem {
   badgeVariant: 'success' | 'warning' | 'info' | 'neutral';
   campName: string;
   detail: string;
-  path: string;
+  path?: string;
   actionLabel?: string;
 }
 
@@ -68,10 +68,22 @@ const MyTasksList: React.FC = () => {
         setTasks((response || []) as ProfileTask[]);
         setPendingSurveys(surveysResponse.pendingSurveys || []);
         setCompletedSurveys(surveysResponse.completedSurveys || []);
-        setPendingShifts((shiftsResponse.availableShifts || []).filter((shift) =>
-          !shift.isFull && shift.remainingSpots > 0
+        const availableShifts = shiftsResponse.availableShifts || [];
+        const currentYear = new Date().getFullYear();
+        const isCurrentYearShift = (shift: MyShiftItem) =>
+          new Date(shift.startTime || shift.date).getFullYear() === currentYear;
+        const directlyAssignedShifts = availableShifts.filter((shift) =>
+          shift.isDirectlyAssignedToMe && isCurrentYearShift(shift)
+        );
+        setPendingShifts(availableShifts.filter((shift) =>
+          !shift.isFull && shift.remainingSpots > 0 && !shift.isDirectlyAssignedToMe
         ));
-        setSignedUpShifts(shiftsResponse.signedUpShifts || []);
+        setSignedUpShifts([
+          ...(shiftsResponse.signedUpShifts || []).filter(isCurrentYearShift),
+          ...directlyAssignedShifts
+        ].filter((shift, index, shifts) =>
+          shifts.findIndex((candidate) => candidate.shiftId === shift.shiftId) === index
+        ));
         setError('');
       } catch (err: any) {
         if (!isMounted) return;
@@ -118,20 +130,26 @@ const MyTasksList: React.FC = () => {
       path: `/surveys/${survey.surveyId}`
     }));
 
-    const shiftSignupItems: ProfileTodoItem[] = pendingShifts.length > 0 ? [{
+    const shiftSignupItems: ProfileTodoItem[] = signedUpShifts.length > 0 ? [{
       id: 'shift-signup',
-      title: signedUpShifts.length > 0
-        ? 'Want to sign up for more shifts?'
-        : 'Sign up for a shift',
+      title: 'You’re all set for this year',
       status: 'open',
-      statusLabel: signedUpShifts.length > 0 ? 'optional' : 'pending',
-      badgeVariant: signedUpShifts.length > 0 ? 'info' : 'warning',
+      statusLabel: 'all set',
+      badgeVariant: 'success',
       campName: pendingShifts[0]?.campName || signedUpShifts[0]?.campName || 'Your camp',
-      detail: signedUpShifts.length > 0
-        ? `You’re already signed up for ${signedUpShifts.length} ${signedUpShifts.length === 1 ? 'shift' : 'shifts'}.`
-        : `${pendingShifts.length} ${pendingShifts.length === 1 ? 'shift is' : 'shifts are'} available. Choose one that works for you.`,
+      detail: `You already have ${signedUpShifts.length} ${signedUpShifts.length === 1 ? 'shift' : 'shifts'} for this year—thank you!${pendingShifts.length > 0 ? ' You can browse more if you’d like.' : ''}`,
+      path: pendingShifts.length > 0 ? '/my-shifts' : undefined,
+      actionLabel: pendingShifts.length > 0 ? 'Browse More' : undefined
+    }] : pendingShifts.length > 0 ? [{
+      id: 'shift-signup',
+      title: 'Sign up for a shift',
+      status: 'open',
+      statusLabel: 'pending',
+      badgeVariant: 'warning',
+      campName: pendingShifts[0]?.campName || 'Your camp',
+      detail: `${pendingShifts.length} ${pendingShifts.length === 1 ? 'shift is' : 'shifts are'} available. Choose one that works for you.`,
       path: '/my-shifts',
-      actionLabel: signedUpShifts.length > 0 ? 'Browse More' : 'Choose a Shift'
+      actionLabel: 'Choose a Shift'
     }] : [];
 
     const completedSurveyItems: ProfileTodoItem[] = completedSurveys.map((survey) => ({
@@ -197,13 +215,15 @@ const MyTasksList: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={item.badgeVariant}>{item.statusLabel}</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.assign(item.path)}
-                  >
-                    {item.actionLabel || 'View'}
-                  </Button>
+                  {item.path && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.location.assign(item.path!)}
+                    >
+                      {item.actionLabel || 'View'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

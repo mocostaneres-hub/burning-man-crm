@@ -88,14 +88,50 @@ describe('MyTasks', () => {
         memberIds: [],
         coworkers: []
       }],
-      signedUpShifts: [{ shiftId: 'signed-shift' }]
+      signedUpShifts: [{
+        shiftId: 'signed-shift',
+        date: '2026-08-19T16:00:00.000Z',
+        startTime: '2026-08-19T16:00:00.000Z'
+      }]
     });
 
     render(<MyTasks />);
 
-    expect(await screen.findByText('You’re already signed up for 1 shift. Want to sign up for more?')).toBeTruthy();
+    expect(await screen.findByText('You’re all set for this year')).toBeTruthy();
+    expect(screen.getByText(/We see you already have 1 shift for this year—thank you for helping!/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Browse More Shifts' })).toBeTruthy();
     expect(screen.queryByText('Kitchen Setup')).toBeNull();
+  });
+
+  test('treats a directly assigned shift as an existing commitment', async () => {
+    mockedGetMyShifts.mockResolvedValue({
+      camps: [{ _id: 'camp-1', name: 'Mudskippers' }],
+      availableShifts: [{
+        shiftId: 'assigned-shift',
+        eventId: 'event-1',
+        eventName: 'Build Week',
+        campId: 'camp-1',
+        campName: 'Mudskippers',
+        title: 'Gate Greeter',
+        date: '2026-08-19T16:00:00.000Z',
+        startTime: '2026-08-19T16:00:00.000Z',
+        endTime: '2026-08-19T18:00:00.000Z',
+        maxSignUps: 4,
+        signedUpCount: 1,
+        remainingSpots: 3,
+        isFull: false,
+        isDirectlyAssignedToMe: true,
+        memberIds: ['user-1'],
+        coworkers: []
+      }],
+      signedUpShifts: []
+    });
+
+    render(<MyTasks />);
+
+    expect(await screen.findByText('You’re all set for this year')).toBeTruthy();
+    expect(screen.getByText(/We see you already have 1 shift for this year—thank you for helping!/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Choose a Shift' })).toBeNull();
   });
 
   test('does not show an empty shift section when there is no shift action', async () => {
