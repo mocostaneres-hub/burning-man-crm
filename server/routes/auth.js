@@ -84,7 +84,10 @@ const generateToken = (user) => {
 // @desc    Register a new user (personal or camp account)
 // @access  Public
 router.post('/register', [
-  body('email').isEmail().normalizeEmail(),
+  // Preserve the local part exactly. express-validator's normalizeEmail()
+  // removes dots from Gmail addresses, which breaks existing/imported users
+  // whose stored login email still contains those dots.
+  body('email').customSanitizer(normalizeEmail).isEmail(),
   body('password').isLength({ min: 6 }),
   body('accountType').isIn(['personal', 'camp']),
   body('firstName').optional().trim(),
@@ -296,7 +299,7 @@ router.post('/register', [
 // @desc    Login user
 // @access  Public
 router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').customSanitizer(normalizeEmail).isEmail(),
   body('password').exists()
 ], async (req, res) => {
   try {
@@ -555,7 +558,7 @@ router.post('/logout', (req, res) => {
 // @desc    Request password reset (sends email with link; rate limited)
 // @access  Public
 router.post('/forgot-password', forgotPasswordLimiter, [
-  body('email').isEmail().normalizeEmail()
+  body('email').customSanitizer(normalizeEmail).isEmail()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -712,7 +715,7 @@ router.put('/change-password', authenticateToken, [
 // @desc    Update user login credentials (email and/or password) - Camp-affiliated accounts
 // @access  Private
 router.put('/update-credentials', authenticateToken, [
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').customSanitizer(normalizeEmail).isEmail().withMessage('Valid email is required'),
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword').optional().isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
 ], async (req, res) => {
