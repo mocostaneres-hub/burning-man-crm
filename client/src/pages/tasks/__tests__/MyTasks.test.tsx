@@ -60,15 +60,45 @@ describe('MyTasks', () => {
 
     render(<MyTasks />);
 
-    expect(await screen.findByText('Pending Shift Signups')).toBeTruthy();
-    expect(screen.getByText('There are shifts available to sign up for.')).toBeTruthy();
+    expect(await screen.findByText('Shift Signup')).toBeTruthy();
+    expect(screen.getByText('You still need to choose a shift. Pick one that works for you.')).toBeTruthy();
     expect(screen.queryByText('Kitchen Setup')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'View Available Shifts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a Shift' }));
     expect(mockNavigate).toHaveBeenCalledWith('/my-shifts');
   });
 
-  test('puts a non-empty pending section before an empty pending section', async () => {
+  test('acknowledges an existing signup and offers to browse more shifts', async () => {
+    mockedGetMyShifts.mockResolvedValue({
+      camps: [{ _id: 'camp-1', name: 'Mudskippers' }],
+      availableShifts: [{
+        shiftId: 'shift-available',
+        eventId: 'event-1',
+        eventName: 'Build Week',
+        campId: 'camp-1',
+        campName: 'Mudskippers',
+        title: 'Kitchen Setup',
+        date: '2026-08-20T16:00:00.000Z',
+        startTime: '2026-08-20T16:00:00.000Z',
+        endTime: '2026-08-20T18:00:00.000Z',
+        maxSignUps: 4,
+        signedUpCount: 1,
+        remainingSpots: 3,
+        isFull: false,
+        memberIds: [],
+        coworkers: []
+      }],
+      signedUpShifts: [{ shiftId: 'signed-shift' }]
+    });
+
+    render(<MyTasks />);
+
+    expect(await screen.findByText('You’re already signed up for 1 shift. Want to sign up for more?')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Browse More Shifts' })).toBeTruthy();
+    expect(screen.queryByText('Kitchen Setup')).toBeNull();
+  });
+
+  test('does not show an empty shift section when there is no shift action', async () => {
     mockedGetMyPendingSurveys.mockResolvedValue({
       pendingSurveys: [{
         surveyId: 'survey-1',
@@ -84,7 +114,8 @@ describe('MyTasks', () => {
 
     await screen.findByText('Camp Logistics Survey');
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(headings.indexOf('Pending Surveys')).toBeLessThan(headings.indexOf('Pending Shift Signups'));
+    expect(headings).toContain('Pending Surveys');
+    expect(headings).not.toContain('Shift Signup');
   });
 
   test('puts the pending section with the oldest assignment first', async () => {
@@ -124,6 +155,6 @@ describe('MyTasks', () => {
 
     await screen.findByText('Older Survey');
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(headings.indexOf('Pending Surveys')).toBeLessThan(headings.indexOf('Pending Shift Signups'));
+    expect(headings.indexOf('Pending Surveys')).toBeLessThan(headings.indexOf('Shift Signup'));
   });
 });

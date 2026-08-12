@@ -83,6 +83,7 @@ const MyTasks: React.FC = () => {
   const [pendingSurveys, setPendingSurveys] = useState<PendingSurveyItem[]>([]);
   const [completedSurveys, setCompletedSurveys] = useState<PendingSurveyItem[]>([]);
   const [pendingShifts, setPendingShifts] = useState<MyShiftItem[]>([]);
+  const [signedUpShiftCount, setSignedUpShiftCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -134,7 +135,10 @@ const MyTasks: React.FC = () => {
       setTasks(normalized);
       setPendingSurveys(surveysResponse.pendingSurveys || []);
       setCompletedSurveys(surveysResponse.completedSurveys || []);
-      setPendingShifts(shiftsResponse.availableShifts || []);
+      setPendingShifts((shiftsResponse.availableShifts || []).filter((shift) =>
+        !shift.isFull && shift.remainingSpots > 0
+      ));
+      setSignedUpShiftCount((shiftsResponse.signedUpShifts || []).length);
       setError(null);
     } catch (error) {
       console.error('Error fetching my tasks:', error);
@@ -400,7 +404,7 @@ const MyTasks: React.FC = () => {
   const pendingSectionOrder: PendingSection[] = [
     {
       section: 'shifts' as const,
-      count: pendingShifts.length,
+      count: signedUpShiftCount > 0 ? 0 : pendingShifts.length,
       oldestAssignedAt: oldestDate(pendingShifts.map((shift) => shift.assignedAt))
     },
     {
@@ -409,6 +413,9 @@ const MyTasks: React.FC = () => {
       oldestAssignedAt: oldestDate(pendingSurveys.map((survey) => survey.assignedAt || survey.sentAt))
     }
   ]
+    .filter(({ section }) => section === 'shifts'
+      ? pendingShifts.length > 0
+      : pendingSurveys.length > 0 || completedSurveys.length > 0)
     .sort((first, second) => {
       if (first.count === 0 && second.count > 0) return 1;
       if (second.count === 0 && first.count > 0) return -1;
@@ -463,20 +470,22 @@ const MyTasks: React.FC = () => {
       {pendingSectionOrder.map((section) => section === 'shifts' ? (
         <Card className="mb-6" key="pending-shifts">
           <div className="p-5">
-            <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Pending Shift Signups</h2>
+            <h2 className="text-lg font-lato font-bold text-custom-text mb-3">Shift Signup</h2>
             {pendingShifts.length === 0 ? (
               <p className="text-sm text-gray-600">No shifts are waiting for your signup.</p>
             ) : (
               <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-gray-700">
-                  There are shifts available to sign up for.
+                  {signedUpShiftCount > 0
+                    ? `You’re already signed up for ${signedUpShiftCount} ${signedUpShiftCount === 1 ? 'shift' : 'shifts'}. Want to sign up for more?`
+                    : 'You still need to choose a shift. Pick one that works for you.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => navigate('/my-shifts')}
                   className="inline-flex items-center justify-center rounded-lg bg-custom-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-custom-primary-dark"
                 >
-                  View Available Shifts
+                  {signedUpShiftCount > 0 ? 'Browse More Shifts' : 'Choose a Shift'}
                 </button>
               </div>
             )}
