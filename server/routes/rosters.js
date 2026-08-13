@@ -149,6 +149,7 @@ function sendLeadRoleConflict(res, existingRole, requestedRole) {
 const EVENTS_LEAD_SENSITIVE_DUES_FIELD_NAMES = [
   'paid',
   'duesPaid',
+  'duesStatus',
   'duesInstructedAt',
   'duesPaidAt',
   'duesReceiptSentAt',
@@ -209,7 +210,6 @@ function concealEventsLeadRosterFields(roster) {
 
   plainRoster.members = plainRoster.members
     .map((entry) => toPlainRosterObject(entry))
-    .filter(isDuesPaidRosterEntry)
     .map((plainEntry) => {
       removeEventsLeadRosterFields(plainEntry);
       removeEventsLeadRosterFields(plainEntry.member);
@@ -2639,7 +2639,7 @@ router.put('/:rosterId/members/:memberId/meal-plan', authenticateToken, async (r
 });
 
 // @route   PUT /api/rosters/:rosterId/members/:memberId/overrides
-// @desc    Update roster-specific member overrides (playaName, yearsBurned, skills)
+// @desc    Update roster-specific member overrides (playaName, yearsBurned, skills, food preferences)
 // @access  Private (Camp owners and Camp Leads; Events Leads for food preferences only)
 router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (req, res) => {
   try {
@@ -2657,7 +2657,8 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       city,
       state,
       location,
-      foodPreferences
+      foodPreferences,
+      foodPreferencesNotes
     } = req.body;
 
     console.log('🔄 [Roster Override] Starting update:', { rosterId, memberId, updates: req.body });
@@ -2688,7 +2689,7 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
 
     const requestedOverrideFields = Object.keys(req.body || {});
     const isFoodPreferencesOnlyUpdate = requestedOverrideFields.length > 0
-      && requestedOverrideFields.every((field) => field === 'foodPreferences');
+      && requestedOverrideFields.every((field) => ['foodPreferences', 'foodPreferencesNotes'].includes(field));
 
     const hasPermission = isFoodPreferencesOnlyUpdate
       ? await canManageMealPlan(req, camp._id)
@@ -2793,6 +2794,23 @@ router.put('/:rosterId/members/:memberId/overrides', authenticateToken, async (r
       }
       roster.members[memberIndex].overrides.foodPreferences = normalizedFoodPreferences;
       console.log('📝 [Roster Override] Updated foodPreferences:', normalizedFoodPreferences);
+    }
+    if (foodPreferencesNotes !== undefined) {
+      if (typeof foodPreferencesNotes !== 'string') {
+        return res.status(400).json({ message: 'Food preference notes must be text' });
+      }
+
+      const normalizedNotes = foodPreferencesNotes.trim();
+      if (normalizedNotes.length > 500) {
+        return res.status(400).json({ message: 'Food preference notes must be 500 characters or fewer' });
+      }
+
+      const oldValue = String(oldOverrides.foodPreferencesNotes || '');
+      if (normalizedNotes !== oldValue) {
+        changedFields.push({ field: 'foodPreferencesNotes', oldValue, newValue: normalizedNotes });
+      }
+      roster.members[memberIndex].overrides.foodPreferencesNotes = normalizedNotes;
+      console.log('📝 [Roster Override] Updated foodPreferencesNotes');
     }
     if (hasTicket !== undefined) {
       const oldValue = oldOverrides.hasTicket;

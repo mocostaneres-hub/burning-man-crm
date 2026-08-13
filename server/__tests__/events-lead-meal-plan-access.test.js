@@ -407,7 +407,7 @@ describe('Events Lead meal-plan access', () => {
     expect(roster.save).not.toHaveBeenCalled();
   });
 
-  test('returns only dues-paid roster members to Events Lead roster view', async () => {
+  test('returns the full roster to Events Leads while concealing dues fields', async () => {
     ShiftSignup.aggregate.mockResolvedValue([{ _id: 'user-paid', count: 2 }]);
     db.findActiveRoster.mockResolvedValue({
       _id: 'roster-1',
@@ -454,9 +454,8 @@ describe('Events Lead meal-plan access', () => {
     const response = await request(app, 'GET', '/api/rosters/active?campId=camp-1');
 
     expect(response.status).toBe(200);
-    expect(response.body.members).toHaveLength(1);
+    expect(response.body.members).toHaveLength(2);
     expect(response.body.members[0]).toMatchObject({
-      duesStatus: 'PAID',
       mealPlanStatus: 'OPTED_OUT',
       member: {
         _id: 'member-paid',
@@ -468,13 +467,15 @@ describe('Events Lead meal-plan access', () => {
       }
     });
     expect(response.body.members[0]).not.toHaveProperty('paid');
+    expect(response.body.members[0]).not.toHaveProperty('duesStatus');
     expect(response.body.members[0]).not.toHaveProperty('duesPaidAt');
     expect(response.body.members[0]).not.toHaveProperty('applicationData');
     expect(response.body.members[0].member.user.email).toBe('paid@example.com');
     expect(response.body.members[0].member.user.phoneNumber).toBe('555-0101');
     expect(response.body.members[0].member.user.phoneCountryCode).toBe('+1');
     expect(response.body.members[0].member.shiftSignupCount).toBe(2);
-    expect(response.body.members.map((entry) => entry.member._id)).not.toContain('member-unpaid');
+    expect(response.body.members.map((entry) => entry.member._id)).toContain('member-unpaid');
+    expect(response.body.members[1]).not.toHaveProperty('duesStatus');
   });
 
   test('does not allow Events Lead to update dues payment status', async () => {
@@ -524,6 +525,32 @@ describe('Events Lead meal-plan access', () => {
     expect(permissionHelpers.canManageMealPlan).toHaveBeenCalledWith(expect.any(Object), camp._id);
     expect(roster.members[0].overrides.foodPreferences).toEqual(['Vegan']);
     expect(roster.save).toHaveBeenCalled();
+  });
+
+  test('allows Events Lead to add and clear free-text food preference notes', async () => {
+    const roster = makeRoster();
+    db.findRoster.mockResolvedValue(roster);
+
+    const addResponse = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/overrides',
+      { foodPreferencesNotes: '  Severe shellfish allergy; separate utensils.  ' }
+    );
+
+    expect(addResponse.status).toBe(200);
+    expect(permissionHelpers.canManageMealPlan).toHaveBeenCalledWith(expect.any(Object), camp._id);
+    expect(roster.members[0].overrides.foodPreferencesNotes).toBe('Severe shellfish allergy; separate utensils.');
+
+    const clearResponse = await request(
+      app,
+      'PUT',
+      '/api/rosters/roster-1/members/member-1/overrides',
+      { foodPreferencesNotes: '' }
+    );
+
+    expect(clearResponse.status).toBe(200);
+    expect(roster.members[0].overrides.foodPreferencesNotes).toBe('');
   });
 
   test('does not allow Events Lead to update broader roster overrides', async () => {

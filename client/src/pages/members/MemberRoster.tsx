@@ -644,22 +644,22 @@ const MemberRoster: React.FC = () => {
     }));
   };
 
-  const handleStartFoodPreferencesEdit = (memberId: string) => {
+  const handleStartFoodPreferencesEdit = (memberId: string, preferences: unknown, notes: unknown) => {
     if (!canEditFoodPreferences) return;
+    setLocalEdits(prev => ({
+      ...prev,
+      [memberId]: {
+        ...(prev[memberId] || {}),
+        foodPreferences: normalizeFoodPreferences(preferences),
+        foodPreferencesNotes: typeof notes === 'string' ? notes : ''
+      }
+    }));
     setEditingFoodPreferencesMemberId(memberId);
   };
 
-  const handleCloseFoodPreferencesEdit = async (memberId: string) => {
-    if (editingFoodPreferencesMemberId !== memberId) return;
-
+  const handleSaveFoodPreferences = async (memberId: string) => {
     const currentEdits = localEdits[memberId] || {};
-    if (currentEdits.foodPreferences === undefined) {
-      setEditingFoodPreferencesMemberId(null);
-      return;
-    }
-
     if (!rosterId) {
-      setEditingFoodPreferencesMemberId(null);
       alert('Roster ID not found');
       return;
     }
@@ -667,7 +667,8 @@ const MemberRoster: React.FC = () => {
     try {
       setFoodPreferenceSavingId(memberId);
       await api.put(`/rosters/${rosterId}/members/${memberId}/overrides`, {
-        foodPreferences: normalizeFoodPreferences(currentEdits.foodPreferences)
+        foodPreferences: normalizeFoodPreferences(currentEdits.foodPreferences),
+        foodPreferencesNotes: String(currentEdits.foodPreferencesNotes || '').trim()
       });
 
       setLocalEdits(prev => {
@@ -680,10 +681,24 @@ const MemberRoster: React.FC = () => {
     } catch (error: any) {
       console.error('Error saving food preferences:', error);
       alert(error?.response?.data?.message || 'Failed to save food preferences. Please try again.');
-      setEditingFoodPreferencesMemberId(null);
     } finally {
       setFoodPreferenceSavingId(null);
     }
+  };
+
+  const handleCancelFoodPreferencesEdit = (memberId: string) => {
+    setEditingFoodPreferencesMemberId(null);
+    setLocalEdits(prev => {
+      const memberEdits = { ...(prev[memberId] || {}) };
+      delete memberEdits.foodPreferences;
+      delete memberEdits.foodPreferencesNotes;
+      if (Object.keys(memberEdits).length === 0) {
+        const next = { ...prev };
+        delete next[memberId];
+        return next;
+      }
+      return { ...prev, [memberId]: memberEdits };
+    });
   };
 
   // Save local edits
@@ -711,6 +726,7 @@ const MemberRoster: React.FC = () => {
       if (canEdit && allEdits.yearsBurned !== undefined) overridesData.yearsBurned = allEdits.yearsBurned;
       if (canEdit && allEdits.skills !== undefined) overridesData.skills = allEdits.skills;
       if (canEditFoodPreferences && allEdits.foodPreferences !== undefined) overridesData.foodPreferences = normalizeFoodPreferences(allEdits.foodPreferences);
+      if (canEditFoodPreferences && allEdits.foodPreferencesNotes !== undefined) overridesData.foodPreferencesNotes = String(allEdits.foodPreferencesNotes).trim();
       if (canEdit && allEdits.hasTicket !== undefined) overridesData.hasTicket = allEdits.hasTicket;
       if (canEdit && allEdits.hasVehiclePass !== undefined) overridesData.hasVehiclePass = allEdits.hasVehiclePass;
       if (canEdit && allEdits.interestedInEAP !== undefined) overridesData.interestedInEAP = allEdits.interestedInEAP;
@@ -2550,6 +2566,11 @@ const MemberRoster: React.FC = () => {
                     ? (member as any).overrides.foodPreferences
                     : user?.foodPreferences
                 );
+                const effectiveFoodPreferencesNotes = String(
+                  localEdits[memberId]?.foodPreferencesNotes !== undefined
+                    ? localEdits[memberId]?.foodPreferencesNotes
+                    : (member as any).overrides?.foodPreferencesNotes || ''
+                );
                 const memberGroup = responseGroupsByPrimary[member._id.toString()];
                 const extraResponses = memberGroup?.extraCount || 0;
                 const groupTooltip = memberGroup?.otherNames?.length
@@ -2707,23 +2728,75 @@ const MemberRoster: React.FC = () => {
                     </td>
                     {/* Food Preferences */}
                     <td
-                      className={`px-6 py-4 text-sm text-gray-900 min-w-[12rem] ${canEditFoodPreferences ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+                      className={`px-6 py-4 text-sm text-gray-900 min-w-[18rem] ${canEditFoodPreferences ? 'cursor-pointer hover:bg-blue-50' : ''}`}
                       onClick={() => {
                         if (!canEditFoodPreferenceCell && canEditFoodPreferences) {
-                          handleStartFoodPreferencesEdit(memberId);
+                          handleStartFoodPreferencesEdit(
+                            memberId,
+                            effectiveFoodPreferences,
+                            effectiveFoodPreferencesNotes
+                          );
                         }
                       }}
-                      title={canEditFoodPreferences ? 'Click to edit meal preferences' : undefined}
+                      title={canEditFoodPreferences ? 'Click to add or edit food preferences' : undefined}
                     >
                       {canEditFoodPreferenceCell ? (
-                        <div onClick={(event) => event.stopPropagation()}>
+                        <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
                           <FoodPreferenceMultiSelect
                             value={effectiveFoodPreferences}
                             onChange={(foodPreferences) => handleFieldChange(memberId, 'foodPreferences', foodPreferences)}
-                            onClose={!isEditing ? () => handleCloseFoodPreferencesEdit(memberId) : undefined}
-                            defaultOpen={!isEditing && isFoodPreferenceCellEditing}
                             buttonClassName="min-w-[10rem] py-1"
                           />
+                          <textarea
+                            value={effectiveFoodPreferencesNotes}
+                            onChange={(event) => handleFieldChange(memberId, 'foodPreferencesNotes', event.target.value)}
+                            maxLength={500}
+                            rows={3}
+                            className="w-full min-w-[16rem] resize-y rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Add allergies, dislikes, or meal notes…"
+                            aria-label="Free-text food preference notes"
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleFieldChange(memberId, 'foodPreferences', []);
+                                handleFieldChange(memberId, 'foodPreferencesNotes', '');
+                              }}
+                              disabled={isSavingFoodPreferences}
+                              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              title="Clear all food preferences; click Save to confirm"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Clear
+                            </button>
+                            {!isEditing && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelFoodPreferencesEdit(memberId)}
+                                  disabled={isSavingFoodPreferences}
+                                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveFoodPreferences(memberId)}
+                                  disabled={isSavingFoodPreferences}
+                                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {isSavingFoodPreferences ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Save className="h-3.5 w-3.5" />
+                                  )}
+                                  {isSavingFoodPreferences ? 'Saving…' : 'Save'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : isSavingFoodPreferences ? (
                         <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -2731,7 +2804,17 @@ const MemberRoster: React.FC = () => {
                           Saving
                         </div>
                       ) : (
-                        <FoodPreferenceTags preferences={effectiveFoodPreferences} compact />
+                        <div className="group/food relative space-y-1.5 pr-7">
+                          <FoodPreferenceTags preferences={effectiveFoodPreferences} compact emptyLabel={effectiveFoodPreferencesNotes ? '' : 'Not set'} />
+                          {effectiveFoodPreferencesNotes && (
+                            <p className="max-w-[18rem] whitespace-pre-wrap break-words text-xs leading-5 text-gray-700">
+                              {effectiveFoodPreferencesNotes}
+                            </p>
+                          )}
+                          {canEditFoodPreferences && (
+                            <Edit className="absolute right-0 top-0 h-4 w-4 text-gray-300 opacity-0 transition-opacity group-hover/food:opacity-100" aria-hidden="true" />
+                          )}
+                        </div>
                       )}
                     </td>
                     {/* Ticket/VP */}
