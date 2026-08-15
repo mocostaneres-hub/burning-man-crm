@@ -951,7 +951,7 @@ class ApiService {
   async editSurveyResponse(
     surveyId: string,
     responseId: string,
-    payload: { answers?: Array<{ questionId: string; blockType: string; value: any; valueType?: string }>; coveredMemberIds?: string[]; editReason?: string }
+    payload: { answers?: Array<{ questionId: string; blockType: string; value: any; valueType?: string }>; coveredMemberIds?: string[]; eapSent?: boolean; editReason?: string }
   ): Promise<{ message: string; response: any }> {
     const response = await this.api.put(`/surveys/${surveyId}/responses/${responseId}`, payload);
     return response.data;

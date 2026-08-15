@@ -78,6 +78,10 @@ const surveyResponseSchema = new mongoose.Schema(
       type: [answerSchema],
       default: []
     },
+    eapSent: {
+      type: Boolean,
+      default: false
+    },
     editHistory: {
       type: [responseEditSchema],
       default: []

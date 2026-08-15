@@ -37,6 +37,7 @@ type SurveyResponseSaveAnswer = {
 
 type SurveyResponseRecord = {
   _id: string;
+  eapSent?: boolean;
   submitterName?: string;
   coveredMembers?: Array<{ memberId: string; name?: string }>;
   answers?: SurveyResponseAnswer[];
@@ -515,6 +516,7 @@ const SurveyResponses: React.FC = () => {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [draftValue, setDraftValue] = useState<unknown>('');
   const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+  const [savingEapResponseIds, setSavingEapResponseIds] = useState<Set<string>>(new Set());
   const [deletingResponseId, setDeletingResponseId] = useState<string | null>(null);
   const [peopleSearch, setPeopleSearch] = useState('');
 
@@ -762,6 +764,7 @@ const SurveyResponses: React.FC = () => {
     if (!survey) return;
 
     const headers = [
+      'EAP Sent?',
       'Submitted',
       'Submitted By',
       'Completed For',
@@ -770,6 +773,7 @@ const SurveyResponses: React.FC = () => {
     ];
 
     const rows = filteredResponses.map((response) => [
+      response.eapSent ? 'Yes' : 'No',
       formatDateTime(response.submittedAt || response.createdAt),
       response.submitterName || 'Responder',
       getCoveredMembersText(response),
@@ -878,6 +882,49 @@ const SurveyResponses: React.FC = () => {
       setError(err?.response?.data?.message || err?.message || 'Failed to delete response');
     } finally {
       setDeletingResponseId(null);
+    }
+  };
+
+  const handleEapSentChange = async (response: SurveyResponseRecord, eapSent: boolean) => {
+    if (!surveyId) return;
+
+    setResponses((current) =>
+      current.map((item) => (item._id === response._id ? { ...item, eapSent } : item))
+    );
+    setSavingEapResponseIds((current) => new Set(current).add(response._id));
+
+    try {
+      setError(null);
+      setSuccessMessage(null);
+      const result = await api.editSurveyResponse(surveyId, response._id, {
+        eapSent,
+        editReason: eapSent ? 'Marked EAP as sent' : 'Marked EAP as not sent'
+      });
+      setResponses((current) =>
+        current.map((item) =>
+          item._id === response._id
+            ? {
+                ...item,
+                eapSent,
+                lastEditedAt: result.response?.lastEditedAt || item.lastEditedAt
+              }
+            : item
+        )
+      );
+      setSuccessMessage(eapSent ? 'EAP marked as sent.' : 'EAP marked as not sent.');
+    } catch (err: any) {
+      setResponses((current) =>
+        current.map((item) =>
+          item._id === response._id ? { ...item, eapSent: Boolean(response.eapSent) } : item
+        )
+      );
+      setError(err?.response?.data?.message || err?.message || 'Failed to update EAP sent status');
+    } finally {
+      setSavingEapResponseIds((current) => {
+        const next = new Set(current);
+        next.delete(response._id);
+        return next;
+      });
     }
   };
 
@@ -1320,6 +1367,9 @@ const SurveyResponses: React.FC = () => {
               <table className="w-full survey-response-table">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="min-w-[112px] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                      EAP Sent?
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
                     <th className="sticky left-0 z-20 min-w-[14rem] bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)]">
                       Submitted By
@@ -1357,7 +1407,7 @@ const SurveyResponses: React.FC = () => {
                   {filteredResponses.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={questionColumns.length + 6}
+                        colSpan={questionColumns.length + 7}
                         className="px-6 py-10 text-center text-sm text-gray-500"
                       >
                         No responses match the current filters.
@@ -1366,6 +1416,16 @@ const SurveyResponses: React.FC = () => {
                   ) : (
                     filteredResponses.map((response, index) => (
                       <tr key={response._id} className="align-top hover:bg-gray-50">
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(response.eapSent)}
+                            onChange={(event) => handleEapSentChange(response, event.target.checked)}
+                            disabled={savingEapResponseIds.has(response._id)}
+                            aria-label={`EAP sent for ${response.submitterName || 'responder'}`}
+                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-wait disabled:opacity-50"
+                          />
+                        </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{index + 1}</td>
                         <td className="sticky left-0 z-10 bg-white px-6 py-4 text-sm font-medium text-gray-900 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)]">
                           {response.submitterName || 'Responder'}

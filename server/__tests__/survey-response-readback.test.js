@@ -14,6 +14,27 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+describe('survey response EAP delivery status', () => {
+  const requiredFields = {
+    surveyId: '65f000000000000000000101',
+    campId: '65f000000000000000000102',
+    submittedByUserId: '65f000000000000000000103',
+    submittedByMemberId: '65f000000000000000000104'
+  };
+
+  test('defaults EAP sent to false for existing and new responses', () => {
+    const response = new SurveyResponse(requiredFields);
+
+    expect(response.eapSent).toBe(false);
+  });
+
+  test('stores an explicitly checked EAP sent status', () => {
+    const response = new SurveyResponse({ ...requiredFields, eapSent: true });
+
+    expect(response.eapSent).toBe(true);
+  });
+});
+
 describe('survey response question identity handling', () => {
   test('preserves an existing question by incoming _id when saving a survey', () => {
     const existingQuestionId = '64f000000000000000000001';

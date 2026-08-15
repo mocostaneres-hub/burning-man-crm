@@ -1989,6 +1989,19 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
       return res.status(404).json({ message: 'Response not found for this survey' });
     }
 
+    const hasEapSentUpdate = Object.prototype.hasOwnProperty.call(req.body || {}, 'eapSent');
+    if (hasEapSentUpdate && typeof req.body.eapSent !== 'boolean') {
+      return res.status(400).json({ message: 'EAP sent status must be true or false' });
+    }
+    const editReason = String(
+      req.body?.editReason ||
+        (hasEapSentUpdate
+          ? req.body.eapSent
+            ? 'Marked EAP as sent'
+            : 'Marked EAP as not sent'
+          : 'Manager edit')
+    );
+
     const surveyQuestions = Array.isArray(req.body?.answers)
       ? await SurveyQuestion.find({ surveyId: survey._id }).select('_id blockType').lean()
       : [];
@@ -2064,13 +2077,14 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
 
         response.coveredMemberIds = safeCoverage;
         if (nextAnswers) response.answers = nextAnswers;
+        if (hasEapSentUpdate) response.eapSent = req.body.eapSent;
         response.lastEditedAt = new Date();
         response.editHistory = [
           ...(response.editHistory || []),
           {
             editedBy: req.user._id,
             editedAt: new Date(),
-            reason: String(req.body?.editReason || 'Manager edit')
+            reason: editReason
           }
         ];
         await response.save(session ? { session } : undefined);
@@ -2095,15 +2109,16 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
           throw error;
         }
       }
-    } else if (nextAnswers) {
-      response.answers = nextAnswers;
+    } else if (nextAnswers || hasEapSentUpdate) {
+      if (nextAnswers) response.answers = nextAnswers;
+      if (hasEapSentUpdate) response.eapSent = req.body.eapSent;
       response.lastEditedAt = new Date();
       response.editHistory = [
         ...(response.editHistory || []),
         {
           editedBy: req.user._id,
           editedAt: new Date(),
-          reason: String(req.body?.editReason || 'Manager edit')
+          reason: editReason
         }
       ];
       await response.save();
@@ -2111,7 +2126,8 @@ router.put('/:surveyId/responses/:responseId', authenticateToken, async (req, re
 
     await recordActivity('CAMP', survey.campId, req.user._id, 'SURVEY_RESPONSE_EDITED', {
       surveyId: survey._id,
-      responseId: response._id
+      responseId: response._id,
+      ...(hasEapSentUpdate ? { eapSent: req.body.eapSent } : {})
     });
 
     res.json({
