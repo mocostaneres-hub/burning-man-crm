@@ -97,6 +97,7 @@ type ShiftAssigneeOption = {
   playaName?: string;
   isLead?: boolean;
   isActiveRosterMember?: boolean;
+  signupType?: 'DIRECT_ASSIGNMENT' | 'SELF_SIGNUP';
 };
 
 const getAssigneeDisplayName = (assignee: ShiftAssigneeOption) => (
@@ -176,9 +177,10 @@ const VolunteerShifts: React.FC = () => {
   const [lockUpdatingEventId, setLockUpdatingEventId] = useState<string | null>(null);
   const [assignmentState, setAssignmentState] = useState<{
     isDirectAssignmentLocked: boolean;
+    confirmedUsers: ShiftAssigneeOption[];
     assignedUsers: ShiftAssigneeOption[];
     unassignedUsers: ShiftAssigneeOption[];
-  }>({ isDirectAssignmentLocked: false, assignedUsers: [], unassignedUsers: [] });
+  }>({ isDirectAssignmentLocked: false, confirmedUsers: [], assignedUsers: [], unassignedUsers: [] });
   const [pendingAddUserIds, setPendingAddUserIds] = useState<string[]>([]);
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [loadingExistingAssignments, setLoadingExistingAssignments] = useState(false);
@@ -660,6 +662,9 @@ const VolunteerShifts: React.FC = () => {
       const response = await api.get(url);
       if (response?.events) {
         setEvents(response.events);
+        setSelectedEvent((currentEvent) => currentEvent
+          ? response.events.find((event: Event) => event._id === currentEvent._id) || currentEvent
+          : currentEvent);
       } else {
         setEvents([]);
       }
@@ -1232,9 +1237,11 @@ const VolunteerShifts: React.FC = () => {
       const response = await api.getShiftAssignees(shift._id);
       setAssignmentState({
         isDirectAssignmentLocked: response.isDirectAssignmentLocked === true,
+        confirmedUsers: response.confirmedUsers || response.assignedUsers || [],
         assignedUsers: response.assignedUsers || [],
         unassignedUsers: response.unassignedUsers || []
       });
+      return response;
     } catch (error) {
       console.error('Error loading shift assignees:', error);
       alert('Failed to load shift assignees');
@@ -1269,9 +1276,9 @@ const VolunteerShifts: React.FC = () => {
     }
   };
 
-  const handleRemoveAssignee = async (userId: string) => {
+  const handleDropConfirmedUser = async (userId: string) => {
     if (!selectedShiftForAssignment) return;
-    const assignee = assignmentState.assignedUsers.find((user) => user.userId === userId);
+    const assignee = assignmentState.confirmedUsers.find((user) => user.userId === userId);
     const assigneeName = assignee
       ? (`${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'this former roster member')
       : 'this person';
@@ -1279,18 +1286,47 @@ const VolunteerShifts: React.FC = () => {
       ? 'The shift will open to others after the final direct assignee is removed.'
       : 'Any remaining capacity will stay open under the current invitation strategy.';
     const confirmed = window.confirm(
-      `Unassign ${assigneeName}? Their confirmed signup will be removed and their spot will be released. ${availabilityAfterRemoval}`
+      `Drop ${assigneeName} from this shift? Their confirmed signup will be removed and their spot will be released. ${availabilityAfterRemoval}`
     );
     if (!confirmed) return;
 
     try {
       setAssignmentSaving(true);
-      await api.removeShiftAssignee(selectedShiftForAssignment._id, userId);
-      await openAssignmentModal(selectedShiftForAssignment);
+      const dropResult = await api.dropMemberFromShift(selectedShiftForAssignment._id, userId);
+      const refreshedAssignment = await openAssignmentModal(selectedShiftForAssignment);
       await loadEvents();
+      setSelectedEvent((currentEvent) => currentEvent ? {
+        ...currentEvent,
+        shifts: currentEvent.shifts.map((shift) => shift._id === selectedShiftForAssignment._id ? {
+          ...shift,
+          memberIds: (shift.memberIds || []).filter((memberId) => memberId.toString() !== userId),
+          directAssignmentUserIds: (shift.directAssignmentUserIds || []).filter((memberId) => memberId.toString() !== userId)
+        } : shift)
+      } : currentEvent);
+      setEventForm((currentForm) => ({
+        ...currentForm,
+        shifts: currentForm.shifts.map((shift) => {
+          if (shift._id !== selectedShiftForAssignment._id) return shift;
+          const assignmentMode = dropResult.assignmentMode || shift.assignmentMode;
+          const directAssignmentUserIds = (refreshedAssignment?.assignedUsers || [])
+            .map((assignedUser: ShiftAssigneeOption) => assignedUser.userId);
+          const selectedUserIds = assignmentMode === 'ALL_ROSTER'
+            ? allRosterIds
+            : assignmentMode === 'LEADS_ONLY'
+              ? leadRosterIds
+              : directAssignmentUserIds;
+          return {
+            ...shift,
+            assignmentMode,
+            currentSignups: refreshedAssignment?.confirmedUsers?.length ?? Math.max(shift.currentSignups - 1, 0),
+            selectedUserIds,
+            directAssignmentUserIds
+          };
+        })
+      }));
     } catch (error: any) {
-      console.error('Error removing direct assignee:', error);
-      alert(error?.response?.data?.message || 'Failed to remove direct assignee');
+      console.error('Error dropping member from shift:', error);
+      alert(error?.response?.data?.message || 'Failed to drop member from shift');
     } finally {
       setAssignmentSaving(false);
     }
@@ -2483,9 +2519,22 @@ const VolunteerShifts: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => handleRemoveShift(index)} className="text-red-600 border-red-600 hover:bg-red-50">
-                        <X className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {isEditMode && shift._id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAssignmentModal(shift, eventToEdit || undefined)}
+                            className="min-h-[40px]"
+                          >
+                            <Users className="mr-1 h-4 w-4" />
+                            Manage Signups
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleRemoveShift(index)} className="text-red-600 border-red-600 hover:bg-red-50">
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3001,7 +3050,7 @@ const VolunteerShifts: React.FC = () => {
                             onClick={() => openAssignmentModal(shift, selectedEvent)}
                             className="min-h-[40px]"
                           >
-                            Assign Directly
+                            Manage Signups
                           </Button>
                         </div>
                       </div>
@@ -3039,7 +3088,7 @@ const VolunteerShifts: React.FC = () => {
           setPendingAddUserIds([]);
           setAssigneeSearch('');
         }}
-        title={selectedShiftForAssignment ? `Assign Directly: ${selectedShiftForAssignment.title}` : 'Assign Directly'}
+        title={selectedShiftForAssignment ? `Manage Shift: ${selectedShiftForAssignment.title}` : 'Manage Shift'}
         size="lg"
       >
         <div className="space-y-4">
@@ -3112,24 +3161,31 @@ const VolunteerShifts: React.FC = () => {
             <>
               <div className={`rounded border p-3 text-sm ${assignmentState.isDirectAssignmentLocked ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
                 {assignmentState.isDirectAssignmentLocked
-                  ? 'Assigned: the people listed below are confirmed on this shift. Their spots are taken, and everyone else is blocked until you unassign the final person.'
-                  : assignmentState.assignedUsers.length > 0
-                    ? 'Open with confirmed assignees: their spots are secured, and eligible members can claim the remaining capacity.'
+                  ? 'Exclusive direct assignment: the people listed below are confirmed, and everyone else is blocked until the final direct assignee is dropped.'
+                  : assignmentState.confirmedUsers.length > 0
+                    ? 'Open with confirmed signups: their spots are secured, and eligible members can claim the remaining capacity.'
                     : selectedShiftForAssignment?.assignmentMode === 'SELECTED_USERS'
                       ? 'Exclusive: adding direct assignees confirms their spots and keeps the shift limited to those people.'
                       : 'Open: adding a direct assignee confirms their spot; the remaining capacity stays available under the current invitation strategy.'}
               </div>
               <div>
-                <div className="text-sm font-medium text-gray-700 mb-2">Direct Assignees ({assignmentState.assignedUsers.length})</div>
-                <p className="text-xs text-gray-500 mb-2">Direct assignees do not need to confirm. They can drop the shift later from My Shifts; admins and leads can also unassign them here.</p>
+                <div className="text-sm font-medium text-gray-700 mb-2">Confirmed Signups ({assignmentState.confirmedUsers.length})</div>
+                <p className="text-xs text-gray-500 mb-2">Camp admins, Events Leads, and Camp Leads can drop any signed-up member here, even when member shift drops are locked for the event.</p>
                 <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
-                  {assignmentState.assignedUsers.length === 0 ? (
-                    <div className="text-sm text-gray-500">No assignees yet.</div>
+                  {assignmentState.confirmedUsers.length === 0 ? (
+                    <div className="text-sm text-gray-500">No confirmed signups yet.</div>
                   ) : (
-                    assignmentState.assignedUsers.map((user) => (
+                    assignmentState.confirmedUsers.map((user) => (
                       <div key={user.userId} className="flex items-center justify-between gap-2 text-sm text-gray-700">
                         <span>
                           {`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Former roster member'}
+                          <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            user.signupType === 'DIRECT_ASSIGNMENT'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {user.signupType === 'DIRECT_ASSIGNMENT' ? 'Direct assignment' : 'Member signup'}
+                          </span>
                           {user.isActiveRosterMember === false && (
                             <span className="ml-1 text-xs text-gray-500">(not on active roster)</span>
                           )}
@@ -3138,10 +3194,10 @@ const VolunteerShifts: React.FC = () => {
                           variant="outline"
                           size="sm"
                           disabled={assignmentSaving}
-                          onClick={() => handleRemoveAssignee(user.userId)}
+                          onClick={() => handleDropConfirmedUser(user.userId)}
                           className="text-red-600 border-red-300 hover:bg-red-50"
                         >
-                          Unassign
+                          Drop from shift
                         </Button>
                       </div>
                     ))
@@ -3151,7 +3207,7 @@ const VolunteerShifts: React.FC = () => {
 
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-gray-700">Select Members</div>
+                  <div className="text-sm font-medium text-gray-700">Assign More Members Directly</div>
                   {assignmentState.unassignedUsers.length > 0 && (
                     <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
                       {pendingAddUserIds.length} selected

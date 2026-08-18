@@ -2387,12 +2387,21 @@ router.get('/shifts/:shiftId/assignees', authenticateToken, async (req, res) => 
     }
 
     const directAssignmentUserIds = await resolveDirectAssignmentUserIds({ shift, shiftId: shift._id });
+    const signupRows = await ShiftSignup.find({ shiftId: shift._id }).select('userId').lean();
+    const confirmedUserIds = [...new Set([
+      ...signupRows.map((signup) => signup.userId.toString()),
+      ...(shift.memberIds || []).map((userId) => userId.toString()),
+      ...directAssignmentUserIds
+    ])];
+    const directAssignmentUserIdSet = new Set(directAssignmentUserIds);
+    const confirmedUserIdSet = new Set(confirmedUserIds);
     const assignmentState = await getShiftAssignmentState({
       shiftId: shift._id,
       campId: eventCampId,
       assignedUserIds: directAssignmentUserIds
     });
     const userIds = [
+      ...confirmedUserIds,
       ...assignmentState.assignedUsers.map((user) => user.userId),
       ...assignmentState.unassignedUsers.map((user) => user.userId)
     ];
@@ -2412,17 +2421,146 @@ router.get('/shifts/:shiftId/assignees', authenticateToken, async (req, res) => 
       };
     };
 
+    const rosterStateByUserId = new Map([
+      ...assignmentState.assignedUsers,
+      ...assignmentState.unassignedUsers
+    ].map((entry) => [entry.userId, entry]));
+    const confirmedUsers = confirmedUserIds.map((userId) => mapUser({
+      userId,
+      isLead: rosterStateByUserId.get(userId)?.isLead || false,
+      isActiveRosterMember: rosterStateByUserId.get(userId)?.isActiveRosterMember !== false
+        && rosterStateByUserId.has(userId)
+    })).map((entry) => ({
+      ...entry,
+      signupType: directAssignmentUserIdSet.has(entry.userId) ? 'DIRECT_ASSIGNMENT' : 'SELF_SIGNUP'
+    }));
+
     return res.json({
       shiftId,
       isDirectAssignmentLocked: hasExclusiveDirectAssignmentLock(
         shift,
         directAssignmentUserIds
       ),
+      confirmedUsers,
       assignedUsers: assignmentState.assignedUsers.map(mapUser),
-      unassignedUsers: assignmentState.unassignedUsers.map(mapUser)
+      unassignedUsers: assignmentState.unassignedUsers
+        .filter((entry) => !confirmedUserIdSet.has(entry.userId))
+        .map(mapUser)
     });
   } catch (error) {
     console.error('Get shift assignees error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/shifts/shifts/:shiftId/signups/:userId
+// @desc    Drop any confirmed member from a shift
+// @access  Private (Camp admins/leads only)
+router.delete('/shifts/:shiftId/signups/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { shiftId, userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid member ID' });
+    }
+
+    const { event, shift } = await resolveEventAndShift(shiftId);
+    if (!event || !shift) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+
+    const eventCampId = event.campId?._id ? event.campId._id.toString() : event.campId.toString();
+    const { canManageEventPlanning } = require('../utils/permissionHelpers');
+    const hasAccess = await canManageEventPlanning(req, eventCampId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Camp owner, Camp Lead, or Events Lead access required' });
+    }
+
+    const normalizedUserId = userId.toString();
+    const directAssignmentUserIds = await resolveDirectAssignmentUserIds({
+      shift,
+      shiftId: shift._id
+    });
+    const isDirectlyAssigned = directAssignmentUserIds.includes(normalizedUserId);
+    const existingSignup = await ShiftSignup.findOne({
+      shiftId: shift._id,
+      userId: normalizedUserId
+    }).select('_id').lean();
+    const isLegacySignup = (shift.memberIds || []).some(
+      (memberId) => memberId.toString() === normalizedUserId
+    );
+
+    if (!existingSignup && !isLegacySignup && !isDirectlyAssigned) {
+      return res.status(404).json({ message: 'This member is not signed up for the shift' });
+    }
+
+    let assignmentMode = shift.assignmentMode || 'ALL_ROSTER';
+    if (isDirectlyAssigned) {
+      const removalResult = await removeDirectAssigneeReservation({
+        event,
+        shift,
+        userId: normalizedUserId
+      });
+      assignmentMode = removalResult?.assignmentMode || assignmentMode;
+    } else {
+      await releaseShiftSpotsForUsers({
+        eventId: event._id,
+        shiftId: shift._id,
+        userIds: [normalizedUserId]
+      });
+    }
+
+    try {
+      await createBulkNotifications([normalizedUserId], {
+        actor: req.user._id,
+        campId: event.campId,
+        type: NOTIFICATION_TYPES.SHIFT_UNSIGNUP,
+        title: `Removed from shift: ${shift.title}`,
+        message: `Camp leadership removed you from "${shift.title}" in ${event.eventName || 'an event'}.`,
+        link: '/my-shifts',
+        metadata: {
+          eventId: event._id,
+          shiftId: shift._id,
+          memberId: normalizedUserId,
+          removedByManager: true
+        }
+      });
+    } catch (notificationError) {
+      console.error('Manager shift-drop notification error:', notificationError);
+    }
+
+    try {
+      const activityDetails = {
+        field: 'shift',
+        campId: event.campId?._id || event.campId,
+        eventId: event._id,
+        eventName: event.eventName || event.name,
+        shiftId: shift._id,
+        shiftTitle: shift.title,
+        shiftDate: shift.date,
+        note: 'Camp leadership removed member from shift',
+        removedByManager: true
+      };
+      await recordActivity('MEMBER', normalizedUserId, req.user._id, 'SHIFT_UNSIGNUP', activityDetails);
+      const campScopedMember = await db.findMember({
+        camp: event.campId?._id || event.campId,
+        user: normalizedUserId
+      });
+      if (campScopedMember?._id) {
+        await recordActivity('MEMBER', campScopedMember._id, req.user._id, 'SHIFT_UNSIGNUP', activityDetails);
+      }
+    } catch (auditError) {
+      console.error('Manager shift-drop activity log failed (non-fatal):', auditError?.message);
+    }
+
+    return res.json({
+      message: 'Member dropped from the shift and their spot was released',
+      shiftId,
+      removedUserId: normalizedUserId,
+      wasDirectAssignment: isDirectlyAssigned,
+      assignmentMode
+    });
+  } catch (error) {
+    console.error('Manager shift-drop error:', error);
     return res.status(500).json({ message: 'Server error' });
   }
 });

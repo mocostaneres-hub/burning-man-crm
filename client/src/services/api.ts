@@ -797,6 +797,7 @@ class ApiService {
   async getShiftAssignees(shiftId: string): Promise<{
     shiftId: string;
     isDirectAssignmentLocked: boolean;
+    confirmedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean; isActiveRosterMember?: boolean; signupType: 'DIRECT_ASSIGNMENT' | 'SELF_SIGNUP' }>;
     assignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean; isActiveRosterMember?: boolean }>;
     unassignedUsers: Array<{ userId: string; firstName: string; lastName: string; email: string; playaName?: string; isLead?: boolean }>;
   }> {
@@ -814,6 +815,15 @@ class ApiService {
     isDirectAssignmentLocked: boolean;
   }> {
     const response = await this.api.delete(`/shifts/shifts/${shiftId}/assignees/${userId}`);
+    return response.data;
+  }
+
+  async dropMemberFromShift(shiftId: string, userId: string): Promise<{
+    removedUserId: string;
+    wasDirectAssignment: boolean;
+    assignmentMode: 'ALL_ROSTER' | 'LEADS_ONLY' | 'SELECTED_USERS';
+  }> {
+    const response = await this.api.delete(`/shifts/shifts/${shiftId}/signups/${userId}`);
     return response.data;
   }
 
